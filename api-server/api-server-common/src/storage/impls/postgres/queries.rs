@@ -18,7 +18,7 @@ use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use tokio_postgres::NoTls;
 
@@ -113,6 +113,80 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(version))
     }
 
+    pub async fn get_address_balance(
+        &self,
+        address: &str,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.tx
+            .query_opt(
+                r#"
+		    SELECT amount
+                    FROM ml_address_balance
+                    WHERE address = $1
+                    ORDER BY block_height DESC
+                    LIMIT 1;
+                "#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .map_or_else(
+                || Ok(None),
+                |row| {
+                    let amount: Vec<u8> = row.get(0);
+                    let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Amount deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                    Ok(Some(amount))
+                },
+            )
+    }
+
+    pub async fn del_address_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_address_balance WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml_address_balance (address, amount, block_height)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (address, block_height) DO UPDATE
+		    SET amount = $2;",
+		"#,
+                &[&address.to_string(), &height, &(amount.into_atoms() as i64)],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn get_best_block(
         &mut self,
     ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
@@ -200,6 +274,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     owning_block_id bytea,
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_account_balance (
+                    address TEXT PRIMARY KEY,
+                    amount bigint NOT NULL,
+                    block_height bigint NOT NULL
+                    UNIQUE (block_height, address)
+                );",
         )
         .await?;
 
