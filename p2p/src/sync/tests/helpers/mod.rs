@@ -81,7 +81,7 @@ pub struct TestNode {
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    _new_tip_receiver: UnboundedReceiver<(Id<Block>, BlockSource)>,
+    _new_tip_receiver: UnboundedReceiver<Id<Block>>,
     protocol_version: ProtocolVersion,
 }
 
@@ -280,7 +280,7 @@ impl TestNode {
                         panic!("Unexpected peer manager event: {peer_event:?}");
                     }
                     PeerManagerEvent::NewTipReceived { .. }
-                    | PeerManagerEvent::NewLocalTip(_)
+                    | PeerManagerEvent::NewChainstateTip(_)
                     | PeerManagerEvent::NewValidTransactionReceived { .. } => {
                         // Ignored
                     }

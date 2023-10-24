@@ -65,6 +65,7 @@ pub enum PeerManagerEvent {
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// New tip block received.
+    ///
     /// In PoW all valid blocks have a cost, but in PoS new blocks are practically free.
     /// So, unlike Bitcoin Core, we only consider new tips.
     /// It is used as an eviction criterion.
@@ -73,8 +74,13 @@ pub enum PeerManagerEvent {
         block_id: Id<Block>,
     },
 
-    /// A new tip has been produces locally.
-    NewLocalTip(Id<Block>),
+    /// A new tip block has been added to the chainstate
+    ///
+    /// Note: normally, NewTipReceived and NewChainstateTip are dependent in the sense
+    /// that if NewTipReceived is produced, it will be accompanied by NewChainstateTip.
+    /// However, peer manager should not use this fact and treat them as independent
+    /// events instead.
+    NewChainstateTip(Id<Block>),
 
     /// New valid unseen transaction received.
     /// It is used as an eviction criterion.

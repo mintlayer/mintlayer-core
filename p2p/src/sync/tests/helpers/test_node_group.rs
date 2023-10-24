@@ -331,7 +331,7 @@ impl TestNodeGroup {
                             panic!("Unexpected peer manager event: {peer_event:?}");
                         }
                         PeerManagerEvent::NewTipReceived { .. }
-                        | PeerManagerEvent::NewLocalTip(_)
+                        | PeerManagerEvent::NewChainstateTip(_)
                         | PeerManagerEvent::NewValidTransactionReceived { .. } => {
                             // Ignored
                         }

@@ -93,7 +93,7 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::Heartbeat);
     }
 
-    fn on_connection_acccepted(&mut self, address: SocketAddress) {
+    fn on_connection_accepted(&mut self, address: SocketAddress) {
         self.send_notification(PeerManagerNotification::ConnectionAccepted { address });
     }
 }

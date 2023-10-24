@@ -171,8 +171,8 @@ where
 
     peer_eviction_random_state: peers_eviction::RandomState,
 
-    /// Last time when a new tip was received or produced locally.
-    last_tip_block_time: Time,
+    /// Last time when a new tip was added to the chainstate.
+    last_chainstate_tip_block_time: Time,
 
     /// PeerManager's observer for use by tests.
     observer: Option<Box<dyn Observer + Send>>,
@@ -249,7 +249,7 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
-            last_tip_block_time: now,
+            last_chainstate_tip_block_time: now,
             observer,
             dns_seed,
         })
@@ -828,7 +828,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_acccepted(address)
+            o.on_connection_accepted(address)
         }
 
         Ok(())
@@ -1230,21 +1230,18 @@ where
                 response.send(Ok(()));
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
-                log::debug!("new tip {block_id} received from peer {peer_id}",);
-
-                self.last_tip_block_time = self.time_getter.get_time();
-
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    peer.last_tip_block_time = Some(self.last_tip_block_time);
+                    log::debug!("new tip {block_id} received from peer {peer_id}");
+                    peer.last_tip_block_time = Some(self.time_getter.get_time());
                 }
             }
-            PeerManagerEvent::NewLocalTip(_) => {
-                self.last_tip_block_time = self.time_getter.get_time();
+            PeerManagerEvent::NewChainstateTip(block_id) => {
+                log::debug!("new tip {block_id} added to chainstate");
+                self.last_chainstate_tip_block_time = self.time_getter.get_time();
             }
             PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
-                log::debug!("new transaction {txid} received from peer {peer_id}",);
-
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    log::debug!("new transaction {txid} received from peer {peer_id}");
                     peer.last_tx_time = Some(self.time_getter.get_time());
                 }
             }
@@ -1532,12 +1529,13 @@ where
                 heartbeat_call_needed = false;
             }
 
-            let time_since_last_tip = (now - self.last_tip_block_time).unwrap_or(Duration::ZERO);
+            let time_since_last_chainstate_tip =
+                (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
 
             // Reload DNS if there are no outbound connections
             if now >= next_dns_reload
                 && self.pending_outbound_connects.is_empty()
-                && (self.peers.is_empty() || time_since_last_tip > stale_tip_time_diff)
+                && (self.peers.is_empty() || time_since_last_chainstate_tip > stale_tip_time_diff)
             {
                 self.reload_dns_seed().await;
                 next_dns_reload = (now + PEER_MGR_DNS_RELOAD_INTERVAL)
@@ -1590,7 +1588,7 @@ pub trait Observer {
     // This will be called at the end of "heartbeat" function.
     fn on_heartbeat(&mut self);
     // This will be called for both incoming and outgoing connections.
-    fn on_connection_acccepted(&mut self, address: SocketAddress);
+    fn on_connection_accepted(&mut self, address: SocketAddress);
 }
 
 pub trait PeerManagerQueryInterface {

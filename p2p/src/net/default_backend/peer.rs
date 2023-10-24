@@ -135,7 +135,6 @@ where
         // After that, the node is open to all kinds of attacks.
         let time_diff =
             std::cmp::max(local_time, remote_time) - std::cmp::min(local_time, remote_time);
-
         utils::ensure!(
             time_diff <= *p2p_config.max_clock_diff,
             P2pError::PeerError(PeerError::TimeDiff(time_diff))

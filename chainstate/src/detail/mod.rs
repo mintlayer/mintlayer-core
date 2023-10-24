@@ -271,20 +271,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(
-        &self,
-        new_block_index: &Option<BlockIndex>,
-        block_source: BlockSource,
-    ) {
+    fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.block_height();
                 let new_id = *new_block_index.block_id();
-                self.events_controller.broadcast(ChainstateEvent::NewTip(
-                    new_id,
-                    new_height,
-                    block_source,
-                ))
+                self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
         }
@@ -565,7 +557,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             None => result,
         };
 
-        self.broadcast_new_tip_event(&result, block_source);
+        self.broadcast_new_tip_event(&result);
 
         if let Some(ref bi) = result {
             log::info!(

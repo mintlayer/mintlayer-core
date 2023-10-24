@@ -57,10 +57,9 @@ fn simple_subscribe(#[case] seed: Seed) {
         {
             let guard = events.lock().unwrap();
             assert_eq!(guard.len(), 1);
-            let (id, height, source) = &guard[0];
+            let (id, height) = &guard[0];
             assert_eq!(id, &first_block.get_id());
             assert_eq!(height, &BlockHeight::new(1));
-            assert_eq!(source, &BlockSource::Local);
         }
 
         // Process one more block.
@@ -71,14 +70,12 @@ fn simple_subscribe(#[case] seed: Seed) {
 
         let guard = events.lock().unwrap();
         assert_eq!(guard.len(), 2);
-        let (id, height, source) = &guard[0];
+        let (id, height) = &guard[0];
         assert_eq!(id, &first_block.get_id());
         assert_eq!(height, &BlockHeight::new(1));
-        assert_eq!(source, &BlockSource::Local);
-        let (id, height, source) = &guard[1];
+        let (id, height) = &guard[1];
         assert_eq!(id, &second_block.get_id());
         assert_eq!(height, &BlockHeight::new(2));
-        assert_eq!(source, &BlockSource::Local);
     });
 }
 
@@ -102,10 +99,9 @@ fn several_subscribers(#[case] seed: Seed) {
 
         let guard = events.lock().unwrap();
         assert_eq!(guard.len(), subscribers);
-        guard.iter().for_each(|(id, height, source)| {
+        guard.iter().for_each(|(id, height)| {
             assert_eq!(id, &block.get_id());
             assert_eq!(height, &BlockHeight::new(1));
-            assert_eq!(source, &BlockSource::Local);
         })
     });
 }
@@ -131,10 +127,9 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
             tf.chainstate.wait_for_all_events();
 
             let guard = events.lock().unwrap();
-            let (id, height, source) = guard.last().unwrap();
+            let (id, height) = guard.last().unwrap();
             assert_eq!(id, index.block_id());
             assert_eq!(height, &index.block_height());
-            assert_eq!(source, &BlockSource::Local);
         }
         assert_eq!(blocks * subscribers, events.lock().unwrap().len());
     });
@@ -226,8 +221,8 @@ fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
     for _ in 0..n {
         let events_ = Arc::clone(&events);
         let handler = Arc::new(move |event: ChainstateEvent| match event {
-            ChainstateEvent::NewTip(block_id, block_height, block_source) => {
-                events_.lock().unwrap().push((block_id, block_height, block_source));
+            ChainstateEvent::NewTip(block_id, block_height) => {
+                events_.lock().unwrap().push((block_id, block_height));
             }
         });
         chainstate.subscribe_to_events(handler);

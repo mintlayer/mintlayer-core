@@ -24,7 +24,6 @@ mod types;
 
 use std::collections::HashMap;
 
-use chainstate::BlockSource;
 use futures::never::Never;
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
@@ -131,10 +130,10 @@ where
 
         loop {
             tokio::select! {
-                block_id_and_source = new_tip_receiver.recv() => {
+                block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
-                    let (block_id, block_source) = block_id_and_source.expect("New tip sender was closed");
-                    self.handle_new_tip(block_id, block_source).await?;
+                    let block_id = block_id.expect("New tip sender was closed");
+                    self.handle_new_tip(block_id).await?;
                 },
 
                 tx_proc = tx_processed_receiver.recv() => {
@@ -226,16 +225,10 @@ where
     }
 
     /// Announces the header of a new block to peers.
-    async fn handle_new_tip(
-        &mut self,
-        block_id: Id<Block>,
-        block_source: BlockSource,
-    ) -> Result<()> {
-        if block_source == BlockSource::Local {
-            self.peer_manager_sender
-                .send(PeerManagerEvent::NewLocalTip(block_id))
-                .map_err(|_| P2pError::ChannelClosed)?;
-        }
+    async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+        self.peer_manager_sender
+            .send(PeerManagerEvent::NewChainstateTip(block_id))
+            .map_err(|_| P2pError::ChannelClosed)?;
 
         if self.chainstate_handle.is_initial_block_download().await? {
             return Ok(());
@@ -316,16 +309,14 @@ where
 /// Returns a receiver for the chainstate `NewTip` events.
 pub async fn subscribe_to_new_tip(
     chainstate_handle: &ChainstateHandle,
-) -> Result<UnboundedReceiver<(Id<Block>, BlockSource)>> {
+) -> Result<UnboundedReceiver<Id<Block>>> {
     let (sender, receiver) = mpsc::unbounded_channel();
 
     let subscribe_func =
         Arc::new(
             move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                chainstate::ChainstateEvent::NewTip(block_id, _, block_source) => {
-                    let _ = sender
-                        .send((block_id, block_source))
-                        .log_err_pfx("The new tip receiver closed");
+                chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                    let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
                 }
             },
         );
