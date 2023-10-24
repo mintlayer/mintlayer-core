@@ -27,9 +27,12 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 
 use crate::{
-    config::{MaxInboundConnections, P2pConfig},
+    config::P2pConfig,
     net::types::{services::Service, PeerRole},
-    peer_manager::tests::{get_connected_peers, run_peer_manager},
+    peer_manager::{
+        tests::{get_connected_peers, run_peer_manager},
+        MaxInboundConnections,
+    },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
@@ -649,7 +652,6 @@ async fn connection_timeout_rpc_notified<T>(
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         ping_check_period: Default::default(),
@@ -766,7 +768,6 @@ where
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -813,7 +814,6 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -904,7 +904,6 @@ where
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -952,7 +951,6 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -994,7 +992,6 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),

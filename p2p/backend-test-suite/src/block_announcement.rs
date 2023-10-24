@@ -176,7 +176,6 @@ where
         disable_noise: Default::default(),
         boot_nodes: Vec::new(),
         reserved_nodes: Vec::new(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),

@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use p2p::{
     config::{NodeType, P2pConfig},
+    peer_manager::ConnectionCountLimits,
     types::ip_or_socket_address::IpOrSocketAddress,
 };
 
@@ -95,7 +96,6 @@ impl From<P2pConfigFile> for P2pConfig {
             disable_noise: c.disable_noise,
             boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
             reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
-            max_inbound_connections: c.max_inbound_connections.into(),
             ban_threshold: c.ban_threshold.into(),
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             max_clock_diff: c.max_clock_diff.map(Duration::from_secs).into(),
@@ -120,7 +120,17 @@ impl From<P2pConfigFile> for P2pConfig {
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             enable_block_relay_peers: Default::default(),
-            connection_count_limits: Default::default(),
+            connection_count_limits: ConnectionCountLimits {
+                max_inbound_connections: c.max_inbound_connections.into(),
+
+                preserved_inbound_count_address_group: Default::default(),
+                preserved_inbound_count_ping: Default::default(),
+                preserved_inbound_count_new_blocks: Default::default(),
+                preserved_inbound_count_new_transactions: Default::default(),
+
+                outbound_full_relay_count: Default::default(),
+                outbound_block_relay_count: Default::default(),
+            },
         }
     }
 }

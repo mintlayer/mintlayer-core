@@ -213,7 +213,6 @@ async fn disconnect() {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),

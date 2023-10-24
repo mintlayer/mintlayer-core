@@ -24,7 +24,6 @@ use crate::{
     peer_manager::ConnectionCountLimits,
 };
 
-make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
@@ -93,8 +92,6 @@ pub struct P2pConfig {
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.
     pub reserved_nodes: Vec<IpOrSocketAddress>,
-    /// Maximum allowed number of inbound connections.
-    pub max_inbound_connections: MaxInboundConnections,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.
