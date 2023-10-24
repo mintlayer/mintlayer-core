@@ -179,7 +179,7 @@ class WalletTokens(BitcoinTestFramework):
                 assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
 
             # lock token supply
-            assert_in("The transaction was submitted successfully", await wallet.lock_token_suply(token_id))
+            assert_in("The transaction was submitted successfully", await wallet.lock_token_supply(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())
             assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
@@ -187,7 +187,7 @@ class WalletTokens(BitcoinTestFramework):
             # cannot mint any more tokens as it is locked
             assert_in("Cannot change a Locked Token supply", await wallet.mint_tokens(token_id, address, tokens_to_mint))
             assert_in("Cannot change a Locked Token supply", await wallet.unmint_tokens(token_id, tokens_to_mint))
-            assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_token_suply(token_id))
+            assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_token_supply(token_id))
 
 
 if __name__ == '__main__':
