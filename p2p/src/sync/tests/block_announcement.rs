@@ -34,7 +34,7 @@ use crate::{
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, HeaderList, HeaderListRequest, SyncMessage},
-    protocol::SupportedProtocolVersion,
+    protocol::{ProtocolConfig, SupportedProtocolVersion},
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -64,7 +64,15 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
 
     let p2p_config = Arc::new(P2pConfig {
-        max_singular_unconnected_headers: 1.into(),
+        protocol_config: ProtocolConfig {
+            max_singular_unconnected_headers: 1.into(),
+
+            msg_header_count_limit: Default::default(),
+            max_request_blocks_count: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+        },
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -79,12 +87,7 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
@@ -152,7 +155,15 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
 
     let p2p_config = Arc::new(P2pConfig {
-        max_singular_unconnected_headers: 1.into(),
+        protocol_config: ProtocolConfig {
+            max_singular_unconnected_headers: 1.into(),
+
+            msg_header_count_limit: Default::default(),
+            max_request_blocks_count: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+        },
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -167,12 +178,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),

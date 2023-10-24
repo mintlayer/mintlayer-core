@@ -159,15 +159,10 @@ async fn disconnect(#[case] seed: Seed) {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
+            protocol_config: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -231,15 +226,10 @@ async fn slow_response(#[case] seed: Seed) {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
+            protocol_config: Default::default(),
         });
 
         let mut tf = TestFramework::builder(&mut rng)

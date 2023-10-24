@@ -18,6 +18,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use serialization::{Decode, Encode};
+use utils::make_config_setting;
 
 use crate::error::{P2pError, ProtocolError};
 
@@ -70,4 +71,40 @@ pub fn choose_common_protocol_version(
 ) -> crate::Result<SupportedProtocolVersion> {
     let min_version = std::cmp::min(version1, version2);
     min_version.try_into()
+}
+
+make_config_setting!(HeaderLimit, usize, 2000);
+make_config_setting!(MaxLocatorSize, usize, 101);
+make_config_setting!(RequestedBlocksLimit, usize, 500);
+make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
+make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
+make_config_setting!(MaxUnconnectedHeaders, usize, 10);
+
+/// Protocol configuration. These values are supposed to be modified in tests only.
+///
+/// Note that there are basically two kinds of values here:
+/// 1) The "hard" limits, which are essential parts of the protocol. Modifying such a value
+/// even slightly will break the protocol. E.g. sending a `msg_header_count_limit` number of
+/// headers signifies that the node may have more headers; modifying this limit even by 1 may
+/// cause the peers not to understand each other properly anymore.
+/// 2) "Soft" limits, which are intended to control weird behavior. Most peers operate under these
+/// limits anyway, so changing them slightly should not lead to protocol incompatibility.
+#[derive(Debug, Default)]
+pub struct ProtocolConfig {
+    // "Hard" limits:
+    /// The maximum number of headers that can be sent in one message.
+    pub msg_header_count_limit: HeaderLimit,
+    /// The maximum number of blocks that can be requested from a single peer.
+    pub max_request_blocks_count: RequestedBlocksLimit,
+
+    // "Soft" limits:
+    /// The maximum number of elements in a locator.
+    pub msg_max_locator_count: MaxLocatorSize,
+    /// The maximum size of a p2p message in bytes.
+    pub max_message_size: MaxMessageSize,
+    /// The maximum number of announcements (hashes) for which we haven't receive transactions.
+    pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
+    /// The maximum number of singular unconnected headers that a V1 peer can send before
+    /// it will be considered malicious.
+    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
 }

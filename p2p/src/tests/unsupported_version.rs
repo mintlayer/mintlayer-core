@@ -58,7 +58,8 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, *p2p_config.max_message_size);
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
 
     let msg = msg_stream.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
@@ -130,7 +131,8 @@ where
 
     let stream = transport.connect(*test_node.local_address()).await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, *p2p_config.max_message_size);
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
 
     // Send Hello with zero protocol version
     msg_stream
@@ -201,7 +203,8 @@ where
     let connect_result_rx1 = test_node.start_connecting(address1);
 
     let (stream1, _) = listener1.accept().await.unwrap();
-    let mut msg_stream1 = BufferedTranscoder::new(stream1, *p2p_config.max_message_size);
+    let mut msg_stream1 =
+        BufferedTranscoder::new(stream1, *p2p_config.protocol_config.max_message_size);
 
     let transport2 = TTM::make_transport();
     let mut listener2 = transport2.bind(vec![TTM::make_address()]).await.unwrap();
@@ -210,7 +213,8 @@ where
     let connect_result_rx2 = test_node.start_connecting(address2);
 
     let (stream2, _) = listener2.accept().await.unwrap();
-    let mut msg_stream2 = BufferedTranscoder::new(stream2, *p2p_config.max_message_size);
+    let mut msg_stream2 =
+        BufferedTranscoder::new(stream2, *p2p_config.protocol_config.max_message_size);
 
     let msg = msg_stream2.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));

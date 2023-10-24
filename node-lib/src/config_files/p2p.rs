@@ -108,13 +108,7 @@ impl From<P2pConfigFile> for P2pConfig {
             node_type: c.node_type.map(Into::into).into(),
 
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: c
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
@@ -131,6 +125,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 outbound_full_relay_count: Default::default(),
                 outbound_block_relay_count: Default::default(),
             },
+            protocol_config: Default::default(),
         }
     }
 }

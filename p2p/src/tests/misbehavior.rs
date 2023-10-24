@@ -56,7 +56,8 @@ where
 
     let stream = transport.connect(*test_node.local_address()).await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, *p2p_config.max_message_size);
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
 
     // Send the normal Hello
     msg_stream

@@ -312,14 +312,9 @@ fn make_p2p_config() -> P2pConfig {
         ping_check_period: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_singular_unconnected_headers: Default::default(),
         enable_block_relay_peers: Default::default(),
+        protocol_config: Default::default(),
     }
 }
 
