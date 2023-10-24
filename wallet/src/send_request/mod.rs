@@ -69,8 +69,9 @@ pub fn make_address_output_token(
 pub fn make_issue_token_outputs(
     token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
 ) -> WalletResult<Vec<TxOutput>> {
-    chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
+    chainstate::check_tokens_issuance(chain_config, block_height, &token_issuance)?;
 
     let issuance_output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
 

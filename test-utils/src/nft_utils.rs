@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::random_string;
+use crate::random_ascii_alphanumeric_string;
 use common::{
     chain::{
         config::ChainConfig,
@@ -36,10 +36,10 @@ pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> 
     let max_uri_len = chain_config.token_max_uri_len();
 
     TokenIssuanceV0 {
-        token_ticker: random_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
         amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
         number_of_decimals: rng.gen_range(1..max_dec_count),
-        metadata_uri: random_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
     }
 }
 
@@ -54,9 +54,9 @@ pub fn random_nft_issuance(
     NftIssuanceV0 {
         metadata: Metadata {
             creator: Some(random_creator(rng)),
-            name: random_string(rng, 1..max_name_len).into_bytes(),
-            description: random_string(rng, 1..max_desc_len).into_bytes(),
-            ticker: random_string(rng, 1..max_ticker_len).into_bytes(),
+            name: random_ascii_alphanumeric_string(rng, 1..max_name_len).into_bytes(),
+            description: random_ascii_alphanumeric_string(rng, 1..max_desc_len).into_bytes(),
+            ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).into_bytes(),
             icon_uri: DataOrNoVec::from(None),
             additional_metadata_uri: DataOrNoVec::from(None),
             media_uri: DataOrNoVec::from(None),

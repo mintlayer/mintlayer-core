@@ -39,7 +39,21 @@ pub fn decode_from_hex<D: serialization::DecodeAll>(to_decode: &str) -> D {
         .expect("The decoding succeeded")
 }
 
-pub fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
+pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
+    for _ in 0..1000 {
+        let random_byte = rng.gen::<u8>();
+        if !random_byte.is_ascii_alphanumeric() {
+            return random_byte;
+        }
+    }
+    // it's approximately 0.75^1000 that this panics
+    panic!("couldn't sample non_ascii_alphanumeric_char");
+}
+
+pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
+    rng: &mut impl Rng,
+    range_len: R,
+) -> String {
     use crypto::random::distributions::{Alphanumeric, DistString};
     if range_len.is_empty() {
         return String::new();
@@ -157,5 +171,15 @@ mod tests {
         let value = rng.gen::<u128>();
         let result = split_value(&mut rng, value);
         assert_eq!(value, result.iter().sum());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn random_ascii_alphanumeric_string_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let result = random_ascii_alphanumeric_string(&mut rng, 1..100);
+        assert!(result.chars().all(|c| c.is_ascii_alphanumeric()));
     }
 }

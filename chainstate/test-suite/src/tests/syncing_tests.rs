@@ -694,7 +694,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
                 chainstate::CheckBlockError::PrevBlockNotFound(
                     block.prev_block_id(),
-                    block.get_id(),
+                    block.get_id()
                 ),
             ))
         );
