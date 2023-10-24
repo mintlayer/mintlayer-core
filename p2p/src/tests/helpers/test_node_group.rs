@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use common::{chain::Block, primitives::Id};
 use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use tokio::time;
 
-use crate::net::default_backend::transport::TransportSocket;
+use crate::{config::P2pConfig, net::default_backend::transport::TransportSocket};
 
 use super::test_node::TestNode;
 
@@ -30,14 +30,23 @@ where
 {
     nodes: Vec<TestNode<Transport>>,
     time_getter: P2pBasicTestTimeGetter,
+    p2p_config: Arc<P2pConfig>,
 }
 
 impl<Transport> TestNodeGroup<Transport>
 where
     Transport: TransportSocket,
 {
-    pub fn new(nodes: Vec<TestNode<Transport>>, time_getter: P2pBasicTestTimeGetter) -> Self {
-        Self { nodes, time_getter }
+    pub fn new(
+        nodes: Vec<TestNode<Transport>>,
+        time_getter: P2pBasicTestTimeGetter,
+        p2p_config: Arc<P2pConfig>,
+    ) -> Self {
+        Self {
+            nodes,
+            time_getter,
+            p2p_config,
+        }
     }
 
     pub fn nodes(&self) -> &[TestNode<Transport>] {
@@ -46,6 +55,10 @@ where
 
     pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
         &self.time_getter
+    }
+
+    pub fn p2p_config(&self) -> &P2pConfig {
+        &self.p2p_config
     }
 
     pub fn get_adresses(&self) -> Vec<SocketAddress> {

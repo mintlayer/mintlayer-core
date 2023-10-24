@@ -163,6 +163,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
             max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
@@ -230,6 +231,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
             max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))

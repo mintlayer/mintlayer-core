@@ -62,6 +62,7 @@ fn unban_peer() {
             max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,

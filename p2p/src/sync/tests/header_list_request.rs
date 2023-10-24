@@ -171,6 +171,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
 
     let blocks = make_new_blocks(
@@ -266,6 +267,7 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)

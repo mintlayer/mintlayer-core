@@ -186,6 +186,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     };
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
 

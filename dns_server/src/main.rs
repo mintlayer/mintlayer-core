@@ -75,6 +75,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
 
     let transport = p2p::make_p2p_transport();

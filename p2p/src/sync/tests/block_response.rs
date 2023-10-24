@@ -168,6 +168,7 @@ async fn disconnect(#[case] seed: Seed) {
             max_peer_tx_announcements: Default::default(),
             max_singular_unconnected_headers: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -240,6 +241,7 @@ async fn slow_response(#[case] seed: Seed) {
             max_peer_tx_announcements: Default::default(),
             max_singular_unconnected_headers: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         });
 
         let mut tf = TestFramework::builder(&mut rng)
