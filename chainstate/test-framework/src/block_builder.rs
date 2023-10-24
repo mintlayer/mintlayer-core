@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::framework::BlockOutputs;
-use crate::utils::{create_multiple_utxo_data, create_new_outputs, outputs_from_block};
+use crate::utils::{create_new_outputs, outputs_from_block};
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
+use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::BlockIndex;
 use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
 use common::chain::block::BlockHeader;
-use common::chain::{OutPointSourceId, UtxoOutPoint};
+use common::chain::{AccountNonce, AccountType, OutPointSourceId, UtxoOutPoint};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -37,6 +38,7 @@ use crypto::key::PrivateKey;
 use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
 use serialization::Encode;
+use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
@@ -47,8 +49,12 @@ pub struct BlockBuilder<'f> {
     consensus_data: ConsensusData,
     reward: BlockReward,
     block_source: BlockSource,
-    used_utxo: BTreeSet<UtxoOutPoint>,
     block_signing_key: Option<PrivateKey>,
+
+    // need these fields to track info across the txs
+    used_utxo: BTreeSet<UtxoOutPoint>,
+    account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
+    tokens_data: InMemoryTokensAccounting,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -61,6 +67,13 @@ impl<'f> BlockBuilder<'f> {
         let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;
         let used_utxo = BTreeSet::new();
+        let account_nonce_tracker = BTreeMap::new();
+
+        let all_tokens_data = framework.storage.read_tokens_accounting_data().unwrap();
+        let tokens_data = InMemoryTokensAccounting::from_values(
+            all_tokens_data.token_data,
+            all_tokens_data.circulating_supply,
+        );
 
         Self {
             framework,
@@ -70,8 +83,10 @@ impl<'f> BlockBuilder<'f> {
             consensus_data,
             reward,
             block_source,
-            used_utxo,
             block_signing_key: None,
+            used_utxo,
+            account_nonce_tracker,
+            tokens_data,
         }
     }
 
@@ -87,36 +102,57 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Adds a transaction that uses random utxos
+    /// Adds a transaction that uses random utxos and accounts
     pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
-        let utxo_set = self.framework.storage.read_utxo_set().unwrap();
+        let utxo_set = self
+            .framework
+            .storage
+            .read_utxo_set()
+            .unwrap()
+            .into_iter()
+            .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
+            .collect();
 
-        if !utxo_set.is_empty() {
-            // TODO: get n utxos as inputs and create m new outputs
-            let index = rng.gen_range(0..utxo_set.len());
-            let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
-            if !self.used_utxo.contains(outpoint) {
-                let new_utxo_data = create_multiple_utxo_data(
-                    &self.framework.chainstate,
-                    outpoint.source_id(),
-                    outpoint.output_index() as usize,
-                    utxo.output(),
-                    rng,
-                );
+        let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
+            self.account_nonce_tracker
+                .get(&account)
+                .copied()
+                .or_else(|| self.framework.storage.get_account_nonce_count(account).unwrap())
+        });
 
-                if let Some((witness, input, output)) = new_utxo_data {
-                    self.used_utxo.insert(outpoint.clone());
-                    return self.add_transaction(
-                        SignedTransaction::new(
-                            Transaction::new(0, vec![input], output).unwrap(),
-                            vec![witness],
-                        )
-                        .expect("invalid witness count"),
-                    );
-                }
-            }
+        let (tx, new_tokens_delta) = super::random_tx_maker::RandomTxMaker::new(
+            &self.framework.chainstate,
+            &utxo_set,
+            &self.tokens_data,
+            account_nonce_getter,
+        )
+        .make(rng);
+
+        if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
+            // flush new tokens info to the in memory store
+            let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_data);
+            tokens_db.merge_with_delta(new_tokens_delta).unwrap();
+
+            // update used utxo set because this function can be called multiple times without flushing data to storage
+            tx.inputs().iter().for_each(|input| {
+                match input {
+                    TxInput::Utxo(utxo_outpoint) => {
+                        self.used_utxo.insert(utxo_outpoint.clone());
+                    }
+                    TxInput::Account(account) => {
+                        self.account_nonce_tracker
+                            .insert((*account.account()).into(), account.nonce());
+                    }
+                };
+            });
+
+            let witnesses = tx.inputs().iter().map(|_| super::empty_witness(rng)).collect();
+            let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
+
+            self.add_transaction(tx)
+        } else {
+            self
         }
-        self
     }
 
     /// Returns regular transaction output(s) if any, otherwise returns block reward outputs

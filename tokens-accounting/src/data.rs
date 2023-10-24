@@ -33,6 +33,15 @@ pub struct TokensAccountingData {
     pub circulating_supply: BTreeMap<TokenId, Amount>,
 }
 
+impl TokensAccountingData {
+    pub fn new() -> Self {
+        Self {
+            token_data: BTreeMap::new(),
+            circulating_supply: BTreeMap::new(),
+        }
+    }
+}
+
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct TokensAccountingDeltaData {
     pub(crate) token_data: DeltaDataCollection<TokenId, TokenData>,
