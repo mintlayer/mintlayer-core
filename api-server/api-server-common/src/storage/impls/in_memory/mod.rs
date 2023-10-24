@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
@@ -30,6 +30,7 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
+    _address_balance_table: BTreeMap<String, ()>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
@@ -41,6 +42,7 @@ impl ApiServerInMemoryStorage {
         let mut result = Self {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
+            _address_balance_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
@@ -54,6 +56,11 @@ impl ApiServerInMemoryStorage {
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         Ok(true)
+    }
+
+    fn get_address_balance(&self, _address: &str) -> Result<Option<Amount>, ApiServerStorageError> {
+	// TODO
+        Ok(Some(Amount::ZERO))
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
@@ -121,6 +128,24 @@ impl ApiServerInMemoryStorage {
         self.best_block = (0.into(), chain_config.genesis_block_id());
         self.storage_version = CURRENT_STORAGE_VERSION;
 
+        Ok(())
+    }
+
+    fn del_address_balance_above_height(
+        &mut self,
+        _block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+	// TODO
+        Ok(())
+    }
+
+    fn set_address_balance_at_height(
+        &mut self,
+        _address: &str,
+        _amount: Amount,
+        _block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+	// TODO
         Ok(())
     }
 
