@@ -85,12 +85,23 @@ use self::{
 
 #[derive(Default, Debug)]
 pub struct ConnectionCountLimits {
+    /// Maximum allowed number of inbound connections.
+    pub max_inbound_connections: MaxInboundConnections,
+
+    /// The number of inbound peers to preserve based on the address group.
     pub preserved_inbound_count_address_group: PreservedInboundCountAddressGroup,
+    /// The number of inbound peers to preserve based on ping.
     pub preserved_inbound_count_ping: PreservedInboundCountPing,
+    /// The number of inbound peers to preserve based on the last time they sent us new blocks.
     pub preserved_inbound_count_new_blocks: PreservedInboundCountNewBlocks,
+    /// The number of inbound peers to preserve based on the last time they sent us new transactions.
     pub preserved_inbound_count_new_transactions: PreservedInboundCountNewTransactions,
 
+    /// The desired number of full relay outbound connections.
     pub outbound_full_relay_count: OutboundFullRelayCount,
+    /// The desired number of block relay outbound connections.
+    /// This is supposed to always include one temporary connection, so the value must
+    /// always be greater than zero.
     pub outbound_block_relay_count: OutboundBlockRelayCount,
 }
 
@@ -108,12 +119,8 @@ impl ConnectionCountLimits {
     }
 }
 
-// Desired number of full relay outbound connections.
-// This value is constant because users should not change this.
+make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(OutboundFullRelayCount, usize, 8);
-
-// Desired number of block relay outbound connections (two permanent and one temporary).
-// This value is constant because users should not change this.
 make_config_setting!(OutboundBlockRelayCount, usize, 3);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
@@ -668,7 +675,8 @@ where
                 // Outbound peer count is not checked because the node initiates new connections
                 // only when needed or from RPC requests.
                 // TODO: Always allow connections from the whitelisted IPs
-                if self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
+                if self.inbound_peer_count()
+                    >= *self.p2p_config.connection_count_limits.max_inbound_connections
                     && !self.try_evict_random_inbound_connection()
                 {
                     log::info!("no peer is selected for eviction, new connection is dropped");

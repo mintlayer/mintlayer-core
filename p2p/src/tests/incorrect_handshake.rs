@@ -58,7 +58,8 @@ where
 
     let (stream, _) = listener.accept().await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, *p2p_config.max_message_size);
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
 
     let msg = msg_stream.recv().await.unwrap();
     assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
@@ -123,7 +124,8 @@ where
 
     let stream = transport.connect(*test_node.local_address()).await.unwrap();
 
-    let mut msg_stream = BufferedTranscoder::new(stream, *p2p_config.max_message_size);
+    let mut msg_stream =
+        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
 
     // Send some other message instead of Hello.
     msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();

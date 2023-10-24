@@ -56,7 +56,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = iter::repeat(block.header().clone())
-            .take(*p2p_config.msg_header_count_limit + 1)
+            .take(*p2p_config.protocol_config.msg_header_count_limit + 1)
             .collect();
         peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
@@ -213,7 +213,6 @@ async fn disconnect() {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -222,15 +221,10 @@ async fn disconnect() {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
+            protocol_config: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_p2p_config(Arc::clone(&p2p_config))

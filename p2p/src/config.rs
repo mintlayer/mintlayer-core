@@ -22,9 +22,9 @@ use utils::make_config_setting;
 use crate::{
     net::types::services::{Service, Services},
     peer_manager::ConnectionCountLimits,
+    protocol::ProtocolConfig,
 };
 
-make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
@@ -33,12 +33,6 @@ make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
-make_config_setting!(HeaderLimit, usize, 2000);
-make_config_setting!(MaxLocatorSize, usize, 101);
-make_config_setting!(RequestedBlocksLimit, usize, 500);
-make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
-make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
-make_config_setting!(MaxUnconnectedHeaders, usize, 10);
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
 make_config_setting!(BlockRelayPeers, bool, true);
 
@@ -71,13 +65,6 @@ impl From<NodeType> for Services {
 }
 
 /// The p2p subsystem configuration.
-// TODO: some of these "configuration options" should never be changed in production code,
-// because their values are a part of the protocol, e.g. this includes msg_header_count_limit and
-// max_request_blocks_count. Some other, like msg_max_locator_count, are never changed even
-// in tests. It might be better to separate these "settings" off into a separate struct and/or
-// make some of them constants (and the constant corresponding to msg_max_locator_count may
-// even be moved to chainstate, where locators are actually produced).
-// See the issue https://github.com/mintlayer/mintlayer-core/issues/1201
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
@@ -93,8 +80,6 @@ pub struct P2pConfig {
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.
     pub reserved_nodes: Vec<IpOrSocketAddress>,
-    /// Maximum allowed number of inbound connections.
-    pub max_inbound_connections: MaxInboundConnections,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.
@@ -112,25 +97,14 @@ pub struct P2pConfig {
     pub node_type: NodeTypeSetting,
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.
     pub allow_discover_private_ips: AllowDiscoverPrivateIps,
-    /// A maximum allowed number of headers in one message.
-    pub msg_header_count_limit: HeaderLimit,
-    /// A maximum number of the elements in the locator.
-    pub msg_max_locator_count: MaxLocatorSize,
-    /// A maximum number of blocks that can be requested from a single peer.
-    pub max_request_blocks_count: RequestedBlocksLimit,
     /// User agent value of this node (sent to peers over the network).
     pub user_agent: UserAgent,
-    /// A maximum size of a p2p message in bytes.
-    pub max_message_size: MaxMessageSize,
-    /// A maximum number of announcements (hashes) for which we haven't receive transactions.
-    pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// A maximum number of singular unconnected headers that a V1 peer can send before
-    /// it will be considered malicious.
-    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
     /// Enable/disable block relay peers (only used in unit tests)
     pub enable_block_relay_peers: BlockRelayPeers,
-    /// Various limits for connection counts; should only be overridden by tests.
+    /// Various limits for connection counts; these should only be overridden in tests.
     pub connection_count_limits: ConnectionCountLimits,
+    /// Various limits related to the protocol; these should only be overridden in tests.
+    pub protocol_config: ProtocolConfig,
 }

@@ -28,7 +28,7 @@ use crate::{
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
-    protocol::ProtocolVersion,
+    protocol::{ProtocolConfig, ProtocolVersion},
     sync::tests::helpers::{make_new_blocks, TestNode},
     testing_utils::for_each_protocol_version,
     types::peer_id::PeerId,
@@ -144,10 +144,18 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
 
     let chain_config = Arc::new(create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        // Note: max_request_blocks_count doesn't really matter here. But we'll be sending
-        // one block at a time, so it's better to pretend that we do that because of the limit
-        // (just in case it becomes important in the future, like it is for msg_header_count_limit).
-        max_request_blocks_count: 1.into(),
+        protocol_config: ProtocolConfig {
+            // Note: max_request_blocks_count doesn't really matter here. But we'll be sending
+            // one block at a time, so it's better to pretend that we do that because of the limit
+            // (just in case it becomes important in the future, like it is for msg_header_count_limit).
+            max_request_blocks_count: 1.into(),
+
+            msg_header_count_limit: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+            max_singular_unconnected_headers: Default::default(),
+        },
         sync_stalling_timeout: STALLING_TIMEOUT.into(),
 
         bind_addresses: Default::default(),
@@ -155,7 +163,6 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -164,12 +171,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_singular_unconnected_headers: Default::default(),
         enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
     });
@@ -243,7 +245,6 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
 
     let chain_config = Arc::new(create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        max_request_blocks_count: Default::default(),
         sync_stalling_timeout: STALLING_TIMEOUT.into(),
 
         bind_addresses: Default::default(),
@@ -251,7 +252,6 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -260,14 +260,10 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_singular_unconnected_headers: Default::default(),
         enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
+        protocol_config: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)

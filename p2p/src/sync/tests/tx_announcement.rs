@@ -35,6 +35,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{SyncMessage, TransactionResponse},
+    protocol::ProtocolConfig,
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -146,7 +147,6 @@ async fn no_transaction_service(#[case] seed: Seed) {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -154,16 +154,11 @@ async fn no_transaction_service(#[case] seed: Seed) {
             ping_timeout: Default::default(),
             max_clock_diff: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
+            protocol_config: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
@@ -207,14 +202,21 @@ async fn too_many_announcements(#[case] seed: Seed) {
         tf.make_block_builder().build_and_process().unwrap().unwrap();
 
         let p2p_config = Arc::new(P2pConfig {
-            max_peer_tx_announcements: 0.into(),
+            protocol_config: ProtocolConfig {
+                max_peer_tx_announcements: 0.into(),
+
+                msg_header_count_limit: Default::default(),
+                msg_max_locator_count: Default::default(),
+                max_request_blocks_count: Default::default(),
+                max_message_size: Default::default(),
+                max_singular_unconnected_headers: Default::default(),
+            },
 
             bind_addresses: Default::default(),
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -223,12 +225,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            max_message_size: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),

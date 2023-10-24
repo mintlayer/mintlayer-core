@@ -215,7 +215,6 @@ fn test_addr_list_handling_outbound() {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -224,15 +223,10 @@ fn test_addr_list_handling_outbound() {
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         connection_count_limits: Default::default(),
+        protocol_config: Default::default(),
     });
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();

@@ -62,7 +62,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let blocks = iter::repeat(block.get_id())
-            .take(*p2p_config.max_request_blocks_count + 1)
+            .take(*p2p_config.protocol_config.max_request_blocks_count + 1)
             .collect();
         peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(blocks)))
             .await;

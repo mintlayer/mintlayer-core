@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use p2p::{
     config::{NodeType, P2pConfig},
+    peer_manager::ConnectionCountLimits,
     types::ip_or_socket_address::IpOrSocketAddress,
 };
 
@@ -95,7 +96,6 @@ impl From<P2pConfigFile> for P2pConfig {
             disable_noise: c.disable_noise,
             boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
             reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
-            max_inbound_connections: c.max_inbound_connections.into(),
             ban_threshold: c.ban_threshold.into(),
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             max_clock_diff: c.max_clock_diff.map(Duration::from_secs).into(),
@@ -108,19 +108,24 @@ impl From<P2pConfigFile> for P2pConfig {
             node_type: c.node_type.map(Into::into).into(),
 
             allow_discover_private_ips: Default::default(),
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_request_blocks_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: c
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             enable_block_relay_peers: Default::default(),
-            connection_count_limits: Default::default(),
+            connection_count_limits: ConnectionCountLimits {
+                max_inbound_connections: c.max_inbound_connections.into(),
+
+                preserved_inbound_count_address_group: Default::default(),
+                preserved_inbound_count_ping: Default::default(),
+                preserved_inbound_count_new_blocks: Default::default(),
+                preserved_inbound_count_new_transactions: Default::default(),
+
+                outbound_full_relay_count: Default::default(),
+                outbound_block_relay_count: Default::default(),
+            },
+            protocol_config: Default::default(),
         }
     }
 }

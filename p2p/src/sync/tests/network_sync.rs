@@ -24,6 +24,7 @@ use test_utils::random::Seed;
 use crate::{
     config::P2pConfig,
     message::SyncMessage,
+    protocol::ProtocolConfig,
     sync::tests::helpers::{
         make_new_block, make_new_blocks, make_new_top_blocks,
         test_node_group::{MsgAction, TestNodeGroup},
@@ -44,15 +45,21 @@ async fn basic(#[case] seed: Seed) {
         let time_getter = P2pBasicTestTimeGetter::new();
 
         let p2p_config = Arc::new(P2pConfig {
-            msg_header_count_limit: 10.into(),
-            max_request_blocks_count: 5.into(),
+            protocol_config: ProtocolConfig {
+                msg_header_count_limit: 10.into(),
+                max_request_blocks_count: 5.into(),
+
+                msg_max_locator_count: Default::default(),
+                max_message_size: Default::default(),
+                max_peer_tx_announcements: Default::default(),
+                max_singular_unconnected_headers: Default::default(),
+            },
 
             bind_addresses: Default::default(),
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -61,11 +68,7 @@ async fn basic(#[case] seed: Seed) {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_max_locator_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
@@ -280,15 +283,21 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         const MAX_REQUEST_BLOCKS_COUNT: usize = 5;
 
         let p2p_config = Arc::new(P2pConfig {
-            msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
-            max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
+            protocol_config: ProtocolConfig {
+                msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
+                max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
+
+                msg_max_locator_count: Default::default(),
+                max_message_size: Default::default(),
+                max_peer_tx_announcements: Default::default(),
+                max_singular_unconnected_headers: Default::default(),
+            },
 
             bind_addresses: Default::default(),
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
-            max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -297,11 +306,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            msg_max_locator_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),

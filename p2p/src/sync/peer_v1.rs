@@ -267,7 +267,7 @@ where
             // therefore, they might ban us eventually.
             if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block_id.is_some()
             {
-                let limit = *self.p2p_config.msg_header_count_limit;
+                let limit = *self.p2p_config.protocol_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
 
                 let block_ids: Vec<_> = self
@@ -361,7 +361,7 @@ where
 
     async fn request_headers(&mut self) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
-        if locator.len() > *self.p2p_config.msg_max_locator_count {
+        if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
             // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
             // so we should never get here in production code. Moreover, currently it's not
             // modified even in tests. TODO: make it a constant.
@@ -369,7 +369,7 @@ where
                 "[peer id = {}] Sending locator of the length {}, which exceeds the maximum length {:?}",
                 self.id(),
                 locator.len(),
-                self.p2p_config.msg_max_locator_count
+                self.p2p_config.protocol_config.msg_max_locator_count
             );
         }
 
@@ -406,10 +406,10 @@ where
     async fn handle_header_request(&mut self, locator: Locator) -> Result<()> {
         log::debug!("[peer id = {}] Handling header request", self.id());
 
-        if locator.len() > *self.p2p_config.msg_max_locator_count {
+        if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
             return Err(P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(
                 locator.len(),
-                *self.p2p_config.msg_max_locator_count,
+                *self.p2p_config.protocol_config.msg_max_locator_count,
             )));
         }
 
@@ -428,7 +428,7 @@ where
         }
 
         // Obtain headers and also determine the new value for peers_best_block_that_we_have.
-        let header_count_limit = *self.p2p_config.msg_header_count_limit;
+        let header_count_limit = *self.p2p_config.protocol_config.msg_header_count_limit;
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
         let (headers, peers_best_block_that_we_have) = self
             .chainstate_handle
@@ -496,13 +496,14 @@ where
 
         // Check that a peer doesn't exceed the blocks limit.
         self.p2p_config
+            .protocol_config
             .max_request_blocks_count
             .checked_sub(block_ids.len())
             .and_then(|n| n.checked_sub(self.outgoing.blocks_queue.len()))
             .ok_or(P2pError::ProtocolError(
                 ProtocolError::BlocksRequestLimitExceeded(
                     block_ids.len() + self.outgoing.blocks_queue.len(),
-                    *self.p2p_config.max_request_blocks_count,
+                    *self.p2p_config.protocol_config.max_request_blocks_count,
                 ),
             ))?;
 
@@ -596,11 +597,11 @@ where
         let last_header = headers.last().expect("Headers shouldn't be empty");
         self.wait_for_clock_diff(last_header.timestamp()).await;
 
-        if headers.len() > *self.p2p_config.msg_header_count_limit {
+        if headers.len() > *self.p2p_config.protocol_config.msg_header_count_limit {
             return Err(P2pError::ProtocolError(
                 ProtocolError::HeadersLimitExceeded(
                     headers.len(),
-                    *self.p2p_config.msg_header_count_limit,
+                    *self.p2p_config.protocol_config.msg_header_count_limit,
                 ),
             ));
         }
@@ -666,7 +667,7 @@ where
                     self.incoming.singular_unconnected_headers_count
                 );
                 if self.incoming.singular_unconnected_headers_count
-                    <= *self.p2p_config.max_singular_unconnected_headers
+                    <= *self.p2p_config.protocol_config.max_singular_unconnected_headers
                 {
                     self.request_headers().await?;
                     return Ok(());
@@ -699,7 +700,8 @@ where
             return Ok(());
         }
 
-        let peer_may_have_more_headers = headers.len() == *self.p2p_config.msg_header_count_limit;
+        let peer_may_have_more_headers =
+            headers.len() == *self.p2p_config.protocol_config.msg_header_count_limit;
 
         // Filter out any existing headers from "headers" and determine the new value for
         // peers_best_block_that_we_have.
@@ -913,10 +915,12 @@ where
             )));
         }
 
-        if self.announced_transactions.len() >= *self.p2p_config.max_peer_tx_announcements {
+        if self.announced_transactions.len()
+            >= *self.p2p_config.protocol_config.max_peer_tx_announcements
+        {
             return Err(P2pError::ProtocolError(
                 ProtocolError::TransactionAnnouncementLimitExceeded(
-                    *self.p2p_config.max_peer_tx_announcements,
+                    *self.p2p_config.protocol_config.max_peer_tx_announcements,
                 ),
             ));
         }
@@ -949,9 +953,9 @@ where
             return Ok(());
         }
 
-        if headers.len() > *self.p2p_config.max_request_blocks_count {
+        if headers.len() > *self.p2p_config.protocol_config.max_request_blocks_count {
             self.incoming.pending_headers =
-                headers.split_off(*self.p2p_config.max_request_blocks_count);
+                headers.split_off(*self.p2p_config.protocol_config.max_request_blocks_count);
         }
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();

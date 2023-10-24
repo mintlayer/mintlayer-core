@@ -187,8 +187,10 @@ mod tests {
 
         let (socket1, socket2) =
             get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
-        let mut sender = BufferedTranscoder::new(socket1, *p2p_config.max_message_size);
-        let mut receiver = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
+        let mut sender =
+            BufferedTranscoder::new(socket1, *p2p_config.protocol_config.max_message_size);
+        let mut receiver =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
 
         for message in messages {
             sender.send(message.clone()).await.unwrap();

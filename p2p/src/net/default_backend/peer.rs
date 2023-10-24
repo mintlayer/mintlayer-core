@@ -109,7 +109,7 @@ where
         backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
     ) -> Self {
-        let socket = BufferedTranscoder::new(socket, *p2p_config.max_message_size);
+        let socket = BufferedTranscoder::new(socket, *p2p_config.protocol_config.max_message_size);
 
         Self {
             peer_id,
@@ -418,7 +418,8 @@ mod tests {
             peer
         });
 
-        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
+        let mut socket2 =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
@@ -499,7 +500,8 @@ mod tests {
             peer
         });
 
-        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
+        let mut socket2 =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
         socket2.recv().await.unwrap();
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::HelloAck {
@@ -575,7 +577,8 @@ mod tests {
         let handle =
             logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
 
-        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
+        let mut socket2 =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
@@ -640,7 +643,8 @@ mod tests {
         let handle =
             logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
 
-        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
+        let mut socket2 =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(Message::HeaderListRequest(HeaderListRequest::new(
