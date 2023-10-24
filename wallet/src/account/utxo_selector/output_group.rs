@@ -41,7 +41,7 @@ pub struct OutputGroup {
 
 /// Should we pay fee with this currency or not in the case we pay the total fees with another
 /// currency. Here Currency refers to either a coin or a token_id.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PayFee {
     PayFeeWithThisCurrency,
     DoNotPayFeeWithThisCurrency,
@@ -56,13 +56,15 @@ impl OutputGroup {
     ) -> Result<Self, UtxoSelectorError> {
         let output_value = match &output.1 {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+            TxOutput::IssueNft(token_id, _, _) => {
+                OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+            }
             TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => {
+            | TxOutput::IssueFungibleToken(_) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))

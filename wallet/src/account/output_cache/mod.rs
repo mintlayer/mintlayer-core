@@ -13,15 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::Add,
+};
 
 use common::{
     chain::{
-        tokens::{is_token_or_nft_issuance, make_token_id, TokenId},
+        output_value::OutputValue,
+        tokens::{
+            is_token_or_nft_issuance, make_token_id, TokenId, TokenIssuance, TokenTotalSupply,
+        },
         AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Id},
+    primitives::{id::WithId, Amount, Id},
 };
 use pos_accounting::make_delegation_id;
 use utils::ensure;
@@ -74,6 +80,166 @@ impl PoolData {
     }
 }
 
+pub enum TokenCurrentSupplyState {
+    Fixed(Amount, Amount), // fixed to a certain amount
+    Lockable(Amount),      // not known in advance but can be locked once at some point in time
+    Locked(Amount),        // Locked
+    Unlimited(Amount),     // limited only by the Amount data type
+}
+
+impl From<TokenTotalSupply> for TokenCurrentSupplyState {
+    fn from(value: TokenTotalSupply) -> Self {
+        match value {
+            TokenTotalSupply::Fixed(amount) => TokenCurrentSupplyState::Fixed(amount, Amount::ZERO),
+            TokenTotalSupply::Lockable => TokenCurrentSupplyState::Lockable(Amount::ZERO),
+            TokenTotalSupply::Unlimited => TokenCurrentSupplyState::Unlimited(Amount::ZERO),
+        }
+    }
+}
+
+impl TokenCurrentSupplyState {
+    pub fn str_state(&self) -> &'static str {
+        match self {
+            Self::Unlimited(_) => "Unlimited",
+            Self::Locked(_) => "Locked",
+            Self::Lockable(_) => "Lockable",
+            Self::Fixed(_, _) => "Fixed",
+        }
+    }
+
+    pub fn check_can_mint(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::Unlimited(_) | Self::Lockable(_) => Ok(()),
+            Self::Fixed(max, current) => {
+                let changed = current.add(amount).ok_or(WalletError::OutputAmountOverflow)?;
+                ensure!(
+                    changed <= *max,
+                    WalletError::CannotMintFixedTokenSupply(*max, *current, amount)
+                );
+                Ok(())
+            }
+            Self::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    pub fn check_can_unmint(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::Unlimited(current) | Self::Lockable(current) | Self::Fixed(_, current) => {
+                ensure!(
+                    *current >= amount,
+                    WalletError::CannotUnmintTokenSupply(amount, *current)
+                );
+                Ok(())
+            }
+            Self::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    pub fn check_can_lock(&self) -> WalletResult<()> {
+        match self {
+            TokenCurrentSupplyState::Lockable(_) => Ok(()),
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Locked(_) => {
+                Err(WalletError::CannotLockTokenSupply(self.str_state()))
+            }
+        }
+    }
+
+    pub fn current_supply(&self) -> Amount {
+        match self {
+            Self::Unlimited(amount)
+            | Self::Fixed(_, amount)
+            | Self::Locked(amount)
+            | Self::Lockable(amount) => *amount,
+        }
+    }
+
+    fn mint(&self, amount: Amount) -> WalletResult<TokenCurrentSupplyState> {
+        match self {
+            TokenCurrentSupplyState::Lockable(current) => Ok(TokenCurrentSupplyState::Lockable(
+                (*current + amount).ok_or(WalletError::OutputAmountOverflow)?,
+            )),
+            TokenCurrentSupplyState::Unlimited(current) => Ok(TokenCurrentSupplyState::Unlimited(
+                (*current + amount).ok_or(WalletError::OutputAmountOverflow)?,
+            )),
+            TokenCurrentSupplyState::Fixed(max, current) => {
+                let changed = (*current + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                ensure!(
+                    changed <= *max,
+                    WalletError::CannotMintFixedTokenSupply(*max, *current, amount)
+                );
+                Ok(TokenCurrentSupplyState::Fixed(*max, changed))
+            }
+            TokenCurrentSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    fn unmint(&self, amount: Amount) -> WalletResult<TokenCurrentSupplyState> {
+        match self {
+            TokenCurrentSupplyState::Lockable(current) => Ok(TokenCurrentSupplyState::Lockable(
+                (*current - amount)
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
+            )),
+            TokenCurrentSupplyState::Unlimited(current) => Ok(TokenCurrentSupplyState::Unlimited(
+                (*current - amount)
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
+            )),
+            TokenCurrentSupplyState::Fixed(max, current) => Ok(TokenCurrentSupplyState::Fixed(
+                *max,
+                (*current - amount)
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
+            )),
+            TokenCurrentSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    fn lock(&self) -> WalletResult<TokenCurrentSupplyState> {
+        match self {
+            TokenCurrentSupplyState::Lockable(current) => {
+                Ok(TokenCurrentSupplyState::Locked(*current))
+            }
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Locked(_) => {
+                Err(WalletError::CannotLockTokenSupply(self.str_state()))
+            }
+        }
+    }
+
+    fn unlock(&self) -> WalletResult<TokenCurrentSupplyState> {
+        match self {
+            TokenCurrentSupplyState::Locked(current) => {
+                Ok(TokenCurrentSupplyState::Lockable(*current))
+            }
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Lockable(_) => {
+                Err(WalletError::InconsistentUnlockTokenSupply(self.str_state()))
+            }
+        }
+    }
+}
+
+pub struct TokenIssuanceData {
+    pub total_supply: TokenCurrentSupplyState,
+    pub reissuance_controller: Destination,
+    pub last_nonce: Option<AccountNonce>,
+    /// last parent transaction if the parent is unconfirmed
+    pub last_parent: Option<OutPointSourceId>,
+}
+
+impl TokenIssuanceData {
+    fn new(data: TokenTotalSupply, reissuance_controller: Destination) -> Self {
+        Self {
+            total_supply: data.into(),
+            reissuance_controller,
+            last_nonce: None,
+            last_parent: None,
+        }
+    }
+}
+
 /// A helper structure for the UTXO search.
 ///
 /// All transactions and blocks from the DB are cached here. If a transaction
@@ -91,6 +257,7 @@ pub struct OutputCache {
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
+    token_issuance: BTreeMap<TokenId, TokenIssuanceData>,
 }
 
 impl OutputCache {
@@ -101,6 +268,7 @@ impl OutputCache {
             unconfirmed_descendants: BTreeMap::new(),
             pools: BTreeMap::new(),
             delegations: BTreeMap::new(),
+            token_issuance: BTreeMap::new(),
         }
     }
 
@@ -167,8 +335,12 @@ impl OutputCache {
         self.delegations.get(delegation_id)
     }
 
+    pub fn token_data(&self, token_id: &TokenId) -> Option<&TokenIssuanceData> {
+        self.token_issuance.get(token_id)
+    }
+
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
-        let already_present = self.txs.contains_key(&tx_id);
+        let already_present = self.txs.get(&tx_id).map_or(false, |tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
             | TxState::InMempool(_)
@@ -182,15 +354,19 @@ impl OutputCache {
 
         self.update_inputs(&tx, is_unconfirmed, &tx_id, already_present)?;
 
-        if let Some(block_info) = get_block_info(&tx) {
-            self.update_outputs(&tx, block_info)?;
-        }
+        self.update_outputs(&tx, get_block_info(&tx), already_present)?;
+
         self.txs.insert(tx_id, tx);
         Ok(())
     }
 
     /// Update the pool states for a newly confirmed transaction
-    fn update_outputs(&mut self, tx: &WalletTx, block_info: BlockInfo) -> Result<(), WalletError> {
+    fn update_outputs(
+        &mut self,
+        tx: &WalletTx,
+        block_info: Option<BlockInfo>,
+        already_present: bool,
+    ) -> Result<(), WalletError> {
         for (idx, output) in tx.outputs().iter().enumerate() {
             match output {
                 TxOutput::ProduceBlockFromStake(_, pool_id) => {
@@ -201,26 +377,34 @@ impl OutputCache {
                     }
                 }
                 TxOutput::CreateStakePool(pool_id, data) => {
-                    self.pools
-                        .entry(*pool_id)
-                        .and_modify(|entry| {
-                            entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
-                        })
-                        .or_insert_with(|| {
-                            PoolData::new(
-                                UtxoOutPoint::new(tx.id(), idx as u32),
-                                block_info,
-                                data.decommission_key().clone(),
-                            )
-                        });
+                    if let Some(block_info) = block_info {
+                        self.pools
+                            .entry(*pool_id)
+                            .and_modify(|entry| {
+                                entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                            })
+                            .or_insert_with(|| {
+                                PoolData::new(
+                                    UtxoOutPoint::new(tx.id(), idx as u32),
+                                    block_info,
+                                    data.decommission_key().clone(),
+                                )
+                            });
+                    }
                 }
                 TxOutput::DelegateStaking(_, delegation_id) => {
+                    if block_info.is_none() {
+                        continue;
+                    }
                     if let Some(delegation_data) = self.delegations.get_mut(delegation_id) {
                         delegation_data.not_staked_yet = false;
                     }
                     // Else it is not ours
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
+                    if block_info.is_none() {
+                        continue;
+                    }
                     let input0_outpoint = tx
                         .inputs()
                         .get(0)
@@ -236,10 +420,25 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
-                | TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
-                    // TODO: add support for tokens v1
-                    // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                TxOutput::IssueFungibleToken(issuance) => {
+                    if already_present {
+                        continue;
+                    }
+                    let input0_outpoint = tx.inputs();
+                    let token_id = make_token_id(input0_outpoint).ok_or(WalletError::NoUtxos)?;
+                    match issuance.as_ref() {
+                        TokenIssuance::V1(data) => {
+                            self.token_issuance.insert(
+                                token_id,
+                                TokenIssuanceData::new(
+                                    data.total_supply,
+                                    data.reissuance_controller.clone(),
+                                ),
+                            );
+                        }
+                    }
                 }
+                TxOutput::IssueNft(_, _, _) => {}
             };
         }
         Ok(())
@@ -281,12 +480,42 @@ impl OutputCache {
                                     )?;
                                 }
                             }
-                            AccountOp::MintTokens(_, _)
-                            | AccountOp::UnmintTokens(_)
-                            | AccountOp::LockTokenSupply(_) => {
-                                // TODO: add support for tokens v1
-                                // See https://github.com/mintlayer/mintlayer-core/issues/1237
-                                unimplemented!()
+                            AccountOp::MintTokens(token_id, amount) => {
+                                if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                    Self::update_token_issuance_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        token_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
+                                    data.total_supply = data.total_supply.mint(*amount)?;
+                                }
+                            }
+                            AccountOp::UnmintTokens(token_id) => {
+                                if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                    Self::update_token_issuance_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        token_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
+                                    let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
+                                    data.total_supply = data.total_supply.unmint(amount)?;
+                                }
+                            }
+                            | AccountOp::LockTokenSupply(token_id) => {
+                                if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                    Self::update_token_issuance_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        token_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
+                                    data.total_supply = data.total_supply.lock()?;
+                                }
                             }
                         }
                     }
@@ -327,6 +556,37 @@ impl OutputCache {
         Ok(())
     }
 
+    /// Update token issuance state with new tx input
+    fn update_token_issuance_state(
+        unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+        data: &mut TokenIssuanceData,
+        delegation_id: &TokenId,
+        outpoint: &common::chain::AccountOutPoint,
+        tx_id: &OutPointSourceId,
+    ) -> Result<(), WalletError> {
+        let next_nonce = data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(*delegation_id))?;
+
+        ensure!(
+            outpoint.nonce() == next_nonce,
+            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, outpoint.nonce())
+        );
+
+        data.last_nonce = Some(outpoint.nonce());
+        // update unconfirmed descendants
+        if let Some(descendants) = data
+            .last_parent
+            .as_ref()
+            .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
+        {
+            descendants.insert(tx_id.clone());
+        }
+        data.last_parent = Some(tx_id.clone());
+        Ok(())
+    }
+
     pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
@@ -344,12 +604,31 @@ impl OutputCache {
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountOp::MintTokens(_, _)
-                        | AccountOp::UnmintTokens(_)
-                        | AccountOp::LockTokenSupply(_) => {
-                            // TODO: add support for tokens v1
-                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
-                            unimplemented!()
+                        AccountOp::MintTokens(token_id, amount) => {
+                            if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                                data.total_supply = data.total_supply.unmint(*amount)?;
+                            }
+                        }
+
+                        AccountOp::UnmintTokens(token_id) => {
+                            if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                                let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
+                                data.total_supply = data.total_supply.mint(amount)?;
+                            }
+                        }
+                        AccountOp::LockTokenSupply(token_id) => {
+                            if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                                data.total_supply = data.total_supply.unlock()?;
+                            }
                         }
                     },
                 }
@@ -396,6 +675,11 @@ impl OutputCache {
                 utxo,
             ),
             WalletError::LockedUtxo(utxo.clone())
+        );
+
+        ensure!(
+            !is_v0_token_output(output),
+            WalletError::TokenV0Utxo(utxo.clone())
         );
 
         let token_id = match tx {
@@ -445,6 +729,7 @@ impl OutputCache {
                                 tx_block_info,
                                 outpoint,
                             )
+                            && !is_v0_token_output(output)
                     })
                     .map(move |(output, outpoint)| {
                         let token_id = match tx {
@@ -516,12 +801,47 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountOp::MintTokens(_, _)
-                                        | AccountOp::UnmintTokens(_)
-                                        | AccountOp::LockTokenSupply(_) => {
-                                            // TODO: add support for tokens v1
-                                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
-                                            unimplemented!()
+                                        AccountOp::MintTokens(token_id, amount) => {
+                                            if let Some(data) =
+                                                self.token_issuance.get_mut(token_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                                data.total_supply =
+                                                    data.total_supply.unmint(*amount)?;
+                                            }
+                                        }
+                                        | AccountOp::UnmintTokens(token_id) => {
+                                            if let Some(data) =
+                                                self.token_issuance.get_mut(token_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                                let amount = sum_burned_token_amount(
+                                                    tx.get_transaction().outputs(),
+                                                    token_id,
+                                                )?;
+                                                data.total_supply =
+                                                    data.total_supply.mint(amount)?;
+                                            }
+                                        }
+                                        | AccountOp::LockTokenSupply(token_id) => {
+                                            if let Some(data) =
+                                                self.token_issuance.get_mut(token_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                                data.total_supply = data.total_supply.unlock()?;
+                                            }
                                         }
                                     },
                                 }
@@ -536,6 +856,46 @@ impl OutputCache {
         }
 
         Ok(all_abandoned)
+    }
+}
+
+fn sum_burned_token_amount(
+    outputs: &[TxOutput],
+    token_id: &TokenId,
+) -> Result<Amount, WalletError> {
+    let amount = outputs
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Burn(OutputValue::TokenV1(tid, amount)) if tid == token_id => Some(*amount),
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _) => None,
+        })
+        .sum::<Option<Amount>>()
+        .ok_or(WalletError::OutputAmountOverflow);
+    amount
+}
+
+/// Check if the TxOutput is a v0 token
+fn is_v0_token_output(output: &TxOutput) -> bool {
+    match output {
+        TxOutput::LockThenTransfer(out, _, _) | TxOutput::Transfer(out, _) => match out {
+            OutputValue::TokenV0(_) => true,
+            OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+        },
+        TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::ProduceBlockFromStake(_, _) => false,
     }
 }
 

@@ -31,6 +31,7 @@ pub enum UtxoType {
     ProduceBlockFromStake = 1 << 4,
     CreateDelegationId = 1 << 5,
     DelegateStaking = 1 << 6,
+    IssueNft = 1 << 7,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +53,8 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         TxOutput::ProduceBlockFromStake(_, _) => Some(UtxoType::ProduceBlockFromStake),
         TxOutput::CreateDelegationId(_, _) => Some(UtxoType::CreateDelegationId),
         TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
-        TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => None,
+        TxOutput::IssueNft(_, _, _) => Some(UtxoType::IssueNft),
+        TxOutput::IssueFungibleToken(_) => None,
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {

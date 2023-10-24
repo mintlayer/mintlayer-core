@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{Currency, DelegationData, UtxoSelectorError};
+use crate::account::{Currency, CurrentFeeRate, DelegationData, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -103,6 +103,10 @@ pub enum WalletError {
     InconsistentProduceBlockFromStake(PoolId),
     #[error("Delegation nonce overflow for id: {0}")]
     DelegationNonceOverflow(DelegationId),
+    #[error("Token issuance nonce overflow for id: {0}")]
+    TokenIssuanceNonceOverflow(TokenId),
+    #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
@@ -135,6 +139,20 @@ pub enum WalletError {
     ConsumedUtxo(UtxoOutPoint),
     #[error("Selected UTXO is still locked")]
     LockedUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is a token v0 and cannot be used")]
+    TokenV0Utxo(UtxoOutPoint),
+    #[error("Cannot change a Locked Token supply")]
+    CannotChangeLockedTokenSupply,
+    #[error("Cannot lock Token supply in state: {0}")]
+    CannotLockTokenSupply(&'static str),
+    #[error("Cannot revert lock Token supply in state: {0}")]
+    InconsistentUnlockTokenSupply(&'static str),
+    #[error(
+        "Cannot mint Token over the fixed supply {0:?}, current supply {1:?} trying to mint {2:?}"
+    )]
+    CannotMintFixedTokenSupply(Amount, Amount, Amount),
+    #[error("Trying to unmint {0:?} but the current supply is {1:?}")]
+    CannotUnmintTokenSupply(Amount, Amount),
 }
 
 /// Result type used for the wallet
@@ -756,8 +774,10 @@ impl<B: storage::Backend> Wallet<B> {
                 request,
                 inputs,
                 latest_median_time,
-                current_fee_rate,
-                consolidate_fee_rate,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }
@@ -779,6 +799,75 @@ impl<B: storage::Backend> Wallet<B> {
                 delegation_id,
                 delegation_share,
                 current_fee_rate,
+            )
+        })
+    }
+
+    pub fn mint_tokens(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        amount: Amount,
+        destination: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.mint_tokens(
+                db_tx,
+                token_id,
+                destination,
+                amount,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn unmint_tokens(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        amount: Amount,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.unmint_tokens(
+                db_tx,
+                token_id,
+                amount,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn lock_token_supply(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.lock_token_supply(
+                db_tx,
+                token_id,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }
@@ -853,8 +942,10 @@ impl<B: storage::Backend> Wallet<B> {
                         destination,
                     },
                     latest_median_time,
-                    current_fee_rate,
-                    consolidate_fee_rate,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
                 )
             })?;
 
@@ -878,8 +969,10 @@ impl<B: storage::Backend> Wallet<B> {
                 stake_pool_arguments,
                 decommission_key,
                 latest_median_time,
-                current_fee_rate,
-                consolidate_fee_rate,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }

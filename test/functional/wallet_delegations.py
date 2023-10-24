@@ -389,7 +389,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
             assert_in("Success", await wallet.sync())
 
-            # check that we still don't have any delagations for this account
+            # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 0)
 
@@ -399,7 +399,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
             assert_in("Success", await wallet.sync())
 
-            # check that we still don't have any delagations for this account
+            # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 0)
 

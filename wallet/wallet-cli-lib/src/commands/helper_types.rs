@@ -21,10 +21,11 @@ use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp, ChainConfig, DelegationId, OutPointSourceId, PoolId,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        tokens::{TokenId, TokenTotalSupply},
+        ChainConfig, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -200,6 +201,92 @@ pub fn parse_utxo_outpoint(mut input: String) -> Result<UtxoOutPoint, WalletCliE
     };
 
     Ok(UtxoOutPoint::new(source_id, output_index))
+}
+
+/// Try to parse a total token supply from a string
+/// Valid values are "unlimited", "lockable" and "fixed(Amount)"
+pub fn parse_token_supply(
+    input: &str,
+    token_number_of_decimals: u8,
+) -> Result<TokenTotalSupply, WalletCliError> {
+    match input {
+        "unlimited" => Ok(TokenTotalSupply::Unlimited),
+        "lockable" => Ok(TokenTotalSupply::Lockable),
+        _ => parse_fixed_token_supply(input, token_number_of_decimals),
+    }
+}
+
+/// Try to parse a fixed total token supply in the format of "fixed(Amount)"
+fn parse_fixed_token_supply(
+    input: &str,
+    token_number_of_decimals: u8,
+) -> Result<TokenTotalSupply, WalletCliError> {
+    if let Some(inner) = input.strip_prefix("fixed(").and_then(|str| str.strip_suffix(')')) {
+        Ok(TokenTotalSupply::Fixed(parse_token_amount(
+            token_number_of_decimals,
+            inner,
+        )?))
+    } else {
+        Err(WalletCliError::InvalidInput(format!(
+            "Failed to parse token supply from {input}"
+        )))
+    }
+}
+
+pub fn to_per_thousand(
+    value_str: &str,
+    variable_name: &str,
+) -> Result<PerThousand, WalletCliError> {
+    PerThousand::from_decimal_str(value_str).ok_or(WalletCliError::InvalidInput(format!(
+        "Failed to parse {variable_name}. The decimal must be in the range [0.001,1.000] or [0.1%,100%]",
+    )))
+}
+
+pub fn parse_address(
+    chain_config: &ChainConfig,
+    address: &str,
+) -> Result<Address<Destination>, WalletCliError> {
+    Address::from_str(chain_config, address)
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
+}
+
+pub fn parse_pool_id(chain_config: &ChainConfig, pool_id: &str) -> Result<PoolId, WalletCliError> {
+    Address::<PoolId>::from_str(chain_config, pool_id)
+        .and_then(|address| address.decode_object(chain_config))
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid pool ID '{pool_id}': {e}")))
+}
+
+pub fn parse_token_id(
+    chain_config: &ChainConfig,
+    token_id: &str,
+) -> Result<TokenId, WalletCliError> {
+    Address::<TokenId>::from_str(chain_config, token_id)
+        .and_then(|address| address.decode_object(chain_config))
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid token ID '{token_id}': {e}")))
+}
+
+pub fn parse_coin_amount(
+    chain_config: &ChainConfig,
+    value: &str,
+) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
+        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+}
+
+pub fn parse_token_amount(
+    token_number_of_decimals: u8,
+    value: &str,
+) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(value, token_number_of_decimals)
+        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+}
+
+pub fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
+    value.into_fixedpoint_str(chain_config.coin_decimals())
+}
+
+pub fn print_token_amount(token_number_of_decimals: u8, value: Amount) -> String {
+    value.into_fixedpoint_str(token_number_of_decimals)
 }
 
 #[cfg(test)]

@@ -21,7 +21,7 @@ pub mod wallet;
 pub mod wallet_events;
 
 pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
+pub use crate::send_request::{get_tx_output_destination, SendRequest};
 pub use crate::wallet::{Wallet, WalletError, WalletResult};
 
 pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;

@@ -27,6 +27,7 @@ use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;
 
+#[derive(Debug)]
 pub struct SelectionResult {
     outputs: Vec<(TxInput, TxOutput)>,
     effective_value: Amount,
@@ -56,6 +57,11 @@ impl SelectionResult {
 
     pub fn get_change(&self) -> Amount {
         self.change
+    }
+
+    pub fn add_change(mut self, change: Amount) -> Result<Self, UtxoSelectorError> {
+        self.change = (self.change + change).ok_or(UtxoSelectorError::AmountArithmeticError)?;
+        Ok(self)
     }
 
     pub fn into_output_pairs(self) -> Vec<(TxInput, TxOutput)> {
@@ -663,6 +669,9 @@ pub fn select_coins(
     cost_of_change: Amount,
     coin_selection_algo: CoinSelectionAlgo,
 ) -> Result<SelectionResult, UtxoSelectorError> {
+    if selection_target == Amount::ZERO && pay_fees == PayFee::DoNotPayFeeWithThisCurrency {
+        return Ok(SelectionResult::new(selection_target));
+    }
     ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
 
     let total_available_value = utxo_pool

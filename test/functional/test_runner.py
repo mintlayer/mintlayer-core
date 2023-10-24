@@ -30,6 +30,7 @@ import configparser
 import datetime
 import locale
 import os
+import random
 import time
 import shutil
 import signal
@@ -132,6 +133,7 @@ BASE_SCRIPTS = [
     'wallet_recover_accounts.py',
     'wallet_get_address_usage.py',
     'wallet_tokens.py',
+    'wallet_tokens_change_supply.py',
     'wallet_nfts.py',
     'wallet_delegations.py',
     'wallet_high_fee.py',
@@ -443,6 +445,7 @@ class TestHandler:
         self.num_running = 0
         self.jobs = []
         self.use_term_control = use_term_control
+        self.randomseed = random.randrange(sys.maxsize)
 
     def get_next(self):
         while self.num_running < self.num_jobs and self.test_list:
@@ -451,6 +454,7 @@ class TestHandler:
             test = self.test_list.pop(0)
             portseed = len(self.test_list)
             portseed_arg = ["--portseed={}".format(portseed)]
+            randomseed_arg = [f"--randomseed={self.randomseed}"]
             log_stdout = tempfile.SpooledTemporaryFile(max_size=2**16)
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
             test_argv = test.split()
@@ -458,7 +462,7 @@ class TestHandler:
             tmpdir_arg = ["--tmpdir={}".format(testdir)]
             self.jobs.append((test,
                               time.time(),
-                              subprocess.Popen([sys.executable, self.tests_dir + test_argv[0]] + test_argv[1:] + self.flags + portseed_arg + tmpdir_arg,
+                              subprocess.Popen([sys.executable, self.tests_dir + test_argv[0]] + test_argv[1:] + self.flags + portseed_arg + tmpdir_arg + randomseed_arg,
                                                universal_newlines=True,
                                                stdout=log_stdout,
                                                stderr=log_stderr),
