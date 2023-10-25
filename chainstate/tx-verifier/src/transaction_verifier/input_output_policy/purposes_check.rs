@@ -171,6 +171,8 @@ pub fn check_tx_inputs_outputs_purposes(
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
             }
+            AccountOp::FreezeToken(_, _) => todo!(),
+            AccountOp::UnfreezeToken(_) => todo!(),
         },
     });
 

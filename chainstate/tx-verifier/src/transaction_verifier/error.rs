@@ -160,6 +160,8 @@ pub enum ConnectTransactionError {
     TotalFeeRequiredOverflow,
     #[error("Insufficient coins fee provided in a transaction: {0:?} actual, {1:?} required")]
     InsufficientCoinsFee(Amount, Amount),
+    #[error("Cannot perform any operations for freezed token {0}")]
+    TokenIsFreezed(TokenId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

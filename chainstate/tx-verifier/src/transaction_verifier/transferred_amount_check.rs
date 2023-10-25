@@ -214,7 +214,10 @@ where
             AccountOp::MintTokens(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
-            AccountOp::UnmintTokens(token_id) | AccountOp::LockTokenSupply(token_id) => {
+            AccountOp::UnmintTokens(token_id)
+            | AccountOp::LockTokenSupply(token_id)
+            | AccountOp::FreezeToken(token_id, _)
+            | AccountOp::UnfreezeToken(token_id) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },

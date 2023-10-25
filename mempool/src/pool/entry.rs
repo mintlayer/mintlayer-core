@@ -60,7 +60,9 @@ impl TxDependency {
             }
             AccountOp::MintTokens(_, _)
             | AccountOp::UnmintTokens(_)
-            | AccountOp::LockTokenSupply(_) => {
+            | AccountOp::LockTokenSupply(_)
+            | AccountOp::FreezeToken(_, _)
+            | AccountOp::UnfreezeToken(_) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new((*acct).into(), nonce))
             }
         }

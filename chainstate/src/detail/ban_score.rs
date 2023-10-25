@@ -151,6 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::TokenIsFreezed(_) => 100,
         }
     }
 }

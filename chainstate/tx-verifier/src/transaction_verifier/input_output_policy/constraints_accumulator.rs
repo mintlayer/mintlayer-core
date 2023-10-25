@@ -127,7 +127,9 @@ impl ConstrainedValueAccumulator {
                         }
                         AccountOp::MintTokens(_, _)
                         | AccountOp::LockTokenSupply(_)
-                        | AccountOp::UnmintTokens(_) => { /* do nothing */ }
+                        | AccountOp::UnmintTokens(_)
+                        | AccountOp::FreezeToken(_, _)
+                        | AccountOp::UnfreezeToken(_) => { /* do nothing */ }
                     };
                 }
             }

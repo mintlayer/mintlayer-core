@@ -180,6 +180,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
+            ConnectTransactionError::TokenIsFreezed(_) => 0,
         }
     }
 }

@@ -190,7 +190,7 @@ impl<'a> RandomTxMaker<'a> {
                         let to_mint =
                             Amount::from_atoms(rng.gen_range(1..supply_left.into_atoms()));
 
-                        let new_nonce = self.get_next_nonce(AccountType::TokenSupply(token_id));
+                        let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                         let account_input = TxInput::Account(AccountOutPoint::new(
                             new_nonce,
                             AccountOp::MintTokens(token_id, to_mint),
@@ -212,7 +212,7 @@ impl<'a> RandomTxMaker<'a> {
                 };
 
                 if !is_locked {
-                    let new_nonce = self.get_next_nonce(AccountType::TokenSupply(token_id));
+                    let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                     let account_input = TxInput::Account(AccountOutPoint::new(
                         new_nonce,
                         AccountOp::LockTokenSupply(token_id),
@@ -390,7 +390,7 @@ impl<'a> RandomTxMaker<'a> {
                             .entry(token_id)
                             .and_modify(|e| *e = ((e.0 + to_unmint).unwrap(), true));
 
-                        let new_nonce = self.get_next_nonce(AccountType::TokenSupply(token_id));
+                        let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                         let account_input = TxInput::Account(AccountOutPoint::new(
                             new_nonce,
                             AccountOp::UnmintTokens(token_id),
