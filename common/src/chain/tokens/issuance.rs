@@ -35,6 +35,22 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub enum IsTokenFreezable {
+    #[codec(index = 0)]
+    Yes,
+    #[codec(index = 1)]
+    No,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub enum IsTokenUnfreezable {
+    #[codec(index = 0)]
+    Yes,
+    #[codec(index = 1)]
+    No,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenIssuance {
     #[codec(index = 1)]
@@ -48,4 +64,5 @@ pub struct TokenIssuanceV1 {
     pub metadata_uri: Vec<u8>,
     pub total_supply: TokenTotalSupply,
     pub reissuance_controller: Destination,
+    pub is_freezable: IsTokenFreezable,
 }

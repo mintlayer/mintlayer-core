@@ -27,8 +27,8 @@ use common::{
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenIssuanceVersion,
-            TokenTotalSupply,
+            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenIssuanceVersion, TokenTotalSupply,
         },
         AccountNonce, AccountOp, AccountType, Block, ChainstateUpgrade, Destination, GenBlock,
         NetUpgrades, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
@@ -74,6 +74,7 @@ fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuance 
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         reissuance_controller: Destination::AnyoneCanSpend,
+        is_freezable: IsTokenFreezable::No,
     })
 }
 
@@ -293,6 +294,7 @@ fn token_issue_test(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
         assert_eq!(
@@ -315,6 +317,7 @@ fn token_issue_test(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
         assert_eq!(
@@ -349,6 +352,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         .to_vec(),
                     total_supply: TokenTotalSupply::Unlimited,
                     reissuance_controller: Destination::AnyoneCanSpend,
+                    is_freezable: IsTokenFreezable::No,
                 });
                 let (result, tx_id, block_id) = process_block_with_issuance(issuance);
 
@@ -379,6 +383,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
+                is_freezable: IsTokenFreezable::No,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
             assert_eq!(
@@ -407,6 +412,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
+                is_freezable: IsTokenFreezable::No,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
             assert_eq!(
@@ -430,6 +436,7 @@ fn token_issue_test(#[case] seed: Seed) {
             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
         assert_eq!(
@@ -3329,6 +3336,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            is_freezable: IsTokenFreezable::No,
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
@@ -3461,6 +3469,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            is_freezable: IsTokenFreezable::No,
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
@@ -3658,6 +3667,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            is_freezable: IsTokenFreezable::No,
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
@@ -3889,6 +3899,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
         });
 
         let tx = TransactionBuilder::new()
@@ -3925,6 +3936,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
+            is_freezable: IsTokenFreezable::No,
         });
 
         let tx = TransactionBuilder::new()
@@ -4039,3 +4051,5 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
             .unwrap();
     });
 }
+
+// FIXME: check freeze operation

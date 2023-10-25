@@ -1702,6 +1702,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                     total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
                     reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                    is_freezable: common::chain::tokens::IsTokenFreezable::No,
                 }),
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
@@ -1945,6 +1946,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
                 reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2172,6 +2174,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
                 reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2340,6 +2343,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Lockable,
                 reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -3069,3 +3073,5 @@ fn wallet_address_usage(#[case] seed: Seed) {
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 }
+
+// FIXME: add tests for freeze

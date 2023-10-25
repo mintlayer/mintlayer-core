@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::{TokenId, TokenTotalSupply},
+        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenTotalSupply},
         Destination, OutPointSourceId, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
@@ -34,6 +34,8 @@ use crate::{
     TokensAccountingCache, TokensAccountingDB, TokensAccountingOperations, TokensAccountingView,
 };
 
+// FIXME: test is freezable
+
 fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -> TokenData {
     TokenData::FungibleToken(FungibleTokenData::new_unchecked(
         random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
@@ -41,6 +43,9 @@ fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -
         random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         supply,
         locked,
+        IsTokenFreezable::No,
+        IsTokenUnfreezable::No,
+        false,
         Destination::AnyoneCanSpend,
     ))
 }

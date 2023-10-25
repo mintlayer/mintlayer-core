@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::{
     chain::{
-        tokens::{TokenId, TokenIssuance, TokenTotalSupply},
+        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenTotalSupply},
         Destination,
     },
     primitives::Amount,
@@ -99,6 +99,9 @@ pub struct FungibleTokenData {
     metadata_uri: Vec<u8>,
     total_supply: TokenTotalSupply,
     locked: bool,
+    is_freezable: IsTokenFreezable,
+    is_unfreezable: IsTokenUnfreezable,
+    freezed: bool,
     reissuance_controller: Destination,
 }
 
@@ -109,6 +112,9 @@ impl FungibleTokenData {
         metadata_uri: Vec<u8>,
         total_supply: TokenTotalSupply,
         locked: bool,
+        is_freezable: IsTokenFreezable,
+        is_unfreezable: IsTokenUnfreezable,
+        freezed: bool,
         reissuance_controller: Destination,
     ) -> Self {
         Self {
@@ -117,6 +123,9 @@ impl FungibleTokenData {
             metadata_uri,
             total_supply,
             locked,
+            is_freezable,
+            is_unfreezable,
+            freezed,
             reissuance_controller,
         }
     }
@@ -148,14 +157,17 @@ impl FungibleTokenData {
     pub fn try_lock(self) -> Result<Self, Self> {
         match self.total_supply {
             TokenTotalSupply::Fixed(_) | TokenTotalSupply::Unlimited => Err(self),
-            TokenTotalSupply::Lockable => Ok(Self {
-                token_ticker: self.token_ticker,
-                number_of_decimals: self.number_of_decimals,
-                metadata_uri: self.metadata_uri,
-                total_supply: self.total_supply,
-                locked: true,
-                reissuance_controller: self.reissuance_controller,
-            }),
+            TokenTotalSupply::Lockable => Ok(Self::new_unchecked(
+                self.token_ticker,
+                self.number_of_decimals,
+                self.metadata_uri,
+                self.total_supply,
+                true,
+                self.is_freezable,
+                self.is_unfreezable,
+                self.freezed,
+                self.reissuance_controller,
+            )),
         }
     }
 }
@@ -163,14 +175,23 @@ impl FungibleTokenData {
 impl From<TokenIssuance> for FungibleTokenData {
     fn from(issuance: TokenIssuance) -> Self {
         match issuance {
-            TokenIssuance::V1(issuance) => Self {
-                token_ticker: issuance.token_ticker,
-                number_of_decimals: issuance.number_of_decimals,
-                metadata_uri: issuance.metadata_uri,
-                total_supply: issuance.total_supply,
-                locked: false,
-                reissuance_controller: issuance.reissuance_controller,
-            },
+            TokenIssuance::V1(issuance) => {
+                let is_unfreezable = match issuance.is_freezable {
+                    IsTokenFreezable::Yes => IsTokenUnfreezable::Yes,
+                    IsTokenFreezable::No => IsTokenUnfreezable::No,
+                };
+                Self::new_unchecked(
+                    issuance.token_ticker,
+                    issuance.number_of_decimals,
+                    issuance.metadata_uri,
+                    issuance.total_supply,
+                    false,
+                    issuance.is_freezable,
+                    is_unfreezable,
+                    false,
+                    issuance.reissuance_controller,
+                )
+            }
         }
     }
 }
