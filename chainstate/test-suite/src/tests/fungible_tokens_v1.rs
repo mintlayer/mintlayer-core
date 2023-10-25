@@ -2723,7 +2723,6 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
         );
         // No reorg
         assert_eq!(tf.best_block_id(), block_c_id);
-        println!("token1: {}, token2: {}", token_id_1, token_id_2);
 
         // Mint some tokens
         let (block_e_id, _) = mint_tokens_in_block(

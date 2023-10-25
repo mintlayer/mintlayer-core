@@ -15,10 +15,12 @@
 
 use super::*;
 use chainstate_test_framework::TxVerificationStrategy;
+use common::chain::{tokens::TokenIssuanceVersion, ChainstateUpgrade, Destination, NetUpgrades};
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50, false)]
+#[trace]
 #[case(Seed::from_entropy(), 20, 50, true)]
 fn simulation(
     #[case] seed: Seed,
@@ -37,6 +39,18 @@ fn simulation(
                 max_tip_age: Default::default(),
             })
             .with_tx_verification_strategy(TxVerificationStrategy::Randomized(seed))
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                        )])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
             .build();
 
         for _ in 0..rng.gen_range(10..max_blocks) {
@@ -45,6 +59,7 @@ fn simulation(
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
+
             block_builder.build_and_process().unwrap().unwrap();
         }
     });

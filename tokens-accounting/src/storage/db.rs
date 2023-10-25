@@ -64,7 +64,7 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingDB<S> {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-        let balance_undo = other
+        let circulating_supply_undo = other
             .circulating_supply
             .consume()
             .into_iter()
@@ -98,7 +98,7 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingDB<S> {
 
         Ok(TokensAccountingDeltaUndoData {
             token_data: DeltaDataUndoCollection::from_data(data_undo),
-            circulating_supply: DeltaAmountCollection::from_iter(balance_undo),
+            circulating_supply: DeltaAmountCollection::from_iter(circulating_supply_undo),
         })
     }
 }

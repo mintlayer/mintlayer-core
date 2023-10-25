@@ -45,6 +45,14 @@ impl InMemoryTokensAccounting {
             circulating_supply,
         }
     }
+
+    pub fn tokens_data(&self) -> &BTreeMap<TokenId, TokenData> {
+        &self.tokens_data
+    }
+
+    pub fn circulating_supply(&self) -> &BTreeMap<TokenId, Amount> {
+        &self.circulating_supply
+    }
 }
 
 impl TokensAccountingStorageRead for InMemoryTokensAccounting {

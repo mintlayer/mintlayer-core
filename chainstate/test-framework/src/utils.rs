@@ -39,11 +39,10 @@ use common::{
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
+    random::Rng,
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
-use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use crypto::random::SliceRandom;
@@ -65,8 +64,10 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _) => None,
+        | TxOutput::IssueFungibleToken(_) => None,
+        TxOutput::IssueNft(token_id, _, _) => {
+            Some(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
+        }
     }
 }
 
@@ -141,134 +142,7 @@ pub fn create_utxo_data(
     }
 }
 
-/// Given an output as in input creates multiple new random outputs.
-pub fn create_multiple_utxo_data(
-    chainstate: &TestChainstate,
-    outsrc: OutPointSourceId,
-    index: usize,
-    output: &TxOutput,
-    rng: &mut (impl Rng + CryptoRng),
-) -> Option<(InputWitness, TxInput, Vec<TxOutput>)> {
-    let num_outputs = rng.gen_range(1..10);
-    let new_outputs = match get_output_value(output)? {
-        OutputValue::Coin(output_value) => {
-            let switch = rng.gen_range(0..3);
-            if switch == 0 {
-                // issue nft
-                let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
-                if output_value >= min_tx_fee {
-                    // Coin output is created intentionally besides issuance output in order to not waste utxo
-                    // (e.g. single genesis output on issuance)
-                    vec![
-                        TxOutput::Transfer(
-                            random_nft_issuance(chainstate.get_chain_config(), rng).into(),
-                            Destination::AnyoneCanSpend,
-                        ),
-                        TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
-                    ]
-                } else {
-                    return None;
-                }
-            } else if switch == 1 {
-                // issue token
-                let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
-                if output_value >= min_tx_fee {
-                    // Coin output is created intentionally besides issuance output in order to not waste utxo
-                    // (e.g. single genesis output on issuance)
-                    vec![
-                        TxOutput::Transfer(
-                            random_token_issuance(chainstate.get_chain_config(), rng).into(),
-                            Destination::AnyoneCanSpend,
-                        ),
-                        TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
-                    ]
-                } else {
-                    return None;
-                }
-            } else {
-                // spend the coin with multiple outputs
-                (0..num_outputs)
-                    .map(|_| {
-                        let new_value = Amount::from_atoms(output_value.into_atoms() / num_outputs);
-                        debug_assert!(new_value >= Amount::from_atoms(1));
-                        TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
-                    })
-                    .collect()
-            }
-        }
-        OutputValue::TokenV0(token_data) => match &*token_data {
-            TokenData::TokenTransfer(transfer) => {
-                if rng.gen::<bool>() {
-                    // burn transferred tokens
-                    let amount_to_burn = if transfer.amount.into_atoms() > 1 {
-                        Amount::from_atoms(rng.gen_range(1..transfer.amount.into_atoms()))
-                    } else {
-                        transfer.amount
-                    };
-                    vec![TxOutput::Burn(
-                        TokenTransfer {
-                            token_id: transfer.token_id,
-                            amount: amount_to_burn,
-                        }
-                        .into(),
-                    )]
-                } else {
-                    // transfer tokens again
-                    if transfer.amount.into_atoms() >= num_outputs {
-                        // transfer with multiple outputs
-                        (0..num_outputs)
-                            .map(|_| {
-                                let amount =
-                                    Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
-                                TxOutput::Transfer(
-                                    TokenTransfer {
-                                        token_id: transfer.token_id,
-                                        amount,
-                                    }
-                                    .into(),
-                                    anyonecanspend_address(),
-                                )
-                            })
-                            .collect()
-                    } else {
-                        // transfer with a single output
-                        vec![TxOutput::Transfer(
-                            OutputValue::TokenV0(token_data),
-                            anyonecanspend_address(),
-                        )]
-                    }
-                }
-            }
-            TokenData::TokenIssuance(issuance) => {
-                if rng.gen::<bool>() {
-                    vec![new_token_burn_output(
-                        chainstate,
-                        &outsrc,
-                        Amount::from_atoms(rng.gen_range(1..issuance.amount_to_issue.into_atoms())),
-                    )]
-                } else {
-                    vec![new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)]
-                }
-            }
-            TokenData::NftIssuance(_issuance) => {
-                if rng.gen::<bool>() {
-                    vec![new_token_burn_output(chainstate, &outsrc, Amount::from_atoms(1))]
-                } else {
-                    vec![new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))]
-                }
-            }
-        },
-        OutputValue::TokenV1(_, _) => unimplemented!(),
-    };
-
-    Some((
-        empty_witness(rng),
-        TxInput::from_utxo(outsrc, index as u32),
-        new_outputs,
-    ))
-}
-
-fn new_token_transfer_output(
+pub fn new_token_transfer_output(
     chainstate: &TestChainstate,
     outsrc: &OutPointSourceId,
     amount: Amount,
@@ -287,27 +161,6 @@ fn new_token_transfer_output(
         }
         .into(),
         anyonecanspend_address(),
-    )
-}
-
-fn new_token_burn_output(
-    chainstate: &TestChainstate,
-    outsrc: &OutPointSourceId,
-    amount_to_burn: Amount,
-) -> TxOutput {
-    TxOutput::Burn(
-        TokenTransfer {
-            token_id: match outsrc {
-                OutPointSourceId::Transaction(prev_tx) => {
-                    chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
-                }
-                OutPointSourceId::BlockReward(_) => {
-                    panic!("cannot issue token in block reward")
-                }
-            },
-            amount: amount_to_burn,
-        }
-        .into(),
     )
 }
 

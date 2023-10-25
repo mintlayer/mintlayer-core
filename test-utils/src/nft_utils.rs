@@ -17,7 +17,11 @@ use crate::random_ascii_alphanumeric_string;
 use common::{
     chain::{
         config::ChainConfig,
-        tokens::{Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0},
+        tokens::{
+            Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
+        Destination,
     },
     primitives::Amount,
 };
@@ -40,6 +44,20 @@ pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> 
         amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
         number_of_decimals: rng.gen_range(1..max_dec_count),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+    }
+}
+
+pub fn random_token_issuance_v1(chain_config: &ChainConfig, rng: &mut impl Rng) -> TokenIssuanceV1 {
+    let max_ticker_len = chain_config.token_max_ticker_len();
+    let max_dec_count = chain_config.token_max_dec_count();
+    let max_uri_len = chain_config.token_max_uri_len();
+
+    TokenIssuanceV1 {
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..max_dec_count),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+        total_supply: TokenTotalSupply::Lockable,
+        reissuance_controller: Destination::AnyoneCanSpend,
     }
 }
 
