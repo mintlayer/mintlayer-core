@@ -418,6 +418,7 @@ impl OutputCache {
                     );
                 }
                 | TxOutput::Burn(_)
+                | TxOutput::DataDeposit(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
                 TxOutput::IssueFungibleToken(issuance) => {
@@ -875,6 +876,7 @@ fn sum_burned_token_amount(
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DataDeposit(_)
             | TxOutput::ProduceBlockFromStake(_, _) => None,
         })
         .sum::<Option<Amount>>()
@@ -895,6 +897,7 @@ fn is_v0_token_output(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DataDeposit(_)
         | TxOutput::ProduceBlockFromStake(_, _) => false,
     }
 }

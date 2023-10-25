@@ -499,7 +499,8 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::Burn(..)
-        | TxOutput::IssueFungibleToken(..) => false,
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::DataDeposit(..) => false,
     }
 }
 

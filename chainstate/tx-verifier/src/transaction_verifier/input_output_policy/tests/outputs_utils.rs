@@ -41,10 +41,11 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::DelegateStaking(_, _) => unimplemented!(),
         TxOutput::IssueFungibleToken(_) => unimplemented!(),
         TxOutput::IssueNft(_, _, _) => unimplemented!(),
+        TxOutput::DataDeposit(_) => unimplemented!(),
     }
 }
 
-pub fn all_outputs() -> [TxOutput; 9] {
+pub fn all_outputs() -> [TxOutput; 10] {
     [
         transfer(),
         burn(),
@@ -55,10 +56,11 @@ pub fn all_outputs() -> [TxOutput; 9] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
+        data_deposit(),
     ]
 }
 
-pub fn valid_tx_outputs() -> [TxOutput; 8] {
+pub fn valid_tx_outputs() -> [TxOutput; 9] {
     [
         transfer(),
         burn(),
@@ -68,6 +70,7 @@ pub fn valid_tx_outputs() -> [TxOutput; 8] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
+        data_deposit(),
     ]
 }
 
@@ -128,6 +131,10 @@ pub fn issue_tokens() -> TxOutput {
     })))
 }
 
+pub fn data_deposit() -> TxOutput {
+    TxOutput::DataDeposit(vec![])
+}
+
 pub fn issue_nft() -> TxOutput {
     TxOutput::IssueNft(
         TokenId::new(H256::zero()),
@@ -156,7 +163,8 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::IssueNft(..) => false,
+        | TxOutput::IssueNft(..)
+        | TxOutput::DataDeposit(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -170,7 +178,8 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::IssueNft(..) => false,
+        | TxOutput::IssueNft(..)
+        | TxOutput::DataDeposit(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

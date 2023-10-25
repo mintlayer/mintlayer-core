@@ -345,6 +345,7 @@ impl MemoryUsage for TxOutput {
             TxOutput::DelegateStaking(_, _) => 0,
             TxOutput::IssueFungibleToken(issuance) => issuance.indirect_memory_usage(),
             TxOutput::IssueNft(_, issuance, _) => issuance.indirect_memory_usage(),
+            TxOutput::DataDeposit(v) => v.indirect_memory_usage(),
         }
     }
 }

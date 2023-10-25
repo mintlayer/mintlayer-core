@@ -299,6 +299,8 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
             CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
+            CheckBlockTransactionsError::DataDepositNotActivated(_, _, _) => 100,
+            CheckBlockTransactionsError::DataDepositMaxSizeExceeded(_, _, _, _) => 100,
         }
     }
 }

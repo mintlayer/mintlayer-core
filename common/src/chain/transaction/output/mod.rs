@@ -108,6 +108,8 @@ pub enum TxOutput {
     IssueFungibleToken(Box<TokenIssuance>),
     #[codec(index = 8)]
     IssueNft(TokenId, Box<NftIssuance>, Destination),
+    #[codec(index = 9)]
+    DataDeposit(Vec<u8>),
 }
 
 impl TxOutput {
@@ -120,7 +122,8 @@ impl TxOutput {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => None,
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }

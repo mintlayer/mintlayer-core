@@ -268,7 +268,8 @@ where
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => None,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -300,7 +301,8 @@ where
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => None,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -332,7 +334,8 @@ where
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -357,7 +360,8 @@ where
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -517,7 +521,8 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => Ok(None),
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => Ok(None),
         }
     }
 
@@ -632,7 +637,8 @@ where
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _) => None,
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -776,7 +782,8 @@ where
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => false,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => false,
                 });
                 ensure!(
                     !has_tokens_v0_op,
@@ -847,7 +854,8 @@ where
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::IssueNft(_, _, _) => None,
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(

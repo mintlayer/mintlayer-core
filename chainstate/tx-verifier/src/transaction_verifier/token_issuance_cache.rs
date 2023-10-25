@@ -238,7 +238,8 @@ fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_) => false,
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DataDeposit(_) => false,
         TxOutput::IssueNft(_, _, _) => true,
     })
 }

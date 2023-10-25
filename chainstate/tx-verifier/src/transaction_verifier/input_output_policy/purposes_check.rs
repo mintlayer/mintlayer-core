@@ -49,7 +49,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
                     | TxOutput::IssueFungibleToken(..)
-                    | TxOutput::IssueNft(..) => Err(ConnectTransactionError::IOPolicyError(
+                    | TxOutput::IssueNft(..)
+                    | TxOutput::DataDeposit(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
@@ -70,7 +71,8 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::CreateDelegationId(..)
                                 | TxOutput::DelegateStaking(..)
                                 | TxOutput::IssueFungibleToken(..)
-                                | TxOutput::IssueNft(..) => {
+                                | TxOutput::IssueNft(..)
+                                | TxOutput::DataDeposit(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
                                         block_id.into(),
@@ -108,7 +110,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
                     | TxOutput::IssueFungibleToken(..)
-                    | TxOutput::IssueNft(..) => false,
+                    | TxOutput::IssueNft(..)
+                    | TxOutput::DataDeposit(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -137,7 +140,8 @@ pub fn check_tx_inputs_outputs_purposes(
         TxOutput::Burn(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::IssueFungibleToken(..) => false,
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::DataDeposit(..) => false,
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
@@ -152,7 +156,8 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::Burn(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::IssueNft(..) => { /* do nothing */ }
+        | TxOutput::IssueNft(..)
+        | TxOutput::DataDeposit(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }

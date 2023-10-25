@@ -162,12 +162,18 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInBlock(Id<Block>),
     #[error("Number of signatures differs from number of inputs")]
     InvalidWitnessCount,
-    #[error("Empty inputs or outputs in transaction found in block")]
+    #[error("Empty inputs or outputs in transaction {0} found in block {1}")]
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
     #[error("No signature data size is too large: {0} > {1}")]
     NoSignatureDataSizeTooLarge(usize, usize),
+    #[error("Data deposit not yet enabled at height {0}. Found in transaction {1} and block {2}")]
+    DataDepositNotActivated(BlockHeight, Id<Transaction>, Id<Block>),
+    #[error(
+        "Data deposit size {0} exceeded max allowed {1}. Found in transaction {2} and block {3}"
+    )]
+    DataDepositMaxSizeExceeded(usize, usize, Id<Transaction>, Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

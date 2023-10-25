@@ -80,10 +80,14 @@ impl ConstrainedValueAccumulator {
                         TxOutput::Transfer(value, _)
                         | TxOutput::LockThenTransfer(value, _, _)
                         | TxOutput::Burn(value) => {
+                            // TODO(PR) check: why are we adding value from burn?
                             if let Some(coins) = value.coin_amount() {
                                 self.unconstrained_value = (self.unconstrained_value + coins)
                                     .ok_or(IOPolicyError::AmountOverflow)?;
                             }
+                        }
+                        | TxOutput::DataDeposit(_) => {
+                            // TODO(PR) this should err
                         }
                         TxOutput::DelegateStaking(coins, _) => {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
@@ -199,8 +203,9 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
-                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
-                }
+                TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => { /* do nothing */ }
             };
         }
 
