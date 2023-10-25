@@ -87,7 +87,9 @@ impl ConstrainedValueAccumulator {
                             }
                         }
                         | TxOutput::DataDeposit(_) => {
-                            // TODO(PR) this should err
+                            return Err(IOPolicyError::SpendingNonSpendableOutput(
+                                outpoint.clone(),
+                            ));
                         }
                         TxOutput::DelegateStaking(coins, _) => {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
@@ -136,7 +138,11 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    pub fn process_outputs(&mut self, outputs: &[TxOutput]) -> Result<(), IOPolicyError> {
+    pub fn process_outputs(
+        &mut self,
+        chain_config: &ChainConfig,
+        outputs: &[TxOutput],
+    ) -> Result<(), IOPolicyError> {
         for output in outputs {
             match output {
                 TxOutput::Transfer(value, _) | TxOutput::Burn(value) => {
@@ -203,9 +209,13 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
-                TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => { /* do nothing */ }
+                TxOutput::DataDeposit(_) => {
+                    let amount = chain_config.data_deposit_min_fee();
+                    self.unconstrained_value = (self.unconstrained_value - amount)
+                        .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
+                }
+                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
+                }
             };
         }
 
@@ -295,7 +305,7 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(
             constraints_accumulator.consume().unwrap().into_atoms(),
@@ -347,7 +357,7 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(
             constraints_accumulator.consume().unwrap().into_atoms(),
@@ -416,7 +426,8 @@ mod tests {
                 )
                 .unwrap();
 
-            let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+            let result =
+                constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
             assert_eq!(
                 result,
                 IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -441,7 +452,7 @@ mod tests {
                 )
                 .unwrap();
 
-            constraints_accumulator.process_outputs(&outputs).unwrap();
+            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
         }
     }
 
@@ -518,7 +529,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
         assert_eq!(
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -554,7 +565,7 @@ mod tests {
                 )
                 .unwrap();
 
-            constraints_accumulator.process_outputs(&outputs).unwrap();
+            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
         }
     }
 
@@ -642,7 +653,7 @@ mod tests {
         ];
 
         let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-        let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
         assert_eq!(
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -675,7 +686,7 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(constraints_accumulator.consume().unwrap(), Amount::ZERO);
     }
