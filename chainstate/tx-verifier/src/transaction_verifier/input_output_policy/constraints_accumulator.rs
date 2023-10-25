@@ -242,6 +242,8 @@ mod tests {
         )
     }
 
+    // Check that it's allowed to pay fees from decommissioning a pool
+    // by providing smaller total outputs than inputs
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -296,6 +298,8 @@ mod tests {
         );
     }
 
+    // Check that it's allowed to pay fees from spending a delegation share
+    // by providing smaller total outputs than inputs
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -346,6 +350,11 @@ mod tests {
         );
     }
 
+    // Create a staking pool.
+    // Try to decommission and spend a utxo in a tx. Outputs of a tx are not locked and has more coins than input utxo.
+    // Check that it's a timelock violation.
+    // Next decommission a pool and spend a utxo. Outputs are not locked but are equal to utxo value.
+    // Check it's ok.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -358,6 +367,7 @@ mod tests {
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
+        let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
         let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
@@ -378,7 +388,7 @@ mod tests {
                 Box::new(stake_pool_data),
             )),
             Some(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputValue::Coin(less_than_staked_amount),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -410,7 +420,7 @@ mod tests {
 
         // it's not an error if output does not include staked coins
         let outputs = vec![TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(100)),
+            OutputValue::Coin(less_than_staked_amount),
             Destination::AnyoneCanSpend,
         )];
 
@@ -430,10 +440,14 @@ mod tests {
         }
     }
 
+    // Create a staking pool.
+    // Try to decommission a pool by providing locked outputs with not enough block count.
+    // Check it's an error.
+    // Then create and check valid case.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn try_to_unlocked_coins(#[case] seed: Seed) {
+    fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
@@ -444,6 +458,7 @@ mod tests {
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
+        let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
         let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
@@ -464,7 +479,7 @@ mod tests {
                 Box::new(stake_pool_data),
             )),
             Some(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputValue::Coin(less_than_staked_amount),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -481,7 +496,7 @@ mod tests {
                 OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64 - 1),
             ),
             TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputValue::Coin(less_than_staked_amount),
                 Destination::AnyoneCanSpend,
             ),
         ];
@@ -503,8 +518,46 @@ mod tests {
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
         );
+
+        // valid case
+        let outputs = vec![
+            TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+            ),
+            TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(10)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+            ),
+            TxOutput::Transfer(
+                OutputValue::Coin(less_than_staked_amount),
+                Destination::AnyoneCanSpend,
+            ),
+        ];
+
+        {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+            constraints_accumulator
+                .process_inputs(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    pledge_getter,
+                    &inputs,
+                    &inputs_utxos,
+                )
+                .unwrap();
+
+            constraints_accumulator.process_outputs(&outputs).unwrap();
+        }
     }
 
+    // Create a stake pool with delegation.
+    // Decommission the pool and spend delegation share in the same tx.
+    // First create a tx with output where outputs are locked for the smaller block count.
+    // Check an error.
+    // Then check that timelock constraints can be satisfied with a single output in a valid case.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -568,6 +621,29 @@ mod tests {
             None,
         ];
 
+        let outputs = vec![
+            TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(
+                    required_decommission_maturity as u64 + required_spend_share_maturity as u64
+                        - 1,
+                ),
+            ),
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(transferred_atoms)),
+                Destination::AnyoneCanSpend,
+            ),
+        ];
+
+        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+        let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+        assert_eq!(
+            result,
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+        );
+
+        // valid case
         let outputs = vec![
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
