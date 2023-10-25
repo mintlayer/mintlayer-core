@@ -101,7 +101,7 @@ pub struct FungibleTokenData {
     locked: bool,
     is_freezable: IsTokenFreezable,
     is_unfreezable: IsTokenUnfreezable,
-    freezed: bool,
+    frozen: bool,
     reissuance_controller: Destination,
 }
 
@@ -114,7 +114,7 @@ impl FungibleTokenData {
         locked: bool,
         is_freezable: IsTokenFreezable,
         is_unfreezable: IsTokenUnfreezable,
-        freezed: bool,
+        frozen: bool,
         reissuance_controller: Destination,
     ) -> Self {
         // FIXME: check some invariants?
@@ -126,7 +126,7 @@ impl FungibleTokenData {
             locked,
             is_freezable,
             is_unfreezable,
-            freezed,
+            frozen,
             reissuance_controller,
         }
     }
@@ -166,14 +166,14 @@ impl FungibleTokenData {
                 true,
                 self.is_freezable,
                 self.is_unfreezable,
-                self.freezed,
+                self.frozen,
                 self.reissuance_controller,
             )),
         }
     }
 
-    pub fn is_freezed(&self) -> bool {
-        self.freezed
+    pub fn is_frozen(&self) -> bool {
+        self.frozen
     }
 
     pub fn is_freezable(&self) -> IsTokenFreezable {

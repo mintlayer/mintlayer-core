@@ -27,7 +27,7 @@ use serialization::{Decode, Encode};
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
-    /// Token account type is used to authorize changes in supply of a token.
+    /// Token account type is used to authorize changes in token data.
     #[codec(index = 1)]
     Token(TokenId),
 }

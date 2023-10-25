@@ -719,12 +719,12 @@ where
                                                 tokens_accounting::TokenData::FungibleToken(
                                                     data,
                                                 ) => {
-                                                    //ensure!(
-                                                    //    !data.is_freezed(),
-                                                    //    ConnectTransactionError::TokenIsFreezed(
-                                                    //        *token_id
-                                                    //    )
-                                                    //);
+                                                    ensure!(
+                                                        !data.is_frozen(),
+                                                        ConnectTransactionError::AttemptToSpendFrozenToken(
+                                                            *token_id
+                                                        )
+                                                    );
                                                 }
                                             };
                                         }

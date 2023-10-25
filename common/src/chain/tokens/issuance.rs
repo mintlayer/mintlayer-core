@@ -63,6 +63,7 @@ pub struct TokenIssuanceV1 {
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
     pub total_supply: TokenTotalSupply,
+    // FIXME: rename
     pub reissuance_controller: Destination,
     pub is_freezable: IsTokenFreezable,
 }

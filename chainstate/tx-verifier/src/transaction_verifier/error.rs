@@ -162,6 +162,8 @@ pub enum ConnectTransactionError {
     InsufficientCoinsFee(Amount, Amount),
     #[error("Cannot perform any operations for freezed token {0}")]
     TokenIsFreezed(TokenId),
+    #[error("Cannot perform any operations for frozen token {0}")]
+    AttemptToSpendFrozenToken(TokenId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

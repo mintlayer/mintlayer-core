@@ -47,6 +47,10 @@ pub enum IOPolicyError {
     MultipleUnmintTokensInputs,
     #[error("Attempted to provide multiple lock token supply inputs in a single tx")]
     MultipleLockTokenSupplyInputs,
+    #[error("Attempted to provide multiple freeze token inputs in a single tx")]
+    MultipleFreezeTokenSupplyInputs,
+    #[error("Attempted to provide multiple unfreeze token inputs in a single tx")]
+    MultipleUnfreezeTokenSupplyInputs,
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]

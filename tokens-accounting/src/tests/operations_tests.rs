@@ -86,7 +86,7 @@ fn check_token_fungible_data_conversion(#[case] seed: Seed) {
 
     let token_data: FungibleTokenData = token_issuance.into();
     assert!(!token_data.is_locked());
-    assert!(!token_data.is_freezed());
+    assert!(!token_data.is_frozen());
 }
 
 #[rstest]
@@ -655,7 +655,7 @@ fn try_freeze_not_freezable_token(#[case] seed: Seed) {
 
     assert_eq!(
         cache.unfreeze_token(token_id),
-        Err(crate::Error::CannotUnfreezeTokenThatIsNotFreezed(token_id))
+        Err(crate::Error::CannotUnfreezeTokenThatIsNotFrozen(token_id))
     );
 }
 
@@ -678,7 +678,7 @@ fn freeze_token_and_undo(#[case] seed: Seed) {
 
     let undo_freeze = cache.freeze_token(token_id, IsTokenUnfreezable::No).unwrap();
 
-    let freezed_token_data = match token_data.clone() {
+    let frozen_token_data = match token_data.clone() {
         TokenData::FungibleToken(data) => {
             TokenData::FungibleToken(data.try_freeze(IsTokenUnfreezable::No).unwrap())
         }
@@ -686,27 +686,27 @@ fn freeze_token_and_undo(#[case] seed: Seed) {
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
-        Some(freezed_token_data.clone())
+        Some(frozen_token_data.clone())
     );
 
     assert_eq!(
         cache.freeze_token(token_id, IsTokenUnfreezable::Yes),
-        Err(crate::Error::TokenIsAlreadyFreezed(token_id))
+        Err(crate::Error::TokenIsAlreadyFrozen(token_id))
     );
 
     assert_eq!(
         cache.mint_tokens(token_id, Amount::from_atoms(1)),
-        Err(crate::Error::CannotMintFreezedToken(token_id))
+        Err(crate::Error::CannotMintFrozenToken(token_id))
     );
 
     assert_eq!(
         cache.unmint_tokens(token_id, Amount::from_atoms(1)),
-        Err(crate::Error::CannotUnmintFreezedToken(token_id))
+        Err(crate::Error::CannotUnmintFrozenToken(token_id))
     );
 
     assert_eq!(
         cache.lock_circulating_supply(token_id),
-        Err(crate::Error::CannotLockFreezedToken(token_id))
+        Err(crate::Error::CannotLockFrozenToken(token_id))
     );
 
     assert_eq!(
@@ -753,7 +753,7 @@ fn unfreeze_token_and_undo(#[case] seed: Seed) {
 
     cache.undo(undo_unfreeze).unwrap();
 
-    let freezed_token_data = match token_data.clone() {
+    let frozen_token_data = match token_data.clone() {
         TokenData::FungibleToken(data) => {
             TokenData::FungibleToken(data.try_freeze(IsTokenUnfreezable::Yes).unwrap())
         }
@@ -761,7 +761,7 @@ fn unfreeze_token_and_undo(#[case] seed: Seed) {
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
-        Some(freezed_token_data.clone())
+        Some(frozen_token_data.clone())
     );
 }
 
@@ -788,7 +788,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
         TokenData::FungibleToken(data) => data,
     };
-    assert!(token_data.is_freezed());
+    assert!(token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
 
     // Unfreeze the token
@@ -797,7 +797,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
         TokenData::FungibleToken(data) => data,
     };
-    assert!(!token_data.is_freezed());
+    assert!(!token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
 
     // All operations are now allowed
@@ -811,7 +811,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
         TokenData::FungibleToken(data) => data,
     };
-    assert!(token_data.is_freezed());
+    assert!(token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::No);
 
     assert_eq!(

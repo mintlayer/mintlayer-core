@@ -180,6 +180,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
+            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
             ConnectTransactionError::TokenIsFreezed(_) => 0,
         }
     }
@@ -349,6 +350,8 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::MultipleUnmintTokensInputs => 100,
             IOPolicyError::MultipleLockTokenSupplyInputs => 100,
+            IOPolicyError::MultipleFreezeTokenSupplyInputs => 100,
+            IOPolicyError::MultipleUnfreezeTokenSupplyInputs => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
@@ -377,13 +380,13 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::NotEnoughCirculatingSupplyToUnmint(_, _, _) => 0,
             tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 0,
             tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
-            tokens_accounting::Error::TokenIsAlreadyFreezed(_) => 0,
+            tokens_accounting::Error::TokenIsAlreadyFrozen(_) => 0,
             tokens_accounting::Error::CannotFreezeNotFreezableToken(_) => 100,
             tokens_accounting::Error::CannotUnfreezeNotUnfreezableToken(_) => 0,
-            tokens_accounting::Error::CannotUnfreezeTokenThatIsNotFreezed(_) => 0,
-            tokens_accounting::Error::CannotMintFreezedToken(_) => 0,
-            tokens_accounting::Error::CannotUnmintFreezedToken(_) => 0,
-            tokens_accounting::Error::CannotLockFreezedToken(_) => 0,
+            tokens_accounting::Error::CannotUnfreezeTokenThatIsNotFrozen(_) => 0,
+            tokens_accounting::Error::CannotMintFrozenToken(_) => 0,
+            tokens_accounting::Error::CannotUnmintFrozenToken(_) => 0,
+            tokens_accounting::Error::CannotLockFrozenToken(_) => 0,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
 
@@ -392,8 +395,8 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUnlockNotLockedSupplyOnReversal(_) => 0,
             tokens_accounting::Error::CannotUndoMintForLockedSupplyOnReversal(_) => 0,
             tokens_accounting::Error::CannotUndoUnmintForLockedSupplyOnReversal(_) => 0,
-            tokens_accounting::Error::CannotUndoFreezeTokenThatIsNotFreezed(_) => 0,
-            tokens_accounting::Error::CannotUndoUnfreezeTokenThatIsFreezed(_) => 0,
+            tokens_accounting::Error::CannotUndoFreezeTokenThatIsNotFrozen(_) => 0,
+            tokens_accounting::Error::CannotUndoUnfreezeTokenThatIsFrozen(_) => 0,
         }
     }
 }

@@ -36,6 +36,7 @@ use tokens_accounting::{
 };
 use utxo::Utxo;
 
+// FIXME: support token freeze
 pub struct RandomTxMaker<'a> {
     chainstate: &'a TestChainstate,
     utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,

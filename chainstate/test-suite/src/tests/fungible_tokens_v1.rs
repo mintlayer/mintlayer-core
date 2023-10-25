@@ -27,8 +27,8 @@ use common::{
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenIssuanceVersion, TokenTotalSupply,
+            make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenIssuanceVersion, TokenTotalSupply,
         },
         AccountNonce, AccountOp, AccountType, Block, ChainstateUpgrade, Destination, GenBlock,
         NetUpgrades, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
@@ -4162,4 +4162,655 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
     });
 }
 
-// FIXME: check freeze operation
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_freezable_supply(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::Yes,
+        );
+
+        // Mint some tokens
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        match actual_token_data.unwrap() {
+            tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
+        };
+
+        // Freeze the token
+        let freeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(1),
+                    AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_min_supply_change_fee * 5).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_tx_id = freeze_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(freeze_tx).build_and_process().unwrap();
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        match actual_token_data.unwrap() {
+            tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_frozen()),
+        };
+
+        // Try to mint some tokens
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::CannotMintFrozenToken(token_id)
+                )
+            ))
+        );
+
+        // Try to lock supply
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::LockTokenSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::CannotLockFrozenToken(token_id)
+                )
+            ))
+        );
+
+        // Try to transfer frozen tokens
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try to lock then transfer frozen tokens
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::LockThenTransfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                        OutputTimeLock::ForBlockCount(100),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try to burn frozen tokens
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_mint,
+                    )))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Unfreeze the token
+        let unfreeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(2), AccountOp::UnfreezeToken(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(freeze_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_min_supply_change_fee * 3).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let unfreeze_tx_id = unfreeze_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(unfreeze_tx)
+            .build_and_process()
+            .unwrap();
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        match actual_token_data.unwrap() {
+            tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
+        };
+
+        // Now all operations are available again. Try mint/unmint/transfer
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(3),
+                            AccountOp::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(4),
+                            AccountOp::UnmintTokens(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unfreeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_mint,
+                    )))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_freeze_fee(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let ok_fee = tf.chainstate.get_chain_config().token_min_freeze_fee();
+        let not_ok_fee = (ok_fee - Amount::from_atoms(1)).unwrap();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::Yes,
+        );
+
+        let tx_with_fee = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(utxo_with_change),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(not_ok_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ok_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_with_fee_id = tx_with_fee.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(tx_with_fee)
+            .build_and_process()
+            .unwrap();
+
+        // Try freeze with insufficient fee
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::InsufficientCoinsFee(not_ok_fee, ok_fee)
+            ))
+        );
+
+        // Freeze with proper fee
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_unfreeze_fee(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let ok_fee = tf.chainstate.get_chain_config().token_min_freeze_fee();
+        let not_ok_fee = (ok_fee - Amount::from_atoms(1)).unwrap();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::Yes,
+        );
+
+        let freeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::Utxo(utxo_with_change),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((ok_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_tx_id = freeze_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(freeze_tx).build_and_process().unwrap();
+
+        let tx_with_fee = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(freeze_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(not_ok_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ok_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_with_fee_id = tx_with_fee.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(tx_with_fee)
+            .build_and_process()
+            .unwrap();
+        // Try unfreeze with insufficient fee
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::UnfreezeToken(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::InsufficientCoinsFee(not_ok_fee, ok_fee)
+            ))
+        );
+
+        // Unfreeze with proper fee
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::UnfreezeToken(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    });
+}
+
+// Issue a token.
+// Try to freeze without providing input signatures, check an error.
+// Try to freeze with random keys, check an error.
+// Freeze with controller keys, check ok.
+// Try to unfreeze without providing input signatures, check an error.
+// Try to unfreeze with random keys, check an error.
+// Unfreeze with controller keys, check ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let token_min_freeze_fee = tf.chainstate.get_chain_config().token_min_freeze_fee();
+        let genesis_block_id = tf.genesis().get_id();
+
+        let (controller_sk, controller_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            is_freezable: IsTokenFreezable::Yes,
+        });
+
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id.into(),
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            issuance,
+        );
+
+        // Try to freeze without signature
+        let freeze_tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_min_freeze_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_tx_id = freeze_tx_no_signatures.transaction().get_id();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(freeze_tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        let replace_signature_for_tx = |tx, sk, pk, inputs_utxos_refs| {
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &sk,
+                Default::default(),
+                Destination::PublicKey(pk),
+                &tx,
+                inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        // Try to freeze with wrong signature
+        let (random_sk, random_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let signed_tx = replace_signature_for_tx(
+            freeze_tx_no_signatures.transaction().clone(),
+            random_sk,
+            random_pk,
+            &inputs_utxos_refs,
+        );
+
+        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process();
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Freeze with proper keys
+        let signed_tx = replace_signature_for_tx(
+            freeze_tx_no_signatures.transaction().clone(),
+            controller_sk.clone(),
+            controller_pk.clone(),
+            &inputs_utxos_refs,
+        );
+        tf.make_block_builder().add_transaction(signed_tx).build_and_process().unwrap();
+
+        // Try to unfreeze without signature
+        let unfreeze_tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(freeze_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+            .build();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(unfreeze_tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate
+                .utxo(&UtxoOutPoint::new(freeze_tx_id.into(), 0))
+                .unwrap()
+                .map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try unfreeze with random signature
+        let (random_sk, random_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let signed_tx = replace_signature_for_tx(
+            unfreeze_tx_no_signatures.transaction().clone(),
+            random_sk,
+            random_pk,
+            &inputs_utxos_refs,
+        );
+
+        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process();
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Unfreeze with controller signature
+        let signed_tx = replace_signature_for_tx(
+            unfreeze_tx_no_signatures.transaction().clone(),
+            controller_sk,
+            controller_pk,
+            &inputs_utxos_refs,
+        );
+        tf.make_block_builder().add_transaction(signed_tx).build_and_process().unwrap();
+    });
+}

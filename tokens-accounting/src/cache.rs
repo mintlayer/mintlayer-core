@@ -114,8 +114,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
 
         match token_data {
             TokenData::FungibleToken(data) => {
-                if data.is_freezed() {
-                    return Err(Error::CannotMintFreezedToken(id));
+                if data.is_frozen() {
+                    return Err(Error::CannotMintFrozenToken(id));
                 }
 
                 match data.total_supply() {
@@ -157,8 +157,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
                     return Err(Error::CannotUnmintFromLockedSupply(id));
-                } else if data.is_freezed() {
-                    return Err(Error::CannotUnmintFreezedToken(id));
+                } else if data.is_frozen() {
+                    return Err(Error::CannotUnmintFrozenToken(id));
                 }
             }
         };
@@ -189,8 +189,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
                     return Err(Error::SupplyIsAlreadyLocked(id));
-                } else if data.is_freezed() {
-                    return Err(Error::CannotLockFreezedToken(id));
+                } else if data.is_frozen() {
+                    return Err(Error::CannotLockFrozenToken(id));
                 }
 
                 let new_data =
@@ -219,8 +219,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
 
         let undo_data = match token_data {
             TokenData::FungibleToken(data) => {
-                if data.is_freezed() {
-                    return Err(Error::TokenIsAlreadyFreezed(id));
+                if data.is_frozen() {
+                    return Err(Error::TokenIsAlreadyFrozen(id));
                 }
                 let new_data = data
                     .clone()
@@ -246,8 +246,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
 
         let undo_data = match token_data {
             TokenData::FungibleToken(data) => {
-                if !data.is_freezed() {
-                    return Err(Error::CannotUnfreezeTokenThatIsNotFreezed(id));
+                if !data.is_frozen() {
+                    return Err(Error::CannotUnfreezeTokenThatIsNotFrozen(id));
                 }
                 let new_data = data
                     .clone()
@@ -331,8 +331,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                     .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
                 match data {
                     TokenData::FungibleToken(data) => {
-                        if !data.is_freezed() {
-                            return Err(Error::CannotUndoFreezeTokenThatIsNotFreezed(undo.id));
+                        if !data.is_frozen() {
+                            return Err(Error::CannotUndoFreezeTokenThatIsNotFrozen(undo.id));
                         }
                     }
                 };
@@ -345,8 +345,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                     .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
                 match data {
                     TokenData::FungibleToken(data) => {
-                        if data.is_freezed() {
-                            return Err(Error::CannotUndoUnfreezeTokenThatIsFreezed(undo.id));
+                        if data.is_frozen() {
+                            return Err(Error::CannotUndoUnfreezeTokenThatIsFrozen(undo.id));
                         }
                     }
                 };
