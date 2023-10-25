@@ -17,7 +17,10 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
         Destination, OutPointSourceId, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
@@ -34,8 +37,6 @@ use crate::{
     TokensAccountingCache, TokensAccountingDB, TokensAccountingOperations, TokensAccountingView,
 };
 
-// FIXME: test is freezable
-
 fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -> TokenData {
     TokenData::FungibleToken(FungibleTokenData::new_unchecked(
         random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
@@ -50,6 +51,21 @@ fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -
     ))
 }
 
+fn make_token_issuance(
+    rng: &mut impl Rng,
+    supply: TokenTotalSupply,
+    freezable: IsTokenFreezable,
+) -> TokenIssuance {
+    TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
+        total_supply: supply,
+        is_freezable: freezable,
+        reissuance_controller: Destination::AnyoneCanSpend,
+    })
+}
+
 fn make_token_id(rng: &mut impl Rng) -> TokenId {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
@@ -57,6 +73,20 @@ fn make_token_id(rng: &mut impl Rng) -> TokenId {
     );
     let input = TxInput::Utxo(outpoint);
     common::chain::tokens::make_token_id(&[input]).unwrap()
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_token_fungible_data_conversion(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+
+    let token_data: FungibleTokenData = token_issuance.into();
+    assert!(!token_data.is_locked());
+    assert!(!token_data.is_freezed());
 }
 
 #[rstest]
@@ -93,7 +123,7 @@ fn issue_token_and_flush(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn issue_token_undo(#[case] seed: Seed) {
+fn issue_token_and_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
@@ -600,5 +630,192 @@ fn try_lock_twice(#[case] seed: Seed) {
     assert_eq!(
         cache.lock_circulating_supply(token_id),
         Err(crate::Error::SupplyIsAlreadyLocked(token_id))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_freeze_not_freezable_token(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::new();
+    let mut cache = TokensAccountingCache::new(&mut storage);
+    let _ = cache.issue_token(token_id, token_data).unwrap();
+
+    assert_eq!(
+        cache.freeze_token(token_id, IsTokenUnfreezable::No),
+        Err(crate::Error::CannotFreezeNotFreezableToken(token_id))
+    );
+
+    assert_eq!(
+        cache.unfreeze_token(token_id),
+        Err(crate::Error::CannotUnfreezeTokenThatIsNotFreezed(token_id))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn freeze_token_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data.clone())]),
+        BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
+    );
+    let mut cache = TokensAccountingCache::new(&mut storage);
+
+    let undo_freeze = cache.freeze_token(token_id, IsTokenUnfreezable::No).unwrap();
+
+    let freezed_token_data = match token_data.clone() {
+        TokenData::FungibleToken(data) => {
+            TokenData::FungibleToken(data.try_freeze(IsTokenUnfreezable::No).unwrap())
+        }
+    };
+
+    assert_eq!(
+        cache.get_token_data(&token_id).unwrap(),
+        Some(freezed_token_data.clone())
+    );
+
+    assert_eq!(
+        cache.freeze_token(token_id, IsTokenUnfreezable::Yes),
+        Err(crate::Error::TokenIsAlreadyFreezed(token_id))
+    );
+
+    assert_eq!(
+        cache.mint_tokens(token_id, Amount::from_atoms(1)),
+        Err(crate::Error::CannotMintFreezedToken(token_id))
+    );
+
+    assert_eq!(
+        cache.unmint_tokens(token_id, Amount::from_atoms(1)),
+        Err(crate::Error::CannotUnmintFreezedToken(token_id))
+    );
+
+    assert_eq!(
+        cache.lock_circulating_supply(token_id),
+        Err(crate::Error::CannotLockFreezedToken(token_id))
+    );
+
+    assert_eq!(
+        cache.unfreeze_token(token_id),
+        Err(crate::Error::CannotUnfreezeNotUnfreezableToken(token_id))
+    );
+
+    cache.undo(undo_freeze).unwrap();
+
+    assert_eq!(
+        cache.get_token_data(&token_id).unwrap(),
+        Some(token_data.clone())
+    );
+
+    let _ = cache.mint_tokens(token_id, Amount::from_atoms(1)).unwrap();
+    let _ = cache.unmint_tokens(token_id, Amount::from_atoms(1)).unwrap();
+    let _ = cache.lock_circulating_supply(token_id).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn unfreeze_token_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data.clone())]),
+        BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
+    );
+    let mut cache = TokensAccountingCache::new(&mut storage);
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
+
+    let undo_unfreeze = cache.unfreeze_token(token_id).unwrap();
+
+    assert_eq!(
+        cache.get_token_data(&token_id).unwrap(),
+        Some(token_data.clone())
+    );
+
+    cache.undo(undo_unfreeze).unwrap();
+
+    let freezed_token_data = match token_data.clone() {
+        TokenData::FungibleToken(data) => {
+            TokenData::FungibleToken(data.try_freeze(IsTokenUnfreezable::Yes).unwrap())
+        }
+    };
+
+    assert_eq!(
+        cache.get_token_data(&token_id).unwrap(),
+        Some(freezed_token_data.clone())
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn freeze_unfreeze_freeze(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data.clone())]),
+        BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
+    );
+    let mut cache = TokensAccountingCache::new(&mut storage);
+
+    // Freeze the token
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
+
+    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
+        TokenData::FungibleToken(data) => data,
+    };
+    assert!(token_data.is_freezed());
+    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
+
+    // Unfreeze the token
+    let _ = cache.unfreeze_token(token_id).unwrap();
+
+    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
+        TokenData::FungibleToken(data) => data,
+    };
+    assert!(!token_data.is_freezed());
+    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
+
+    // All operations are now allowed
+    let _ = cache.mint_tokens(token_id, Amount::from_atoms(1)).unwrap();
+    let _ = cache.unmint_tokens(token_id, Amount::from_atoms(1)).unwrap();
+    let _ = cache.lock_circulating_supply(token_id).unwrap();
+
+    // Freeze again, now without an option to unfreeze
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::No).unwrap();
+
+    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
+        TokenData::FungibleToken(data) => data,
+    };
+    assert!(token_data.is_freezed());
+    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::No);
+
+    assert_eq!(
+        cache.unfreeze_token(token_id),
+        Err(crate::Error::CannotUnfreezeNotUnfreezableToken(token_id))
     );
 }

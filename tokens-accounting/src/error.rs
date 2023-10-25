@@ -35,20 +35,38 @@ pub enum Error {
     AmountOverflow,
     #[error("Cannot mint from locked supply for token: '{0}`")]
     CannotMintFromLockedSupply(TokenId),
+    #[error("Cannot mint freezed token: '{0}`")]
+    CannotMintFreezedToken(TokenId),
     #[error("Cannot unmint from locked supply for token: '{0}`")]
     CannotUnmintFromLockedSupply(TokenId),
+    #[error("Cannot unmint freezed token: '{0}`")]
+    CannotUnmintFreezedToken(TokenId),
     #[error("Circulating supply `{0:?}` is not enough to unmint `{1:?}` for token `{2}`")]
     NotEnoughCirculatingSupplyToUnmint(Amount, Amount, TokenId),
     #[error("Supply for a token '{0}` is already locked")]
     SupplyIsAlreadyLocked(TokenId),
     #[error("Cannot lock supply for a token '{0}` with not lockable supply type")]
     CannotLockNotLockableSupply(TokenId),
+    #[error("Cannot lock freezed token '{0}`")]
+    CannotLockFreezedToken(TokenId),
     #[error("Cannot unlock supply on reversal for a token '{0}` with is not locked")]
     CannotUnlockNotLockedSupplyOnReversal(TokenId),
     #[error("Cannot undo mint on reversal for a token '{0}` with locked supply")]
     CannotUndoMintForLockedSupplyOnReversal(TokenId),
     #[error("Cannot undo unmint on reversal for a token '{0}` with locked supply")]
     CannotUndoUnmintForLockedSupplyOnReversal(TokenId),
+    #[error("A token '{0}` is already freezed")]
+    TokenIsAlreadyFreezed(TokenId),
+    #[error("Cannot freeze token '{0}` that is not freezable")]
+    CannotFreezeNotFreezableToken(TokenId),
+    #[error("Cannot unfreeze token '{0}` that is not unfreezable")]
+    CannotUnfreezeNotUnfreezableToken(TokenId),
+    #[error("Cannot unfreeze token '{0}` that is not freezed")]
+    CannotUnfreezeTokenThatIsNotFreezed(TokenId),
+    #[error("Cannot unfreeze on reversal token '{0}` that is not freezed")]
+    CannotUndoFreezeTokenThatIsNotFreezed(TokenId),
+    #[error("Cannot unfreeze on reversal token '{0}` that is not freezed")]
+    CannotUndoUnfreezeTokenThatIsFreezed(TokenId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

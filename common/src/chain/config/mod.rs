@@ -194,6 +194,7 @@ pub struct ChainConfig {
     data_deposit_min_fee: Amount,
     token_min_issuance_fee: Amount,
     token_min_supply_change_fee: Amount,
+    // FIXME: token_min_freeze_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,

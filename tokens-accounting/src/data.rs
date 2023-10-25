@@ -117,6 +117,7 @@ impl FungibleTokenData {
         freezed: bool,
         reissuance_controller: Destination,
     ) -> Self {
+        // FIXME: check some invariants?
         Self {
             token_ticker,
             number_of_decimals,
@@ -166,6 +167,52 @@ impl FungibleTokenData {
                 self.is_freezable,
                 self.is_unfreezable,
                 self.freezed,
+                self.reissuance_controller,
+            )),
+        }
+    }
+
+    pub fn is_freezed(&self) -> bool {
+        self.freezed
+    }
+
+    pub fn is_freezable(&self) -> IsTokenFreezable {
+        self.is_freezable
+    }
+
+    pub fn is_unfreezable(&self) -> IsTokenUnfreezable {
+        self.is_unfreezable
+    }
+
+    pub fn try_freeze(self, is_unfreezable: IsTokenUnfreezable) -> Result<Self, Self> {
+        match self.is_freezable {
+            IsTokenFreezable::No => Err(self),
+            IsTokenFreezable::Yes => Ok(Self::new_unchecked(
+                self.token_ticker,
+                self.number_of_decimals,
+                self.metadata_uri,
+                self.total_supply,
+                self.locked,
+                self.is_freezable,
+                is_unfreezable,
+                true,
+                self.reissuance_controller,
+            )),
+        }
+    }
+
+    pub fn try_unfreeze(self) -> Result<Self, Self> {
+        match self.is_unfreezable {
+            IsTokenUnfreezable::No => Err(self),
+            IsTokenUnfreezable::Yes => Ok(Self::new_unchecked(
+                self.token_ticker,
+                self.number_of_decimals,
+                self.metadata_uri,
+                self.total_supply,
+                self.locked,
+                self.is_freezable,
+                self.is_unfreezable,
+                false,
                 self.reissuance_controller,
             )),
         }
