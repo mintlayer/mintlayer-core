@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TxInput, TxOutput},
+    chain::{
+        output_value::OutputValue, timelock::OutputTimeLock, tokens::TokenData, AccountOp,
+        ChainConfig, PoolId, TxInput, TxOutput,
+    },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
@@ -33,6 +36,7 @@ use super::IOPolicyError;
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: Amount,
     timelock_constrained: BTreeMap<BlockDistance, Amount>,
+    token_fee_burn_constrained: Amount,
 }
 
 impl ConstrainedValueAccumulator {
@@ -40,6 +44,7 @@ impl ConstrainedValueAccumulator {
         Self {
             unconstrained_value: Amount::ZERO,
             timelock_constrained: Default::default(),
+            token_fee_burn_constrained: Amount::ZERO,
         }
     }
 
@@ -77,9 +82,7 @@ impl ConstrainedValueAccumulator {
                         .as_ref()
                         .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?
                     {
-                        TxOutput::Transfer(value, _)
-                        | TxOutput::LockThenTransfer(value, _, _)
-                        | TxOutput::Burn(value) => {
+                        TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
                             if let Some(coins) = value.coin_amount() {
                                 self.unconstrained_value = (self.unconstrained_value + coins)
                                     .ok_or(IOPolicyError::AmountOverflow)?;
@@ -91,7 +94,8 @@ impl ConstrainedValueAccumulator {
                         }
                         TxOutput::CreateDelegationId(..)
                         | TxOutput::IssueFungibleToken(..)
-                        | TxOutput::IssueNft(..) => { /* do nothing */ }
+                        | TxOutput::Burn(..) => return Err(IOPolicyError::NotSpendableInputType),
+                        TxOutput::IssueNft(..) => { /* TODO: support tokens */ }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let block_distance = chain_config
@@ -124,7 +128,12 @@ impl ConstrainedValueAccumulator {
                         }
                         AccountOp::MintTokens(_, _)
                         | AccountOp::LockTokenSupply(_)
-                        | AccountOp::UnmintTokens(_) => { /* do nothing */ }
+                        | AccountOp::UnmintTokens(_) => {
+                            let fee = chain_config.as_ref().token_min_supply_change_fee();
+                            self.token_fee_burn_constrained = (self.token_fee_burn_constrained
+                                + fee)
+                                .ok_or(IOPolicyError::AmountOverflow)?;
+                        }
                     };
                 }
             }
@@ -132,16 +141,48 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    pub fn process_outputs(&mut self, outputs: &[TxOutput]) -> Result<(), IOPolicyError> {
+    pub fn process_outputs(
+        &mut self,
+        chain_config: &ChainConfig,
+        outputs: &[TxOutput],
+    ) -> Result<(), IOPolicyError> {
+        let mut total_burned = Amount::ZERO;
+
         for output in outputs {
             match output {
-                TxOutput::Transfer(value, _) | TxOutput::Burn(value) => {
-                    if let Some(coins) = value.coin_amount() {
-                        self.unconstrained_value = (self.unconstrained_value - coins).ok_or(
+                TxOutput::Transfer(value, _) => match value {
+                    OutputValue::Coin(coins) => {
+                        self.unconstrained_value = (self.unconstrained_value - *coins).ok_or(
                             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
                         )?;
                     }
-                }
+                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                        TokenData::TokenTransfer(_) => { /* do nothing */ }
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
+                            let fee = chain_config.as_ref().token_min_issuance_fee();
+                            self.token_fee_burn_constrained = (self.token_fee_burn_constrained
+                                + fee)
+                                .ok_or(IOPolicyError::AmountOverflow)?;
+                        }
+                    },
+                    OutputValue::TokenV1(_, _) => { /* do nothing */ }
+                },
+                TxOutput::Burn(value) => match value {
+                    OutputValue::Coin(coins) => {
+                        total_burned =
+                            (total_burned + *coins).ok_or(IOPolicyError::AmountOverflow)?
+                    }
+                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                        TokenData::TokenTransfer(_) => { /* do nothing */ }
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
+                            let fee = chain_config.as_ref().token_min_issuance_fee();
+                            self.token_fee_burn_constrained = (self.token_fee_burn_constrained
+                                + fee)
+                                .ok_or(IOPolicyError::AmountOverflow)?;
+                        }
+                    },
+                    OutputValue::TokenV1(_, _) => { /* do nothing */ }
+                },
                 TxOutput::DelegateStaking(coins, _) => {
                     self.unconstrained_value = (self.unconstrained_value - *coins)
                         .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
@@ -199,10 +240,19 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
-                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
+                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
+                    let fee = chain_config.as_ref().token_min_issuance_fee();
+                    self.token_fee_burn_constrained = (self.token_fee_burn_constrained + fee)
+                        .ok_or(IOPolicyError::AmountOverflow)?;
                 }
             };
         }
+
+        // Amount cannot be negative so burn constrains must be checked after iterating over all outputs
+        ensure!(
+            self.token_fee_burn_constrained <= total_burned,
+            IOPolicyError::AttemptViolateTokenFeeBurnConstraints
+        );
 
         Ok(())
     }
@@ -213,10 +263,13 @@ mod tests {
     use super::*;
     use common::{
         chain::{
-            config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-            timelock::OutputTimeLock, AccountNonce, AccountOp, ConsensusUpgrade, DelegationId,
-            Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
-            UtxoOutPoint,
+            config::ChainType,
+            output_value::OutputValue,
+            stakelock::StakePoolData,
+            timelock::OutputTimeLock,
+            tokens::{NftIssuance, TokenId, TokenIssuance},
+            AccountNonce, AccountOp, ConsensusUpgrade, DelegationId, Destination, NetUpgrades,
+            OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
     };
@@ -290,7 +343,7 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(
             constraints_accumulator.consume().unwrap().into_atoms(),
@@ -342,7 +395,7 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(
             constraints_accumulator.consume().unwrap().into_atoms(),
@@ -411,7 +464,8 @@ mod tests {
                 )
                 .unwrap();
 
-            let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+            let result =
+                constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
             assert_eq!(
                 result,
                 IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -436,7 +490,7 @@ mod tests {
                 )
                 .unwrap();
 
-            constraints_accumulator.process_outputs(&outputs).unwrap();
+            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
         }
     }
 
@@ -513,7 +567,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
         assert_eq!(
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -549,7 +603,7 @@ mod tests {
                 )
                 .unwrap();
 
-            constraints_accumulator.process_outputs(&outputs).unwrap();
+            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
         }
     }
 
@@ -637,7 +691,7 @@ mod tests {
         ];
 
         let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-        let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
         assert_eq!(
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
@@ -670,8 +724,111 @@ mod tests {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&outputs).unwrap();
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
 
         assert_eq!(constraints_accumulator.consume().unwrap(), Amount::ZERO);
+    }
+
+    // Create a custom inputs/outputs set with 6 supply changes and 4 issuances of different kind.
+    // Check that burn constraints are satisfied.
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn token_fee_burn(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet).build();
+        let token_min_issuance_fee = chain_config.token_min_issuance_fee();
+        let token_min_change_supply_fee = chain_config.token_min_supply_change_fee();
+
+        let token_id = TokenId::new(H256::zero());
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(100..1000));
+
+        let fungible_token_v0_issuance =
+            test_utils::nft_utils::random_token_issuance(&chain_config, &mut rng);
+        let fungible_token_v1_issuance =
+            test_utils::nft_utils::random_token_issuance_v1(&chain_config, &mut rng);
+        let nft_v1_issuance_1 = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
+        let nft_v1_issuance_2 = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
+        let nft_v1_issuance_3 = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
+
+        let source_id = OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng)));
+        let inputs = vec![
+            TxInput::from_account(
+                AccountNonce::new(0),
+                AccountOp::MintTokens(token_id, amount_to_mint),
+            ),
+            TxInput::from_account(AccountNonce::new(0), AccountOp::UnmintTokens(token_id)),
+            TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id)),
+            TxInput::from_account(AccountNonce::new(0), AccountOp::UnmintTokens(token_id)),
+            TxInput::from_utxo(source_id.clone(), 0),
+            TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id)),
+            TxInput::from_utxo(source_id, 0),
+            TxInput::from_account(
+                AccountNonce::new(0),
+                AccountOp::MintTokens(token_id, amount_to_mint),
+            ),
+        ];
+        let input_utxos = vec![
+            None,
+            None,
+            None,
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((token_min_issuance_fee * 4).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((token_min_change_supply_fee * 6).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+            None,
+        ];
+
+        let outputs = vec![
+            TxOutput::Burn(OutputValue::Coin(
+                (token_min_issuance_fee + token_min_change_supply_fee).unwrap(),
+            )),
+            TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(fungible_token_v1_issuance))),
+            TxOutput::IssueNft(
+                token_id,
+                Box::new(NftIssuance::V0(nft_v1_issuance_1)),
+                Destination::AnyoneCanSpend,
+            ),
+            TxOutput::Burn(OutputValue::Coin((token_min_issuance_fee * 2).unwrap())),
+            TxOutput::Burn(OutputValue::Coin(
+                (token_min_change_supply_fee * 2).unwrap(),
+            )),
+            TxOutput::Transfer(
+                OutputValue::TokenV0(Box::new(fungible_token_v0_issuance.into())),
+                Destination::AnyoneCanSpend,
+            ),
+            TxOutput::LockThenTransfer(
+                OutputValue::TokenV0(Box::new(nft_v1_issuance_2.into())),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ),
+            TxOutput::Burn(OutputValue::Coin(
+                (token_min_change_supply_fee * 3).unwrap(),
+            )),
+            TxOutput::Burn(OutputValue::TokenV0(Box::new(nft_v1_issuance_3.into()))),
+            TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)),
+        ];
+
+        let pledge_getter = |_| unreachable!();
+
+        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+        constraints_accumulator
+            .process_inputs(
+                &chain_config,
+                BlockHeight::new(1),
+                pledge_getter,
+                &inputs,
+                &input_utxos,
+            )
+            .unwrap();
+
+        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
     }
 }

@@ -47,6 +47,8 @@ pub enum IOPolicyError {
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
     AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Attempt violate token fee burn constraints")]
+    AttemptViolateTokenFeeBurnConstraints,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
     InputsAndInputsUtxosLengthMismatch(usize, usize),
     #[error("Output is not found in the cache or database: {0:?}")]
@@ -57,6 +59,8 @@ pub enum IOPolicyError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
     PledgeAmountNotFound(PoolId),
+    #[error("There is a not spendable input type")]
+    NotSpendableInputType,
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -113,7 +117,7 @@ pub fn check_tx_inputs_outputs_policy(
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     constraints_accumulator
-        .process_outputs(tx.outputs())
+        .process_outputs(chain_config, tx.outputs())
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     Ok(())

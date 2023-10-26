@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId};
 use crate::{
-    chain::{output_value::OutputValue, AccountOp, TxInput, TxOutput},
+    chain::{output_value::OutputValue, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -40,21 +40,6 @@ pub fn get_issuance_count_via_tokens_op(outputs: &[TxOutput]) -> usize {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => false,
             TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
-        })
-        .count()
-}
-
-pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
-    inputs
-        .iter()
-        .filter(|&input| match input {
-            TxInput::Utxo(_) => false,
-            TxInput::Account(account) => match account.account() {
-                AccountOp::SpendDelegationBalance(_, _) => false,
-                AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_) => true,
-            },
         })
         .count()
 }

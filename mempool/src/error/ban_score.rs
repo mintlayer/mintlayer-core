@@ -142,7 +142,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
-            ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
 
@@ -377,7 +376,9 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::AttemptViolateTokenFeeBurnConstraints => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
+            IOPolicyError::NotSpendableInputType => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 0,
             IOPolicyError::BlockHeightArithmeticError => 0,
             IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),

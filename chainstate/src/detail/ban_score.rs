@@ -152,7 +152,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
-            ConnectTransactionError::TotalFeeRequiredOverflow => 100,
         }
     }
 }
@@ -277,7 +276,6 @@ impl BanScore for TokensError {
             TokensError::IssueError(_, _, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             TokensError::CoinOrTokenOverflow => 100,
-            TokensError::InsufficientTokenFees(_, _) => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
             TokensError::TokensInBlockReward => 100,
@@ -505,11 +503,13 @@ impl BanScore for IOPolicyError {
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::AttemptViolateTokenFeeBurnConstraints => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 100,
             IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
+            IOPolicyError::NotSpendableInputType => 100,
         }
     }
 }

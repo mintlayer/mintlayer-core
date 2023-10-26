@@ -89,7 +89,6 @@ impl OrphanType {
             | CTE::FailedToIncrementAccountNonce
             | CTE::TokensAccountingError(_)
             | CTE::TokensAccountingBlockUndoError(_)
-            | CTE::TotalFeeRequiredOverflow
             | CTE::IOPolicyError(_, _) => None,
         }
     }
