@@ -139,6 +139,9 @@ impl ConstrainedValueAccumulator {
                                 + chain_config.token_min_freeze_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
+                        AccountOp::ChangeAuthority(_, _) => {
+                            todo!()
+                        }
                     };
                 }
             }

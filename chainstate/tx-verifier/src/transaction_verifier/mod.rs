@@ -359,10 +359,10 @@ where
         &mut self,
         account_input: &AccountOutPoint,
     ) -> Result<(), ConnectTransactionError> {
-        let account = *account_input.account();
+        let account = account_input.account();
         // Check that account nonce increments previous value
         let expected_nonce = match self
-            .get_account_nonce_count(account.into())
+            .get_account_nonce_count(account.clone().into())
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
         {
             Some(nonce) => nonce
@@ -373,14 +373,14 @@ where
         ensure!(
             expected_nonce == account_input.nonce(),
             ConnectTransactionError::NonceIsNotIncremental(
-                account.into(),
+                account.clone().into(),
                 expected_nonce,
                 account_input.nonce(),
             )
         );
         // store new nonce
         self.account_nonce.insert(
-            account.into(),
+            account.clone().into(),
             CachedOperation::Write(account_input.nonce()),
         );
 
@@ -391,7 +391,7 @@ where
         &mut self,
         account_input: &AccountOutPoint,
     ) -> Result<(), ConnectTransactionError> {
-        let account: AccountType = (*account_input.account()).into();
+        let account: AccountType = (account_input.account().clone()).into();
         let new_nonce = self
             .get_account_nonce_count(account)
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
@@ -473,7 +473,8 @@ where
                         | AccountOp::UnmintTokens(_)
                         | AccountOp::LockTokenSupply(_)
                         | AccountOp::FreezeToken(_, _)
-                        | AccountOp::UnfreezeToken(_) => None,
+                        | AccountOp::UnfreezeToken(_)
+                        | AccountOp::ChangeAuthority(_, _) => None,
                     }
                 }
             })
@@ -766,6 +767,7 @@ where
                         });
                         Some(res)
                     }
+                    | AccountOp::ChangeAuthority(_, _) => todo!(),
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;

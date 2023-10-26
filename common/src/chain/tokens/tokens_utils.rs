@@ -53,7 +53,8 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
             TxInput::Account(account) => match account.account() {
                 AccountOp::SpendDelegationBalance(_, _)
                 | AccountOp::FreezeToken(_, _)
-                | AccountOp::UnfreezeToken(_) => false,
+                | AccountOp::UnfreezeToken(_)
+                | AccountOp::ChangeAuthority(_, _) => false,
                 AccountOp::MintTokens(_, _)
                 | AccountOp::UnmintTokens(_)
                 | AccountOp::LockTokenSupply(_) => true,

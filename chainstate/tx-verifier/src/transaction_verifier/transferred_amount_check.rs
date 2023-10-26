@@ -217,7 +217,8 @@ where
             AccountOp::UnmintTokens(token_id)
             | AccountOp::LockTokenSupply(token_id)
             | AccountOp::FreezeToken(token_id, _)
-            | AccountOp::UnfreezeToken(token_id) => {
+            | AccountOp::UnfreezeToken(token_id)
+            | AccountOp::ChangeAuthority(token_id, _) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -468,12 +469,14 @@ fn calculate_required_fee_burn(
                 AccountOp::SpendDelegationBalance(_, _)
                 | AccountOp::MintTokens(_, _)
                 | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_) => false,
+                | AccountOp::LockTokenSupply(_)
+                | AccountOp::ChangeAuthority(_, _) => false,
                 AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => true,
             },
         })
         .count() as u128;
 
+    // FIXME: authority change?
     let required_fee = (chain_config.token_min_supply_change_fee() * supply_change_count)
         .and_then(|fee| fee + (chain_config.token_min_issuance_fee() * issuance_count)?)
         .and_then(|fee| fee + (chain_config.token_min_freeze_fee() * token_freeze_count)?)

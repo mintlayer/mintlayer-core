@@ -141,7 +141,7 @@ impl<'f> BlockBuilder<'f> {
                     }
                     TxInput::Account(account) => {
                         self.account_nonce_tracker
-                            .insert((*account.account()).into(), account.nonce());
+                            .insert(account.account().clone().into(), account.nonce());
                     }
                 };
             });

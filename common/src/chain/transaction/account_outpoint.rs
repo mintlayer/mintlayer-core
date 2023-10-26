@@ -22,6 +22,8 @@ use crate::{
 };
 use serialization::{Decode, Encode};
 
+use super::Destination;
+
 /// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
@@ -40,7 +42,8 @@ impl From<AccountOp> for AccountType {
             | AccountOp::UnmintTokens(id)
             | AccountOp::LockTokenSupply(id)
             | AccountOp::FreezeToken(id, _)
-            | AccountOp::UnfreezeToken(id) => AccountType::Token(id),
+            | AccountOp::UnfreezeToken(id)
+            | AccountOp::ChangeAuthority(id, _) => AccountType::Token(id),
         }
     }
 }
@@ -48,7 +51,7 @@ impl From<AccountOp> for AccountType {
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub enum AccountOp {
     #[codec(index = 0)]
     SpendDelegationBalance(DelegationId, Amount),
@@ -69,6 +72,9 @@ pub enum AccountOp {
     // By unfreezing token all operations are available for the tokens again
     #[codec(index = 5)]
     UnfreezeToken(TokenId),
+    // Change the authority who can authorize operations for a token
+    #[codec(index = 6)]
+    ChangeAuthority(TokenId, Destination),
 }
 
 /// Type of OutPoint that represents spending from an account
