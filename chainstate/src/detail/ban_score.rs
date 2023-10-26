@@ -191,7 +191,6 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoBlockUndoError(_) => 100,
-            TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),

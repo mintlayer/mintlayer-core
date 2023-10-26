@@ -215,7 +215,6 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(_) => 0,
             TransactionVerifierStorageError::UtxoBlockUndoError(_) => 0,
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 0,
-            TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 0,
             TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 0,
         }

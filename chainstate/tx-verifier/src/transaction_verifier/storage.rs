@@ -48,8 +48,6 @@ pub enum TransactionVerifierStorageError {
     UtxoError(#[from] utxo::Error),
     #[error("BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
-    #[error("Transaction index has been disabled")]
-    TransactionIndexDisabled,
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Accounting BlockUndo error: {0}")]
