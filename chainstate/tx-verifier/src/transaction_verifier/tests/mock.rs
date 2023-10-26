@@ -24,8 +24,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -55,11 +55,6 @@ mockall::mock! {
             block_id: &Id<GenBlock>,
         ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
 
-        fn get_mainchain_tx_index(
-            &self,
-            tx_id: &OutPointSourceId,
-        ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError>;
-
         fn get_token_aux_data(
             &self,
             token_id: &TokenId,
@@ -82,17 +77,6 @@ mockall::mock! {
     }
 
     impl TransactionVerifierStorageMut for Store {
-        fn set_mainchain_tx_index(
-            &mut self,
-            tx_id: &OutPointSourceId,
-            tx_index: &TxMainChainIndex,
-        ) -> Result<(), TransactionVerifierStorageError>;
-
-        fn del_mainchain_tx_index(
-            &mut self,
-            tx_id: &OutPointSourceId,
-        ) -> Result<(), TransactionVerifierStorageError>;
-
         fn set_token_aux_data(
             &mut self,
             token_id: &TokenId,

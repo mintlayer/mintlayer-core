@@ -19,8 +19,7 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, Transaction,
-        TxMainChainIndex,
+        AccountNonce, AccountType, Block, GenBlock, Transaction,
     },
     primitives::Id,
 };
@@ -31,10 +30,7 @@ use thiserror::Error;
 use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
-use super::{
-    error::{TokensError, TxIndexError},
-    TransactionSource,
-};
+use super::{error::TokensError, TransactionSource};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -50,8 +46,6 @@ pub enum TransactionVerifierStorageError {
     TokensError(#[from] TokensError),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
-    #[error("Tx index error: {0}")]
-    TxIndexError(#[from] TxIndexError),
     #[error("BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("Transaction index has been disabled")]
@@ -66,22 +60,10 @@ pub enum TransactionVerifierStorageError {
     TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
 }
 
-pub trait HasTxIndexDisabledError {
-    fn tx_index_disabled_error() -> Self;
-}
-
-impl HasTxIndexDisabledError for TransactionVerifierStorageError {
-    fn tx_index_disabled_error() -> Self {
-        Self::TransactionIndexDisabled
-    }
-}
-
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef:
     UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead
-where
-    <Self as TransactionVerifierStorageRef>::Error: HasTxIndexDisabledError,
 {
     type Error: std::error::Error;
 
@@ -99,11 +81,6 @@ where
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_token_aux_data(
         &self,
@@ -132,17 +109,6 @@ pub trait TransactionVerifierStorageMut:
     + FlushablePoSAccountingView
     + FlushableTokensAccountingView
 {
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &TxMainChainIndex,
-    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
-
-    fn del_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
-
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
@@ -233,13 +199,6 @@ where
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.deref().get_gen_block_index(block_id)
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error> {
-        self.deref().get_mainchain_tx_index(tx_id)
     }
 
     fn get_token_aux_data(

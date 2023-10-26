@@ -18,26 +18,10 @@ use crate::TransactionSource;
 use super::{
     storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
-    CachedInputsOperation, CachedOperation, TransactionVerifierDelta,
+    CachedOperation, TransactionVerifierDelta,
 };
-use common::chain::OutPointSourceId;
 use tokens_accounting::FlushableTokensAccountingView;
 use utxo::FlushableUtxoView;
-
-fn flush_tx_indexes<S: TransactionVerifierStorageMut>(
-    storage: &mut S,
-    tx_id: OutPointSourceId,
-    tx_index_op: CachedInputsOperation,
-) -> Result<(), <S as TransactionVerifierStorageRef>::Error> {
-    match tx_index_op {
-        CachedInputsOperation::Write(ref tx_index) => {
-            storage.set_mainchain_tx_index(&tx_id, tx_index)?
-        }
-        CachedInputsOperation::Read(_) => (),
-        CachedInputsOperation::Erase => storage.del_mainchain_tx_index(&tx_id)?,
-    }
-    Ok(())
-}
 
 fn flush_tokens<S: TransactionVerifierStorageMut>(
     storage: &mut S,
@@ -86,10 +70,6 @@ where
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
-    for (tx_id, tx_index_op) in consumed.tx_index_cache {
-        flush_tx_indexes(storage, tx_id, tx_index_op)?;
-    }
-
     flush_tokens(storage, &consumed.token_issuance_cache)?;
 
     // flush utxo set

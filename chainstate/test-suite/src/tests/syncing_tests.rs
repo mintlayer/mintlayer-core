@@ -621,7 +621,6 @@ fn initial_block_download(#[case] seed: Seed) {
                 max_db_commit_attempts: Default::default(),
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
-                tx_index_enabled: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
             })
             .with_initial_time_since_genesis(2)
@@ -668,7 +667,6 @@ fn header_check_for_orphan(#[case] seed: Seed) {
                 max_db_commit_attempts: Default::default(),
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
-                tx_index_enabled: Default::default(),
                 max_tip_age: Default::default(),
             })
             .build();

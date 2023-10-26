@@ -19,20 +19,14 @@ use common::chain::{tokens::TokenIssuanceVersion, ChainstateUpgrade, Destination
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), 20, 50, false)]
+#[case(Seed::from_entropy(), 20, 50)]
 #[trace]
-#[case(Seed::from_entropy(), 20, 50, true)]
-fn simulation(
-    #[case] seed: Seed,
-    #[case] max_blocks: usize,
-    #[case] max_tx_per_block: usize,
-    #[case] tx_index_enabled: bool,
-) {
+#[case(Seed::from_entropy(), 20, 50)]
+fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: tx_index_enabled.into(),
                 max_db_commit_attempts: Default::default(),
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),

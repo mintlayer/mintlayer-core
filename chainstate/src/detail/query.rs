@@ -22,8 +22,7 @@ use common::{
             NftIssuance, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
             RPCTokenTotalSupply, TokenAuxiliaryData, TokenData, TokenId,
         },
-        Block, GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxMainChainIndex,
-        TxOutput,
+        Block, GenBlock, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -144,17 +143,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    pub fn is_transaction_index_enabled(&self) -> Result<bool, PropertyQueryError> {
-        self.chainstate_ref.get_is_transaction_index_enabled()
-    }
-
-    pub fn get_transaction_in_block(
-        &self,
-        id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, PropertyQueryError> {
-        self.chainstate_ref.get_transaction_in_block(id)
-    }
-
     pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
         let best_block_index = self.chainstate_ref.get_best_block_index()?;
         let height = best_block_index.block_height();
@@ -258,13 +246,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         };
 
         self.get_mainchain_headers_higher_than(latest_fork_point_height, header_count_limit)
-    }
-
-    pub fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
-        self.chainstate_ref.get_mainchain_tx_index(tx_id)
     }
 
     pub fn get_token_info_for_rpc(

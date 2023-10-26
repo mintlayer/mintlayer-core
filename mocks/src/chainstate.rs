@@ -26,8 +26,7 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, PoolId, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -95,10 +94,6 @@ mockall::mock! {
         fn get_best_block_index(&self) -> Result<chainstate_types::GenBlockIndex, ChainstateError>;
         fn get_chainstate_config(&self) -> ChainstateConfig;
         fn wait_for_all_events(&self);
-        fn get_mainchain_tx_index(
-            &self,
-            tx_id: &OutPointSourceId,
-        ) -> Result<Option<TxMainChainIndex>, ChainstateError>;
         fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
         fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> Result<BlockTimestamp, ChainstateError>;
         fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
@@ -179,11 +174,6 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, ChainstateError>;
-        fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError>;
-        fn get_transaction(
-            &self,
-            tx_id: &Id<Transaction>,
-        ) -> Result<Option<SignedTransaction>, ChainstateError>;
     }
 }
 

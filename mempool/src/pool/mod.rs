@@ -384,7 +384,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 ),
                 transaction.transaction(),
                 &BlockTimestamp::from_time(verifier_time),
-                None,
             );
 
             if tip != chainstate_handle.call(|c| c.get_best_block_id())?? {

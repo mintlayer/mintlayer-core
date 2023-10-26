@@ -16,9 +16,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    cached_inputs_operation::CachedInputsOperation,
     storage::{
-        HasTxIndexDisabledError, TransactionVerifierStorageError, TransactionVerifierStorageMut,
+        TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
@@ -28,8 +27,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -74,23 +73,6 @@ where
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.storage.get_gen_block_index(block_id)
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error> {
-        let tx_index_cache = self.tx_index_cache.as_ref().ok_or_else(|| {
-            <<Self as TransactionVerifierStorageRef>::Error>::tx_index_disabled_error()
-        })?;
-        match tx_index_cache.get_from_cached(tx_id) {
-            Some(v) => match v {
-                CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),
-                CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
-                CachedInputsOperation::Erase => Ok(None),
-            },
-            None => self.storage.get_mainchain_tx_index(tx_id),
-        }
     }
 
     fn get_token_aux_data(
@@ -175,29 +157,6 @@ where
     A: PoSAccountingView,
     T: TokensAccountingView,
 {
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &TxMainChainIndex,
-    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.tx_index_cache
-            .as_mut()
-            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?
-            .set_tx_index(tx_id, tx_index.clone())
-            .map_err(|e| TransactionVerifierStorageError::TxIndexError(e).into())
-    }
-
-    fn del_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.tx_index_cache
-            .as_mut()
-            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?
-            .remove_tx_index_by_id(tx_id.clone())
-            .map_err(|e| TransactionVerifierStorageError::TxIndexError(e).into())
-    }
-
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,

@@ -23,7 +23,6 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder,
         tokens::{TokenAuxiliaryData, TokenTotalSupply},
-        TxMainChainIndex, TxMainChainPosition,
     },
     primitives::H256,
 };
@@ -65,8 +64,7 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
         verifier
     };
@@ -160,8 +158,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
             UtxosBlockUndoEntry {
@@ -204,88 +201,6 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     assert_eq!(
         verifier2.get_undo_data(block_undo_id_2).unwrap().as_ref(),
         Some(&block_undo_2)
-    );
-}
-
-// Create the following hierarchy:
-//
-// TransactionVerifier -> TransactionVerifier -> MockStore
-// tx_index2              tx_index1              tx_index0
-//
-// Check that data can be accessed through derived entities
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn hierarchy_test_tx_index(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = ConfigBuilder::test_chain().build();
-
-    let outpoint0 = OutPointSourceId::Transaction(Id::new(H256::zero()));
-    let pos0 = TxMainChainPosition::new(H256::zero().into(), 1).into();
-    let tx_index_0 = TxMainChainIndex::new(pos0, 1).unwrap();
-
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
-    let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
-    let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
-
-    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
-    let pos2 = TxMainChainPosition::new(H256::from_low_u64_be(2).into(), 1).into();
-    let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
-
-    let mut store = mock::MockStore::new();
-    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
-    store
-        .expect_get_mainchain_tx_index()
-        .with(eq(outpoint0.clone()))
-        .times(2)
-        .return_const(Ok(Some(tx_index_0.clone())));
-    store
-        .expect_get_mainchain_tx_index()
-        .with(eq(outpoint2.clone()))
-        .times(1)
-        .return_const(Ok(None));
-
-    let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
-            outpoint1.clone(),
-            CachedInputsOperation::Read(tx_index_1.clone()),
-        )]));
-        verifier
-    };
-
-    let verifier2 = {
-        let mut verifier = verifier1.derive_child();
-        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
-            outpoint2.clone(),
-            CachedInputsOperation::Read(tx_index_2.clone()),
-        )]));
-        verifier
-    };
-
-    assert_eq!(
-        verifier1.get_mainchain_tx_index(&outpoint0).unwrap().as_ref(),
-        Some(&tx_index_0)
-    );
-    assert_eq!(
-        verifier1.get_mainchain_tx_index(&outpoint1).unwrap().as_ref(),
-        Some(&tx_index_1)
-    );
-    assert_eq!(verifier1.get_mainchain_tx_index(&outpoint2).unwrap(), None);
-
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint0).unwrap(),
-        Some(tx_index_0)
-    );
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint1).unwrap(),
-        Some(tx_index_1)
-    );
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint2).unwrap(),
-        Some(tx_index_2)
     );
 }
 
@@ -345,8 +260,7 @@ fn hierarchy_test_tokens_v0(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_1.clone()))]),
             BTreeMap::from([(
@@ -453,8 +367,7 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
         .times(2)
         .return_const(Ok(Some(block_index)));
 
-    let verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+    let verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.get_gen_block_index(&block_id.into()).unwrap();
 
     let verifier2 = verifier1.derive_child();
@@ -536,8 +449,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         let undo = verifier
             .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
@@ -683,8 +595,7 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.account_nonce = BTreeMap::from([(account1, CachedOperation::Read(nonce1))]);
         verifier
     };
@@ -822,8 +733,7 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier =
-            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
         let undo_issue = verifier
             .tokens_accounting_cache
             .issue_token(token_id_1, token_data1.clone())

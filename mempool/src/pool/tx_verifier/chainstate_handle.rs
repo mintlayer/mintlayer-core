@@ -16,18 +16,15 @@
 use std::collections::BTreeMap;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface,
-    tx_verifier::{
-        transaction_verifier::storage::HasTxIndexDisabledError, TransactionVerifierStorageRef,
-    },
+    chainstate_interface::ChainstateInterface, tx_verifier::TransactionVerifierStorageRef,
     ChainstateError,
 };
 use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -45,12 +42,6 @@ pub enum Error {
     Chainstate(#[from] ChainstateError),
     #[error("Subsystem error: {0}")]
     Subsystem(#[from] subsystem::error::CallError),
-}
-
-impl HasTxIndexDisabledError for Error {
-    fn tx_index_disabled_error() -> Self {
-        Self::Chainstate(ChainstateError::tx_index_disabled_error())
-    }
 }
 
 impl From<pos_accounting::Error> for Error {
@@ -212,14 +203,6 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
             // `storage_result::Error` rather than `Self::Error`.
             Error::Subsystem(_) => panic!("subsystem failure"),
         })
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, Error> {
-        let tx_id = tx_id.clone();
-        self.call(move |c| c.get_mainchain_tx_index(&tx_id))
     }
 
     fn get_token_aux_data(&self, token_id: &TokenId) -> Result<Option<TokenAuxiliaryData>, Error> {

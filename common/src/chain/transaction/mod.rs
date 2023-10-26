@@ -39,9 +39,6 @@ pub use output::*;
 
 pub mod signature;
 
-pub mod transaction_index;
-pub use transaction_index::*;
-
 use self::signature::inputsig::InputWitness;
 use self::signed_transaction::SignedTransaction;
 

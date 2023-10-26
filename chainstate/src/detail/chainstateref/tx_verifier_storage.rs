@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId,
-        OutPointSourceId, PoolId, Transaction,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
+        Transaction,
     },
     primitives::{Amount, Id},
 };
@@ -61,15 +61,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<common::chain::TxMainChainIndex>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_token_aux_data(
@@ -162,25 +153,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     TransactionVerifierStorageMut for ChainstateRef<'a, S, V>
 {
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &common::chain::TxMainChainIndex,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .set_mainchain_tx_index(tx_id, tx_index)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn del_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .del_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,

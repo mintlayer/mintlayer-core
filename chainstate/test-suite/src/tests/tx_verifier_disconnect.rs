@@ -30,8 +30,7 @@ use common::{
 use crypto::random::CryptoRng;
 
 use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, TransactionSource, TransactionSourceForConnect,
-    TransactionVerifier,
+    TransactionSource, TransactionSourceForConnect, TransactionVerifier,
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
@@ -55,11 +54,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let genesis_id = tf.genesis().get_id();
         tf.create_chain(&genesis_id.into(), num_blocks, &mut rng).unwrap();
 
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(*tf.chainstate.get_chainstate_config().tx_index_enabled),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         for height in 1..num_blocks {
             let block_id = match tf.block_id(height as u64).classify(&chain_config) {
@@ -132,11 +127,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
         let best_block_idx = best_block.into();
         let tx_source = TransactionSourceForConnect::for_mempool(&best_block_idx);
 
@@ -153,7 +144,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .build();
 
         verifier
-            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp(), None)
+            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp())
             .unwrap();
 
         // create and connect a tx from mempool based on previous tx from mempool
@@ -169,7 +160,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .build();
 
         verifier
-            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp(), None)
+            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp())
             .unwrap();
 
         {

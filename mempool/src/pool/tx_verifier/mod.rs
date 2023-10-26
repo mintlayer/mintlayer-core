@@ -41,7 +41,6 @@ pub fn create(
     chain_config: Arc<ChainConfig>,
     chainstate: chainstate::ChainstateHandle,
 ) -> TransactionVerifier {
-    let verifier_config = chainstate::tx_verifier::TransactionVerifierConfig::new(false);
     let chainstate = chainstate_handle::ChainstateHandle::new(chainstate);
     chainstate::tx_verifier::TransactionVerifier::new_generic(
         chainstate.shallow_clone(),
@@ -49,6 +48,5 @@ pub fn create(
         chainstate.shallow_clone(),
         chainstate.shallow_clone(),
         chainstate,
-        verifier_config,
     )
 }

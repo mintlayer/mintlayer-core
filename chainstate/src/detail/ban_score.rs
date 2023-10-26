@@ -30,7 +30,7 @@ use super::{
         error::{ConnectTransactionError, TokensError},
         storage::TransactionVerifierStorageError,
     },
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, TxIndexError,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::{BlockError, ChainstateError};
 use chainstate_types::GetAncestorError;
@@ -58,8 +58,6 @@ impl BanScore for BlockError {
             BlockError::DbCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
-            BlockError::TxIndexConfigError => 0,
-            BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::EpochSealError(err) => err.ban_score(),
             BlockError::BlockDataMissingForValidBlockIndex(_) => 0,
@@ -116,7 +114,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
             ConnectTransactionError::TokensError(err) => err.ban_score(),
-            ConnectTransactionError::TxIndexError(err) => err.ban_score(),
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
@@ -193,36 +190,12 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 100,
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
-            TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 100,
-        }
-    }
-}
-
-impl BanScore for TxIndexError {
-    fn ban_score(&self) -> u32 {
-        match self {
-            // this is zero because it's used when we add the outputs whose transactions we tested beforehand
-            TxIndexError::InvariantBrokenAlreadyUnspent => 0,
-            // Even though this is an invariant, we consider it a violation to be overly cautious
-            TxIndexError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
-            TxIndexError::OutputAlreadyPresentInInputsCache => 100,
-            TxIndexError::PreviouslyCachedInputNotFound(_) => 0,
-            TxIndexError::MissingOutputOrSpentOutputErasedOnConnect => 100,
-            TxIndexError::MissingOutputOrSpentOutputErasedOnDisconnect => 0,
-            TxIndexError::InvalidOutputCount => 100,
-            TxIndexError::SerializationInvariantError(_) => 100,
-            TxIndexError::DoubleSpendAttempt(_) => 100,
-            TxIndexError::MissingOutputOrSpent => 100,
-            TxIndexError::OutputIndexOutOfRange {
-                tx_id: _,
-                source_output_index: _,
-            } => 100,
         }
     }
 }

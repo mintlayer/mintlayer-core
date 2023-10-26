@@ -13,17 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
-
 use chainstate::{
-    tx_verification_strategy_utils::{
-        construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
-    },
     TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
 };
 use chainstate_types::BlockIndex;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, TxMainChainIndex},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use crypto::random::{Rng, RngCore};
@@ -32,7 +27,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
-        config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
+        error::ConnectTransactionError, flush::flush_to_storage,
         storage::TransactionVerifierStorageRef, Fee, TransactionSourceForConnect,
         TransactionVerifier, TransactionVerifierDelta,
     },
@@ -73,7 +68,6 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
@@ -92,7 +86,6 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
                 tx_verifier_maker,
                 storage_backend,
                 chain_config,
-                verifier_config,
                 block_index,
                 block,
                 &median_time_past,
@@ -109,7 +102,6 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
@@ -121,13 +113,8 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier = self.disconnect_with_base(
-            tx_verifier_maker,
-            storage_backend,
-            chain_config,
-            verifier_config,
-            block,
-        )?;
+        let mut tx_verifier =
+            self.disconnect_with_base(tx_verifier_maker, storage_backend, chain_config, block)?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 
@@ -142,7 +129,6 @@ impl RandomizedTransactionVerificationStrategy {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
@@ -155,10 +141,7 @@ impl RandomizedTransactionVerificationStrategy {
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
-        let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
-
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
         let mut total_fees = Amount::ZERO;
         let mut tx_num = 0usize;
@@ -170,7 +153,6 @@ impl RandomizedTransactionVerificationStrategy {
                     block,
                     block_index,
                     median_time_past,
-                    &mut tx_indices,
                     tx_num,
                 )?;
 
@@ -190,7 +172,6 @@ impl RandomizedTransactionVerificationStrategy {
                     },
                     &block.transactions()[tx_num],
                     median_time_past,
-                    take_front_tx_index(&mut tx_indices),
                 )?;
                 tx_num += 1;
             }
@@ -205,7 +186,6 @@ impl RandomizedTransactionVerificationStrategy {
                 block_index,
                 block.block_reward_transactable(),
                 Fee(total_fees),
-                block_reward_tx_index,
             )
             .log_err()?;
 
@@ -218,7 +198,6 @@ impl RandomizedTransactionVerificationStrategy {
         block: &WithId<Block>,
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
-        tx_indices: &mut Option<VecDeque<TxMainChainIndex>>,
         mut tx_num: usize,
     ) -> Result<(TransactionVerifierDelta, Amount, usize), ConnectTransactionError>
     where
@@ -243,7 +222,6 @@ impl RandomizedTransactionVerificationStrategy {
                     },
                     &block.transactions()[tx_num],
                     median_time_past,
-                    take_front_tx_index(tx_indices),
                 )?;
 
                 total_fees = (total_fees + fee.0).ok_or_else(|| {
@@ -261,7 +239,6 @@ impl RandomizedTransactionVerificationStrategy {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
@@ -273,7 +250,7 @@ impl RandomizedTransactionVerificationStrategy {
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
             if self.rng.lock().unwrap().gen::<bool>() {

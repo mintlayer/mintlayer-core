@@ -59,7 +59,6 @@ impl OrphanType {
             | CTE::TimeLockViolation(_)
             | CTE::UtxoError(_)
             | CTE::TokensError(_)
-            | CTE::TxIndexError(_)
             | CTE::TransactionVerifierError(_)
             | CTE::UtxoBlockUndoError(_)
             | CTE::AccountingBlockUndoError(_)
