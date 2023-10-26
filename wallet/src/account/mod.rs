@@ -1141,9 +1141,9 @@ impl Account {
                 }
                 AccountOp::MintTokens(token_id, _)
                 | AccountOp::UnmintTokens(token_id)
-                | AccountOp::LockTokenSupply(token_id) => self.find_token(token_id).is_ok(),
-                AccountOp::FreezeToken(_, _) => unimplemented!(),
-                AccountOp::UnfreezeToken(_) => unimplemented!(),
+                | AccountOp::LockTokenSupply(token_id)
+                | AccountOp::FreezeToken(token_id, _)
+                | AccountOp::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1442,7 +1442,10 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
+                AccountOp::LockTokenSupply(token_id)
+                | AccountOp::UnmintTokens(token_id)
+                | AccountOp::FreezeToken(token_id, _)
+                | AccountOp::UnfreezeToken(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
@@ -1453,8 +1456,6 @@ fn group_preselected_inputs(
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
-                AccountOp::FreezeToken(_, _) => unimplemented!(),
-                AccountOp::UnfreezeToken(_) => unimplemented!(),
             },
         }
     }

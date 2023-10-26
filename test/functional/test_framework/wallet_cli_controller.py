@@ -178,8 +178,9 @@ class WalletCliController:
                               number_of_decimals: int,
                               metadata_uri: str,
                               destination_address: str,
-                              token_supply: str = 'unlimited') -> Tuple[Optional[str], Optional[str]]:
-        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply}\n')
+                              token_supply: str = 'unlimited',
+                              is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
+        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
         if output.startswith("A new token has been issued with ID"):
             return output[output.find(':')+2:], None
 

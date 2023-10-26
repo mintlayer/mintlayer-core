@@ -18,7 +18,9 @@ use std::collections::BTreeSet;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, Metadata, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+        },
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -111,6 +113,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
         token_total_supply: TokenTotalSupply,
+        is_freezable: IsTokenFreezable,
     ) -> Result<TokenId, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -125,7 +128,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     metadata_uri,
                     total_supply: token_total_supply,
                     authority: destination,
-                    is_freezable: common::chain::tokens::IsTokenFreezable::No, // TODO: pass from outside
+                    is_freezable,
                 }),
                 current_fee_rate,
                 consolidate_fee_rate,

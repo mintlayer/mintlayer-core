@@ -49,7 +49,7 @@ use crate::{
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_coin_amount, parse_pool_id, parse_token_amount,
     parse_token_id, parse_utxo_outpoint, print_coin_amount, print_token_amount, to_per_thousand,
-    CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
+    CliIsFreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -191,6 +191,7 @@ pub enum WalletCommand {
         metadata_uri: String,
         destination_address: String,
         token_supply: String,
+        is_freezable: CliIsFreezable,
     },
 
     /// Issue a new token
@@ -776,6 +777,7 @@ impl CommandHandler {
                 metadata_uri,
                 destination_address,
                 token_supply,
+                is_freezable,
             } => {
                 ensure!(
                     number_of_decimals <= chain_config.token_max_dec_count(),
@@ -796,6 +798,7 @@ impl CommandHandler {
                         number_of_decimals,
                         metadata_uri.into_bytes(),
                         token_supply,
+                        is_freezable.to_wallet_types(),
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
