@@ -155,7 +155,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             )?;
                             let destination = match token_data {
                                 tokens_accounting::TokenData::FungibleToken(data) => {
-                                    data.reissuance_controller().clone()
+                                    data.authority().clone()
                                 }
                             };
                             Ok(destination)

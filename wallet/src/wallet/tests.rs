@@ -1701,7 +1701,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                     number_of_decimals: rng.gen_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                     total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-                    reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                    authority: address2.decode_object(&chain_config).unwrap(),
                     is_freezable: common::chain::tokens::IsTokenFreezable::No,
                 }),
                 FeeRate::new(Amount::ZERO),
@@ -1945,7 +1945,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
-                reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                authority: address2.decode_object(&chain_config).unwrap(),
                 is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
@@ -1970,7 +1970,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        token_issuance_data.reissuance_controller,
+        token_issuance_data.authority,
         address2.decode_object(&chain_config).unwrap()
     );
 
@@ -2173,7 +2173,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-                reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                authority: address2.decode_object(&chain_config).unwrap(),
                 is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
@@ -2199,7 +2199,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        token_issuance_data.reissuance_controller,
+        token_issuance_data.authority,
         address2.decode_object(&chain_config).unwrap()
     );
 
@@ -2342,7 +2342,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: "http://uri".as_bytes().to_vec(),
                 total_supply: common::chain::tokens::TokenTotalSupply::Lockable,
-                reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                authority: address2.decode_object(&chain_config).unwrap(),
                 is_freezable: common::chain::tokens::IsTokenFreezable::No,
             }),
             FeeRate::new(Amount::ZERO),
@@ -2368,7 +2368,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        token_issuance_data.reissuance_controller,
+        token_issuance_data.authority,
         address2.decode_object(&chain_config).unwrap()
     );
 

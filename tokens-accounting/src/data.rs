@@ -102,10 +102,11 @@ pub struct FungibleTokenData {
     is_freezable: IsTokenFreezable,
     is_unfreezable: IsTokenUnfreezable,
     frozen: bool,
-    reissuance_controller: Destination,
+    authority: Destination,
 }
 
 impl FungibleTokenData {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_unchecked(
         token_ticker: Vec<u8>,
         number_of_decimals: u8,
@@ -115,9 +116,8 @@ impl FungibleTokenData {
         is_freezable: IsTokenFreezable,
         is_unfreezable: IsTokenUnfreezable,
         frozen: bool,
-        reissuance_controller: Destination,
+        authority: Destination,
     ) -> Self {
-        // FIXME: check some invariants?
         Self {
             token_ticker,
             number_of_decimals,
@@ -127,7 +127,7 @@ impl FungibleTokenData {
             is_freezable,
             is_unfreezable,
             frozen,
-            reissuance_controller,
+            authority,
         }
     }
 
@@ -151,8 +151,8 @@ impl FungibleTokenData {
         self.locked
     }
 
-    pub fn reissuance_controller(&self) -> &Destination {
-        &self.reissuance_controller
+    pub fn authority(&self) -> &Destination {
+        &self.authority
     }
 
     pub fn try_lock(self) -> Result<Self, Self> {
@@ -167,7 +167,7 @@ impl FungibleTokenData {
                 self.is_freezable,
                 self.is_unfreezable,
                 self.frozen,
-                self.reissuance_controller,
+                self.authority,
             )),
         }
     }
@@ -196,7 +196,7 @@ impl FungibleTokenData {
                 self.is_freezable,
                 is_unfreezable,
                 true,
-                self.reissuance_controller,
+                self.authority,
             )),
         }
     }
@@ -213,7 +213,7 @@ impl FungibleTokenData {
                 self.is_freezable,
                 self.is_unfreezable,
                 false,
-                self.reissuance_controller,
+                self.authority,
             )),
         }
     }
@@ -236,7 +236,7 @@ impl From<TokenIssuance> for FungibleTokenData {
                     issuance.is_freezable,
                     is_unfreezable,
                     false,
-                    issuance.reissuance_controller,
+                    issuance.authority,
                 )
             }
         }

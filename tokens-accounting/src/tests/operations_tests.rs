@@ -62,7 +62,7 @@ fn make_token_issuance(
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         is_freezable: freezable,
-        reissuance_controller: Destination::AnyoneCanSpend,
+        authority: Destination::AnyoneCanSpend,
     })
 }
 
@@ -785,18 +785,14 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     // Freeze the token
     let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
 
-    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
-        TokenData::FungibleToken(data) => data,
-    };
+    let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
 
     // Unfreeze the token
     let _ = cache.unfreeze_token(token_id).unwrap();
 
-    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
-        TokenData::FungibleToken(data) => data,
-    };
+    let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(!token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
 
@@ -808,9 +804,7 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     // Freeze again, now without an option to unfreeze
     let _ = cache.freeze_token(token_id, IsTokenUnfreezable::No).unwrap();
 
-    let token_data = match cache.get_token_data(&token_id).unwrap().unwrap() {
-        TokenData::FungibleToken(data) => data,
-    };
+    let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(token_data.is_frozen());
     assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::No);
 

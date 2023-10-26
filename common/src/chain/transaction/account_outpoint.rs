@@ -56,8 +56,7 @@ pub enum AccountOp {
     #[codec(index = 1)]
     MintTokens(TokenId, Amount),
     // Take tokens out of circulation. Not the same as Burn because unminting means that certain amount
-    // of tokens is no longer supported by underlying fiat currency, which can only be done by
-    // reissuance controller.
+    // of tokens is no longer supported by underlying fiat currency, which can only be done by the authority.
     #[codec(index = 2)]
     UnmintTokens(TokenId),
     // After supply is locked tokens cannot be minted or unminted ever again.

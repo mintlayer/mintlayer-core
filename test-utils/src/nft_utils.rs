@@ -58,7 +58,7 @@ pub fn random_token_issuance_v1(chain_config: &ChainConfig, rng: &mut impl Rng) 
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
         total_supply: TokenTotalSupply::Lockable,
         is_freezable: IsTokenFreezable::Yes,
-        reissuance_controller: Destination::AnyoneCanSpend,
+        authority: Destination::AnyoneCanSpend,
     }
 }
 

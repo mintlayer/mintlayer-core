@@ -77,7 +77,7 @@ fn make_issuance(
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
-        reissuance_controller: Destination::AnyoneCanSpend,
+        authority: Destination::AnyoneCanSpend,
         is_freezable: freezable,
     })
 }
@@ -294,7 +294,7 @@ fn token_issue_test(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
+            authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -317,7 +317,7 @@ fn token_issue_test(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
+            authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -352,7 +352,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         .as_bytes()
                         .to_vec(),
                     total_supply: TokenTotalSupply::Unlimited,
-                    reissuance_controller: Destination::AnyoneCanSpend,
+                    authority: Destination::AnyoneCanSpend,
                     is_freezable: IsTokenFreezable::No,
                 });
                 let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -383,7 +383,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .as_bytes()
                     .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
-                reissuance_controller: Destination::AnyoneCanSpend,
+                authority: Destination::AnyoneCanSpend,
                 is_freezable: IsTokenFreezable::No,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -412,7 +412,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .as_bytes()
                     .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
-                reissuance_controller: Destination::AnyoneCanSpend,
+                authority: Destination::AnyoneCanSpend,
                 is_freezable: IsTokenFreezable::No,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -436,7 +436,7 @@ fn token_issue_test(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
+            authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -3437,7 +3437,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            authority: Destination::PublicKey(controller_pk.clone()),
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -3570,7 +3570,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            authority: Destination::PublicKey(controller_pk.clone()),
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -3768,7 +3768,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
-            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            authority: Destination::PublicKey(controller_pk.clone()),
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -4004,7 +4004,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
+            authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -4041,7 +4041,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
+            authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -4652,7 +4652,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+            authority: Destination::PublicKey(controller_pk.clone()),
             is_freezable: IsTokenFreezable::Yes,
         });
 
