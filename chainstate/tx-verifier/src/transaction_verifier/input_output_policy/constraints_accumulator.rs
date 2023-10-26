@@ -77,16 +77,13 @@ impl ConstrainedValueAccumulator {
                         .as_ref()
                         .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?
                     {
-                        TxOutput::Transfer(value, _)
-                        | TxOutput::LockThenTransfer(value, _, _)
-                        | TxOutput::Burn(value) => {
-                            // TODO(PR) check: why are we adding value from burn?
+                        TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
                             if let Some(coins) = value.coin_amount() {
                                 self.unconstrained_value = (self.unconstrained_value + coins)
                                     .ok_or(IOPolicyError::AmountOverflow)?;
                             }
                         }
-                        | TxOutput::DataDeposit(_) => {
+                        | TxOutput::Burn(_) | TxOutput::DataDeposit(_) => {
                             return Err(IOPolicyError::SpendingNonSpendableOutput(
                                 outpoint.clone(),
                             ));
