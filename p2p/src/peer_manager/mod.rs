@@ -793,7 +793,8 @@ where
         self.peer_connectivity_handle.accept(peer_id)?;
 
         log::info!(
-            "new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {peer_role:?}"
+            "new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {peer_role:?}, protocol_version: {:?}",
+            info.protocol_version
         );
 
         if info.common_services.has_service(Service::PeerAddresses) {
@@ -1042,6 +1043,7 @@ where
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn reload_dns_seed(&mut self) {
         let addresses = self.dns_seed.obtain_addresses().await;
+        log::debug!("Dns seed reloaded, address = {addresses:?}");
         for addr in addresses {
             self.peerdb.peer_discovered(addr);
         }
@@ -1519,6 +1521,7 @@ where
         let mut last_ping_check = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
         let mut next_dns_reload = self.time_getter.get_time();
+        let mut had_dns_reload = false;
 
         let mut heartbeat_call_needed = false;
 
@@ -1581,14 +1584,41 @@ where
             let time_since_last_chainstate_tip =
                 (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
 
-            // Reload DNS if there are no outbound connections
-            if now >= next_dns_reload
-                && self.pending_outbound_connects.is_empty()
-                && (self.peers.is_empty() || time_since_last_chainstate_tip > stale_tip_time_diff)
+            // Reload DNS if there are no outbound connections or if we haven't done it at least
+            // once yet.
+            // Note: the latter is useful in the case when a "fresh" node has been passed some
+            // initial addresses at startup (via boot_nodes or reserved_nodes) and either their
+            // number is too small or they all are in the same address group. In that case the node
+            // might establish a few OutboundBlockRelay connections and then stop establishing
+            // new ones until it's out of IBD and its tip becomes stale (following the second
+            // part of the condition below).
+            if !had_dns_reload
+                || (now >= next_dns_reload
+                    && self.pending_outbound_connects.is_empty()
+                    && (self.peers.is_empty()
+                        || time_since_last_chainstate_tip > stale_tip_time_diff))
             {
+                log::debug!(
+                    concat!(
+                        "Choosing to reload dns seed, now is {:?}, ",
+                        "next_dns_reload is {:?}, ",
+                        "self.pending_outbound_connects.is_empty() is {}, ",
+                        "self.peers.is_empty() is {}, ",
+                        "time_since_last_chainstate_tip is {:?}, ",
+                        "stale_tip_time_diff is {:?}"
+                    ),
+                    now,
+                    next_dns_reload,
+                    self.pending_outbound_connects.is_empty(),
+                    self.peers.is_empty(),
+                    time_since_last_chainstate_tip,
+                    stale_tip_time_diff
+                );
+
                 self.reload_dns_seed().await;
                 next_dns_reload = (now + PEER_MGR_DNS_RELOAD_INTERVAL)
                     .expect("Times derived from local clock; cannot fail");
+                had_dns_reload = true;
                 heartbeat_call_needed = true;
             }
 

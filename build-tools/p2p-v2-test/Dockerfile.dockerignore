@@ -1,0 +1,6 @@
+.git
+.github
+.gitlab
+.vscode
+build-tools
+target

@@ -53,4 +53,6 @@ pub enum WalletCliError {
     AddressEncodingError(#[from] AddressError),
     #[error("Retrieving addresses with usage failed for account {0}: {1}")]
     AddressesRetrievalFailed(U31, String),
+    #[error("Error converting to json: {0}")]
+    SerdeJsonFormatError(#[from] serde_json::Error),
 }

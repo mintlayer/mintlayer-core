@@ -341,7 +341,7 @@ where
                         ).await?;
                     }
                     Err(err) => {
-                        log::info!("peer connection closed, reason {err:?}");
+                        log::info!("Connection closed for peer {}, reason {err:?}", self.peer_id);
                         return Ok(());
                     }
                 }
