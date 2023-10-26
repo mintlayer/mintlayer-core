@@ -1085,6 +1085,10 @@ impl Account {
         get_transaction_list(&self.key_chain, &self.output_cache, skip, count)
     }
 
+    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&WalletTx> {
+        self.output_cache.get_transaction(transaction_id)
+    }
+
     pub fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,

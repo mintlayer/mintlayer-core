@@ -260,6 +260,11 @@ pub enum WalletCommand {
     /// Generate a new unused public key
     NewPublicKey,
 
+    /// Get the transaction from the wallet if present
+    GetTransaction {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+
     GetVrfPublicKey,
 
     SendToAddress {
@@ -1006,6 +1011,16 @@ impl CommandHandler {
                     .get_vrf_public_key()
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
+            }
+
+            WalletCommand::GetTransaction { transaction_id } => {
+                let tx = self
+                    .get_readonly_controller()?
+                    .get_transaction(transaction_id.take())
+                    .map(|tx| format!("{:?}", tx))
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(ConsoleCommand::Print(tx))
             }
 
             WalletCommand::SendToAddress {

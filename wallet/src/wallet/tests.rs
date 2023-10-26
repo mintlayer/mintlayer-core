@@ -1010,6 +1010,73 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .unwrap();
     }
 }
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_get_transaction(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [gen_random_transfer(&mut rng, Amount::from_atoms(1))],
+            [],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let tx_id = tx.transaction().get_id();
+
+    // try to find not registered transaction
+    let err = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap_err();
+    assert_eq!(err, WalletError::NoTransactionFound(tx_id));
+
+    wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
+    let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
+
+    match found_tx {
+        WalletTx::Tx(found_tx) => {
+            assert_eq!(*found_tx.state(), TxState::Inactive(1));
+            assert_eq!(found_tx.get_transaction(), tx.transaction());
+        }
+        WalletTx::Block(_) => {
+            panic!("unexpected result");
+        }
+    }
+
+    // put the tx in a block and scan it as confirmed
+    let (_, block) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![tx.clone()],
+        Amount::ZERO,
+        1,
+    );
+    let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
+
+    match found_tx {
+        WalletTx::Tx(found_tx) => {
+            assert_eq!(
+                *found_tx.state(),
+                TxState::Confirmed(BlockHeight::new(2), block.timestamp(), 0)
+            );
+            assert_eq!(found_tx.get_transaction(), tx.transaction());
+        }
+        WalletTx::Block(_) => {
+            panic!("unexpected result");
+        }
+    }
+}
 
 #[rstest]
 #[trace]

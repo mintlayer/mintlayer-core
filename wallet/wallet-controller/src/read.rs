@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use common::{
     address::Address,
     chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
-    primitives::{id::WithId, Amount},
+    primitives::{id::WithId, Amount, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use futures::{stream::FuturesUnordered, TryStreamExt};
@@ -33,7 +33,7 @@ use wallet::{
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoType, UtxoTypes},
     with_locked::WithLocked,
-    BlockInfo, KeychainUsageState,
+    BlockInfo, KeychainUsageState, WalletTx,
 };
 
 use crate::ControllerError;
@@ -103,6 +103,15 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<TransactionList, ControllerError<T>> {
         self.wallet
             .get_transaction_list(self.account_index, skip, count)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<&WalletTx, ControllerError<T>> {
+        self.wallet
+            .get_transaction(self.account_index, transaction_id)
             .map_err(ControllerError::WalletError)
     }
 

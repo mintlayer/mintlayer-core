@@ -858,6 +858,12 @@ impl OutputCache {
 
         Ok(all_abandoned)
     }
+
+    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&WalletTx> {
+        self.txs
+            .get(&transaction_id.into())
+            .ok_or(WalletError::NoTransactionFound(transaction_id))
+    }
 }
 
 fn sum_burned_token_amount(

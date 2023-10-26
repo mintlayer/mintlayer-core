@@ -53,7 +53,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState, WalletTx};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -714,6 +714,15 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<TransactionList> {
         let account = self.get_account(account_index)?;
         account.get_transaction_list(skip, count)
+    }
+
+    pub fn get_transaction(
+        &self,
+        account_index: U31,
+        transaction_id: Id<Transaction>,
+    ) -> WalletResult<&WalletTx> {
+        let account = self.get_account(account_index)?;
+        account.get_transaction(transaction_id)
     }
 
     pub fn get_transactions_to_be_broadcast(&self) -> WalletResult<Vec<SignedTransaction>> {
