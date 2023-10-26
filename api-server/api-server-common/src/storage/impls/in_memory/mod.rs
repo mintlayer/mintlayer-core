@@ -59,7 +59,7 @@ impl ApiServerInMemoryStorage {
     }
 
     fn get_address_balance(&self, _address: &str) -> Result<Option<Amount>, ApiServerStorageError> {
-	// TODO
+        // TODO
         Ok(Some(Amount::ZERO))
     }
 
@@ -135,7 +135,7 @@ impl ApiServerInMemoryStorage {
         &mut self,
         _block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-	// TODO
+        // TODO
         Ok(())
     }
 
@@ -145,7 +145,7 @@ impl ApiServerInMemoryStorage {
         _amount: Amount,
         _block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-	// TODO
+        // TODO
         Ok(())
     }
 
