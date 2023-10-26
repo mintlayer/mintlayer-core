@@ -265,6 +265,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         token_data.metadata_uri().to_owned(),
                         circulating_supply,
                         (*token_data.total_supply()).into(),
+                        token_data.is_frozen(),
                     ));
                     Ok(Some(rpc_issuance))
                 }
@@ -358,6 +359,7 @@ fn to_rpc_token_info(
                 issuance.metadata_uri.clone(),
                 issuance.amount_to_issue,
                 RPCTokenTotalSupply::Fixed(issuance.amount_to_issue),
+                false,
             )))
         }
         TokenData::NftIssuance(nft) => {

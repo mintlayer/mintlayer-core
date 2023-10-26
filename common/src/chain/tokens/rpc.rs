@@ -63,6 +63,7 @@ pub struct RPCFungibleTokenInfo {
     pub metadata_uri: Vec<u8>,
     pub circulating_supply: Amount,
     pub total_supply: RPCTokenTotalSupply,
+    pub is_frozen: bool,
 }
 
 impl RPCFungibleTokenInfo {
@@ -73,6 +74,7 @@ impl RPCFungibleTokenInfo {
         metadata_uri: Vec<u8>,
         circulating_supply: Amount,
         total_supply: RPCTokenTotalSupply,
+        is_frozen: bool,
     ) -> Self {
         Self {
             token_id,
@@ -81,6 +83,7 @@ impl RPCFungibleTokenInfo {
             metadata_uri,
             circulating_supply,
             total_supply,
+            is_frozen,
         }
     }
 }

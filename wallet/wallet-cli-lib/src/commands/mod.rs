@@ -858,7 +858,7 @@ impl CommandHandler {
                 let amount = {
                     let token_number_of_decimals = self
                         .controller()?
-                        .get_token_number_of_decimals(token_id)
+                        .get_token_number_of_decimals_if_not_frozen(token_id)
                         .await
                         .map_err(WalletCliError::Controller)?;
                     parse_token_amount(token_number_of_decimals, &amount)?
@@ -877,7 +877,7 @@ impl CommandHandler {
                 let amount = {
                     let token_number_of_decimals = self
                         .controller()?
-                        .get_token_number_of_decimals(token_id)
+                        .get_token_number_of_decimals_if_not_frozen(token_id)
                         .await
                         .map_err(WalletCliError::Controller)?;
                     parse_token_amount(token_number_of_decimals, &amount)?
@@ -1040,7 +1040,7 @@ impl CommandHandler {
                 let amount = {
                     let token_number_of_decimals = self
                         .controller()?
-                        .get_token_number_of_decimals(token_id)
+                        .get_token_number_of_decimals_if_not_frozen(token_id)
                         .await
                         .map_err(WalletCliError::Controller)?;
                     parse_token_amount(token_number_of_decimals, &amount)?
