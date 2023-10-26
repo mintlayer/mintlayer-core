@@ -628,6 +628,9 @@ name = "bitflags"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitvec"
@@ -1504,23 +1507,6 @@ dependencies = [
 
 [[package]]
 name = "crossterm"
-version = "0.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a84cda67535339806297f1b331d6dd6320470d2a0fe65381e79ee9e156dd3d13"
-dependencies = [
- "bitflags 1.3.2",
- "crossterm_winapi",
- "libc",
- "mio",
- "parking_lot 0.12.1",
- "serde",
- "signal-hook",
- "signal-hook-mio",
- "winapi",
-]
-
-[[package]]
-name = "crossterm"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
@@ -1530,6 +1516,7 @@ dependencies = [
  "libc",
  "mio",
  "parking_lot 0.12.1",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -2141,6 +2128,16 @@ name = "fs4"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eeb4ed9e12f43b7fa0baae3f9cdda28352770132ef2e09a23760c29cae8bd47"
+dependencies = [
+ "rustix",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "fs4"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29f9df8a11882c4e3335eb2d18a0137c505d9ca927470b0cac9c6f0ae07d28f7"
 dependencies = [
  "rustix",
  "windows-sys 0.48.0",
@@ -3381,7 +3378,7 @@ source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.2#fb3
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
- "fs4",
+ "fs4 0.6.6",
  "libc",
  "lmdb-rkv-sys",
  "num",
@@ -4004,7 +4001,7 @@ dependencies = [
  "common",
  "crypto",
  "directories",
- "fs4",
+ "fs4 0.7.0",
  "jsonrpsee",
  "logging",
  "mempool",
@@ -5200,13 +5197,13 @@ dependencies = [
 
 [[package]]
 name = "reedline"
-version = "0.23.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3defc4467a8909614bcb02cb304a3e8472c31f7a44e6c6c287eb9575b212bc4d"
+checksum = "e7dc1d1d369c194cf79acc204397aca1fecc4248df3e1c1eabb15e5ef2d16991"
 dependencies = [
  "chrono",
  "crossbeam",
- "crossterm 0.26.1",
+ "crossterm",
  "fd-lock",
  "itertools 0.10.5",
  "nu-ansi-term 0.49.0",
@@ -7435,7 +7432,7 @@ dependencies = [
  "clap",
  "common",
  "consensus",
- "crossterm 0.27.0",
+ "crossterm",
  "crypto",
  "directories",
  "hex",
