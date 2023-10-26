@@ -181,7 +181,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
-            ConnectTransactionError::TokenIsFreezed(_) => 0,
         }
     }
 }

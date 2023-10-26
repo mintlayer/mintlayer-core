@@ -21,7 +21,10 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         output_value::OutputValue,
-        tokens::{make_token_id, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
+        tokens::{
+            make_token_id, IsTokenFreezable, IsTokenUnfreezable, NftIssuance, TokenId,
+            TokenIssuance, TokenTotalSupply,
+        },
         AccountNonce, AccountOp, AccountOutPoint, AccountType, Destination, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -36,7 +39,6 @@ use tokens_accounting::{
 };
 use utxo::Utxo;
 
-// FIXME: support token freeze
 pub struct RandomTxMaker<'a> {
     chainstate: &'a TestChainstate,
     utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
@@ -171,15 +173,56 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for (i, token_id) in inputs.iter().copied().enumerate() {
-            if rng.gen_bool(0.9) {
-                let circulating_supply =
-                    tokens_cache.get_circulating_supply(&token_id).unwrap().unwrap_or(Amount::ZERO);
-                let token_data = tokens_cache.get_token_data(&token_id).unwrap();
+            let token_data = tokens_cache.get_token_data(&token_id).unwrap();
+            if let Some(token_data) = token_data {
+                let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
 
-                if let Some(token_data) = token_data {
-                    let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
+                if token_data.is_frozen() {
+                    if let IsTokenUnfreezable::Yes = token_data.is_unfreezable() {
+                        // Unfreeze
+                        let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
+                        let account_input = TxInput::Account(AccountOutPoint::new(
+                            new_nonce,
+                            AccountOp::UnfreezeToken(token_id),
+                        ));
 
-                    if !token_data.is_locked() {
+                        let inputs = vec![account_input, fee_inputs[i].clone()];
+                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+
+                        let _ = tokens_cache.unfreeze_token(token_id).unwrap();
+
+                        result_inputs.extend(inputs);
+                        result_outputs.extend(outputs);
+                    }
+                } else if rng.gen_bool(0.1) {
+                    if let IsTokenFreezable::Yes = token_data.is_freezable() {
+                        // Freeze
+                        let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
+                        let unfreezable = if rng.gen::<bool>() {
+                            IsTokenUnfreezable::Yes
+                        } else {
+                            IsTokenUnfreezable::No
+                        };
+                        let account_input = TxInput::Account(AccountOutPoint::new(
+                            new_nonce,
+                            AccountOp::FreezeToken(token_id, unfreezable),
+                        ));
+
+                        let inputs = vec![account_input, fee_inputs[i].clone()];
+                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+
+                        let _ = tokens_cache.freeze_token(token_id, unfreezable).unwrap();
+
+                        result_inputs.extend(inputs);
+                        result_outputs.extend(outputs);
+                    }
+                } else if !token_data.is_locked() {
+                    if rng.gen_bool(0.9) {
+                        let circulating_supply = tokens_cache
+                            .get_circulating_supply(&token_id)
+                            .unwrap()
+                            .unwrap_or(Amount::ZERO);
+
                         // mint
                         let supply_limit = match token_data.total_supply() {
                             TokenTotalSupply::Fixed(v) => *v,
@@ -205,26 +248,29 @@ impl<'a> RandomTxMaker<'a> {
                         result_outputs.extend(outputs);
 
                         let _ = tokens_cache.mint_tokens(token_id, to_mint).unwrap();
+                    } else {
+                        let is_locked =
+                            match tokens_cache.get_token_data(&token_id).unwrap().unwrap() {
+                                tokens_accounting::TokenData::FungibleToken(data) => {
+                                    data.is_locked()
+                                }
+                            };
+
+                        if !is_locked {
+                            let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
+                            let account_input = TxInput::Account(AccountOutPoint::new(
+                                new_nonce,
+                                AccountOp::LockTokenSupply(token_id),
+                            ));
+                            result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
+
+                            // fake output to avoid empty outputs error
+                            let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                            result_outputs.extend(outputs);
+
+                            let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
+                        }
                     }
-                }
-            } else {
-                let is_locked = match tokens_cache.get_token_data(&token_id).unwrap().unwrap() {
-                    tokens_accounting::TokenData::FungibleToken(data) => data.is_locked(),
-                };
-
-                if !is_locked {
-                    let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                    let account_input = TxInput::Account(AccountOutPoint::new(
-                        new_nonce,
-                        AccountOp::LockTokenSupply(token_id),
-                    ));
-                    result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
-
-                    // fake output to avoid empty outputs error
-                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
-                    result_outputs.extend(outputs);
-
-                    let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
                 }
             }
         }
@@ -267,6 +313,14 @@ impl<'a> RandomTxMaker<'a> {
                     unimplemented!("deprecated tokens version")
                 }
                 OutputValue::TokenV1(token_id, amount) => {
+                    let token_data = tokens_cache.get_token_data(&token_id).unwrap();
+                    if let Some(token_data) = token_data {
+                        let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
+                        if token_data.is_frozen() {
+                            continue;
+                        }
+                    }
+
                     let (new_inputs, new_outputs) = self.spend_tokens_v1(
                         rng,
                         tokens_cache,
@@ -380,7 +434,7 @@ impl<'a> RandomTxMaker<'a> {
                         .is_some_and(|(_, was_unminted)| *was_unminted);
 
                     let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
-                    if !token_data.is_locked() && !was_unminted {
+                    if !token_data.is_locked() && !token_data.is_frozen() && !was_unminted {
                         let to_unmint = Amount::from_atoms(atoms);
 
                         let circulating_supply =
