@@ -49,7 +49,8 @@ use crate::{
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_coin_amount, parse_pool_id, parse_token_amount,
     parse_token_id, parse_utxo_outpoint, print_coin_amount, print_token_amount, to_per_thousand,
-    CliIsFreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
+    CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
+    CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -222,6 +223,17 @@ pub enum WalletCommand {
 
     /// Lock the circulating supply for the token
     LockTokenSupply {
+        token_id: String,
+    },
+
+    /// Freezing the token forbids any operation with all the tokens (except for optional unfreeze)
+    FreezeToken {
+        token_id: String,
+        is_unfreezable: CliIsUnfreezable,
+    },
+
+    /// By unfreezing the token all operations are available for the tokens again
+    UnfreezeToken {
         token_id: String,
     },
 
@@ -898,6 +910,33 @@ impl CommandHandler {
                 self.get_synced_controller()
                     .await?
                     .lock_token_supply(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::FreezeToken {
+                token_id,
+                is_unfreezable,
+            } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+
+                self.get_synced_controller()
+                    .await?
+                    .freeze_token(token_id, is_unfreezable.to_wallet_types())
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::UnfreezeToken { token_id } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+
+                self.get_synced_controller()
+                    .await?
+                    .unfreeze_token(token_id)
                     .await
                     .map_err(WalletCliError::Controller)?;
 

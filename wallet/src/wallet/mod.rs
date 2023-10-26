@@ -27,7 +27,7 @@ pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{make_token_id, Metadata, TokenId, TokenIssuance};
+use common::chain::tokens::{make_token_id, IsTokenUnfreezable, Metadata, TokenId, TokenIssuance};
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -153,6 +153,12 @@ pub enum WalletError {
     CannotMintFixedTokenSupply(Amount, Amount, Amount),
     #[error("Trying to unmint {0:?} but the current supply is {1:?}")]
     CannotUnmintTokenSupply(Amount, Amount),
+    #[error("Cannot freeze an unfreezable token")]
+    CannotFreezeUnfreezableToken,
+    #[error("Cannot freeze an already frozen token")]
+    CannotFreezeAlreadyFrozenToken,
+    #[error("Cannot unfreeze this token")]
+    CannotUnfreezeToken,
 }
 
 /// Result type used for the wallet
@@ -861,6 +867,50 @@ impl<B: storage::Backend> Wallet<B> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.lock_token_supply(
+                db_tx,
+                token_id,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn freeze_token(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        is_token_unfreezable: IsTokenUnfreezable,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.freeze_token(
+                db_tx,
+                token_id,
+                is_token_unfreezable,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn unfreeze_token(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.unfreeze_token(
                 db_tx,
                 token_id,
                 latest_median_time,

@@ -233,9 +233,16 @@ impl TokenFreezableState {
             Self::NotFrozen(IsTokenFreezable::Yes) => {
                 Ok(Self::Frozen(IsTokenFreezable::Yes, is_unfreezable))
             }
-            Self::NotFrozen(IsTokenFreezable::No) | Self::Frozen(_, _) => {
-                Err(WalletError::MissingTokenId)
-            }
+            Self::NotFrozen(IsTokenFreezable::No) => Err(WalletError::CannotFreezeUnfreezableToken),
+            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
+        }
+    }
+
+    pub fn check_can_freeze(&self) -> WalletResult<()> {
+        match self {
+            Self::NotFrozen(IsTokenFreezable::Yes) => Ok(()),
+            Self::NotFrozen(IsTokenFreezable::No) => Err(WalletError::CannotFreezeUnfreezableToken),
+            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
         }
     }
 
@@ -245,7 +252,16 @@ impl TokenFreezableState {
                 Ok(Self::NotFrozen(*is_freezable))
             }
             Self::Frozen(_, IsTokenUnfreezable::No) | Self::NotFrozen(_) => {
-                Err(WalletError::MissingTokenId)
+                Err(WalletError::CannotUnfreezeToken)
+            }
+        }
+    }
+
+    pub fn check_can_unfreeze(&self) -> WalletResult<()> {
+        match self {
+            Self::Frozen(_, IsTokenUnfreezable::Yes) => Ok(()),
+            Self::Frozen(_, IsTokenUnfreezable::No) | Self::NotFrozen(_) => {
+                Err(WalletError::CannotUnfreezeToken)
             }
         }
     }

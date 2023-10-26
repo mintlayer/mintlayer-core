@@ -19,7 +19,8 @@ use common::{
     address::Address,
     chain::{
         tokens::{
-            IsTokenFreezable, Metadata, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
@@ -216,6 +217,48 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let tx = self
             .wallet
             .lock_token_supply(
+                self.account_index,
+                token_id,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    /// After freezing a token all operations (transfer, mint, unmint...)
+    /// on that token are forbidden until it is unfrozen
+    pub async fn freeze_token(
+        &mut self,
+        token_id: TokenId,
+        is_token_unfreezable: IsTokenUnfreezable,
+    ) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = self
+            .wallet
+            .freeze_token(
+                self.account_index,
+                token_id,
+                is_token_unfreezable,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    /// After unfreezing a token all operations on that token are again permitted
+    pub async fn unfreeze_token(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = self
+            .wallet
+            .unfreeze_token(
                 self.account_index,
                 token_id,
                 current_fee_rate,

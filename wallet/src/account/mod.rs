@@ -45,7 +45,8 @@ use common::chain::signature::inputsig::standard_signature::StandardInputSignatu
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{
-    make_token_id, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, TokenData, TokenId,
+    TokenTransfer,
 };
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -792,6 +793,71 @@ impl Account {
         let tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
             AccountOp::LockTokenSupply(token_id),
+        ));
+        let authority = token_data.authority.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn freeze_token(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        is_token_unfreezable: IsTokenUnfreezable,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+
+        let token_data = self.find_token(&token_id)?;
+        token_data.frozen_state.check_can_freeze()?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::FreezeToken(token_id, is_token_unfreezable),
+        ));
+        let authority = token_data.authority.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn unfreeze_token(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+
+        let token_data = self.find_token(&token_id)?;
+        token_data.frozen_state.check_can_unfreeze()?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::UnfreezeToken(token_id),
         ));
         let authority = token_data.authority.clone();
 
