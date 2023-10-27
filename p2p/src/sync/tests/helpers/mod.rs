@@ -158,6 +158,10 @@ impl TestNode {
         &self.chainstate_handle
     }
 
+    pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
+        self.chainstate_handle.call(move |cs| cs.get_block(block_id)).await.unwrap().unwrap()
+    }
+
     pub fn mempool(&self) -> &MempoolHandle {
         &self.mempool_handle
     }
