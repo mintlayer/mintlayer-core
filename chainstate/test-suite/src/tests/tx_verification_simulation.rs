@@ -20,8 +20,6 @@ use common::chain::{tokens::TokenIssuanceVersion, ChainstateUpgrade, Destination
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50)]
-#[trace]
-#[case(Seed::from_entropy(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
