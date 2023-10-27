@@ -508,6 +508,16 @@ where
             ))?;
 
         // Check that all the blocks are known and haven't been already requested.
+        // First check self.outgoing.blocks_queue
+        let already_requested_blocks: BTreeSet<_> = self.outgoing.blocks_queue.iter().collect();
+        let doubly_requested_id = block_ids.iter().find(|id| already_requested_blocks.get(id).is_some());
+        if let Some(id) = doubly_requested_id {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::DuplicatedBlockRequest(*id),
+            ));
+        }
+
+        // Then check the chainstate
         let ids = block_ids.clone();
         let best_sent_block = self.outgoing.best_sent_block.clone();
         self.chainstate_handle

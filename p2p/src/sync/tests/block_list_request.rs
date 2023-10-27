@@ -22,13 +22,15 @@ use common::{
     primitives::{Id, Idable},
 };
 use crypto::random::Rng;
+use logging::log;
 use p2p_test_utils::create_n_blocks;
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, SyncMessage},
-    sync::tests::helpers::TestNode,
+    sync::tests::helpers::{make_new_blocks, TestNode},
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pError,
@@ -173,12 +175,15 @@ async fn valid_request(#[case] seed: Seed) {
     .await;
 }
 
+// 1) The peer requests a block.
+// 2) The node sends the block.
+// 3) The peer requests the same block again.
 #[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn request_same_block_twice(#[case] seed: Seed) {
+async fn request_same_block_after_downloading(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -221,12 +226,79 @@ async fn request_same_block_twice(#[case] seed: Seed) {
         ])))
         .await;
 
-        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
-        assert_eq!(peer.get_id(), adjusted_peer);
-        assert_eq!(
-            score,
-            P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
+        node.assert_peer_score_adjustment(
+            peer.get_id(),
+            P2pError::ProtocolError(ProtocolError::DuplicatedBlockRequest(block.get_id()))
+                .ban_score(),
+        )
+        .await;
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+// 1) The peer requests a bunch of blocks.
+// 2) The node starts sending the blocks.
+// 3) The peer requests the last requested block again, while earlier blocks are still being sent.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn request_same_block_while_downloading(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(create_unit_test_config());
+        let time_getter = P2pBasicTestTimeGetter::new();
+
+        let initial_blocks = make_new_blocks(
+            &chain_config,
+            None,
+            &time_getter.get_time_getter(),
+            10,
+            &mut rng,
         );
+        let initial_block_headers: Vec<_> =
+            initial_blocks.iter().map(|blk| blk.header().clone()).collect();
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_blocks(initial_blocks.clone())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        log::debug!("Sending block list request to the node");
+        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+            initial_block_headers.iter().map(|hdr| hdr.block_id()).collect(),
+        )))
+        .await;
+
+        log::debug!("Expecting block response #0");
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(sent_to, peer.get_id());
+        assert_eq!(
+            message,
+            SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
+        );
+
+        let duplicate_block_id = initial_blocks.last().unwrap().get_id();
+
+        log::debug!("Sending duplicate block request");
+        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
+            duplicate_block_id,
+        ])))
+        .await;
+
+        node.assert_peer_score_adjustment(
+            peer.get_id(),
+            P2pError::ProtocolError(ProtocolError::DuplicatedBlockRequest(duplicate_block_id))
+                .ban_score(),
+        )
+        .await;
 
         node.join_subsystem_manager().await;
     })
