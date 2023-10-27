@@ -1022,15 +1022,11 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
             &chain_config,
             None,
             &time_getter.get_time_getter(),
-            // Note: this test is very unreliable if the number of initial blocks is low, because
-            // the new block that is created inside the loop below may reach the chainstate
-            // when all initial blocks have already been sent.
-            // TODO: the number of 100 still doesn't guarantee that spurious failures won't happen.
-            // We probably need to replace unbounded channels inside TestNode with bounded ones
-            // with a configurable limit. Then, by specifying the limit of 1, we'd be able to ensure
-            // in this test that new BlockResponse's are not produced until we've checked the
-            // previous ones.
-            100,
+            // Note: this test is rather unreliable if the number of initial blocks is low,
+            // because the LocalEvent::ChainstateNewTip for the new block (the one created
+            // inside the loop) may reach Peer when all initial blocks have already been sent,
+            // in which case it'll happily produce a block announcement.
+            20,
             &mut rng,
         );
         let initial_block_headers: Vec<_> =
@@ -1039,6 +1035,10 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
             .with_blocks(initial_blocks.clone())
+            // Note: this limit guarantees that there is some pause after each BlockResponse is
+            // sent, giving more time for the required LocalEvent::ChainstateNewTip to propagate.
+            // (though it still doesn't guarantee the lack of spurious failures for this test).
+            .with_sync_msg_channel_buffer_size(1)
             .build()
             .await;
 

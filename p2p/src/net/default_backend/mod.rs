@@ -142,8 +142,16 @@ where
     }
 }
 
+#[async_trait]
 impl MessagingService for MessagingHandle {
-    fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+    async fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+        // Note: send_message was made async to be able to use a bounded channel in tests.
+        // TODO: it may make sense to use a bounded channel in production as well. One possible
+        // reason for this might be to limit the number of BlockResponse messages that can exist
+        // at the same time. E.g. currently sync::Peer will produce a BlockResponse for each
+        // requested block almost immediately. The maximum number of simultaneously requested
+        // blocks is 500 per peer, a block can be up to 1Mb in size, so several malicious peers
+        // can eat up several Gb of RAM on the node.
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),

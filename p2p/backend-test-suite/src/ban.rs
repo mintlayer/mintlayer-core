@@ -133,12 +133,14 @@ where
         };
         messaging_handle_2
             .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
+            .await
             .unwrap();
         messaging_handle_2
             .send_message(
                 peer,
                 SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
             )
+            .await
             .unwrap();
     });
 
