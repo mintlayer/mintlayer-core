@@ -29,8 +29,6 @@ pub struct ChainstateConfigFile {
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
-    /// Maintain a full transaction index.
-    pub tx_index_enabled: Option<bool>,
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
@@ -44,7 +42,6 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_db_commit_attempts: c.max_db_commit_attempts.into(),
             max_orphan_blocks: c.max_orphan_blocks.into(),
             min_max_bootstrap_import_buffer_sizes: c.min_max_bootstrap_import_buffer_sizes.into(),
-            tx_index_enabled: c.tx_index_enabled.into(),
             max_tip_age: c.max_tip_age.map(Duration::from_secs).into(),
         }
     }

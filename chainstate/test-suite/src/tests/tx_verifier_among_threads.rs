@@ -23,7 +23,7 @@ use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
-use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
+use tx_verifier::transaction_verifier::TransactionVerifier;
 use utxo::{Utxo, UtxosView};
 
 use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
@@ -149,7 +149,6 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
             utxos,
             accounting,
             tokens_accounting,
-            TransactionVerifierConfig::new(false),
         );
 
         std::thread::scope(|s| {

@@ -21,7 +21,6 @@ use common::{
 };
 use tx_verifier::{
     flush_to_storage, transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
-    TransactionVerifierConfig,
 };
 use utils::tap_error_log::LogError;
 
@@ -54,11 +53,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             None => prev_block_id,
         };
 
-        let mut tx_verifier = TransactionVerifier::new(
-            self,
-            self.chain_config,
-            TransactionVerifierConfig::new(false),
-        );
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
         // during reorg epoch seal can change so it needs to be tracked as well
         let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
@@ -90,7 +85,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         TransactionVerifier::new,
                         &tx_verifier,
                         self.chain_config,
-                        TransactionVerifierConfig::new(false),
                         &block.into(),
                     )?
                     .consume()?;
@@ -129,7 +123,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TransactionVerifier::new,
                     &tx_verifier,
                     self.chain_config,
-                    TransactionVerifierConfig::new(false),
                     &new_tip_block_index,
                     &new_tip,
                     median_time_past,

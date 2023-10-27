@@ -14,9 +14,6 @@
 // limitations under the License.
 
 use chainstate::{
-    tx_verification_strategy_utils::{
-        construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
-    },
     TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
 };
 use chainstate_types::BlockIndex;
@@ -28,7 +25,7 @@ use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
-        config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
+        error::ConnectTransactionError, flush::flush_to_storage,
         storage::TransactionVerifierStorageRef, Fee, TransactionSourceForConnect,
         TransactionVerifier,
     },
@@ -60,7 +57,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
@@ -74,11 +70,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
-        let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
-
-        let mut base_tx_verifier =
-            tx_verifier_maker(storage_backend, chain_config, verifier_config);
+        let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
         let total_fees = block
             .transactions()
@@ -92,7 +84,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         },
                         tx,
                         &median_time_past,
-                        take_front_tx_index(&mut tx_indices),
                     )
                     .log_err()?;
                 let consumed_cache = tx_verifier.consume()?;
@@ -113,7 +104,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 block_index,
                 block.block_reward_transactable(),
                 Fee(total_fees),
-                block_reward_tx_index,
             )
             .log_err()?;
 
@@ -127,7 +117,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
@@ -139,8 +128,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut base_tx_verifier =
-            tx_verifier_maker(storage_backend, chain_config, verifier_config);
+        let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
         block
             .transactions()

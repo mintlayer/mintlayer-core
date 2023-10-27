@@ -102,10 +102,6 @@ pub struct RunOptions {
     #[clap(long)]
     pub max_orphan_blocks: Option<usize>,
 
-    /// Maintain a full transaction index.
-    #[clap(long)]
-    pub tx_index_enabled: Option<bool>,
-
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<Vec<String>>,

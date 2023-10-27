@@ -38,8 +38,8 @@ use common::{
         config::{create_unit_test_config, Builder as ConfigBuilder},
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        OutputSpentState, PoolId, TxInput, TxOutput,
+        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoolId,
+        TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -335,14 +335,6 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         // Create a new block
         let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
-        // Check that all tx not in the main chain
-        for tx in block.transactions() {
-            assert_eq!(
-                tf.chainstate.get_mainchain_tx_index(&tx.transaction().get_id().into()).unwrap(),
-                None
-            );
-        }
-
         // Process the second block
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block.get_id()));
@@ -354,36 +346,15 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.utxo_outpoint().unwrap();
-                if *tf.chainstate.get_chainstate_config().tx_index_enabled {
-                    let prev_out_tx_index = tf
-                        .chainstate
-                        .get_mainchain_tx_index(&outpoint.source_id())
-                        .unwrap()
-                        .unwrap();
-                    assert_eq!(
-                        prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
-                        OutputSpentState::SpentBy(tx_id.into())
-                    );
-                }
                 assert_eq!(tf.chainstate.utxo(outpoint), Ok(None))
             }
             // All the outputs of this transaction should be unspent
-            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap();
-            if *tf.chainstate.get_chainstate_config().tx_index_enabled {
-                let tx_index = tx_index.unwrap();
-                for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
-                    let idx = idx as u32;
-                    assert_eq!(
-                        tx_index.get_spent_state(idx).unwrap(),
-                        OutputSpentState::Unspent
-                    );
-                    let utxo =
-                        tf.chainstate.utxo(&UtxoOutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
-                    assert_eq!(utxo.output(), txo);
-                    assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
-                }
-            } else {
-                assert!(tx_index.is_none());
+            for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
+                let idx = idx as u32;
+                let utxo =
+                    tf.chainstate.utxo(&UtxoOutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                assert_eq!(utxo.output(), txo);
+                assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
             }
         }
     });

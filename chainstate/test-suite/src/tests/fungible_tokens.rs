@@ -1777,15 +1777,6 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
                 != block_index.block_id())
         );
 
-        // Check that issuance transaction in the storage is removed
-        assert!(tf
-            .chainstate
-            .get_mainchain_tx_index(&OutPointSourceId::Transaction(
-                issuance_tx.transaction().get_id()
-            ))
-            .unwrap()
-            .is_none());
-
         // Check that tokens not in storage
         assert!(tf
             .chainstate

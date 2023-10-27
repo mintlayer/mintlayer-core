@@ -30,7 +30,6 @@ make_config_setting!(
         DEFAULT_MAX_IMPORT_BUFFER_SIZE,
     )
 );
-make_config_setting!(TxIndexEnabled, bool, false);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
 /// The chainstate subsystem configuration.
@@ -43,7 +42,6 @@ pub struct ChainstateConfig {
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
-    pub tx_index_enabled: TxIndexEnabled,
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     pub max_tip_age: MaxTipAge,
@@ -70,11 +68,6 @@ impl ChainstateConfig {
         min_max_bootstrap_import_buffer_sizes: (usize, usize),
     ) -> Self {
         self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
-        self
-    }
-
-    pub fn with_whether_tx_index_enabled(mut self, tx_index_enabled: bool) -> Self {
-        self.tx_index_enabled = tx_index_enabled.into();
         self
     }
 }

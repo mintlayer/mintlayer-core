@@ -20,8 +20,8 @@ use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -63,24 +63,8 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.write::<db::DBBlockIndex, _, _, _>(block_index.block_id(), block_index)
     }
 
-    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()> {
-        self.write_value::<well_known::TxIndexEnabled>(&enabled)
-    }
-
     fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()> {
         self.write_value::<well_known::MinHeightForReorg>(&height)
-    }
-
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &TxMainChainIndex,
-    ) -> crate::Result<()> {
-        self.write::<db::DBTxIndex, _, _, _>(tx_id, tx_index)
-    }
-
-    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBTxIndex, _>().del(tx_id).map_err(Into::into)
     }
 
     fn set_block_id_at_height(

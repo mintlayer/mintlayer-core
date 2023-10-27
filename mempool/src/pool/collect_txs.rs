@@ -104,7 +104,7 @@ pub fn collect_txs<M>(
         .iter()
         .map(|transaction| {
             let _fee =
-                tx_verifier.connect_transaction(&tx_source, transaction, &block_timestamp, None)?;
+                tx_verifier.connect_transaction(&tx_source, transaction, &block_timestamp)?;
             Ok(transaction.transaction().get_id())
         })
         .collect::<Result<Vec<_>, TxValidationError>>()?;
@@ -190,12 +190,8 @@ pub fn collect_txs<M>(
             (None, None) => break,
         };
 
-        let verification_result = tx_verifier.connect_transaction(
-            &tx_source,
-            next_tx.transaction(),
-            &block_timestamp,
-            None,
-        );
+        let verification_result =
+            tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &block_timestamp);
 
         if let Err(err) = verification_result {
             // TODO Narrow down when the critical error is presented. Printing the error may be a

@@ -77,9 +77,7 @@ pub use error::{
 };
 pub use orphan_blocks::OrphanBlocksRef;
 pub use transaction_verifier::{
-    error::{
-        ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError, TxIndexError,
-    },
+    error::{ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError},
     storage::TransactionVerifierStorageError,
     IOPolicyError,
 };
@@ -171,10 +169,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             time_getter,
         );
 
-        chainstate
-            .process_tx_index_enabled_flag()
-            .map_err(crate::ChainstateError::from)?;
-
         if best_block_id.is_none() {
             chainstate
                 .process_genesis()
@@ -234,39 +228,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             config_geneis_id == stored_genesis_id,
             InitializationError::GenesisMismatch(config_geneis_id, stored_genesis_id),
         );
-
-        Ok(())
-    }
-
-    /// Check that transaction index state is consistent between DB and config.
-    fn process_tx_index_enabled_flag(&mut self) -> Result<(), BlockError> {
-        let mut db_tx = self
-            .chainstate_storage
-            .transaction_rw(None)
-            .map_err(BlockError::from)
-            .log_err()?;
-
-        let tx_index_enabled = db_tx
-            .get_is_mainchain_tx_index_enabled()
-            .map_err(BlockError::StorageError)
-            .log_err()?;
-
-        if let Some(tx_index_enabled) = tx_index_enabled {
-            // Make sure DB indexing state is same as in the config.
-            // TODO: Allow changing state (creating new or deleting existing index).
-            ensure!(
-                *self.chainstate_config.tx_index_enabled == tx_index_enabled,
-                BlockError::TxIndexConfigError
-            );
-        } else {
-            // First start, enable or disable indexing depending on config.
-            db_tx
-                .set_is_mainchain_tx_index_enabled(*self.chainstate_config.tx_index_enabled)
-                .map_err(BlockError::StorageError)
-                .log_err()?;
-        }
-
-        db_tx.commit().expect("Set tx indexing failed");
 
         Ok(())
     }
@@ -586,11 +547,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Initialize chainstate with genesis block
     pub fn process_genesis(&mut self) -> Result<(), BlockError> {
         // Gather information about genesis.
-        let genesis = self.chain_config.genesis_block();
         let genesis_id = self.chain_config.genesis_block_id();
-        let utxo_count = genesis.utxos().len() as u32;
-        let genesis_index = common::chain::TxMainChainIndex::new(genesis_id.into(), utxo_count)
-            .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
         let mut db_tx = self
@@ -606,13 +563,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
             .map_err(BlockError::StorageError)
             .log_err()?;
-
-        if *self.chainstate_config.tx_index_enabled {
-            db_tx
-                .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
-                .map_err(BlockError::StorageError)
-                .log_err()?;
-        }
 
         db_tx
             .set_epoch_data(

@@ -23,8 +23,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId,
-        OutPointSourceId, PoolId, Transaction, TxMainChainIndex,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
+        Transaction,
     },
     primitives::{Amount, Id},
 };
@@ -68,15 +68,6 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                 self.storage.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block))
             }
         }
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
-        self.storage
-            .get_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_token_aux_data(

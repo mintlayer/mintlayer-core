@@ -17,7 +17,7 @@ use chainstate::{
     ban_score::BanScore,
     tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
-    TransactionVerifierStorageError, TxIndexError,
+    TransactionVerifierStorageError,
 };
 
 use crate::error::{Error, MempoolPolicyError, TxValidationError};
@@ -121,7 +121,6 @@ impl MempoolBanScore for ConnectTransactionError {
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TokensError(err) => err.mempool_ban_score(),
-            ConnectTransactionError::TxIndexError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TransactionVerifierError(err) => err.mempool_ban_score(),
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
@@ -207,7 +206,6 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             // These are delegated
             TransactionVerifierStorageError::TokensError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.mempool_ban_score(),
-            TransactionVerifierStorageError::TxIndexError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::PoSAccountingError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.mempool_ban_score(),
 
@@ -217,7 +215,6 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(_) => 0,
             TransactionVerifierStorageError::UtxoBlockUndoError(_) => 0,
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 0,
-            TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 0,
             TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 0,
         }
@@ -229,32 +226,6 @@ impl MempoolBanScore for TokensError {
         // TokensError only involves state-independent transaction validity.
         // We can reuse the ban logic from chainstate here.
         chainstate::ban_score::BanScore::ban_score(self)
-    }
-}
-
-impl MempoolBanScore for TxIndexError {
-    fn mempool_ban_score(&self) -> u32 {
-        match self {
-            // Various internal invariants
-            TxIndexError::InvariantBrokenAlreadyUnspent => 0,
-            TxIndexError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
-            TxIndexError::OutputAlreadyPresentInInputsCache => 0,
-            TxIndexError::PreviouslyCachedInputNotFound(_) => 0,
-            TxIndexError::MissingOutputOrSpentOutputErasedOnConnect => 0,
-            TxIndexError::MissingOutputOrSpentOutputErasedOnDisconnect => 0,
-
-            // Invalid transactions
-            TxIndexError::InvalidOutputCount => 100,
-            TxIndexError::SerializationInvariantError(_) => 100,
-            TxIndexError::OutputIndexOutOfRange {
-                tx_id: _,
-                source_output_index: _,
-            } => 100,
-
-            // Double spend may happen if peers are out of sync.
-            TxIndexError::DoubleSpendAttempt(_) => 0,
-            TxIndexError::MissingOutputOrSpent => 0,
-        }
     }
 }
 

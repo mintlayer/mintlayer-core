@@ -16,8 +16,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common::chain::OutputSpentState;
-
 use crate::tests::EventList;
 use chainstate::BlockError;
 use chainstate::BlockSource;
@@ -27,8 +25,8 @@ use chainstate::ConnectTransactionError;
 use chainstate_test_framework::TestFramework;
 use common::chain::Block;
 use common::chain::GenBlock;
-use common::chain::OutPointSourceId;
 use common::chain::Transaction;
+use common::chain::UtxoOutPoint;
 use common::primitives::BlockHeight;
 use common::primitives::Id;
 use common::primitives::Idable;
@@ -444,27 +442,18 @@ pub enum TestSpentStatus {
     NotInMainchain,
 }
 
-fn spent_status(
-    tf: &TestFramework,
-    tx_id: &Id<Transaction>,
-    output_index: u32,
-) -> Option<OutputSpentState> {
-    let tx_index =
-        tf.chainstate.get_mainchain_tx_index(&OutPointSourceId::from(*tx_id)).unwrap()?;
-    tx_index.get_spent_state(output_index).ok()
+fn is_spent(tf: &TestFramework, tx_id: &Id<Transaction>, output_index: u32) -> bool {
+    let utxo = tf.chainstate.utxo(&UtxoOutPoint::new((*tx_id).into(), output_index)).unwrap();
+    utxo.is_none()
 }
 
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {
     for (output_index, _) in tx.outputs().iter().enumerate() {
-        let status = spent_status(tf, &tx.get_id(), output_index as u32);
-        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
-            if spend_status == &TestSpentStatus::Spent {
-                assert_ne!(status, Some(OutputSpentState::Unspent));
-            } else {
-                assert_eq!(status, Some(OutputSpentState::Unspent));
-            }
+        let spent = is_spent(tf, &tx.get_id(), output_index as u32);
+        if spend_status == &TestSpentStatus::Spent {
+            assert!(spent);
         } else {
-            assert!(status.is_none());
+            assert!(!spent);
         }
     }
 }

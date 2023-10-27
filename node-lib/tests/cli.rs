@@ -119,7 +119,6 @@ fn read_config_override_values() {
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
-        tx_index_enabled: Some(false),
         p2p_addr: Some(vec![p2p_addr.to_owned()]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
         p2p_disable_noise: Some(p2p_disable_noise),
@@ -159,10 +158,6 @@ fn read_config_override_values() {
     assert_eq!(
         config.chainstate.clone().unwrap().chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
-    );
-    assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.tx_index_enabled,
-        Some(false)
     );
     assert_eq!(
         config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
