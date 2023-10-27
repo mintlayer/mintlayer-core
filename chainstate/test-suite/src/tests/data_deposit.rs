@@ -319,6 +319,8 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
 
         let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
+        // The data output isn't included in the utxo set, so it can't be spent and will be seen as missing.
+        // This is because of how "non-spendable" outputs are handled in the UTXO set, where they're simply ignored.
         let expected_err = Err(ChainstateError::ProcessBlockError(
             BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent(
                 UtxoOutPoint::new(
