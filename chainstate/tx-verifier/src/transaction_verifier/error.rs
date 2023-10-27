@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::{TokenId, TokenIssuanceVersion},
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender,
-        Transaction, TxMainChainIndexError, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -86,8 +86,6 @@ pub enum ConnectTransactionError {
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
     TokensError(#[from] TokensError),
-    #[error("Tx index error: {0}")]
-    TxIndexError(#[from] TxIndexError),
     #[error("Error from TransactionVerifierStorage: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
@@ -167,59 +165,6 @@ impl From<chainstate_storage::Error> for ConnectTransactionError {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         ConnectTransactionError::StorageError(err)
-    }
-}
-
-impl From<SpendError> for TxIndexError {
-    fn from(err: SpendError) -> Self {
-        match err {
-            SpendError::AlreadySpent(spender) => TxIndexError::DoubleSpendAttempt(spender),
-            SpendError::AlreadyUnspent => TxIndexError::InvariantBrokenAlreadyUnspent,
-            SpendError::OutOfRange {
-                tx_id,
-                source_output_index,
-            } => TxIndexError::OutputIndexOutOfRange {
-                tx_id,
-                source_output_index,
-            },
-        }
-    }
-}
-
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum TxIndexError {
-    #[error("Invalid output count")]
-    InvalidOutputCount,
-    #[error("Serialization invariant failed for block `{0}`")]
-    SerializationInvariantError(Id<Block>),
-    #[error("While disconnecting a block, transaction number `{0}` does not exist in block `{1}`")]
-    InvariantErrorTxNumWrongInBlock(usize, Id<Block>),
-    #[error("Outputs already in the inputs cache")]
-    OutputAlreadyPresentInInputsCache,
-    #[error("Output is not found in the cache or database")]
-    MissingOutputOrSpent,
-    #[error("Input was cached, but could not be found")]
-    PreviouslyCachedInputNotFound(OutPointSourceId),
-    #[error("While connecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
-    MissingOutputOrSpentOutputErasedOnConnect,
-    #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
-    MissingOutputOrSpentOutputErasedOnDisconnect,
-    #[error("Double-spend attempt in `{0:?}`")]
-    DoubleSpendAttempt(Spender),
-    #[error("Block disconnect already-unspent (invariant broken)")]
-    InvariantBrokenAlreadyUnspent,
-    #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
-    OutputIndexOutOfRange {
-        tx_id: Option<Spender>,
-        source_output_index: usize,
-    },
-}
-
-impl From<TxMainChainIndexError> for TxIndexError {
-    fn from(err: TxMainChainIndexError) -> Self {
-        match err {
-            TxMainChainIndexError::InvalidOutputCount => TxIndexError::InvalidOutputCount,
-        }
     }
 }
 

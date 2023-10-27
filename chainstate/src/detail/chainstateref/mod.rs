@@ -37,8 +37,8 @@ use common::{
         config::EpochIndex,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         tokens::{NftIssuance, TokenAuxiliaryData},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
-        SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -46,7 +46,7 @@ use common::{
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
-use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
+use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
@@ -68,7 +68,7 @@ pub use epoch_seal::EpochSealError;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
-    chainstate_config: &'a ChainstateConfig,
+    _chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
     db_tx: S,
     time_getter: &'a TimeGetter,
@@ -124,7 +124,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> ChainstateRef<'a, S, V> {
         ChainstateRef {
             chain_config,
-            chainstate_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -140,7 +140,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> ChainstateRef<'a, S, V> {
         ChainstateRef {
             chain_config,
-            chainstate_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -163,14 +163,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn current_time(&self) -> Time {
         self.time_getter.get_time()
-    }
-
-    pub fn get_is_transaction_index_enabled(&self) -> Result<bool, PropertyQueryError> {
-        Ok(self
-            .db_tx
-            .get_is_mainchain_tx_index_enabled()
-            .map_err(PropertyQueryError::from)?
-            .expect("Must be set on node initialization"))
     }
 
     pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
@@ -219,39 +211,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_gen_block_index(prev_block_id)
             .log_err()?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
-    }
-
-    pub fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
-        log::trace!("Loading transaction index of id: {:?}", tx_id);
-        self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
-    }
-
-    pub fn get_transaction_in_block(
-        &self,
-        id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, PropertyQueryError> {
-        log::trace!("Loading whether tx index is enabled: {}", id);
-        let is_tx_index_enabled = self.get_is_transaction_index_enabled()?;
-        if !is_tx_index_enabled {
-            return Err(PropertyQueryError::TransactionIndexDisabled);
-        }
-        log::trace!("Loading transaction index with id: {}", id);
-        let tx_index = self.db_tx.get_mainchain_tx_index(&OutPointSourceId::Transaction(id))?;
-        let tx_index = match tx_index {
-            Some(tx_index) => tx_index,
-            None => return Ok(None),
-        };
-        log::trace!("Loading transaction with id: {}", id);
-        let position = match tx_index.position() {
-            common::chain::SpendablePosition::Transaction(pos) => pos,
-            common::chain::SpendablePosition::BlockReward(_) => {
-                panic!("In get_transaction(), a tx id led to a block reward")
-            }
-        };
-        Ok(self.db_tx.get_mainchain_tx_by_position(position)?)
     }
 
     pub fn get_block_id_by_height(
@@ -1180,16 +1139,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let verifier_config = TransactionVerifierConfig {
-            tx_index_enabled: *self.chainstate_config.tx_index_enabled,
-        };
         let connected_txs = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
                 &*self,
                 self.chain_config,
-                verifier_config,
                 block_index,
                 block,
                 median_time_past,
@@ -1203,14 +1158,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let verifier_config = TransactionVerifierConfig {
-            tx_index_enabled: *self.chainstate_config.tx_index_enabled,
-        };
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             &*self,
             self.chain_config,
-            verifier_config,
             block,
         )?;
         let cached_inputs = cached_inputs.consume()?;

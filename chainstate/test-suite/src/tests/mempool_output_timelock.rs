@@ -28,9 +28,7 @@ use common::{
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, TransactionSourceForConnect, TransactionVerifier,
-};
+use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -49,11 +47,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let block_height_that_unlocks = 10;
 
@@ -78,7 +72,6 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
-                    None
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
             ));
@@ -97,7 +90,6 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
-                None,
             )
             .unwrap();
     });
@@ -110,11 +102,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
@@ -141,7 +129,6 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
-                    None,
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
             ));
@@ -163,7 +150,6 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
-                None,
             )
             .unwrap();
     });
@@ -176,11 +162,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
@@ -228,7 +210,6 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
-                    None,
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
             ));
@@ -251,7 +232,6 @@ fn output_lock_until_time(#[case] seed: Seed) {
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(tf.current_time()),
-                None,
             )
             .unwrap();
     });
@@ -264,11 +244,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
@@ -317,7 +293,6 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
-                    None
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
             ));
@@ -345,7 +320,6 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_time(time::get_time()),
-                None,
             )
             .unwrap();
     });

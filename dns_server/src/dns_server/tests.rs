@@ -57,7 +57,7 @@ async fn dns_server_basic() {
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_a.len(), 1);
-    assert_eq!(result_a[0].data(), Some(&RData::A(ip1)));
+    assert_eq!(result_a[0].data(), Some(&RData::A(ip1.into())));
 
     let result_aaaa = auth
         .lookup(&host.clone().into(), RecordType::AAAA, Default::default())
@@ -68,7 +68,7 @@ async fn dns_server_basic() {
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(result_aaaa.len(), 1);
-    assert_eq!(result_aaaa[0].data(), Some(&RData::AAAA(ip2)));
+    assert_eq!(result_aaaa[0].data(), Some(&RData::AAAA(ip2.into())));
 
     handle_command(&auth, DnsServerCommand::DelAddress(ip1.into()));
     handle_command(&auth, DnsServerCommand::DelAddress(ip2.into()));

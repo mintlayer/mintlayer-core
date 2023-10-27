@@ -25,8 +25,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction, TxInput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -174,13 +174,6 @@ where
 
     fn wait_for_all_events(&self) {
         self.deref().wait_for_all_events()
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, ChainstateError> {
-        self.deref().get_mainchain_tx_index(tx_id)
     }
 
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
@@ -355,17 +348,6 @@ where
         self.deref().get_account_nonce_count(account)
     }
 
-    fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError> {
-        self.deref().is_transaction_index_enabled()
-    }
-
-    fn get_transaction(
-        &self,
-        tx_id: &Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ChainstateError> {
-        self.deref().get_transaction(tx_id)
-    }
-
     fn get_token_data(
         &self,
         id: &TokenId,
@@ -428,7 +410,6 @@ mod tests {
                 max_db_commit_attempts: 10.into(),
                 max_orphan_blocks: 0.into(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
-                tx_index_enabled: Default::default(),
                 max_tip_age: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();

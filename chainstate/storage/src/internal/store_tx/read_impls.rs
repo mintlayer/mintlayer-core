@@ -22,8 +22,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxMainChainIndex, TxMainChainPosition, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -60,24 +60,6 @@ mod private {
                 let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
                     .expect("Invalid block reward encoding in DB");
                 Ok(Some(block_reward))
-            }
-        }
-    }
-
-    pub fn get_mainchain_tx_by_position(
-        tx_index: &TxMainChainPosition,
-        block_read_result: storage::Result<Option<Encoded<Cow<'_, [u8]>, Block>>>,
-    ) -> crate::Result<Option<SignedTransaction>> {
-        match block_read_result {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let block = block.bytes();
-                let begin = tx_index.byte_offset_in_block() as usize;
-                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
-                let tx = SignedTransaction::decode(&mut &*encoded_tx)
-                    .expect("Invalid tx encoding in DB");
-                Ok(Some(tx))
             }
         }
     }
@@ -139,28 +121,8 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         private::block_index_to_block_reward(block_index, encoded_block)
     }
 
-    fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
-        self.read_value::<well_known::TxIndexEnabled>()
-    }
-
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
         self.read_value::<well_known::MinHeightForReorg>()
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<db::DBTxIndex, _, _>(tx_id)
-    }
-
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<SignedTransaction>> {
-        let map = self.0.get::<db::DBBlock, _>();
-        let block = map.get(tx_index.block_id());
-        private::get_mainchain_tx_by_position(tx_index, block)
     }
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
@@ -375,28 +337,8 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         private::block_index_to_block_reward(block_index, encoded_block)
     }
 
-    fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
-        self.read_value::<well_known::TxIndexEnabled>()
-    }
-
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
         self.read_value::<well_known::MinHeightForReorg>()
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<db::DBTxIndex, _, _>(tx_id)
-    }
-
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<SignedTransaction>> {
-        let map = self.0.get::<db::DBBlock, _>();
-        let block = map.get(tx_index.block_id());
-        private::get_mainchain_tx_by_position(tx_index, block)
     }
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {

@@ -30,7 +30,6 @@ use common::{
 };
 use detail::{bootstrap::BootstrapError, Chainstate};
 use interface::chainstate_interface_impl;
-use tx_verifier::transaction_verifier::storage::HasTxIndexDisabledError;
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
@@ -40,7 +39,7 @@ pub use crate::{
         BlockSource, ChainInfo, CheckBlockError, CheckBlockTransactionsError,
         ConnectTransactionError, IOPolicyError, InitializationError, Locator, OrphanCheckError,
         SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
-        TransactionVerifierStorageError, TxIndexError,
+        TransactionVerifierStorageError,
     },
 };
 pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
@@ -65,12 +64,6 @@ pub enum ChainstateError {
     BootstrapError(#[from] BootstrapError),
     #[error("Error invoking block invalidator: {0}")]
     BlockInvalidatorError(#[from] BlockInvalidatorError),
-}
-
-impl HasTxIndexDisabledError for ChainstateError {
-    fn tx_index_disabled_error() -> Self {
-        ChainstateError::ProcessBlockError(BlockError::tx_index_disabled_error())
-    }
 }
 
 pub type ChainstateSubsystem = Box<dyn ChainstateInterface>;

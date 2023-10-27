@@ -16,7 +16,7 @@
 use super::*;
 use common::chain::output_value::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
-use common::chain::{Block, Destination, TxOutput};
+use common::chain::{Block, Destination, OutPointSourceId, TxOutput};
 use common::primitives::{Amount, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{CryptoRng, Rng};
@@ -42,10 +42,7 @@ fn test_storage_get_default_version_in_tx() {
 #[cfg(not(loom))]
 fn test_storage_manipulation() {
     use common::{
-        chain::{
-            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-            SpendablePosition,
-        },
+        chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         primitives::H256,
     };
 
@@ -113,11 +110,6 @@ fn test_storage_manipulation() {
         &enc_block0[offset_tx0..].starts_with(&enc_tx0),
         "Transaction format has changed, adjust the offset in this test",
     );
-    let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
-    assert_eq!(
-        &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
-        &signed_tx0
-    );
 
     // Test setting and retrieving best chain id
     assert_eq!(store.get_best_block_id(), Ok(None));
@@ -125,34 +117,6 @@ fn test_storage_manipulation() {
     assert_eq!(store.get_best_block_id(), Ok(Some(block0.get_id().into())));
     assert_eq!(store.set_best_block_id(&block1.get_id().into()), Ok(()));
     assert_eq!(store.get_best_block_id(), Ok(Some(block1.get_id().into())));
-
-    // Chain index operations
-    let idx_tx0 = TxMainChainIndex::new(pos_tx0.into(), 1).expect("Tx index creation failed");
-    let out_id_tx0 = OutPointSourceId::from(tx0.get_id());
-    assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
-    assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
-    assert_eq!(
-        store.get_mainchain_tx_index(&out_id_tx0),
-        Ok(Some(idx_tx0.clone()))
-    );
-    assert_eq!(store.del_mainchain_tx_index(&out_id_tx0), Ok(()));
-    assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
-    assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
-
-    // Retrieve transactions by ID using the index
-    assert_eq!(
-        store.get_mainchain_tx_index(&OutPointSourceId::from(tx1.get_id())),
-        Ok(None)
-    );
-    if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
-        if let SpendablePosition::Transaction(ref p) = index.position() {
-            assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(signed_tx0)));
-        } else {
-            unreachable!();
-        };
-    } else {
-        unreachable!();
-    }
 }
 
 #[test]

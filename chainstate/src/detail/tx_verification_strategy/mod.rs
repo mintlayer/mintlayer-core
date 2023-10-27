@@ -16,8 +16,6 @@
 pub mod default_strategy;
 pub use default_strategy::DefaultTransactionVerificationStrategy;
 
-pub mod tx_verification_strategy_utils;
-
 use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
@@ -28,7 +26,6 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     error::ConnectTransactionError,
     transaction_verifier::{
-        config::TransactionVerifierConfig,
         storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
         TransactionVerifier,
     },
@@ -37,12 +34,12 @@ use utxo::UtxosView;
 
 // TODO: replace with trait_alias when stabilized
 pub trait TransactionVerifierMakerFn<C, S, U, A, T>:
-    Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A, T>
+    Fn(S, C) -> TransactionVerifier<C, S, U, A, T>
 {
 }
 
 impl<C, S, U, A, T, F> TransactionVerifierMakerFn<C, S, U, A, T> for F where
-    F: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A, T>
+    F: Fn(S, C) -> TransactionVerifier<C, S, U, A, T>
 {
 }
 
@@ -60,7 +57,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
@@ -85,7 +81,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
-        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where

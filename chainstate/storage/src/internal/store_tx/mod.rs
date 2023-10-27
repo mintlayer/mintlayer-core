@@ -51,7 +51,6 @@ mod well_known {
     declare_entry!(StoreVersion: ChainstateStorageVersion);
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
-    declare_entry!(TxIndexEnabled: bool);
     declare_entry!(MagicBytes: [u8; 4]);
     declare_entry!(ChainType: String);
     declare_entry!(MinHeightForReorg: BlockHeight);

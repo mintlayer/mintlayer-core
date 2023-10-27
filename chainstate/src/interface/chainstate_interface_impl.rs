@@ -34,8 +34,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SignedTransaction,
-        Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -290,17 +290,6 @@ where
 
     fn wait_for_all_events(&self) {
         self.chainstate.wait_for_all_events()
-    }
-
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, ChainstateError> {
-        self.chainstate
-            .query()
-            .map_err(ChainstateError::from)?
-            .get_mainchain_tx_index(tx_id)
-            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
@@ -620,25 +609,6 @@ where
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_account_nonce_count(account)
             .map_err(ChainstateError::FailedToReadProperty)
-    }
-
-    fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError> {
-        self.chainstate
-            .query()
-            .map_err(ChainstateError::from)?
-            .is_transaction_index_enabled()
-            .map_err(ChainstateError::FailedToReadProperty)
-    }
-
-    fn get_transaction(
-        &self,
-        tx_id: &Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ChainstateError> {
-        self.chainstate
-            .query()
-            .map_err(ChainstateError::from)?
-            .get_transaction_in_block(*tx_id)
-            .map_err(ChainstateError::from)
     }
 
     fn get_token_data(

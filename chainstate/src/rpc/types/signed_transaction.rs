@@ -25,6 +25,7 @@ pub struct RpcSignedTransaction {
 }
 
 impl RpcSignedTransaction {
+    #[allow(dead_code)]
     pub fn new(tx: SignedTransaction) -> Self {
         Self {
             id: tx.transaction().get_id(),

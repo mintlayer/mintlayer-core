@@ -24,7 +24,13 @@ use std::{
 use crypto::random::{make_pseudo_rng, SliceRandom};
 use futures::never::Never;
 use tokio::{net::UdpSocket, sync::mpsc};
-use trust_dns_client::rr::{rdata::SOA, LowerName, Name, RData, RecordSet, RecordType, RrKey};
+use trust_dns_client::{
+    proto::rr::{LowerName, RrKey},
+    rr::{
+        rdata::{NS, SOA},
+        Name, RData, RecordSet, RecordType,
+    },
+};
 use trust_dns_server::{
     authority::{
         AuthLookup, Authority, Catalog, LookupError, LookupOptions, MessageRequest, UpdateResult,
@@ -186,7 +192,7 @@ impl AuthorityImpl {
 
         if let Some(nameserver) = self.nameserver.as_ref() {
             let mut ns_rec = RecordSet::with_ttl(self.host.clone(), RecordType::NS, TTL_NS);
-            ns_rec.add_rdata(RData::NS(nameserver.clone()));
+            ns_rec.add_rdata(RData::NS(NS(nameserver.clone())));
             new_records.insert(
                 RrKey::new(ns_rec.name().clone().into(), ns_rec.record_type()),
                 Arc::new(ns_rec),
@@ -196,7 +202,7 @@ impl AuthorityImpl {
         // A records
         let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
         for ip in ipv4 {
-            ipv4_rec.add_rdata(RData::A(ip));
+            ipv4_rec.add_rdata(RData::A(ip.into()));
         }
         new_records.insert(
             RrKey::new(ipv4_rec.name().clone().into(), ipv4_rec.record_type()),
@@ -206,7 +212,7 @@ impl AuthorityImpl {
         // AAAA records
         let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
         for ip in ipv6 {
-            ipv6_rec.add_rdata(RData::AAAA(ip));
+            ipv6_rec.add_rdata(RData::AAAA(ip.into()));
         }
         new_records.insert(
             RrKey::new(ipv6_rec.name().clone().into(), ipv6_rec.record_type()),

@@ -29,8 +29,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, SignedTransaction,
+        transaction::Transaction,
+        AccountNonce, AccountType, Block, GenBlock,
     },
     primitives::{BlockHeight, Id},
 };
@@ -86,22 +86,8 @@ pub trait BlockchainStorageRead:
 
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
-    fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
-
     /// Get the height below which reorgs should not be allowed.
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
-
-    /// Get outputs state for given transaction in the mainchain
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> crate::Result<Option<TxMainChainIndex>>;
-
-    /// Get transaction by block ID and position
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<SignedTransaction>>;
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
@@ -173,21 +159,8 @@ pub trait BlockchainStorageWrite:
     /// Remove block from the database
     fn del_block(&mut self, id: Id<Block>) -> Result<()>;
 
-    /// Change tx indexing state flag
-    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> Result<()>;
-
     /// Set the height below which reorgs should not be allowed.
     fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
-
-    /// Set state of the outputs of given transaction
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &TxMainChainIndex,
-    ) -> Result<()>;
-
-    /// Delete outputs state index associated with given transaction
-    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> Result<()>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(

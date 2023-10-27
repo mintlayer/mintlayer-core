@@ -23,20 +23,19 @@ use std::{
     sync::Arc,
 };
 
+use self::types::block::RpcBlock;
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
+        ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
 use serialization::{hex_encoded::HexEncoded, json_encoded::JsonEncoded};
-
-use self::types::{block::RpcBlock, signed_transaction::RpcSignedTransaction};
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -55,19 +54,6 @@ trait ChainstateRpc {
     /// Returns a json-encoded serialized block with the given id.
     #[method(name = "get_block_json")]
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>>;
-
-    /// returns a hex-encoded transaction, assuming it's in the mainchain.
-    /// Note: The transaction index must be enabled in the node.
-    #[method(name = "get_transaction")]
-    async fn get_transaction(
-        &self,
-        id: Id<Transaction>,
-    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>>;
-
-    /// returns a json-encoded transaction, assuming it's in the mainchain.
-    /// Note: The transaction index must be enabled in the node.
-    #[method(name = "get_transaction_json")]
-    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>>;
 
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
@@ -182,35 +168,6 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             })
             .await,
         )?;
-
-        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
-
-        Ok(result)
-    }
-
-    async fn get_transaction(
-        &self,
-        id: Id<Transaction>,
-    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>> {
-        let tx: Option<SignedTransaction> =
-            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
-        Ok(tx.map(HexEncoded::new))
-    }
-
-    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>> {
-        let tx: Option<SignedTransaction> =
-            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
-        let rpc_tx = tx.map(RpcSignedTransaction::new);
-
-        let chain_config: Arc<ChainConfig> = rpc::handle_result(
-            self.call(move |this| {
-                let chain_config = Arc::clone(this.get_chain_config());
-                Ok::<_, Infallible>(chain_config)
-            })
-            .await,
-        )?;
-
-        let result = rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string());
 
         let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
 

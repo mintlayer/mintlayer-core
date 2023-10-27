@@ -52,8 +52,6 @@ pub enum PropertyQueryError {
     PoolBalanceReadError(PoolId),
     #[error("Invalid starting block height: {0}")]
     InvalidStartingBlockHeightForMainchainBlocks(BlockHeight),
-    #[error("Transaction index must be enabled to retrieve transactions by id")]
-    TransactionIndexDisabled,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

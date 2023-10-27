@@ -35,7 +35,6 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
-use tx_verifier::transaction_verifier::{error::TxIndexError, storage::HasTxIndexDisabledError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -61,10 +60,6 @@ pub enum BlockError {
     BlockProofCalculationError(Id<Block>),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
-    #[error("Changing tx index state is not implemented for existing DB")]
-    TxIndexConfigError,
-    #[error("Transaction index construction error: {0}")]
-    TxIndexConstructionError(#[from] TxIndexError),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during sealing an epoch: {0}")]
@@ -239,11 +234,5 @@ impl From<OrphanAddError> for Result<(), OrphanCheckError> {
         match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => Ok(()),
         }
-    }
-}
-
-impl HasTxIndexDisabledError for BlockError {
-    fn tx_index_disabled_error() -> Self {
-        TransactionVerifierStorageError::tx_index_disabled_error().into()
     }
 }
