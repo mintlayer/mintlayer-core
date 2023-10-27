@@ -18,11 +18,11 @@ use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError, IOPolicyError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness, tokens::TokenIssuanceVersion, ChainstateUpgrade,
     Destination, TxInput, TxOutput,
 };
+use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::Amount;
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::Rng;
@@ -320,9 +320,11 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
         let expected_err = Err(ChainstateError::ProcessBlockError(
-            BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidInputTypeInTx,
-                OutPointSourceId::Transaction(tx.transaction().get_id()),
+            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent(
+                UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(tx_with_data_as_output.transaction().get_id()),
+                    1,
+                ),
             )),
         ));
 
