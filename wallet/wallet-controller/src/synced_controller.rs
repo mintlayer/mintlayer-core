@@ -173,6 +173,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
+        self.wallet
+            .check_token_can_be_used(self.account_index, token_id)
+            .map_err(ControllerError::WalletError)?;
+
         let tx = self
             .wallet
             .mint_tokens(
@@ -196,6 +200,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
+        self.wallet
+            .check_token_can_be_used(self.account_index, token_id)
+            .map_err(ControllerError::WalletError)?;
+
         let tx = self
             .wallet
             .unmint_tokens(
@@ -213,6 +221,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn lock_token_supply(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
+
+        self.wallet
+            .check_token_can_be_used(self.account_index, token_id)
+            .map_err(ControllerError::WalletError)?;
 
         let tx = self
             .wallet
@@ -388,6 +400,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
+
+        self.wallet
+            .check_token_can_be_used(self.account_index, token_id)
+            .map_err(ControllerError::WalletError)?;
 
         let output = make_address_output_token(self.chain_config, address, amount, token_id)
             .map_err(ControllerError::WalletError)?;

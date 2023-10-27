@@ -159,6 +159,8 @@ pub enum WalletError {
     CannotFreezeAlreadyFrozenToken,
     #[error("Cannot unfreeze this token")]
     CannotUnfreezeToken,
+    #[error("Cannot use a frozen token")]
+    CannotUseFrozenToken,
 }
 
 /// Result type used for the wallet
@@ -920,6 +922,14 @@ impl<B: storage::Backend> Wallet<B> {
                 },
             )
         })
+    }
+
+    pub fn check_token_can_be_used(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+    ) -> WalletResult<()> {
+        self.get_account(account_index)?.check_token_can_be_used(&token_id)
     }
 
     pub fn create_delegation(

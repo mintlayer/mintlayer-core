@@ -581,6 +581,15 @@ impl Account {
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
+    pub fn check_token_can_be_used(&self, token_id: &TokenId) -> WalletResult<()> {
+        self.output_cache
+            .token_data(token_id)
+            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
+            .map_or(Ok(()), |token_issuance_data| {
+                token_issuance_data.frozen_state.check_can_be_used()
+            })
+    }
+
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,

@@ -195,6 +195,12 @@ class WalletCliController:
     async def lock_token_supply(self, token_id: str) -> str:
         return await self._write_command(f"locktokensupply {token_id}\n")
 
+    async def freeze_token(self, token_id: str, is_unfreezable: str) -> str:
+        return await self._write_command(f"freezetoken {token_id} {is_unfreezable}\n")
+
+    async def unfreeze_token(self, token_id: str) -> str:
+        return await self._write_command(f"unfreezetoken {token_id}\n")
+
     async def issue_new_nft(self,
                             destination_address: str,
                             media_hash: str,

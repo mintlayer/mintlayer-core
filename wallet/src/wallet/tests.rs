@@ -1916,6 +1916,223 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + (chain_config.token_min_issuance_fee() * 4).unwrap())
+    .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let fixed_max_amount = Amount::from_atoms(rng.gen_range(1..100000));
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(TokenIssuanceV1 {
+                token_ticker: "XXXX".as_bytes().to_vec(),
+                number_of_decimals: rng.gen_range(1..18),
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+                total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
+                authority: address2.decode_object(&chain_config).unwrap(),
+                is_freezable: common::chain::tokens::IsTokenFreezable::Yes,
+            }),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_min_supply_change_fee();
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![token_issuance_transaction],
+        block1_amount,
+        1,
+    );
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        WalletError::CannotUnfreezeToken
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, None);
+
+    let freeze_tx = wallet
+        .freeze_token(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            IsTokenUnfreezable::Yes,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_freeze().unwrap_err(),
+        WalletError::CannotFreezeAlreadyFrozenToken
+    );
+    token_issuance_data.frozen_state.check_can_unfreeze().unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+
+    // unfreeze the token
+
+    let unfreeze_tx = wallet
+        .unfreeze_token(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet.add_unconfirmed_tx(unfreeze_tx.clone(), &WalletEventsNoOp).unwrap();
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        WalletError::CannotUnfreezeToken
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+
+    // test abandoning a transaction
+    wallet
+        .abandon_transaction(DEFAULT_ACCOUNT_INDEX, freeze_tx.transaction().get_id())
+        .unwrap();
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        WalletError::CannotUnfreezeToken
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, None);
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![freeze_tx, unfreeze_tx],
+        block2_amount,
+        2,
+    );
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+
+    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        WalletError::CannotUnfreezeToken
+    );
+
+    // freeze but don't allow unfreezing
+    let freeze_tx = wallet
+        .freeze_token(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            IsTokenUnfreezable::No,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_freeze().unwrap_err(),
+        WalletError::CannotFreezeAlreadyFrozenToken
+    );
+    assert_eq!(
+        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        WalletError::CannotUnfreezeToken
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(2)));
+
+    // cannot feeze again
+    let err = wallet
+        .freeze_token(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            IsTokenUnfreezable::No,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::CannotFreezeAlreadyFrozenToken);
+
+    // cannot unfeeze
+    let err = wallet
+        .unfreeze_token(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::CannotUnfreezeToken);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn change_token_supply_fixed(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());

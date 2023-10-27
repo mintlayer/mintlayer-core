@@ -228,6 +228,12 @@ pub enum TokenFreezableState {
 }
 
 impl TokenFreezableState {
+    pub fn check_can_be_used(&self) -> WalletResult<()> {
+        match self {
+            Self::Frozen(_, _) => Err(WalletError::CannotUseFrozenToken),
+            Self::NotFrozen(_) => Ok(()),
+        }
+    }
     fn freeze(&self, is_unfreezable: IsTokenUnfreezable) -> WalletResult<Self> {
         match self {
             Self::NotFrozen(IsTokenFreezable::Yes) => {
@@ -796,6 +802,13 @@ impl OutputCache {
             WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
             WalletTx::Block(_) => None,
         };
+
+        // check token is not frozen and can be used
+        token_id
+            .and_then(|token_id| self.token_data(&token_id))
+            .map_or(Ok(()), |token_data| {
+                token_data.frozen_state.check_can_be_used()
+            })?;
 
         Ok((output, token_id))
     }
