@@ -129,8 +129,8 @@ impl<P: UtxosView> UtxosCache<P> {
         tx.outputs()
             .iter()
             .enumerate()
-            // outputs that cannot be spent should not be included into utxo set
-            .filter(|(_, output)| can_be_spent(output))
+            // not all outputs should be included in the utxo set
+            .filter(|(_, output)| should_include_in_utxo_set(output))
             .try_for_each(|(idx, output)| {
                 let outpoint = UtxoOutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.
@@ -181,7 +181,7 @@ impl<P: UtxosView> UtxosCache<P> {
         for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = UtxoOutPoint::new(tx.get_id().into(), i as u32);
 
-            if can_be_spent(output) {
+            if should_include_in_utxo_set(output) {
                 self.spend_utxo(&tx_outpoint)?;
             }
         }
@@ -229,7 +229,7 @@ impl<P: UtxosView> UtxosCache<P> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
-                if !can_be_spent(output) {
+                if !should_include_in_utxo_set(output) {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
                 let outpoint = UtxoOutPoint::new(source_id.clone(), idx as u32);
@@ -489,7 +489,8 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
     }
 }
 
-fn can_be_spent(output: &TxOutput) -> bool {
+/// Returns true if the given output type should be included in the utxo set
+fn should_include_in_utxo_set(output: &TxOutput) -> bool {
     match output {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(..)
@@ -499,7 +500,8 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::Burn(..)
-        | TxOutput::IssueFungibleToken(..) => false,
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::DataDeposit(..) => false,
     }
 }
 

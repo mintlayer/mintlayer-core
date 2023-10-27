@@ -96,7 +96,9 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => {
                                 Ok(d.clone())
                             }
-                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                            TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::DataDeposit(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
@@ -190,6 +192,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
+                            | TxOutput::DataDeposit(_)
                             | TxOutput::IssueFungibleToken(_) => {
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }

@@ -31,6 +31,8 @@ use serialization::extras::non_empty_vec::DataOrNoVec;
 
 #[allow(dead_code)]
 fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
+    // If you're getting a compiler error here, it means that you added a new output type.
+    // Please update the functions in this file and include your output type where appropriate
     match output {
         TxOutput::Transfer(_, _) => unimplemented!(),
         TxOutput::LockThenTransfer(_, _, _) => unimplemented!(),
@@ -41,10 +43,11 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::DelegateStaking(_, _) => unimplemented!(),
         TxOutput::IssueFungibleToken(_) => unimplemented!(),
         TxOutput::IssueNft(_, _, _) => unimplemented!(),
+        TxOutput::DataDeposit(_) => unimplemented!(),
     }
 }
 
-pub fn all_outputs() -> [TxOutput; 9] {
+pub fn all_outputs() -> [TxOutput; 10] {
     [
         transfer(),
         burn(),
@@ -55,10 +58,11 @@ pub fn all_outputs() -> [TxOutput; 9] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
+        data_deposit(),
     ]
 }
 
-pub fn valid_tx_outputs() -> [TxOutput; 8] {
+pub fn valid_tx_outputs() -> [TxOutput; 9] {
     [
         transfer(),
         burn(),
@@ -68,11 +72,29 @@ pub fn valid_tx_outputs() -> [TxOutput; 8] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
+        data_deposit(),
     ]
 }
 
 pub fn valid_tx_inputs() -> [TxOutput; 5] {
     [transfer(), lock_then_transfer(), stake_pool(), produce_block(), issue_nft()]
+}
+
+pub fn invalid_tx_inputs() -> [TxOutput; 5] {
+    [burn(), delegate_staking(), create_delegation(), issue_tokens(), data_deposit()]
+}
+
+pub fn invalid_block_reward_for_pow() -> [TxOutput; 8] {
+    [
+        transfer(),
+        burn(),
+        stake_pool(),
+        produce_block(),
+        create_delegation(),
+        delegate_staking(),
+        issue_nft(),
+        issue_tokens(),
+    ]
 }
 
 pub fn transfer() -> TxOutput {
@@ -128,6 +150,10 @@ pub fn issue_tokens() -> TxOutput {
     })))
 }
 
+pub fn data_deposit() -> TxOutput {
+    TxOutput::DataDeposit(vec![])
+}
+
 pub fn issue_nft() -> TxOutput {
     TxOutput::IssueNft(
         TokenId::new(H256::zero()),
@@ -156,7 +182,8 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::IssueNft(..) => false,
+        | TxOutput::IssueNft(..)
+        | TxOutput::DataDeposit(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -170,7 +197,8 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::IssueNft(..) => false,
+        | TxOutput::IssueNft(..)
+        | TxOutput::DataDeposit(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

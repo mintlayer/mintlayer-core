@@ -49,7 +49,8 @@ fn get_staking_kernel_destination(
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _) => {
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_) => {
             return Err(BlockSignatureError::WrongOutputType(header.get_id()))
         }
         TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker(),

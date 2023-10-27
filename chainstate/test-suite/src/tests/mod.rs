@@ -32,6 +32,7 @@ mod block_status;
 mod bootstrap;
 mod chainstate_accounting_storage_tests;
 mod chainstate_storage_tests;
+mod data_deposit;
 mod delegation_tests;
 mod double_spend_tests;
 mod events_tests;

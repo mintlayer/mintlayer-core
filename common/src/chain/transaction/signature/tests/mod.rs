@@ -736,6 +736,7 @@ fn check_mutate_output(
         TxOutput::DelegateStaking(_, _) => unreachable!(),
         TxOutput::IssueFungibleToken(_) => unreachable!(),
         TxOutput::IssueNft(_, _, _) => unreachable!(),
+        TxOutput::DataDeposit(_) => unreachable!(),
     };
 
     let tx = tx_updater.generate_tx().unwrap();

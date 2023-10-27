@@ -55,6 +55,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
         TxOutput::IssueNft(_, _, _) => Some(UtxoType::IssueNft),
         TxOutput::IssueFungibleToken(_) => None,
+        TxOutput::DataDeposit(_) => None,
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {

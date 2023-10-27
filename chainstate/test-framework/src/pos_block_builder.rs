@@ -80,7 +80,8 @@ impl<'f> PoSBlockBuilder<'f> {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => None,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => None,
                     | TxOutput::CreateStakePool(pool_id, _) => Some(*pool_id),
                 },
             );
@@ -254,7 +255,8 @@ impl<'f> PoSBlockBuilder<'f> {
                             | TxOutput::CreateDelegationId(..)
                             | TxOutput::DelegateStaking(..)
                             | TxOutput::IssueFungibleToken(_)
-                            | TxOutput::IssueNft(_, _, _) => false,
+                            | TxOutput::IssueNft(_, _, _)
+                            | TxOutput::DataDeposit(_) => false,
                             TxOutput::CreateStakePool(pool_id, _) => *pool_id == staking_pool,
                         })
                         .unwrap();
