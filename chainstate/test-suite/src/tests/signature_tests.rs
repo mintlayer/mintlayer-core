@@ -365,7 +365,8 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
 
         let chain_config = tf.chainstate.get_chain_config().clone();
 
-        let max_no_sig_data_size = tf.chainstate.get_chain_config().no_signature_data_max_size();
+        let max_no_sig_data_size =
+            tf.chainstate.get_chain_config().data_in_no_signature_witness_max_size();
 
         let data_size = if valid_size {
             max_no_sig_data_size
@@ -429,7 +430,7 @@ fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = chain::config::Builder::new(chain::config::ChainType::Testnet)
-            .no_signature_data_allowed(data_allowed)
+            .data_in_no_signature_witness_allowed(data_allowed)
             .consensus_upgrades(
                 NetUpgrades::initialize(vec![(
                     BlockHeight::zero(),
@@ -444,7 +445,8 @@ fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
 
         let chain_config = tf.chainstate.get_chain_config().clone();
 
-        let max_no_sig_data_size = tf.chainstate.get_chain_config().no_signature_data_max_size();
+        let max_no_sig_data_size =
+            tf.chainstate.get_chain_config().data_in_no_signature_witness_max_size();
 
         {
             // Valid case

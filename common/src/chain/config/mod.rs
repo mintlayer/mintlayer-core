@@ -183,8 +183,8 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
-    no_signature_data_max_size: usize,
-    no_signature_data_allowed: bool,
+    data_in_no_signature_witness_max_size: usize,
+    data_in_no_signature_witness_allowed: bool,
     max_depth_for_reorg: BlockDistance,
     pow_chain_config: PoWChainConfig,
     epoch_length: NonZeroU64,
@@ -335,14 +335,14 @@ impl ChainConfig {
 
     /// The maximum size of data attached to NoSignature witness
     #[must_use]
-    pub fn no_signature_data_max_size(&self) -> usize {
-        self.no_signature_data_max_size
+    pub fn data_in_no_signature_witness_max_size(&self) -> usize {
+        self.data_in_no_signature_witness_max_size
     }
 
     /// Whether one is allowed to attach data to NoSignature witness
     #[must_use]
-    pub fn no_signature_data_allowed(&self) -> bool {
-        self.no_signature_data_allowed
+    pub fn data_in_no_signature_witness_allowed(&self) -> bool {
+        self.data_in_no_signature_witness_allowed
     }
 
     /// The maximum offset of time from the current time the timestamp of a new block can be
@@ -566,7 +566,7 @@ impl AsRef<ChainConfig> for ChainConfig {
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
-const TX_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
+const TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const DATA_DEPOSIT_MAX_SIZE: usize = 128;
