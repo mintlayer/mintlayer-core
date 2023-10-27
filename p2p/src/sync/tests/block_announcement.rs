@@ -1026,7 +1026,7 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
             // because the LocalEvent::ChainstateNewTip for the new block (the one created
             // inside the loop) may reach Peer when all initial blocks have already been sent,
             // in which case it'll happily produce a block announcement.
-            20,
+            100,
             &mut rng,
         );
         let initial_block_headers: Vec<_> =
