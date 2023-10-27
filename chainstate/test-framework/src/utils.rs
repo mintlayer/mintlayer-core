@@ -64,7 +64,8 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_) => None,
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DataDeposit(_) => None,
         TxOutput::IssueNft(token_id, _, _) => {
             Some(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
         }
@@ -138,7 +139,8 @@ pub fn create_utxo_data(
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _) => None,
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_) => None,
     }
 }
 

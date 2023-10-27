@@ -119,7 +119,8 @@ fn own_output(key_chain: &AccountKeyChain, output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _) => false,
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_) => false,
     }
 }
 

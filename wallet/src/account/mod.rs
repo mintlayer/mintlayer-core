@@ -638,7 +638,8 @@ impl Account {
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _) => None,
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -694,7 +695,8 @@ impl Account {
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueFungibleToken(_) => None,
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::DataDeposit(_) => None,
                 TxOutput::IssueNft(token_id, _, _) => {
                     (*token_id == dummy_token_id).then_some(token_id)
                 }
@@ -856,7 +858,8 @@ impl Account {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => panic!("Unexpected UTXO"),
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => panic!("Unexpected UTXO"),
                 };
                 pool_id == utxo_pool_id
             })
@@ -1472,7 +1475,8 @@ fn group_outputs<T, Grouped: Clone>(
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::CreateDelegationId(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => continue,
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
@@ -1533,7 +1537,8 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_) => {
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::DataDeposit(_) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))

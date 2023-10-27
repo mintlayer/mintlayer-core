@@ -35,7 +35,7 @@ use common::{
             ConsensusData,
         },
         config::EpochIndex,
-        tokens::{get_tokens_issuance_count, TokenId},
+        tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         tokens::{NftIssuance, TokenAuxiliaryData},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
@@ -596,7 +596,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::IssueFungibleToken(_)
-                        | TxOutput::IssueNft(_, _, _) => Err(
+                        | TxOutput::IssueNft(_, _, _)
+                        | TxOutput::DataDeposit(_) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -611,7 +612,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::CreateDelegationId(_, _)
                             | TxOutput::DelegateStaking(_, _)
                             | TxOutput::IssueFungibleToken(_)
-                            | TxOutput::IssueNft(_, _, _) => Err(
+                            | TxOutput::IssueNft(_, _, _)
+                            | TxOutput::DataDeposit(_) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -701,6 +703,61 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn check_data_deposit_outputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        let prev_block_id = block.prev_block_id();
+        let current_height = self
+            .get_gen_block_index(&prev_block_id)?
+            .ok_or(CheckBlockTransactionsError::PropertyQueryError(
+                PropertyQueryError::PrevBlockIndexNotFound(prev_block_id),
+            ))?
+            .block_height()
+            .next_height();
+
+        for tx in block.transactions() {
+            for output in tx.outputs() {
+                match output {
+                    TxOutput::Transfer(..)
+                    | TxOutput::LockThenTransfer(..)
+                    | TxOutput::Burn(..)
+                    | TxOutput::CreateStakePool(..)
+                    | TxOutput::ProduceBlockFromStake(..)
+                    | TxOutput::CreateDelegationId(..)
+                    | TxOutput::DelegateStaking(..)
+                    | TxOutput::IssueFungibleToken(..)
+                    | TxOutput::IssueNft(..) => { /* Do nothing */ }
+                    TxOutput::DataDeposit(v) => {
+                        // TODO: remove height check after the fork that enables data deposits
+                        let current_tokens_version = self
+                            .chain_config
+                            .chainstate_upgrades()
+                            .version_at_height(current_height)
+                            .1
+                            .token_issuance_version();
+                        if current_tokens_version == TokenIssuanceVersion::V0 {
+                            return Err(CheckBlockTransactionsError::DataDepositNotActivated(
+                                current_height,
+                                tx.transaction().get_id(),
+                                block.get_id(),
+                            ));
+                        }
+
+                        // Ensure the size of the data doesn't exceed the max allowed
+                        if v.len() > self.chain_config.data_deposit_max_size() {
+                            return Err(CheckBlockTransactionsError::DataDepositMaxSizeExceeded(
+                                v.len(),
+                                self.chain_config.data_deposit_max_size(),
+                                tx.transaction().get_id(),
+                                block.get_id(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         let prev_block_id = block.prev_block_id();
         let current_height = self
@@ -765,7 +822,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => Ok(()),
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::DataDeposit(_) => Ok(()),
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)
                 .log_err()?;
@@ -801,6 +859,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.check_duplicate_inputs(block).log_err()?;
         self.check_tokens_txs(block).log_err()?;
         self.check_no_signature_size(block).log_err()?;
+        self.check_data_deposit_outputs(block).log_err()?;
         Ok(())
     }
 

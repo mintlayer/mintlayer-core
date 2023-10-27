@@ -130,6 +130,7 @@ where
                     OutputValue::Coin(pledge_amount)
                 }
                 TxOutput::Burn(_)
+                | TxOutput::DataDeposit(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => {
                     return Err(ConnectTransactionError::IOPolicyError(
@@ -209,6 +210,7 @@ fn calculate_total_outputs<P: PoSAccountingView>(
             TxOutput::IssueFungibleToken(_) => OutputValue::Coin(Amount::ZERO),
             // when in tx output IssueNft has 0 output value because it is created there
             TxOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
+            TxOutput::DataDeposit(_) => OutputValue::Coin(Amount::ZERO),
         };
         get_output_token_id_and_amount(&output_value, include_issuance)
     });
@@ -381,7 +383,8 @@ pub fn calculate_tokens_burned_in_outputs(
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => None,
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => None,
         })
         .sum::<Option<Amount>>()
         .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))

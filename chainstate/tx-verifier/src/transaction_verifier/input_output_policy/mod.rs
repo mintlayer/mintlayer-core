@@ -57,6 +57,8 @@ pub enum IOPolicyError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
     PledgeAmountNotFound(PoolId),
+    #[error("Spending non-spendable output: `{0:?}`")]
+    SpendingNonSpendableOutput(UtxoOutPoint),
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -113,7 +115,7 @@ pub fn check_tx_inputs_outputs_policy(
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     constraints_accumulator
-        .process_outputs(tx.outputs())
+        .process_outputs(chain_config, tx.outputs())
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     Ok(())

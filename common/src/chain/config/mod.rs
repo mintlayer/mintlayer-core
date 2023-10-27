@@ -189,6 +189,8 @@ pub struct ChainConfig {
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
+    data_deposit_max_size: usize,
+    data_deposit_min_fee: Amount,
     token_min_issuance_fee: Amount,
     token_min_supply_change_fee: Amount,
     token_max_uri_len: usize,
@@ -427,6 +429,16 @@ impl ChainConfig {
         }
     }
 
+    /// The maximum allowed size for data deposited in DataDeposit output
+    pub fn data_deposit_max_size(&self) -> usize {
+        self.data_deposit_max_size
+    }
+
+    /// The fee for depositing data
+    pub fn data_deposit_min_fee(&self) -> Amount {
+        self.data_deposit_min_fee
+    }
+
     /// The fee for issuing a token
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
@@ -550,6 +562,8 @@ const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_MAX_SIZE: usize = 128;
+const DATA_DEPOSIT_MIN_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
 const TOKEN_MIN_HASH_LEN: usize = 4;
