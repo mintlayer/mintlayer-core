@@ -111,8 +111,12 @@ async fn transaction_order_respects_deps(#[case] seed: Seed) {
     let accumulator = mempool
         .collect_txs(accumulator, vec![], PackingStrategy::FillSpaceFromMempool)
         .unwrap();
-    let tx_ids: Vec<_> =
-        accumulator.transactions().iter().map(|tx| tx.transaction().get_id()).collect();
+    let tx_ids: Vec<_> = accumulator
+        .unwrap()
+        .transactions()
+        .iter()
+        .map(|tx| tx.transaction().get_id())
+        .collect();
 
     assert_eq!(tx_ids, vec![tx0_id, tx1_id, tx2_id]);
 }
@@ -154,6 +158,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
         )
         .unwrap();
     let position_map: BTreeMap<Id<Transaction>, usize> = accumulator
+        .unwrap()
         .transactions()
         .iter()
         .enumerate()
@@ -189,7 +194,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             PackingStrategy::FillSpaceFromMempool,
         )
         .unwrap();
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap();
+    let collected_txs = collected_txs.transactions();
     let expected_num_txs_collected: usize = 0;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
 
@@ -232,7 +238,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             PackingStrategy::FillSpaceFromMempool,
         )
         .unwrap();
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap();
+    let collected_txs = collected_txs.transactions();
     log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
@@ -247,7 +254,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             PackingStrategy::FillSpaceFromMempool,
         )
         .unwrap();
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap();
+    let collected_txs = collected_txs.transactions();
     assert_eq!(collected_txs.len(), 0);
 
     let tx_accumulator = DefaultTxAccumulator::new(1, mempool.best_block_id(), DUMMY_TIMESTAMP);
@@ -258,7 +266,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             PackingStrategy::FillSpaceFromMempool,
         )
         .unwrap();
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap();
+    let collected_txs = collected_txs.transactions();
     assert_eq!(collected_txs.len(), 0);
     Ok(())
 }
@@ -362,8 +371,12 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     let accumulator = mempool
         .collect_txs(accumulator, vec![], PackingStrategy::FillSpaceFromMempool)
         .unwrap();
-    let accumulated_ids: BTreeSet<_> =
-        accumulator.transactions().iter().map(|tx| tx.transaction().get_id()).collect();
+    let accumulated_ids: BTreeSet<_> = accumulator
+        .unwrap()
+        .transactions()
+        .iter()
+        .map(|tx| tx.transaction().get_id())
+        .collect();
 
     assert!(accumulated_ids.contains(&tx0_id));
     assert_eq!(accumulated_ids.contains(&tx1_id), in_accumulator_at0);
@@ -396,6 +409,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     ));
     let accumulator = mempool
         .collect_txs(accumulator, vec![], PackingStrategy::FillSpaceFromMempool)
+        .unwrap()
         .unwrap();
     let has_tx1 = accumulator.transactions().iter().any(|tx| tx.transaction().get_id() == tx1_id);
 

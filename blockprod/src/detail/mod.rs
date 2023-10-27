@@ -183,6 +183,9 @@ impl BlockProduction {
         Ok(())
     }
 
+    /// Collect transactions from the mempool
+    /// Returns the accumulator that is filled with transactions from the mempool
+    /// Ok(None) means that a recoverable error happened (such as that the mempool tip moved).
     pub async fn collect_transactions(
         &self,
         current_tip: Id<GenBlock>,
@@ -190,7 +193,7 @@ impl BlockProduction {
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
         let mut accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
             current_tip,
@@ -471,7 +474,7 @@ impl BlockProduction {
             // scratch every time a different timestamp is attempted. That is more costly
             // in terms of computational resources but will allow the node to include more
             // transactions since the passing time may release some time locks.
-            let collected_transactions = self
+            let accumulator = self
                 .collect_transactions(
                     current_tip_index.block_id(),
                     min_constructed_block_timestamp,
@@ -479,9 +482,12 @@ impl BlockProduction {
                     transaction_ids.clone(),
                     packing_strategy,
                 )
-                .await?
-                .transactions()
-                .to_vec();
+                .await?;
+
+            let collected_transactions = match accumulator {
+                Some(acc) => acc.transactions().to_vec(),
+                None => continue,
+            };
 
             let block_body = BlockBody::new(block_reward, collected_transactions);
 

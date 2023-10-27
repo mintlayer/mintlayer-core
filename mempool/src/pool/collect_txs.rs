@@ -66,19 +66,21 @@ impl<'a> From<&'a TxMempoolEntry> for EntryByScore<'a> {
     }
 }
 
+/// Fill the TransactionAccumulator with transactions from the mempool
+/// Returns the updated TransactionAccumulator. Ok(None) means that a
+/// recoverable error happened (such as that the mempool tip moved).
 pub fn collect_txs<M>(
     mempool: &Mempool<M>,
     mut tx_accumulator: Box<dyn TransactionAccumulator>,
     transaction_ids: Vec<Id<Transaction>>,
     packing_strategy: PackingStrategy,
-) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
+) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
     let mempool_tip = mempool.best_block_id();
     let block_timestamp = tx_accumulator.block_timestamp();
 
-    ensure!(
-        tx_accumulator.expected_tip() == mempool_tip,
-        BlockConstructionError::AccumTipMismatch(tx_accumulator.expected_tip(), mempool_tip),
-    );
+    if tx_accumulator.expected_tip() != mempool_tip {
+        return Ok(None);
+    }
 
     let chainstate = tx_verifier::ChainstateHandle::new(mempool.chainstate_handle.shallow_clone());
     let chain_config = mempool.chain_config.deref();
@@ -237,5 +239,5 @@ pub fn collect_txs<M>(
         BlockConstructionError::TipMoved(mempool_tip, final_chainstate_tip),
     );
 
-    Ok(tx_accumulator)
+    Ok(Some(tx_accumulator))
 }

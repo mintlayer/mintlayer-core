@@ -957,7 +957,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         tx_accumulator: Box<dyn TransactionAccumulator>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
     }
 

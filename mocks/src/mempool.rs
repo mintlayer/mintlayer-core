@@ -57,7 +57,7 @@ mockall::mock! {
             tx_accumulator: Box<dyn TransactionAccumulator + Send>,
             transaction_ids: Vec<Id<Transaction>>,
             packing_strategy: PackingStrategy,
-        ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError>;
+        ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
         fn memory_usage(&self) -> usize;

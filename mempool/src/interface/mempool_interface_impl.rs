@@ -172,7 +172,7 @@ impl MempoolInterface for MempoolImpl {
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
         self.mempool.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
     }
 

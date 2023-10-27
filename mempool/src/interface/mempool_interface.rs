@@ -60,12 +60,15 @@ pub trait MempoolInterface: Send + Sync {
     fn best_block_id(&self) -> Id<GenBlock>;
 
     /// Collect transactions by putting them in given accumulator
+    /// Returns the accumulator with the collected transactions
+    /// Ok(None) is returned on recoverable errors, such as if
+    /// the tip changed before collecting transactions started.
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError>;
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
     /// Subscribe to events emitted by mempool
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
