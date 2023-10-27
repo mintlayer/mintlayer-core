@@ -716,6 +716,10 @@ where
         // The code below will set it again if needed.
         self.peer_activity.set_expecting_blocks_since(None);
 
+        // TODO: here we allow the peer to send blocks out of order. This means that we may receive
+        // an orphan block first and then its parent. Because of this, the NewTipReceived event
+        // generated below may not contain the actual tip. It doesn't seem like it may lead
+        // to problems at this moment, but it's still better to be more strict about it.
         if self.incoming.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "block response".to_owned(),
