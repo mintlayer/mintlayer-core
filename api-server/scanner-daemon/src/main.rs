@@ -82,7 +82,7 @@ pub async fn run<S: ApiServerStorage>(
             .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
     }
 
-    let mut local_block = BlockchainState::new(storage);
+    let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
     loop {
         let sync_result =
             api_blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, &mut local_block)
