@@ -345,6 +345,8 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::InvalidInputTypeInTx => 100,
             IOPolicyError::MultiplePoolCreated => 100,
             IOPolicyError::MultipleDelegationCreated => 100,
+            IOPolicyError::MultipleUnmintTokensInputs => 100,
+            IOPolicyError::MultipleLockTokenSupplyInputs => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,

@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
-    chain::{block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxOutput},
+    chain::{
+        block::BlockRewardTransactable, signature::Signable, tokens::TokenId, AccountOp, Block,
+        Transaction, TxInput, TxOutput,
+    },
     primitives::Id,
 };
 use consensus::ConsensusPoSError;
@@ -140,6 +145,40 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::IssueFungibleToken(..) => false,
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
+
+    // only single unmint per token per tx is allowed
+    let mut unmint_tokens_inputs_count = BTreeMap::<TokenId, usize>::new();
+    // only single lock supply per token per tx is allowed
+    let mut lock_token_supply_inputs_count = BTreeMap::<TokenId, usize>::new();
+
+    tx.inputs().iter().for_each(|input| match input {
+        TxInput::Utxo(_) => { /* do nothing */ }
+        TxInput::Account(account) => match account.account() {
+            AccountOp::SpendDelegationBalance(_, _) | AccountOp::MintTokens(_, _) => {/* do nothing */}
+            AccountOp::UnmintTokens(token_id) => {
+                unmint_tokens_inputs_count
+                    .entry(*token_id)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+            }
+            AccountOp::LockTokenSupply(token_id) => {
+                lock_token_supply_inputs_count
+                    .entry(*token_id)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+            }
+        },
+    });
+
+    unmint_tokens_inputs_count.iter().try_for_each(|(_, count)| {
+        ensure!(*count <= 1, IOPolicyError::MultipleUnmintTokensInputs);
+        Ok::<_, IOPolicyError>(())
+    })?;
+
+    lock_token_supply_inputs_count.iter().try_for_each(|(_, count)| {
+        ensure!(*count <= 1, IOPolicyError::MultipleLockTokenSupplyInputs);
+        Ok::<_, IOPolicyError>(())
+    })?;
 
     // Check outputs
     let mut produce_block_outputs_count = 0;

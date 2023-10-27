@@ -1979,7 +1979,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         Amount::ZERO,
     );
 
-    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1..fixed_max_amount.into_atoms()));
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1..=fixed_max_amount.into_atoms()));
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
@@ -2092,7 +2092,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     );
 
     let token_amount_to_unmint =
-        Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.gen_range(1..=token_amount_to_mint.into_atoms()));
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
