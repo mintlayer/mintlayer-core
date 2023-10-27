@@ -119,7 +119,7 @@ struct OutgoingDataState {
     /// The index of the best block that we've sent to the peer.
     best_sent_block: Option<BlockIndex>,
     /// The id of the best block header that we've sent to the peer.
-    /// Note: at this moment this field is only informational, i.e. we only print it to the log.
+    // Note: at this moment this field is only informational, i.e. we only print it to the log.
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
@@ -256,7 +256,7 @@ where
             self.incoming.peers_best_block_that_we_have
         );
 
-        // Note: if we haven't sent all out headers last time, the peer will ask us for more anyway,
+        // Note: if we haven't sent all our headers last time, the peer will ask us for more anyway,
         // so no need to send the update just now.
         // Likewise, if the peer has requested blocks, it will send another header request once
         // it gets the blocks, so no need to send the update in this case either.
@@ -620,7 +620,7 @@ where
             .prev_block_id();
 
         // Note: we require a peer to send headers starting from a block that we already have
-        // in our chainstate or to one that we've already requested from the peer.
+        // in our chainstate or from one that we've already requested from the peer.
         // I.e. peers shouldn't track what block headers they've sent us already and use
         // the last header (best_sent_block_header) as a starting point for future HeaderList
         // updates.
