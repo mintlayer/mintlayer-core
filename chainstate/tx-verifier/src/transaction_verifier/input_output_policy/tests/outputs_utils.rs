@@ -31,6 +31,8 @@ use serialization::extras::non_empty_vec::DataOrNoVec;
 
 #[allow(dead_code)]
 fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
+    // If you're getting a compiler error here, it means that you added a new output type.
+    // Please update the functions in this file and include your output type where appropriate
     match output {
         TxOutput::Transfer(_, _) => unimplemented!(),
         TxOutput::LockThenTransfer(_, _, _) => unimplemented!(),
@@ -76,6 +78,23 @@ pub fn valid_tx_outputs() -> [TxOutput; 9] {
 
 pub fn valid_tx_inputs() -> [TxOutput; 5] {
     [transfer(), lock_then_transfer(), stake_pool(), produce_block(), issue_nft()]
+}
+
+pub fn invalid_tx_inputs() -> [TxOutput; 5] {
+    [burn(), delegate_staking(), create_delegation(), issue_tokens(), data_deposit()]
+}
+
+pub fn invalid_block_reward_for_pow() -> [TxOutput; 8] {
+    [
+        transfer(),
+        burn(),
+        stake_pool(),
+        produce_block(),
+        create_delegation(),
+        delegate_staking(),
+        issue_nft(),
+        issue_tokens(),
+    ]
 }
 
 pub fn transfer() -> TxOutput {

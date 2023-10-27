@@ -140,7 +140,7 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
     let valid_inputs = super::outputs_utils::valid_tx_inputs();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
 
-    let invalid_inputs = [burn(), delegate_staking(), create_delegation(), issue_tokens()];
+    let invalid_inputs = invalid_tx_inputs();
 
     let input_utxos = {
         let mut outputs =
@@ -169,7 +169,7 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn tx_produce_block_in_output(#[case] seed: Seed) {
+fn produce_block_in_tx_output(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
@@ -310,16 +310,7 @@ fn reward_none_to_any(#[case] seed: Seed) {
 
     {
         // invalid cases
-        let invalid_purposes = [
-            transfer(),
-            burn(),
-            stake_pool(),
-            produce_block(),
-            create_delegation(),
-            delegate_staking(),
-            issue_nft(),
-            issue_tokens(),
-        ];
+        let invalid_purposes = invalid_block_reward_for_pow();
 
         let number_of_outputs = rng.gen_range(1..10);
         let outputs =
