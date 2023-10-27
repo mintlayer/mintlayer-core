@@ -56,7 +56,7 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
-    let router = router.route("/address/:public_key_hash", get(address));
+    let router = router.route("/address/:address", get(address));
 
     router.route("/pool/:id", get(pool))
 }
@@ -348,18 +348,10 @@ pub async fn address<T: ApiServerStorage>(
     Path(address): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let address = {
-        let address =
-            Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
-                ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
-            })?;
-
-        address.decode_object(&state.chain_config).map_err(|_| {
+    let address =
+        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
-
-        address
-    };
 
     let coin_balance = state
         .db
