@@ -163,6 +163,8 @@ pub enum CheckBlockTransactionsError {
     TokensError(TokensError),
     #[error("No signature data size is too large: {0} > {1}")]
     NoSignatureDataSizeTooLarge(usize, usize),
+    #[error("No signature data is not allowed. Found in transaction {0} and block {1}")]
+    NoSignatureDataNotAllowed(Id<Transaction>, Id<Block>),
     #[error("Data deposit not yet enabled at height {0}. Found in transaction {1} and block {2}")]
     DataDepositNotActivated(BlockHeight, Id<Transaction>, Id<Block>),
     #[error(

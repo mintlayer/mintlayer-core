@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use common::chain::config::create_unit_test_config;
+use common::chain::config::{create_mainnet, create_unit_test_config};
 use common::{address::pubkeyhash::PublicKeyHash, chain::Destination::Address};
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivable::Derivable;
@@ -67,7 +67,7 @@ fn key_chain_creation(
     #[case] public: &str,
     #[case] chaincode: &str,
 ) {
-    let chain_config = Arc::new(create_unit_test_config());
+    let chain_config = Arc::new(create_mainnet());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain = MasterKeyChain::new_from_mnemonic(

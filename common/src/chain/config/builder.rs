@@ -49,6 +49,13 @@ impl ChainType {
         }
     }
 
+    fn default_no_signature_data_allowed(&self) -> bool {
+        match self {
+            ChainType::Mainnet => false,
+            ChainType::Regtest | ChainType::Testnet | ChainType::Signet => true,
+        }
+    }
+
     fn default_consensus_upgrades(&self) -> NetUpgrades<ConsensusUpgrade> {
         match self {
             ChainType::Mainnet | ChainType::Regtest => {
@@ -176,7 +183,8 @@ pub struct Builder {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
-    max_no_signature_data_size: usize,
+    no_signature_data_allowed: bool,
+    no_signature_data_max_size: usize,
     max_depth_for_reorg: BlockDistance,
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
@@ -217,7 +225,8 @@ impl Builder {
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
-            max_no_signature_data_size: super::MAX_TX_NO_SIG_WITNESS_SIZE,
+            no_signature_data_allowed: chain_type.default_no_signature_data_allowed(),
+            no_signature_data_max_size: super::TX_NO_SIG_WITNESS_MAX_SIZE,
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             max_depth_for_reorg: super::DEFAULT_MAX_DEPTH_FOR_REORG,
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
@@ -247,7 +256,7 @@ impl Builder {
 
     /// New builder initialized with test chain config
     pub fn test_chain() -> Self {
-        Self::new(ChainType::Mainnet)
+        Self::new(ChainType::Testnet)
             .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
     }
@@ -267,7 +276,8 @@ impl Builder {
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
-            max_no_signature_data_size,
+            no_signature_data_allowed,
+            no_signature_data_max_size,
             max_depth_for_reorg,
             epoch_length,
             sealed_epoch_distance_from_tip,
@@ -347,7 +357,8 @@ impl Builder {
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
-            max_no_signature_data_size,
+            no_signature_data_allowed,
+            no_signature_data_max_size,
             max_depth_for_reorg,
             pow_chain_config,
             epoch_length,
@@ -398,6 +409,8 @@ impl Builder {
     builder_method!(software_version: SemVer);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
+    builder_method!(no_signature_data_allowed: bool);
+    builder_method!(no_signature_data_max_size: usize);
     builder_method!(max_block_header_size: usize);
     builder_method!(max_block_size_with_standard_txs: usize);
     builder_method!(max_block_size_with_smart_contracts: usize);

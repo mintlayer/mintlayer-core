@@ -283,7 +283,7 @@ mod tests {
     fn make_block(epoch_index: EpochIndex) -> Block {
         let pool_id = PoolId::new(H256::zero());
         let timestamp = BlockTimestamp::from_int_seconds(1);
-        let randomness = get_initial_randomness(ChainType::Mainnet);
+        let randomness = get_initial_randomness(ChainType::Testnet);
 
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         let vrf_transcript = construct_transcript(epoch_index, &randomness, timestamp);

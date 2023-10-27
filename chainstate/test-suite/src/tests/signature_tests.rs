@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::address::pubkeyhash::PublicKeyHash;
+use common::chain;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
 use common::chain::signed_transaction::SignedTransaction;
@@ -355,43 +356,101 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn too_large_no_sig_data(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), true)]
+#[case(Seed::from_entropy(), false)]
+fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let chain_config = tf.chainstate.get_chain_config().clone();
 
-        let max_no_sig_data_size = tf.chainstate.get_chain_config().max_no_signature_data_size();
+        let max_no_sig_data_size = tf.chainstate.get_chain_config().no_signature_data_max_size();
+
+        let data_size = if valid_size {
+            max_no_sig_data_size
+        } else {
+            max_no_sig_data_size + 1
+        };
+
+        {
+            let data: Vec<u8> = (0..data_size).map(|_| rng.gen::<u8>()).collect();
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_utxo(
+                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                        0,
+                    ),
+                    InputWitness::NoSignature(Some(data)),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    anyonecanspend_address(),
+                ))
+                .build();
+
+            if valid_size {
+                let process_result =
+                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+
+                process_result.unwrap().unwrap();
+            } else {
+                let process_result =
+                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+
+                assert_eq!(
+                    process_result.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::CheckBlockFailed(
+                            chainstate::CheckBlockError::CheckTransactionFailed(
+                                chainstate::CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
+                                    max_no_sig_data_size + 1,
+                                    max_no_sig_data_size
+                                )
+                            )
+                        )
+                    )
+                );
+            }
+        }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), true)]
+#[case(Seed::from_entropy(), false)]
+fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
+    use common::chain::ConsensusUpgrade;
+    use common::chain::NetUpgrades;
+    use common::primitives::BlockHeight;
+
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let chain_config = chain::config::Builder::new(chain::config::ChainType::Testnet)
+            .no_signature_data_allowed(data_allowed)
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ConsensusUpgrade::IgnoreConsensus,
+                )])
+                .unwrap(),
+            )
+            .genesis_unittest(Destination::AnyoneCanSpend)
+            .build();
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+        let chain_config = tf.chainstate.get_chain_config().clone();
+
+        let max_no_sig_data_size = tf.chainstate.get_chain_config().no_signature_data_max_size();
 
         {
             // Valid case
             let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.gen::<u8>()).collect();
 
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::from_utxo(
-                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                        0,
-                    ),
-                    InputWitness::NoSignature(Some(data)),
-                )
-                .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(Amount::from_atoms(100)),
-                    anyonecanspend_address(),
-                ))
-                .build();
-
-            let process_result =
-                tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
-
-            process_result.unwrap();
-        }
-
-        {
-            // Invalid case
-            let data: Vec<u8> = (0..max_no_sig_data_size + 1).map(|_| rng.gen::<u8>()).collect();
+            let data = if data_allowed { Some(data) } else { None };
 
             let tx = TransactionBuilder::new()
                 .add_input(
@@ -399,7 +458,7 @@ fn too_large_no_sig_data(#[case] seed: Seed) {
                         OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                         0,
                     ),
-                    InputWitness::NoSignature(Some(data)),
+                    InputWitness::NoSignature(data),
                 )
                 .add_output(TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(100)),
@@ -407,22 +466,32 @@ fn too_large_no_sig_data(#[case] seed: Seed) {
                 ))
                 .build();
 
-            let process_result =
-                tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+            if data_allowed {
+                let block = tf.make_block_builder().with_transactions(vec![tx.clone()]).build();
 
-            assert_eq!(
-                process_result.unwrap_err(),
-                chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::CheckBlockFailed(
-                        chainstate::CheckBlockError::CheckTransactionFailed(
-                            chainstate::CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
-                                max_no_sig_data_size + 1,
-                                max_no_sig_data_size
+                if data_allowed {
+                    let process_result = tf.process_block(block, chainstate::BlockSource::Local);
+
+                    process_result.unwrap().unwrap();
+                } else {
+                    let process_result =
+                        tf.process_block(block.clone(), chainstate::BlockSource::Local);
+
+                    assert_eq!(
+                            process_result.unwrap_err(),
+                            chainstate::ChainstateError::ProcessBlockError(
+                                chainstate::BlockError::CheckBlockFailed(
+                                    chainstate::CheckBlockError::CheckTransactionFailed(
+                                        chainstate::CheckBlockTransactionsError::NoSignatureDataNotAllowed(
+                                            tx.transaction().get_id(),
+                                            block.get_id()
+                                        )
+                                    )
+                                )
                             )
-                        )
-                    )
-                )
-            );
+                        );
+                }
+            }
         }
     });
 }

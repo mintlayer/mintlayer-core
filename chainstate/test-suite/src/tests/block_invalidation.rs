@@ -164,7 +164,7 @@ struct TestChainBlockIds {
 fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestChainBlockIds) {
     let mut tf = TestFramework::builder(rng)
         .with_chain_config(
-            ChainConfigBuilder::new(ChainType::Mainnet)
+            ChainConfigBuilder::new(ChainType::Testnet)
                 .consensus_upgrades(NetUpgrades::unit_tests())
                 .genesis_unittest(Destination::AnyoneCanSpend)
                 .max_depth_for_reorg(BlockDistance::new(5))
