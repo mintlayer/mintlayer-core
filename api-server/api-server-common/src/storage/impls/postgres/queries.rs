@@ -176,8 +176,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     INSERT INTO ml_address_balance (address, amount, block_height)
                     VALUES ($1, $2, $3)
-                    ON CONFLICT (address, block_height) DO UPDATE
-		    SET amount = $2;",
+                    ON CONFLICT (address, block_height)
+                    DO UPDATE SET amount = $2;
 		"#,
                 &[&address.to_string(), &height, &(amount.into_atoms() as i64)],
             )
@@ -278,10 +278,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_account_balance (
+            "CREATE TABLE ml_address_balance (
                     address TEXT PRIMARY KEY,
                     amount bigint NOT NULL,
-                    block_height bigint NOT NULL
+                    block_height bigint NOT NULL,
                     UNIQUE (block_height, address)
                 );",
         )
