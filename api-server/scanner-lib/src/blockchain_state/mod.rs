@@ -19,13 +19,17 @@ use api_server_common::storage::storage_api::{
     ApiServerTransactionRw,
 };
 use common::{
+    address::Address,
     chain::{
-        output_value::OutputValue, transaction::OutPointSourceId, Block, GenBlock, TxInput,
-        TxOutput,
+        config::{create_unit_test_config, ChainConfig},
+        output_value::OutputValue,
+        transaction::OutPointSourceId,
+        Block, Destination, GenBlock, TxInput, TxOutput,
     },
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use std::ops::{Add, Sub};
+use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -34,12 +38,16 @@ pub enum BlockchainStateError {
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
+    chain_config: Arc<ChainConfig>,
     storage: S,
 }
 
 impl<S: ApiServerStorage> BlockchainState<S> {
-    pub fn new(storage: S) -> Self {
-        Self { storage }
+    pub fn new(chain_config: Arc<ChainConfig>, storage: S) -> Self {
+        Self {
+            chain_config,
+            storage,
+        }
     }
 
     pub fn storage(&self) -> &S {
@@ -73,7 +81,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
         // Disconnect address balances
         db_tx.del_address_balance_above_height(common_block_height).await?;
-        // TODO delete token balances
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
@@ -90,7 +97,13 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
                     .await?;
 
-                update_balances_from_inputs(&mut db_tx, block_height, tx.inputs()).await?;
+                update_balances_from_inputs(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    tx.inputs(),
+                )
+                .await?;
                 update_balances_from_outputs(&mut db_tx, block_height, tx.outputs()).await?;
             }
 
@@ -107,6 +120,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 }
 
 async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
     inputs: &[TxInput],
@@ -117,13 +131,22 @@ async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
                 // TODO
             }
             TxInput::Utxo(outpoint) => {
-                let address = "TODO";
-
                 match outpoint.source_id() {
-                    OutPointSourceId::BlockReward(_block_id) => {}
+                    OutPointSourceId::BlockReward(_block_id) => {
+                        // TODO
+                    }
                     OutPointSourceId::Transaction(transaction_id) => {
                         let input_transaction =
-                            db_tx.get_transaction(transaction_id).await?.expect("");
+                            db_tx.get_transaction(transaction_id).await?.ok_or_else(|| {
+                                ApiServerStorageError::LowLevelStorageError(
+                                    "Unable to retrieve transaction".to_string(),
+                                )
+                            })?;
+
+                        assert!(
+                            input_transaction.1.transaction().outputs().len()
+                                > outpoint.output_index() as usize
+                        );
 
                         match &input_transaction.1.transaction().outputs()
                             [outpoint.output_index() as usize]
@@ -135,29 +158,51 @@ async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
                             | TxOutput::IssueFungibleToken(_)
                             | TxOutput::IssueNft(_, _, _)
                             | TxOutput::ProduceBlockFromStake(_, _) => {}
-                            TxOutput::LockThenTransfer(output_value, _destination, _)
-                            | TxOutput::Transfer(output_value, _destination) => {
-                                match output_value {
-                                    OutputValue::Coin(amount) => {
-                                        let current_balance =
-                                            db_tx.get_address_balance(address).await?.expect("");
+                            TxOutput::LockThenTransfer(output_value, destination, _)
+                            | TxOutput::Transfer(output_value, destination) => {
+                                match destination {
+                                    Destination::PublicKey(_) | Destination::Address(_) => {
+                                        let address =
+                                            Address::<Destination>::new(&chain_config, destination)
+                                                .map_err(|_| {
+                                                    ApiServerStorageError::DeserializationError(
+                                                        "Unable to encode destination".to_string(),
+                                                    )
+                                                })?;
 
-                                        let new_amount = current_balance.sub(*amount).expect("");
+                                        match output_value {
+                                            OutputValue::TokenV0(_)
+                                            | OutputValue::TokenV1(_, _) => {
+                                                // TODO
+                                            }
+                                            OutputValue::Coin(amount) => {
+                                                let current_balance = db_tx
+                                                    .get_address_balance(address.get())
+                                                    .await?
+                                                    .unwrap_or(Amount::ZERO);
 
-                                        db_tx
-                                            .set_address_balance_at_height(
-                                                address,
-                                                new_amount,
-                                                block_height,
-                                            )
-                                            .await?;
+                                                let new_amount = current_balance
+                                                    .sub(*amount)
+                                                    .ok_or_else(|| {
+                                                        ApiServerStorageError::LowLevelStorageError(
+                                                            "Balance should not underflow"
+                                                                .to_string(),
+                                                        )
+                                                    })?;
+
+                                                db_tx
+                                                    .set_address_balance_at_height(
+                                                        address.get(),
+                                                        new_amount,
+                                                        block_height,
+                                                    )
+                                                    .await?;
+                                            }
+                                        }
                                     }
-                                    OutputValue::TokenV0(_) => {
-                                        // TODO
-                                    }
-                                    OutputValue::TokenV1(_, _) => {
-                                        // TODO
-                                    }
+                                    Destination::AnyoneCanSpend
+                                    | Destination::ClassicMultisig(_)
+                                    | Destination::ScriptHash(_) => {}
                                 }
                             }
                         }
@@ -175,8 +220,6 @@ async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     outputs: &[TxOutput],
 ) -> Result<(), ApiServerStorageError> {
-    let address = "TODO";
-
     for output in outputs {
         match output {
             TxOutput::Burn(_)
@@ -186,23 +229,45 @@ async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::ProduceBlockFromStake(_, _) => {}
-            TxOutput::Transfer(output_value, _destination)
-            | TxOutput::LockThenTransfer(output_value, _destination, _) => {
-                match output_value {
-                    OutputValue::TokenV0(_) => {
-                        // TODO
-                    }
-                    OutputValue::TokenV1(_, _) => {
-                        // TODO
-                    }
-                    OutputValue::Coin(amount) => {
-                        let current_balance = db_tx.get_address_balance(address).await?.expect("");
-                        let new_amount = current_balance.add(*amount).expect("");
+            TxOutput::Transfer(output_value, destination)
+            | TxOutput::LockThenTransfer(output_value, destination, _) => {
+                match destination {
+                    Destination::PublicKey(_) | Destination::Address(_) => {
+                        let chain_config = create_unit_test_config();
+                        let address = Address::<Destination>::new(&chain_config, destination)
+                            .map_err(|_| {
+                                ApiServerStorageError::DeserializationError(
+                                    "Unable to encode destination".to_string(),
+                                )
+                            })?;
 
-                        db_tx
-                            .set_address_balance_at_height(address, new_amount, block_height)
-                            .await?;
+                        match output_value {
+                            OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {
+                                // TODO
+                            }
+                            OutputValue::Coin(amount) => {
+                                let current_balance = db_tx
+                                    .get_address_balance(address.get())
+                                    .await?
+                                    .unwrap_or(Amount::ZERO);
+
+                                let new_amount = current_balance
+                                    .add(*amount)
+                                    .expect("Balance should not overflow");
+
+                                db_tx
+                                    .set_address_balance_at_height(
+                                        address.get(),
+                                        new_amount,
+                                        block_height,
+                                    )
+                                    .await?;
+                            }
+                        }
                     }
+                    Destination::AnyoneCanSpend
+                    | Destination::ClassicMultisig(_)
+                    | Destination::ScriptHash(_) => {}
                 }
             }
         }
