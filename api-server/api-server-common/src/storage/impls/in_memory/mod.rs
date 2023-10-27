@@ -162,7 +162,7 @@ impl ApiServerInMemoryStorage {
     ) -> Result<(), ApiServerStorageError> {
         self.address_balance_table
             .entry(address.to_string())
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(block_height, amount);
 
         Ok(())
