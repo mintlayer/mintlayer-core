@@ -80,18 +80,22 @@ fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuance 
 fn issue_token_from_block(
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
-    utxo_input_outpoint: UtxoOutPoint,
+    utxo_to_pay_fee: UtxoOutPoint,
     issuance: TokenIssuance,
 ) -> (TokenId, Id<Block>, UtxoOutPoint) {
     let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
+    let fee_utxo_coins = chainstate_test_framework::get_output_value(
+        tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
+    )
+    .unwrap()
+    .coin_amount()
+    .unwrap();
+
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::Utxo(utxo_input_outpoint),
-            InputWitness::NoSignature(None),
-        )
+        .add_input(utxo_to_pay_fee.into(), InputWitness::NoSignature(None))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin((token_min_issuance_fee * 10).unwrap()),
+            OutputValue::Coin((fee_utxo_coins - token_min_issuance_fee).unwrap()),
             Destination::AnyoneCanSpend,
         ))
         .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
@@ -834,6 +838,241 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         assert_eq!(
             actual_supply,
             Some((amount_to_mint - amount_to_unmint).unwrap())
+        );
+    });
+}
+
+// Issue a token.
+// Use 2 mint inputs in the same tx.
+// Check that circulating supply was increased twice.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_twice_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+
+        // Mint tokens
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, (amount_to_mint * 2).unwrap()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        (token_min_supply_change_fee * 2).unwrap(),
+                    )))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check result
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some((amount_to_mint * 2).unwrap()));
+    });
+}
+
+// Issue and mint some tokens.
+// Try to use 2 unmint inputs in the same tx.
+// Check an error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some(amount_to_mint));
+
+        // Unmint tokens twice
+        let unmint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_account(AccountNonce::new(2), AccountOp::UnmintTokens(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                amount_to_mint,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                (token_min_supply_change_fee * 2).unwrap(),
+            )))
+            .build();
+        let unmint_tx_id = unmint_tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(unmint_tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::MultipleUnmintTokensInputs,
+                    unmint_tx_id.into()
+                )
+            ))
+        );
+    });
+}
+
+// Issue 2 tokens and mint some.
+// Try to use 2 unmint inputs in the same tx for different tokens.
+// Check it's ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id_1, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let best_block_id = tf.best_block_id();
+        let (token_id_2, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            make_issuance(&mut rng, TokenTotalSupply::Unlimited),
+        );
+
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_1_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id_1,
+            amount_to_mint,
+            true,
+        );
+
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_2_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            UtxoOutPoint::new(mint_tx_1_id.into(), 2),
+            token_id_2,
+            amount_to_mint,
+            true,
+        );
+
+        assert_eq!(
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_1).unwrap(),
+            Some(amount_to_mint)
+        );
+        assert_eq!(
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_2).unwrap(),
+            Some(amount_to_mint)
+        );
+
+        // Unmint both tokens tokens same tx
+        let unmint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_1)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_2)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_1_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_2_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_2_id.into(), 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id_1,
+                amount_to_mint,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id_2,
+                amount_to_mint,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                (token_min_supply_change_fee * 2).unwrap(),
+            )))
+            .build();
+        tf.make_block_builder().add_transaction(unmint_tx).build_and_process().unwrap();
+
+        assert_eq!(
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_1).unwrap(),
+            None
+        );
+        assert_eq!(
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_2).unwrap(),
+            None
         );
     });
 }
@@ -2193,6 +2432,109 @@ fn try_lock_twice(#[case] seed: Seed) {
                 )
             ))
         );
+    });
+}
+
+// Issue a token.
+// Try to use 2 lock inputs in the same tx.
+// Check an error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
+
+        let lock_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::LockTokenSupply(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                (token_min_supply_change_fee * 2).unwrap(),
+            )))
+            .build();
+        let lock_tx_id = lock_tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::MultipleLockTokenSupplyInputs,
+                    lock_tx_id.into()
+                )
+            ))
+        );
+    });
+}
+
+// Issue 2 tokens.
+// Lock both tokens in the same transaction.
+// Check that both tokens are locked.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let (token_id_1, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
+
+        let best_block_id = tf.best_block_id();
+        let (token_id_2, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            make_issuance(&mut rng, TokenTotalSupply::Lockable),
+        );
+
+        // Unmint both tokens tokens same tx
+        let unmint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id_1)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id_2)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                (token_min_supply_change_fee * 2).unwrap(),
+            )))
+            .build();
+        tf.make_block_builder().add_transaction(unmint_tx).build_and_process().unwrap();
+
+        let token_data1 =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id_1).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(token_data1) = token_data1.unwrap();
+        assert!(token_data1.is_locked());
+
+        let token_data2 =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id_2).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(token_data2) = token_data2.unwrap();
+        assert!(token_data2.is_locked());
     });
 }
 

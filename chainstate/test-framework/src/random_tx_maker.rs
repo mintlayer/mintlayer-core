@@ -47,6 +47,10 @@ pub struct RandomTxMaker<'a> {
     // Transaction is composed of multiple inputs and outputs
     // but tokens can be issued only using input0 so a flag to check is required
     token_can_be_issued: bool,
+
+    // There can be only one Unmint operation per token per transaction.
+    // And in that case all burned tokens must be accounted.
+    unmint_ops: BTreeMap<TokenId, (Amount, bool)>,
 }
 
 impl<'a> RandomTxMaker<'a> {
@@ -63,6 +67,7 @@ impl<'a> RandomTxMaker<'a> {
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: true,
+            unmint_ops: BTreeMap::new(),
         }
     }
 
@@ -278,6 +283,13 @@ impl<'a> RandomTxMaker<'a> {
                 }
             };
         }
+
+        self.unmint_ops.iter().filter(|(_, (_, was_unminted))| *was_unminted).for_each(
+            |(token_id, (total_burned, _))| {
+                let _ = tokens_cache.unmint_tokens(*token_id, *total_burned).unwrap();
+            },
+        );
+
         (result_inputs, result_outputs)
     }
 
@@ -367,13 +379,22 @@ impl<'a> RandomTxMaker<'a> {
 
                 // check token_data as well because it can be an nft
                 if let (Some(fee_tx_input), Some(token_data)) = (&fee_input, token_data) {
-                    let circulating_supply =
-                        tokens_cache.get_circulating_supply(&token_id).unwrap();
-                    assert!(circulating_supply.is_some());
+                    let was_unminted = !self
+                        .unmint_ops
+                        .get(&token_id)
+                        .is_some_and(|(_, was_unminted)| *was_unminted);
 
                     let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
-                    if !token_data.is_locked() {
+                    if !token_data.is_locked() && !was_unminted {
                         let to_unmint = Amount::from_atoms(atoms);
+
+                        let circulating_supply =
+                            tokens_cache.get_circulating_supply(&token_id).unwrap();
+                        assert!(circulating_supply.unwrap() >= to_unmint);
+
+                        self.unmint_ops
+                            .entry(token_id)
+                            .and_modify(|e| *e = ((e.0 + to_unmint).unwrap(), true));
 
                         let new_nonce = self.get_next_nonce(AccountType::TokenSupply(token_id));
                         let account_input = TxInput::Account(AccountOutPoint::new(
@@ -389,19 +410,23 @@ impl<'a> RandomTxMaker<'a> {
                             TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
                         ];
                         result_outputs.extend(outputs);
-
-                        let _ = tokens_cache.unmint_tokens(token_id, to_unmint).unwrap();
                     }
                     *fee_input = None;
                 }
             } else {
                 // burn
-                result_outputs.push(TxOutput::Burn(OutputValue::TokenV1(
-                    token_id,
-                    Amount::from_atoms(atoms),
-                )))
+                let to_burn = Amount::from_atoms(atoms);
+                result_outputs.push(TxOutput::Burn(OutputValue::TokenV1(token_id, to_burn)));
+
+                self.unmint_ops
+                    .entry(token_id)
+                    .and_modify(|(total_burned, _)| {
+                        *total_burned = (*total_burned + to_burn).unwrap()
+                    })
+                    .or_insert((to_burn, false));
             }
         }
+
         (result_inputs, result_outputs)
     }
 }
