@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod amounts_map;
 mod input_output_policy;
 mod pos_accounting_delta_adapter;
 mod pos_accounting_undo_cache;
@@ -30,6 +29,9 @@ pub mod hierarchy;
 pub mod signature_destination_getter;
 pub mod storage;
 pub mod timelock_check;
+
+mod amounts_map;
+pub use amounts_map::CoinOrTokenId;
 
 mod tx_source;
 use tokens_accounting::{
@@ -928,6 +930,7 @@ where
             tx_source.expected_block_height(),
             &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
+            issuance_token_id_getter,
         )?;
 
         // Register tokens if tx has issuance data

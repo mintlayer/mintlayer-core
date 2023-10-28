@@ -15,13 +15,16 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use common::primitives::Amount;
+use common::{chain::tokens::TokenId, primitives::Amount};
 use fallible_iterator::{FallibleIterator, IntoFallibleIterator};
 
-use super::{
-    error::{ConnectTransactionError, TokensError},
-    token_issuance_cache::CoinOrTokenId,
-};
+use super::error::{ConnectTransactionError, TokensError};
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
 
 /// A temporary type used to accumulate token type vs amount
 #[derive(Debug)]
@@ -59,7 +62,7 @@ fn insert_or_increase(
     match total_amounts.entry(key) {
         Entry::Occupied(mut entry) => {
             let value = entry.get_mut();
-            *value = (*value + amount).ok_or(TokensError::CoinOrTokenOverflow)?;
+            *value = (*value + amount).ok_or(TokensError::CoinOrTokenOverflow(key))?;
         }
         Entry::Vacant(ventry) => {
             ventry.insert(amount);

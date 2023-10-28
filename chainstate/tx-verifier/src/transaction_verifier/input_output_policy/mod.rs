@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable, Block, ChainConfig, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        block::BlockRewardTransactable, tokens::TokenId, Block, ChainConfig, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -24,7 +24,7 @@ use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
 
-use super::error::ConnectTransactionError;
+use super::{amounts_map::CoinOrTokenId, error::ConnectTransactionError};
 
 mod constraints_accumulator;
 mod purposes_check;
@@ -45,10 +45,10 @@ pub enum IOPolicyError {
     ProduceBlockInTx,
     #[error("Attempted to provide multiple account command inputs in a single tx")]
     MultipleAccountCommands,
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Attempt to print money or violate timelock constraints")]
-    AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Coin or token overflow {0:?}")]
+    CoinOrTokenOverflow(CoinOrTokenId),
+    #[error("Attempt to print money or violate timelock constraints {0:?}")]
+    AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId),
     #[error("Attempt to violate operations fee requirements")]
     AttemptToViolateFeeRequirements,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
@@ -65,6 +65,10 @@ pub enum IOPolicyError {
     SpendingNonSpendableOutput(UtxoOutPoint),
     #[error("Attempt to use account input in block reward")]
     AttemptToUseAccountInputInReward,
+    #[error("Failed to query token id for tx")]
+    TokenIdQueryFailed,
+    #[error("Token id not found for tx")]
+    TokenIdNotFound,
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -75,13 +79,18 @@ pub fn check_reward_inputs_outputs_policy(
     purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view, block_id)
 }
 
-pub fn check_tx_inputs_outputs_policy(
+pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     tx: &Transaction,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
+    issuance_token_id_getter: IssuanceTokenIdGetterFunc,
+) -> Result<(), ConnectTransactionError>
+where
+    IssuanceTokenIdGetterFunc:
+        Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
+{
     let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
 
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
@@ -110,11 +119,15 @@ pub fn check_tx_inputs_outputs_policy(
             .map(|pool_data| pool_data.pledge_amount()))
     };
 
+    let issuance_token_id_getter =
+        || issuance_token_id_getter(&tx.get_id()).map_err(|_| IOPolicyError::TokenIdQueryFailed);
+
     constraints_accumulator
         .process_inputs(
             chain_config,
             block_height,
             pledge_getter,
+            issuance_token_id_getter,
             tx.inputs(),
             &inputs_utxos,
         )

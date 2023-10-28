@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ConnectTransactionError;
-use chainstate::{BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError};
+use chainstate::{
+    BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, IOPolicyError,
+};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenIssuanceVersion,
@@ -24,6 +26,7 @@ use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -250,10 +253,11 @@ fn data_deposit_insufficient_fee(
             let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
             let expected_err = Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::InsufficientCoinsFee(
-                    data_fee,
-                    (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128)
-                        .unwrap(),
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin,
+                    ),
+                    OutPointSourceId::Transaction(tx.transaction().get_id()),
                 )),
             ));
 

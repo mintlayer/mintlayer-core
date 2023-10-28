@@ -36,9 +36,8 @@ use utils::ensure;
 use utxo::UtxosView;
 
 use super::{
-    amounts_map::AmountsMap,
+    amounts_map::{AmountsMap, CoinOrTokenId},
     error::{ConnectTransactionError, TokensError},
-    token_issuance_cache::CoinOrTokenId,
     Fee, IOPolicyError, Subsidy,
 };
 

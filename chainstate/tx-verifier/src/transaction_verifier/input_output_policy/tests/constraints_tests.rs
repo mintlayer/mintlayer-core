@@ -156,18 +156,21 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
+        let issuance_token_id_getter = |_: &_| unreachable!();
+
         let err = check_tx_inputs_outputs_policy(
             &tx,
             &chain_config,
             BlockHeight::new(1),
             &pos_db,
             &utxo_db,
+            issuance_token_id_getter,
         )
         .unwrap_err();
         assert_eq!(
             err,
             ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 tx.get_id().into()
             )
         );
@@ -207,8 +210,17 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
-            .unwrap();
+        let issuance_token_id_getter = |_: &_| unreachable!();
+
+        check_tx_inputs_outputs_policy(
+            &tx,
+            &chain_config,
+            BlockHeight::new(1),
+            &pos_db,
+            &utxo_db,
+            issuance_token_id_getter,
+        )
+        .unwrap();
     }
 }
 
@@ -281,18 +293,21 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
+        let issuance_token_id_getter = |_: &_| unreachable!();
+
         let res = check_tx_inputs_outputs_policy(
             &tx,
             &chain_config,
             BlockHeight::new(1),
             &pos_db,
             &utxo_db,
+            issuance_token_id_getter,
         )
         .unwrap_err();
         assert_eq!(
             res,
             ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 tx.get_id().into()
             )
         )
@@ -337,7 +352,19 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
-            .unwrap();
+        let issuance_token_id_getter = |_: &_| unreachable!();
+
+        check_tx_inputs_outputs_policy(
+            &tx,
+            &chain_config,
+            BlockHeight::new(1),
+            &pos_db,
+            &utxo_db,
+            issuance_token_id_getter,
+        )
+        .unwrap();
     }
 }
+
+// FIXME: more tests with timelock constraints
+// FIXME: move transfer check tests here?

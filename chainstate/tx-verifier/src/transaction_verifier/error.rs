@@ -29,7 +29,7 @@ use thiserror::Error;
 use crate::timelock_check;
 
 use super::{
-    input_output_policy::IOPolicyError,
+    amounts_map::CoinOrTokenId, input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
@@ -210,8 +210,8 @@ pub enum TokensError {
     IssueError(TokenIssuanceError, Id<Transaction>, Id<Block>),
     #[error("Too many tokens issuance in transaction {0} in block {1}")]
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
-    #[error("Coin or token overflow")]
-    CoinOrTokenOverflow,
+    #[error("Coin or token overflow {0:?}")]
+    CoinOrTokenOverflow(CoinOrTokenId),
     #[error("Insufficient token issuance fee in transaction {0}")]
     InsufficientTokenFees(Id<Transaction>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]

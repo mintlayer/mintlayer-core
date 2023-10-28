@@ -349,8 +349,8 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::ProduceBlockInTx => 100,
-            IOPolicyError::AmountOverflow => 100,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::CoinOrTokenOverflow(_) => 100,
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 0,
             IOPolicyError::BlockHeightArithmeticError => 0,
@@ -359,6 +359,8 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
             IOPolicyError::AttemptToViolateFeeRequirements => 0,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
+            IOPolicyError::TokenIdQueryFailed => 0,
+            IOPolicyError::TokenIdNotFound => 0,
         }
     }
 }
