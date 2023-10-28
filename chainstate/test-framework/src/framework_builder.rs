@@ -57,7 +57,7 @@ pub struct TestFrameworkBuilder {
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new(_rng: &mut (impl Rng + CryptoRng)) -> Self {
-        let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
+        let chain_config = ChainConfigBuilder::new(ChainType::Testnet)
             .consensus_upgrades(
                 NetUpgrades::initialize(vec![(
                     BlockHeight::zero(),

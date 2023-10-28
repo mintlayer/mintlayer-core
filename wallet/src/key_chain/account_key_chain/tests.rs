@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::key_chain::MasterKeyChain;
-use common::chain::config::create_unit_test_config;
+use common::chain::config::create_mainnet;
 use crypto::key::secp256k1::Secp256k1PublicKey;
 use rstest::rstest;
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
@@ -31,7 +31,7 @@ const MNEMONIC: &str =
 #[case("035df5d551bac1d61a5473615a70eb17b2f4ccbf7e354166639428941e4dbbcd81")]
 #[case("030d1d07a8e45110d14f4e2c8623e8db556c11a90c0aac6be9a88f2464e446ee95")]
 fn check_mine_methods(#[case] public: &str) {
-    let chain_config = Arc::new(create_unit_test_config());
+    let chain_config = Arc::new(create_mainnet());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
