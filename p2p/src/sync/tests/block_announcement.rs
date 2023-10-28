@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
@@ -1026,7 +1026,7 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
             // because the LocalEvent::ChainstateNewTip for the new block (the one created
             // inside the loop) may reach Peer when all initial blocks have already been sent,
             // in which case it'll happily produce a block announcement.
-            100,
+            20,
             &mut rng,
         );
         let initial_block_headers: Vec<_> =
@@ -1091,6 +1091,8 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
                 )
                 .await;
             }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
         assert_eq!(intermediate_block_headers.len(), 1);
 
