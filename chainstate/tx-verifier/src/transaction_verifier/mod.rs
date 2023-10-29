@@ -237,11 +237,8 @@ where
         tx: &Transaction,
         block_id: &Option<Id<Block>>,
     ) -> Result<(), ConnectTransactionError> {
-        // Check if the fee is enough for issuance
-        let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if issuance_count > 0 {
-            let total_burned = tx
-                .outputs()
+        let calculate_total_burned = |tx: &Transaction| {
+            tx.outputs()
                 .iter()
                 .filter_map(|output| match output {
                     TxOutput::Burn(v) => v.coin_amount(),
@@ -256,52 +253,28 @@ where
                     | TxOutput::DataDeposit(_) => None,
                 })
                 .sum::<Option<Amount>>()
-                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
+                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
+        };
 
-            let required_fee = (self.chain_config.as_ref().token_min_issuance_fee()
-                * issuance_count as u128)
-                .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
-            ensure!(
-                total_burned >= required_fee,
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                    tx.get_id(),
-                    block_id.unwrap_or_else(|| H256::zero().into()),
-                ))
-            );
-        }
+        // Check if the fee is enough for issuance and all supply change
+        let issuance_count = get_tokens_issuance_count(tx.outputs()) as u128;
+        let supply_change_count = get_token_supply_change_count(tx.inputs()) as u128;
 
-        // Check if the fee is enough for reissuance
-        let supply_change_count = get_token_supply_change_count(tx.inputs());
-        if supply_change_count > 0 {
-            let total_burned = tx
-                .outputs()
-                .iter()
-                .filter_map(|output| match output {
-                    TxOutput::Burn(v) => v.coin_amount(),
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_) => None,
-                })
-                .sum::<Option<Amount>>()
-                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
+        let required_fee = (self.chain_config.as_ref().token_min_supply_change_fee()
+            * supply_change_count)
+            .and_then(|fee| {
+                fee + (self.chain_config.as_ref().token_min_issuance_fee() * issuance_count)?
+            })
+            .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
 
-            let required_fee = (self.chain_config.as_ref().token_min_supply_change_fee()
-                * supply_change_count as u128)
-                .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
-            ensure!(
-                total_burned >= required_fee,
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                    tx.get_id(),
-                    block_id.unwrap_or_else(|| H256::zero().into()),
-                ))
-            );
-        }
+        let total_burned = calculate_total_burned(tx)?;
+        ensure!(
+            total_burned >= required_fee,
+            ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
+                tx.get_id(),
+                block_id.unwrap_or_else(|| H256::zero().into()),
+            ))
+        );
 
         Ok(())
     }
