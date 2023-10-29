@@ -1035,9 +1035,10 @@ async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed)
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
             .with_blocks(initial_blocks.clone())
-            // Note: this limit guarantees that there is some pause after each BlockResponse is
-            // sent, giving more time for the required LocalEvent::ChainstateNewTip to propagate.
-            // (though it still doesn't guarantee the lack of spurious failures for this test).
+            // Note: because of this limit, the "sleep" call inside the loop creates a pause
+            // after each BlockResponse is sent; this gives more time for the required
+            // LocalEvent::ChainstateNewTip to propagate (though it still doesn't guarantee
+            // the lack of spurious failures for this test).
             .with_sync_msg_channel_buffer_size(1)
             .build()
             .await;
