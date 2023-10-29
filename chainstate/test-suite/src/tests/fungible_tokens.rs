@@ -17,7 +17,7 @@ use std::vec;
 
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, TokensError,
+    ConnectTransactionError, IOPolicyError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
@@ -42,7 +42,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
-use tx_verifier::error::TokenIssuanceError;
+use tx_verifier::{error::TokenIssuanceError, transaction_verifier::CoinOrTokenId};
 
 #[rstest]
 #[trace]
@@ -723,7 +723,12 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(tx_id))
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
+                    tx_id.into()
+                )
             ))
         );
 

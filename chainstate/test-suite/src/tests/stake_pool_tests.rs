@@ -47,6 +47,7 @@ use test_utils::{
     nft_utils::random_token_issuance,
     random::{make_seedable_rng, Seed},
 };
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -342,15 +343,15 @@ fn stake_pool_overspend(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .build();
-
+        let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    genesis_output_amount,
-                    genesis_overspend_amount
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin),
+                    tx_id.into()
                 )
             ))
         );
@@ -463,14 +464,19 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(1),
                 ))
                 .build();
-
+            let tx2_id = tx2.transaction().get_id();
             let result =
                 tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
 
             assert_eq!(
                 result,
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::AttemptToPrintMoney(amount_to_stake, overspend_amount)
+                    ConnectTransactionError::IOPolicyError(
+                        IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::Coin
+                        ),
+                        tx2_id.into()
+                    )
                 ))
             );
         }

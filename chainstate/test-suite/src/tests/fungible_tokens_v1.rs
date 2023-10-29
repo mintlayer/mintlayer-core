@@ -47,8 +47,10 @@ use test_utils::{
     random_ascii_alphanumeric_string, split_value,
 };
 use tokens_accounting::TokensAccountingStorageRead;
-use tx_verifier::error::TokenIssuanceError;
-use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError;
+use tx_verifier::transaction_verifier::{
+    error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
+    CoinOrTokenId,
+};
 
 fn make_test_framework_with_v1(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
     TestFramework::builder(rng)
@@ -523,7 +525,6 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -603,25 +604,22 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
             .unwrap();
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(
-                    (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
-                    token_min_issuance_fee
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
                 )
             ))
         );
@@ -789,36 +787,33 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Unmint more than minted
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(nonce, AccountCommand::UnmintTokens(token_id)),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(mint_tx_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(mint_tx_id.into(), 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
-                        token_id,
-                        amount_to_unmint_over_limit,
-                    )))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(nonce, AccountCommand::UnmintTokens(token_id)),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                amount_to_unmint_over_limit,
+            )))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    amount_to_mint,
-                    amount_to_unmint_over_limit,
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
                 )
             ))
         );
@@ -1562,20 +1557,26 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
         };
 
         let result = mint_from_account(AccountCommand::UnmintTokens(token_id));
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, amount_to_mint)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(_)),
+                    _
+                )
             ))
-        );
+        ));
 
         let result = mint_from_account(AccountCommand::LockTokenSupply(token_id));
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, amount_to_mint)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(_)),
+                    _
+                )
             ))
-        );
+        ));
 
         mint_from_account(AccountCommand::MintTokens(token_id, amount_to_mint)).unwrap();
     });
@@ -1602,58 +1603,58 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
         );
 
         // Mint but skip account input
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        utxo_with_change.clone().into(),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, amount_to_mint)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                )
             ))
         );
 
         // Mint but input amount is lees then output
         let amount_to_mint_input = (amount_to_mint - Amount::from_atoms(1)).unwrap();
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::MintTokens(token_id, amount_to_mint_input),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        utxo_with_change.clone().into(),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::MintTokens(token_id, amount_to_mint_input),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(amount_to_mint_input, amount_to_mint)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                )
             ))
         );
     });
@@ -2020,36 +2021,33 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
 
         // The outputs contain proper amount of burn tokens
         // But inputs use a utxo that is less by 1 and thus should fail to satisfy constraints
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(nonce, AccountCommand::UnmintTokens(token_id)),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_transfer_tokens_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(mint_tx_id.into(), 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
-                        token_id,
-                        amount_to_unmint,
-                    )))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(nonce, AccountCommand::UnmintTokens(token_id)),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_transfer_tokens_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                amount_to_unmint,
+            )))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    (amount_to_unmint - Amount::from_atoms(1)).unwrap(),
-                    amount_to_unmint
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
                 )
             ))
         );
@@ -2603,35 +2601,32 @@ fn mint_fee(#[case] seed: Seed) {
             .unwrap();
 
         // Try mint with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::MintTokens(token_id, some_amount),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, some_amount),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::MintTokens(token_id, some_amount),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, some_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(
-                    (token_min_supply_change_fee - Amount::from_atoms(1)).unwrap(),
-                    token_min_supply_change_fee
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
                 )
             ))
         );
@@ -2712,32 +2707,29 @@ fn unmint_fee(#[case] seed: Seed) {
             .unwrap();
 
         // Try unmint with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(1),
-                            AccountCommand::MintTokens(token_id, some_amount),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, some_amount)))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::MintTokens(token_id, some_amount),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, some_amount)))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(
-                    (token_min_supply_change_fee - Amount::from_atoms(1)).unwrap(),
-                    token_min_supply_change_fee
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
                 )
             ))
         );
@@ -2803,31 +2795,29 @@ fn lock_supply_fee(#[case] seed: Seed) {
             .unwrap();
 
         // Try lock with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::LockTokenSupply(token_id),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .build(),
+        let tx_insufficient_fee = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::LockTokenSupply(token_id),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let tx_insufficient_fee_id = tx_insufficient_fee.transaction().get_id();
+        let result =
+            tf.make_block_builder().add_transaction(tx_insufficient_fee).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(
-                    (token_min_supply_change_fee - Amount::from_atoms(1)).unwrap(),
-                    token_min_supply_change_fee
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_insufficient_fee_id.into(),
                 )
             ))
         );
@@ -2903,26 +2893,26 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Try to overspend minted amount
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(mint_tx_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_overspend),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_overspend),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(amount_to_mint, amount_to_overspend)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                )
             ))
         );
 
@@ -3948,12 +3938,12 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
 }
 
 // Issue a token.
-// Then in a single tx try mint some tokens, lock supply, issue another tx and deposit data with not enough fee.
+// Then in a single tx try mint some tokens, issue another tx and deposit data with not enough fee.
 // Then try again but with fee that satisfies all operations.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
+fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = make_test_framework_with_v1(&mut rng);
@@ -3970,11 +3960,9 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
         );
 
         let ok_fee = (token_min_issuance_fee + token_min_supply_change_fee)
-            .and_then(|v| v + token_min_supply_change_fee)
             .and_then(|v| v + data_deposit_fee)
             .unwrap();
         let not_ok_fee = (token_min_issuance_fee + token_min_supply_change_fee)
-            .and_then(|v| v + token_min_supply_change_fee)
             .and_then(|v| v + data_deposit_fee)
             .and_then(|v| v - Amount::from_atoms(1))
             .unwrap();
@@ -4014,30 +4002,27 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_input(
-                TxInput::from_command(
-                    AccountNonce::new(1),
-                    AccountCommand::LockTokenSupply(token_id),
-                ),
-                InputWitness::NoSignature(None),
-            )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::DataDeposit(Vec::new()))
             .build();
+        let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::InsufficientCoinsFee(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
 
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                        TxInput::from_utxo(tx_with_fee_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -4357,29 +4342,29 @@ fn token_freeze_fee(#[case] seed: Seed) {
             .unwrap();
 
         // Try freeze with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(not_ok_fee, ok_fee)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
+                )
             ))
         );
 
@@ -4463,30 +4448,31 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
             .add_transaction(tx_with_fee)
             .build_and_process()
             .unwrap();
+
         // Try unfreeze with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(1),
-                            AccountCommand::UnfreezeToken(token_id),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::UnfreezeToken(token_id),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(not_ok_fee, ok_fee)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into()
+                )
             ))
         );
 
@@ -5214,31 +5200,28 @@ fn change_authority_fee(#[case] seed: Seed) {
         let new_authority = Destination::PublicKey(some_pk);
 
         // Try change authority with insufficient fee
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(0),
-                            AccountCommand::ChangeTokenAuthority(token_id, new_authority.clone()),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::ChangeTokenAuthority(token_id, new_authority.clone()),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InsufficientCoinsFee(
-                    (token_min_change_authority_fee - Amount::from_atoms(1)).unwrap(),
-                    token_min_change_authority_fee
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into(),
                 )
             ))
         );

@@ -26,7 +26,6 @@ use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -241,8 +240,9 @@ fn data_deposit_insufficient_fee(
             )
             .with_outputs(outputs)
             .build();
+        let tx_id = tx.transaction().get_id();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx).build();
 
         if expect_success {
             let _new_connected_block_index = tf
@@ -254,10 +254,8 @@ fn data_deposit_insufficient_fee(
 
             let expected_err = Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                        CoinOrTokenId::Coin,
-                    ),
-                    OutPointSourceId::Transaction(tx.transaction().get_id()),
+                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    tx_id.into(),
                 )),
             ));
 

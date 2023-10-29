@@ -907,6 +907,13 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
+        // Register tokens if tx has issuance data
+        self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
+            self.storage
+                .get_token_aux_data(id)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        })?;
+
         let issuance_token_id_getter =
             |tx_id: &Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
                 // issuance transactions are unique, so we use them to get the token id
@@ -914,17 +921,8 @@ where
                     .map_err(|_| ConnectTransactionError::TxVerifierStorage)
             };
 
-        // check for attempted money printing
-        let fee = check_transferred_amounts_and_get_fee(
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            &self.pos_accounting_adapter.accounting_delta(),
-            tx.transaction(),
-            tx_source.expected_block_height(),
-            issuance_token_id_getter,
-        )?;
-
-        input_output_policy::check_tx_inputs_outputs_policy(
+        // check for attempted money printing and invalid inputs/outputs combinations
+        let fee = input_output_policy::check_tx_inputs_outputs_policy(
             tx.transaction(),
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
@@ -932,13 +930,6 @@ where
             &self.utxo_cache,
             issuance_token_id_getter,
         )?;
-
-        // Register tokens if tx has issuance data
-        self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
-            self.storage
-                .get_token_aux_data(id)
-                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-        })?;
 
         // check timelocks of the outputs and make sure there's no premature spending
         timelock_check::check_timelocks(

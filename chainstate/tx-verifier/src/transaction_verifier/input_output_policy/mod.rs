@@ -15,14 +15,16 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable, tokens::TokenId, Block, ChainConfig, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        block::BlockRewardTransactable, tokens::TokenId, Block, ChainConfig, DelegationId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
 };
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
+
+use crate::Fee;
 
 use super::{amounts_map::CoinOrTokenId, error::ConnectTransactionError};
 
@@ -47,6 +49,8 @@ pub enum IOPolicyError {
     MultipleAccountCommands,
     #[error("Coin or token overflow {0:?}")]
     CoinOrTokenOverflow(CoinOrTokenId),
+    #[error("Attempt to print money {0:?}")]
+    AttemptToPrintMoney(CoinOrTokenId),
     #[error("Attempt to print money or violate timelock constraints {0:?}")]
     AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId),
     #[error("Attempt to violate operations fee requirements")]
@@ -69,6 +73,8 @@ pub enum IOPolicyError {
     TokenIdQueryFailed,
     #[error("Token id not found for tx")]
     TokenIdNotFound,
+    #[error("Balance not found for delegation `{0}`")]
+    DelegationBalanceNotFound(DelegationId),
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -86,7 +92,7 @@ pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<(), ConnectTransactionError>
+) -> Result<Fee, ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
         Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
@@ -119,6 +125,12 @@ where
             .map(|pool_data| pool_data.pledge_amount()))
     };
 
+    let delegation_balance_getter = |delegation_id: DelegationId| {
+        Ok(pos_accounting_view
+            .get_delegation_balance(delegation_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?)
+    };
+
     let issuance_token_id_getter =
         || issuance_token_id_getter(&tx.get_id()).map_err(|_| IOPolicyError::TokenIdQueryFailed);
 
@@ -127,6 +139,7 @@ where
             chain_config,
             block_height,
             pledge_getter,
+            delegation_balance_getter,
             issuance_token_id_getter,
             tx.inputs(),
             &inputs_utxos,
@@ -137,7 +150,9 @@ where
         .process_outputs(chain_config, tx.outputs())
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    Ok(())
+    constraints_accumulator
+        .consume()
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))
 }
 
 // TODO: use FallibleIterator to avoid manually collecting to a Result

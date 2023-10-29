@@ -22,7 +22,7 @@ use super::helpers::pos::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
-    CheckBlockError, ConnectTransactionError, SpendStakeError,
+    CheckBlockError, ConnectTransactionError, IOPolicyError, SpendStakeError,
 };
 use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
@@ -1887,6 +1887,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(2000),
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
 
         let res = tf
             .make_pos_block_builder(&mut rng)
@@ -1899,9 +1900,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    delegation_balance,
-                    delegation_balance_overspend
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(
+                        tx_verifier::transaction_verifier::CoinOrTokenId::Coin
+                    ),
+                    tx_id.into()
                 )
             ))
         );
