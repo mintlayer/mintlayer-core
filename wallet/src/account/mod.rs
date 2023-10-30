@@ -666,12 +666,7 @@ impl Account {
             nft_issue_arguments.destination,
         );
 
-        let request = SendRequest::new().with_outputs([
-            dummy_issuance_output,
-            TxOutput::Burn(OutputValue::Coin(
-                self.chain_config.token_min_issuance_fee(),
-            )),
-        ]);
+        let request = SendRequest::new().with_outputs([dummy_issuance_output]);
         let mut request = self.select_inputs_for_send_request(
             request,
             vec![],
@@ -751,7 +746,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_unmint_token_outputs(token_id, amount, self.chain_config.as_ref())?;
+        let outputs = make_unmint_token_outputs(token_id, amount)?;
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_unmint(amount)?;
@@ -783,7 +778,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+        let outputs = make_lock_token_outputs()?;
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_lock()?;
