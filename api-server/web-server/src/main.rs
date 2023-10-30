@@ -20,7 +20,7 @@ mod error;
 use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use api_web_server::{api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState};
 use clap::Parser;
-use common::chain::config::create_unit_test_config;
+use common::chain::config::Builder;
 use logging::log;
 use std::sync::Arc;
 
@@ -35,8 +35,7 @@ async fn main() {
     let args = ApiServerWebServerConfig::parse();
     log::info!("Command line options: {args:?}");
 
-    // TODO: generalize network configuration
-    let chain_config = Arc::new(create_unit_test_config());
+    let chain_config = Arc::new(Builder::new(args.network.into()).build());
 
     let storage = TransactionalApiServerPostgresStorage::new(
         &args.postgres_config.postgres_host,

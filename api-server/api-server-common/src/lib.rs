@@ -16,6 +16,26 @@
 pub mod storage;
 
 use clap::Parser;
+use common::chain::config::ChainType;
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum Network {
+    Mainnet,
+    Testnet,
+    Regtest,
+    Signet,
+}
+
+impl From<Network> for ChainType {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Mainnet => ChainType::Mainnet,
+            Network::Testnet => ChainType::Testnet,
+            Network::Regtest => ChainType::Regtest,
+            Network::Signet => ChainType::Signet,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 pub struct PostgresConfig {

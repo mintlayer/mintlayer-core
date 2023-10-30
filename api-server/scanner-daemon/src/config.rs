@@ -13,18 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::PostgresConfig;
+use api_server_common::{Network, PostgresConfig};
 use clap::Parser;
-use common::chain::config::ChainType;
 use std::net::SocketAddr;
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-pub enum Network {
-    Mainnet,
-    Testnet,
-    Regtest,
-    Signet,
-}
 
 #[derive(Parser, Debug)]
 pub struct ApiServerScannerArgs {
@@ -51,15 +42,4 @@ pub struct ApiServerScannerArgs {
     /// Postgres config values
     #[clap(flatten)]
     pub postgres_config: PostgresConfig,
-}
-
-impl From<Network> for ChainType {
-    fn from(value: Network) -> Self {
-        match value {
-            Network::Mainnet => ChainType::Mainnet,
-            Network::Testnet => ChainType::Testnet,
-            Network::Regtest => ChainType::Regtest,
-            Network::Signet => ChainType::Signet,
-        }
-    }
 }
