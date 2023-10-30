@@ -178,6 +178,10 @@ impl TxData {
         Self { tx, state }
     }
 
+    pub fn get_signed_transaction(&self) -> &SignedTransaction {
+        &self.tx
+    }
+
     pub fn get_transaction(&self) -> &Transaction {
         self.tx.transaction()
     }

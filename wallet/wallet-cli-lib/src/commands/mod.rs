@@ -265,6 +265,16 @@ pub enum WalletCommand {
         transaction_id: HexEncoded<Id<Transaction>>,
     },
 
+    /// Get the transaction from the wallet if present as hex encoded raw transaction
+    GetRawTransaction {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+
+    /// Get the signed transaction from the wallet if present as hex encoded raw transaction
+    GetRawSignedTransaction {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+
     GetVrfPublicKey,
 
     SendToAddress {
@@ -1018,6 +1028,26 @@ impl CommandHandler {
                     .get_readonly_controller()?
                     .get_transaction(transaction_id.take())
                     .map(|tx| format!("{:?}", tx))
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(ConsoleCommand::Print(tx))
+            }
+
+            WalletCommand::GetRawTransaction { transaction_id } => {
+                let tx = self
+                    .get_readonly_controller()?
+                    .get_transaction(transaction_id.take())
+                    .map(|tx| HexEncode::hex_encode(tx.get_transaction()))
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(ConsoleCommand::Print(tx))
+            }
+
+            WalletCommand::GetRawSignedTransaction { transaction_id } => {
+                let tx = self
+                    .get_readonly_controller()?
+                    .get_transaction(transaction_id.take())
+                    .map(|tx| HexEncode::hex_encode(tx.get_signed_transaction()))
                     .map_err(WalletCliError::Controller)?;
 
                 Ok(ConsoleCommand::Print(tx))

@@ -1085,7 +1085,7 @@ impl Account {
         get_transaction_list(&self.key_chain, &self.output_cache, skip, count)
     }
 
-    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&WalletTx> {
+    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&TxData> {
         self.output_cache.get_transaction(transaction_id)
     }
 

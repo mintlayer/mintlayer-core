@@ -169,6 +169,9 @@ class WalletCliController:
     async def get_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"gettransaction {tx_id}\n")
 
+    async def get_raw_signed_transaction(self, tx_id: str) -> str:
+        return await self._write_command(f"getrawsignedtransaction {tx_id}\n")
+
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"sendtoaddress {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 

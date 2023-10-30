@@ -1044,15 +1044,8 @@ fn wallet_get_transaction(#[case] seed: Seed) {
     wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
     let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
 
-    match found_tx {
-        WalletTx::Tx(found_tx) => {
-            assert_eq!(*found_tx.state(), TxState::Inactive(1));
-            assert_eq!(found_tx.get_transaction(), tx.transaction());
-        }
-        WalletTx::Block(_) => {
-            panic!("unexpected result");
-        }
-    }
+    assert_eq!(*found_tx.state(), TxState::Inactive(1));
+    assert_eq!(found_tx.get_transaction(), tx.transaction());
 
     // put the tx in a block and scan it as confirmed
     let (_, block) = create_block(
@@ -1064,18 +1057,11 @@ fn wallet_get_transaction(#[case] seed: Seed) {
     );
     let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
 
-    match found_tx {
-        WalletTx::Tx(found_tx) => {
-            assert_eq!(
-                *found_tx.state(),
-                TxState::Confirmed(BlockHeight::new(2), block.timestamp(), 0)
-            );
-            assert_eq!(found_tx.get_transaction(), tx.transaction());
-        }
-        WalletTx::Block(_) => {
-            panic!("unexpected result");
-        }
-    }
+    assert_eq!(
+        *found_tx.state(),
+        TxState::Confirmed(BlockHeight::new(2), block.timestamp(), 0)
+    );
+    assert_eq!(found_tx.get_transaction(), tx.transaction());
 }
 
 #[rstest]

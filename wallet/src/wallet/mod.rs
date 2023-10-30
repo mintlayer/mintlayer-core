@@ -51,9 +51,9 @@ use wallet_storage::{
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
-use wallet_types::wallet_tx::TxState;
+use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState, WalletTx};
+use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -720,7 +720,7 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
         transaction_id: Id<Transaction>,
-    ) -> WalletResult<&WalletTx> {
+    ) -> WalletResult<&TxData> {
         let account = self.get_account(account_index)?;
         account.get_transaction(transaction_id)
     }

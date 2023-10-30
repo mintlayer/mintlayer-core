@@ -33,7 +33,7 @@ use pos_accounting::make_delegation_id;
 use utils::ensure;
 use wallet_types::{
     utxo_types::{get_utxo_state, UtxoState, UtxoStates},
-    wallet_tx::TxState,
+    wallet_tx::{TxData, TxState},
     with_locked::WithLocked,
     AccountWalletTxId, BlockInfo, WalletTx,
 };
@@ -859,10 +859,11 @@ impl OutputCache {
         Ok(all_abandoned)
     }
 
-    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&WalletTx> {
-        self.txs
-            .get(&transaction_id.into())
-            .ok_or(WalletError::NoTransactionFound(transaction_id))
+    pub fn get_transaction(&self, transaction_id: Id<Transaction>) -> WalletResult<&TxData> {
+        match self.txs.get(&transaction_id.into()) {
+            None | Some(WalletTx::Block(_)) => Err(WalletError::NoTransactionFound(transaction_id)),
+            Some(WalletTx::Tx(tx)) => Ok(tx),
+        }
     }
 }
 

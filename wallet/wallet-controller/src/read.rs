@@ -32,8 +32,9 @@ use wallet::{
 };
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoType, UtxoTypes},
+    wallet_tx::TxData,
     with_locked::WithLocked,
-    BlockInfo, KeychainUsageState, WalletTx,
+    BlockInfo, KeychainUsageState,
 };
 
 use crate::ControllerError;
@@ -109,7 +110,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<&WalletTx, ControllerError<T>> {
+    ) -> Result<&TxData, ControllerError<T>> {
         self.wallet
             .get_transaction(self.account_index, transaction_id)
             .map_err(ControllerError::WalletError)
