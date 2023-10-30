@@ -160,7 +160,7 @@ impl Account {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
 
-        let mut output_currency_amounts = group_outputs(
+        let mut output_currency_amounts = group_outputs_with_issuance_fee(
             request.outputs().iter(),
             |&output| output,
             |grouped: &mut Amount, _, new_amount| -> WalletResult<()> {
@@ -168,6 +168,7 @@ impl Account {
                 Ok(())
             },
             Amount::ZERO,
+            &self.chain_config,
         )?;
 
         let network_fee: Amount = current_fee_rate
@@ -183,7 +184,8 @@ impl Account {
             timestamp: median_time,
         };
 
-        let mut preselected_inputs = group_preselected_inputs(&request, current_fee_rate)?;
+        let mut preselected_inputs =
+            group_preselected_inputs(&request, current_fee_rate, &self.chain_config)?;
 
         let (utxos, selection_algo) = if input_utxos.is_empty() {
             (
@@ -1399,6 +1401,7 @@ impl Account {
 fn group_preselected_inputs(
     request: &SendRequest,
     current_fee_rate: FeeRate,
+    chain_config: &ChainConfig,
 ) -> Result<BTreeMap<Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination) in request.inputs().iter().zip(request.destinations()) {
@@ -1430,10 +1433,20 @@ fn group_preselected_inputs(
             TxInput::Utxo(_) => {}
             TxInput::Account(acc) => match acc.account() {
                 AccountOp::MintTokens(token_id, amount) => {
-                    update_preselected_inputs(Currency::Token(*token_id), *amount, *fee)?;
+                    update_preselected_inputs(
+                        Currency::Token(*token_id),
+                        *amount,
+                        (*fee + chain_config.token_min_supply_change_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
                 }
                 AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
-                    update_preselected_inputs(Currency::Token(*token_id), Amount::ZERO, *fee)?;
+                    update_preselected_inputs(
+                        Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_min_supply_change_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
                 }
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
@@ -1472,6 +1485,66 @@ fn group_outputs<T, Grouped: Clone>(
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_) => continue,
+            TxOutput::ProduceBlockFromStake(_, _) => {
+                return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                    get_tx_output(&output).clone(),
+                )))
+            }
+        };
+
+        match output_value {
+            OutputValue::Coin(output_amount) => {
+                combiner(&mut coin_grouped, &output, output_amount)?;
+            }
+            OutputValue::TokenV0(token_data) => {
+                let token_data = token_data.as_ref();
+                match token_data {
+                    TokenData::TokenTransfer(token_transfer) => {
+                        let total_token_amount = tokens_grouped
+                            .entry(Currency::Token(token_transfer.token_id))
+                            .or_insert_with(|| init.clone());
+
+                        combiner(total_token_amount, &output, token_transfer.amount)?;
+                    }
+                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
+                }
+            }
+            OutputValue::TokenV1(id, amount) => {
+                let total_token_amount =
+                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+
+                combiner(total_token_amount, &output, amount)?;
+            }
+        }
+    }
+
+    tokens_grouped.insert(Currency::Coin, coin_grouped);
+    Ok(tokens_grouped)
+}
+
+fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
+    outputs: impl Iterator<Item = T>,
+    get_tx_output: impl Fn(&T) -> &TxOutput,
+    mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
+    init: Grouped,
+    chain_config: &ChainConfig,
+) -> WalletResult<BTreeMap<Currency, Grouped>> {
+    let mut coin_grouped = init.clone();
+    let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
+
+    // Iterate over all outputs and group them up by currency
+    for output in outputs {
+        // Get the supported output value
+        let output_value = match get_tx_output(&output) {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                v.clone()
+            }
+            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+            TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
+            TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
+                OutputValue::Coin(chain_config.token_min_issuance_fee())
+            }
+            TxOutput::CreateDelegationId(_, _) | TxOutput::DataDeposit(_) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
