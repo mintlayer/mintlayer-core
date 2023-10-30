@@ -90,7 +90,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn pending_transactions(&self) -> Result<Vec<&'a WithId<Transaction>>, ControllerError<T>> {
+    pub fn pending_transactions(&self) -> Result<Vec<WithId<&'a Transaction>>, ControllerError<T>> {
         self.wallet
             .pending_transactions(self.account_index)
             .map_err(ControllerError::WalletError)

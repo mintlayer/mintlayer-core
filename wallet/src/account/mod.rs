@@ -1212,16 +1212,13 @@ impl Account {
                     |mut new_tx_was_added, (idx, signed_tx)| {
                         let tx_state =
                             TxState::Confirmed(block_height, block.timestamp(), idx as u64);
-                        let wallet_tx = WalletTx::Tx(TxData::new(
-                            signed_tx.transaction().clone().into(),
-                            tx_state,
-                        ));
+                        let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
                         new_tx_was_added |= self
                             .add_wallet_tx_if_relevant_and_remove_from_user_txs(
                                 db_tx,
                                 wallet_events,
                                 wallet_tx,
-                                signed_tx,
+                                signed_tx.transaction().get_id(),
                             )?;
                         Ok(new_tx_was_added)
                     },
@@ -1246,14 +1243,11 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         wallet_events: &impl WalletEvents,
         wallet_tx: WalletTx,
-        signed_tx: &SignedTransaction,
+        tx_id: Id<Transaction>,
     ) -> Result<bool, WalletError> {
         Ok(
             if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
-                let id = AccountWalletCreatedTxId::new(
-                    self.get_account_id(),
-                    signed_tx.transaction().get_id(),
-                );
+                let id = AccountWalletCreatedTxId::new(self.get_account_id(), tx_id);
                 db_tx.del_user_transaction(&id)?;
                 true
             } else {
@@ -1316,10 +1310,7 @@ impl Account {
         for signed_tx in transactions {
             counter += 1;
             let tx_state = make_tx_state(counter);
-            let wallet_tx = WalletTx::Tx(TxData::new(
-                signed_tx.transaction().clone().into(),
-                tx_state,
-            ));
+            let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
 
             if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                 not_added.push((signed_tx, tx_state));
@@ -1330,19 +1321,17 @@ impl Account {
         // and keep looping as long as we add a new tx
         loop {
             let mut not_added_next = vec![];
-            for (signed_tx, tx_state) in not_added.iter() {
-                let wallet_tx = WalletTx::Tx(TxData::new(
-                    signed_tx.transaction().clone().into(),
-                    *tx_state,
-                ));
+            let previously_not_added = not_added.len();
+            for (signed_tx, tx_state) in not_added {
+                let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
 
                 if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
-                    not_added_next.push((*signed_tx, *tx_state));
+                    not_added_next.push((signed_tx, tx_state));
                 }
             }
 
             // if no new tx was added break
-            if not_added.len() == not_added_next.len() {
+            if not_added_next.len() == previously_not_added {
                 break;
             }
 
@@ -1370,7 +1359,7 @@ impl Account {
         self.account_info.name()
     }
 
-    pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
+    pub fn pending_transactions(&self) -> Vec<WithId<&Transaction>> {
         self.output_cache.pending_transactions()
     }
 

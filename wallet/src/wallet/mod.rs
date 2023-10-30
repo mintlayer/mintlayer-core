@@ -654,7 +654,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn pending_transactions(
         &self,
         account_index: U31,
-    ) -> WalletResult<Vec<&WithId<Transaction>>> {
+    ) -> WalletResult<Vec<WithId<&Transaction>>> {
         let account = self.get_account(account_index)?;
         let transactions = account.pending_transactions();
         Ok(transactions)

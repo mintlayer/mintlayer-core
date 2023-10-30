@@ -745,7 +745,7 @@ impl OutputCache {
             .collect()
     }
 
-    pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
+    pub fn pending_transactions(&self) -> Vec<WithId<&Transaction>> {
         self.txs
             .values()
             .filter_map(|tx| match tx {
