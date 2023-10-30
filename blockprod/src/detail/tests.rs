@@ -189,11 +189,11 @@ mod collect_transactions {
         mock_mempool
             .expect_collect_txs()
             .returning(|_, _, _| {
-                Ok(Box::new(DefaultTxAccumulator::new(
+                Ok(Some(Box::new(DefaultTxAccumulator::new(
                     usize::default(),
                     Id::new(H256::zero()),
                     DUMMY_TIMESTAMP,
-                )))
+                ))))
             })
             .times(1);
 
