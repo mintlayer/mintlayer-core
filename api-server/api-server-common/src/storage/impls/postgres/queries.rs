@@ -120,7 +120,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query_opt(
                 r#"
-		    SELECT amount
+                    SELECT amount
                     FROM ml_address_balance
                     WHERE address = $1
                     ORDER BY block_height DESC
@@ -174,12 +174,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_address_balance (address, amount, block_height)
+                    INSERT INTO ml_address_balance (address, block_height, amount)
                     VALUES ($1, $2, $3)
                     ON CONFLICT (address, block_height)
-                    DO UPDATE SET amount = $2;
-		"#,
-                &[&address.to_string(), &height, &(amount.into_atoms() as i64)],
+                    DO UPDATE SET amount = $3;
+                "#,
+                &[&address.to_string(), &height, &amount.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -279,10 +279,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml_address_balance (
-                    address TEXT PRIMARY KEY,
-                    amount bigint NOT NULL,
+                    address TEXT NOT NULL,
                     block_height bigint NOT NULL,
-                    UNIQUE (block_height, address)
+                    amount bytea NOT NULL,
+                    PRIMARY KEY (address, block_height)
                 );",
         )
         .await?;
