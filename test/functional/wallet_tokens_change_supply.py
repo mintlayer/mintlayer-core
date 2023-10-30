@@ -30,7 +30,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
-from test_framework.util import assert_in, assert_equal
+from test_framework.util import assert_in, assert_equal, assert_not_in
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
@@ -176,13 +176,20 @@ class WalletTokens(BitcoinTestFramework):
                     assert_in("Success", await wallet.sync())
 
                 # check total supply is correct
-                assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
+                if total_tokens_supply > 0:
+                    assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
+                else:
+                    assert_not_in(f"{token_id}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
+
 
             # lock token supply
             assert_in("The transaction was submitted successfully", await wallet.lock_token_supply(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())
-            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+            if total_tokens_supply > 0:
+                assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+            else:
+                assert_not_in(f"{token_id}", await wallet.get_balance())
 
             # cannot mint any more tokens as it is locked
             assert_in("Cannot change a Locked Token supply", await wallet.mint_tokens(token_id, address, tokens_to_mint))
