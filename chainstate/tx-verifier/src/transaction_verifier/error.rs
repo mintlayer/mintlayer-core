@@ -158,6 +158,8 @@ pub enum ConnectTransactionError {
     TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
     #[error("Total fee required overflow")]
     TotalFeeRequiredOverflow,
+    #[error("Insufficient coins fee provided in a transaction: {0:?} actual, {1:?} required")]
+    InsufficientCoinsFee(Amount, Amount),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -208,8 +210,8 @@ pub enum TokensError {
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or token overflow")]
     CoinOrTokenOverflow,
-    #[error("Insufficient token issuance fee in transaction {0} in block {1}")]
-    InsufficientTokenFees(Id<Transaction>, Id<Block>),
+    #[error("Insufficient token issuance fee in transaction {0}")]
+    InsufficientTokenFees(Id<Transaction>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
     TransferZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Tokens ID can't be calculated")]

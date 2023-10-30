@@ -169,8 +169,6 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_inputs = Vec::new();
         let mut result_outputs = Vec::new();
 
-        let min_tx_fee = self.chainstate.get_chain_config().token_min_supply_change_fee();
-
         for (i, token_id) in inputs.iter().copied().enumerate() {
             if rng.gen_bool(0.9) {
                 let circulating_supply =
@@ -199,13 +197,10 @@ impl<'a> RandomTxMaker<'a> {
                         ));
                         result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
-                        let outputs = vec![
-                            TxOutput::Transfer(
-                                OutputValue::TokenV1(token_id, to_mint),
-                                Destination::AnyoneCanSpend,
-                            ),
-                            TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
-                        ];
+                        let outputs = vec![TxOutput::Transfer(
+                            OutputValue::TokenV1(token_id, to_mint),
+                            Destination::AnyoneCanSpend,
+                        )];
                         result_outputs.extend(outputs);
 
                         let _ = tokens_cache.mint_tokens(token_id, to_mint).unwrap();
@@ -224,7 +219,8 @@ impl<'a> RandomTxMaker<'a> {
                     ));
                     result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
-                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(min_tx_fee))];
+                    // fake output to avoid empty outputs error
+                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
                     result_outputs.extend(outputs);
 
                     let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
@@ -314,7 +310,6 @@ impl<'a> RandomTxMaker<'a> {
                         random_token_issuance_v1(self.chainstate.get_chain_config(), rng),
                     ))),
                     TxOutput::Transfer(OutputValue::Coin(change), Destination::AnyoneCanSpend),
-                    TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
                 ]
             } else {
                 Vec::new()
@@ -337,7 +332,6 @@ impl<'a> RandomTxMaker<'a> {
                         Destination::AnyoneCanSpend,
                     ),
                     TxOutput::Transfer(OutputValue::Coin(change), Destination::AnyoneCanSpend),
-                    TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
                 ]
             } else {
                 Vec::new()
@@ -403,12 +397,8 @@ impl<'a> RandomTxMaker<'a> {
                         ));
                         result_inputs.extend(vec![account_input, fee_tx_input.clone()]);
 
-                        let min_tx_fee =
-                            self.chainstate.get_chain_config().token_min_supply_change_fee();
-                        let outputs = vec![
-                            TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint)),
-                            TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
-                        ];
+                        let outputs =
+                            vec![TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint))];
                         result_outputs.extend(outputs);
                     }
                     *fee_input = None;

@@ -150,6 +150,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
+            ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
         }
     }
 }
@@ -249,7 +250,7 @@ impl BanScore for TokensError {
             TokensError::IssueError(_, _, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             TokensError::CoinOrTokenOverflow => 100,
-            TokensError::InsufficientTokenFees(_, _) => 100,
+            TokensError::InsufficientTokenFees(_) => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
             TokensError::TokensInBlockReward => 100,

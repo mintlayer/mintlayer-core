@@ -69,14 +69,11 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{
-            get_issuance_count_via_tokens_op, get_token_supply_change_count,
-            get_tokens_issuance_count, make_token_id, TokenId, TokenIssuanceVersion,
-        },
+        tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
         AccountNonce, AccountOp, AccountOutPoint, AccountType, Block, ChainConfig, DelegationId,
         GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
@@ -230,53 +227,6 @@ where
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
-    }
-
-    fn check_issuance_fee_burn(
-        &self,
-        tx: &Transaction,
-        block_id: &Option<Id<Block>>,
-    ) -> Result<(), ConnectTransactionError> {
-        let calculate_total_burned = |tx: &Transaction| {
-            tx.outputs()
-                .iter()
-                .filter_map(|output| match output {
-                    TxOutput::Burn(v) => v.coin_amount(),
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_) => None,
-                })
-                .sum::<Option<Amount>>()
-                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
-        };
-
-        // Check if the fee is enough for issuance and all supply change
-        let issuance_count = get_tokens_issuance_count(tx.outputs()) as u128;
-        let supply_change_count = get_token_supply_change_count(tx.inputs()) as u128;
-
-        let required_fee = (self.chain_config.as_ref().token_min_supply_change_fee()
-            * supply_change_count)
-            .and_then(|fee| {
-                fee + (self.chain_config.as_ref().token_min_issuance_fee() * issuance_count)?
-            })
-            .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
-
-        let total_burned = calculate_total_burned(tx)?;
-        ensure!(
-            total_burned >= required_fee,
-            ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                tx.get_id(),
-                block_id.unwrap_or_else(|| H256::zero().into()),
-            ))
-        );
-
-        Ok(())
     }
 
     fn get_pool_data_from_output_in_reward(
@@ -889,9 +839,11 @@ where
 
         // check for attempted money printing
         let fee = check_transferred_amounts_and_get_fee(
+            self.chain_config.as_ref(),
             &self.utxo_cache,
             &self.pos_accounting_adapter.accounting_delta(),
             tx.transaction(),
+            tx_source.expected_block_height(),
             issuance_token_id_getter,
         )?;
 
@@ -902,9 +854,6 @@ where
             &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
         )?;
-
-        // check token issuance fee
-        self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
 
         // Register tokens if tx has issuance data
         self.token_issuance_cache.register(block_id, tx.transaction(), |id| {

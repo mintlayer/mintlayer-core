@@ -14,9 +14,7 @@
 // limitations under the License.
 
 use chainstate::ConnectTransactionError;
-use chainstate::{
-    BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError, IOPolicyError,
-};
+use chainstate::{BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness, tokens::TokenIssuanceVersion, ChainstateUpgrade,
@@ -240,9 +238,9 @@ fn data_deposit_insufficient_fee(#[case] seed: Seed, #[case] expect_success: boo
             let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
             let expected_err = Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
-                    OutPointSourceId::Transaction(tx.transaction().get_id()),
+                BlockError::StateUpdateFailed(ConnectTransactionError::InsufficientCoinsFee(
+                    data_fee,
+                    tf.chain_config().data_deposit_min_fee(),
                 )),
             ));
 
