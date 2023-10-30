@@ -287,11 +287,8 @@ where
                     .await?;
 
                 if headers.is_empty() {
-                    log::warn!(
-                        concat!(
-                            "[peer id = {}] Got new tip event with block id {}, ",
-                            "but there is nothing to send"
-                        ),
+                    log::debug!(
+                        "[peer id = {}] Got new tip event with block id {}, but there is nothing to send",
                         self.id(),
                         new_tip_id,
                     );
@@ -300,10 +297,7 @@ where
                     // so we may ignore this one (and it makes sense to ignore it to avoid sending
                     // the same header list multiple times).
                     log::warn!(
-                        concat!(
-                            "[peer id = {}] Got new tip event with block id {}, ",
-                            "but the tip has changed since then to {}"
-                        ),
+                        "[peer id = {}] Got new tip event with block id {}, but the tip has changed since then to {}",
                         self.id(),
                         new_tip_id,
                         best_block_id
@@ -354,10 +348,6 @@ where
     async fn request_headers(&mut self) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
         if locator.len() > *self.p2p_config.protocol_config.msg_max_locator_count {
-            // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
-            // so we should never get here in production code. Moreover, currently it's not
-            // modified even in tests. TODO: make it a constant.
-            // See https://github.com/mintlayer/mintlayer-core/issues/1201
             log::warn!(
                 "[peer id = {}] Sending locator of the length {}, which exceeds the maximum length {:?}",
                 self.id(),
