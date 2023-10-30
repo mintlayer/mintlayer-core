@@ -21,10 +21,8 @@ use api_server_common::storage::storage_api::{
 use common::{
     address::Address,
     chain::{
-        config::{create_unit_test_config, ChainConfig},
-        output_value::OutputValue,
-        transaction::OutPointSourceId,
-        Block, Destination, GenBlock, TxInput, TxOutput,
+        config::ChainConfig, output_value::OutputValue, transaction::OutPointSourceId, Block,
+        Destination, GenBlock, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -89,8 +87,13 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
-            update_balances_from_outputs(&mut db_tx, block_height, block.block_reward().outputs())
-                .await?;
+            update_balances_from_outputs(
+                Arc::clone(&self.chain_config),
+                &mut db_tx,
+                block_height,
+                block.block_reward().outputs(),
+            )
+            .await?;
 
             for tx in block.transactions() {
                 db_tx
@@ -104,7 +107,14 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     tx.inputs(),
                 )
                 .await?;
-                update_balances_from_outputs(&mut db_tx, block_height, tx.outputs()).await?;
+
+                update_balances_from_outputs(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    tx.outputs(),
+                )
+                .await?;
             }
 
             db_tx.set_block(block.get_id(), &block).await?;
@@ -216,6 +226,7 @@ async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
 }
 
 async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
     outputs: &[TxOutput],
@@ -233,7 +244,6 @@ async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
             | TxOutput::LockThenTransfer(output_value, destination, _) => {
                 match destination {
                     Destination::PublicKey(_) | Destination::Address(_) => {
-                        let chain_config = create_unit_test_config();
                         let address = Address::<Destination>::new(&chain_config, destination)
                             .map_err(|_| {
                                 ApiServerStorageError::DeserializationError(
