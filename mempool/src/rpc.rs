@@ -25,7 +25,7 @@ use utils::tap_error_log::LogError;
 
 use crate::{FeeRate, MempoolMaxSize, TxStatus};
 
-use rpc::Result as RpcResult;
+use rpc::RpcResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GetTxResponse {
@@ -72,15 +72,15 @@ trait MempoolRpc {
 
 #[async_trait::async_trait]
 impl MempoolRpcServer for super::MempoolHandle {
-    async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
+    async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::RpcResult<bool> {
         rpc::handle_result(self.call(move |this| this.contains_transaction(&tx_id)).await)
     }
 
-    async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
+    async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> rpc::RpcResult<bool> {
         rpc::handle_result(self.call(move |this| this.contains_orphan_transaction(&tx_id)).await)
     }
 
-    async fn get_all_transactions(&self) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>> {
+    async fn get_all_transactions(&self) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>> {
         rpc::handle_result(
             self.call(move |this| -> Vec<HexEncoded<SignedTransaction>> {
                 this.get_all().into_iter().map(HexEncoded::new).collect()
@@ -89,7 +89,10 @@ impl MempoolRpcServer for super::MempoolHandle {
         )
     }
 
-    async fn get_transaction(&self, tx_id: Id<Transaction>) -> rpc::Result<Option<GetTxResponse>> {
+    async fn get_transaction(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> rpc::RpcResult<Option<GetTxResponse>> {
         let res: Option<_> = rpc::handle_result(
             self.call(move |this| {
                 this.transaction(&tx_id).map(|tx| (tx, TxStatus::InMempool)).or_else(|| {
@@ -106,7 +109,7 @@ impl MempoolRpcServer for super::MempoolHandle {
         }))
     }
 
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<()> {
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::RpcResult<()> {
         let res = self
             .call_mut(move |m| m.add_transaction_local(tx.take(), LocalTxOrigin::Mempool))
             .await
@@ -114,24 +117,24 @@ impl MempoolRpcServer for super::MempoolHandle {
         rpc::handle_result(res)
     }
 
-    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
+    async fn local_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>> {
         rpc::handle_result(self.call(|this| this.best_block_id()).await)
     }
 
-    async fn memory_usage(&self) -> rpc::Result<usize> {
+    async fn memory_usage(&self) -> rpc::RpcResult<usize> {
         rpc::handle_result(self.call(|this| this.memory_usage()).await)
     }
 
-    async fn get_max_size(&self) -> rpc::Result<usize> {
+    async fn get_max_size(&self) -> rpc::RpcResult<usize> {
         rpc::handle_result(self.call(|this| this.get_max_size().as_bytes()).await)
     }
 
-    async fn set_max_size(&self, max_size: usize) -> rpc::Result<()> {
+    async fn set_max_size(&self, max_size: usize) -> rpc::RpcResult<()> {
         let max_size = MempoolMaxSize::from_bytes(max_size);
         rpc::handle_result(self.call_mut(move |this| this.set_max_size(max_size)).await)
     }
 
-    async fn get_fee_rate(&self, in_top_x_mb: usize) -> rpc::Result<FeeRate> {
+    async fn get_fee_rate(&self, in_top_x_mb: usize) -> rpc::RpcResult<FeeRate> {
         rpc::handle_result(self.call(move |this| this.get_fee_rate(in_top_x_mb)).await)
     }
 }
