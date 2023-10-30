@@ -58,7 +58,8 @@ use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState};
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
 pub const WALLET_VERSION_V2: u32 = 2;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V2;
+pub const WALLET_VERSION_V3: u32 = 3;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V3;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -275,11 +276,29 @@ impl<B: storage::Backend> Wallet<B> {
         // Create the next unused account
         Self::migrate_next_unused_account(chain_config, &mut db_tx)?;
 
-        db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
+        db_tx.set_storage_version(WALLET_VERSION_V2)?;
         db_tx.commit()?;
         logging::log::info!(
             "Successfully migrated wallet database to latest version {}",
-            CURRENT_WALLET_VERSION
+            WALLET_VERSION_V2
+        );
+
+        Ok(())
+    }
+
+    /// Migrate the wallet DB from version 2 to version 3
+    /// * reset transactions as now we store SignedTransaction instead of Transaction in WalletTx
+    fn migration_v3(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        // reset wallet transaction as now we will need to rescan the blockchain to store the
+        // correct order of the transactions to avoid bugs in loading them in the wrong order
+        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+
+        db_tx.set_storage_version(WALLET_VERSION_V3)?;
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V3
         );
 
         Ok(())
@@ -291,7 +310,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn check_db_needs_migration(db: &Store<B>) -> WalletResult<bool> {
         match db.get_storage_version()? {
             WALLET_VERSION_UNINITIALIZED => Err(WalletError::WalletNotInitialized),
-            WALLET_VERSION_V1 => Ok(true),
+            WALLET_VERSION_V1 | WALLET_VERSION_V2 => Ok(true),
             CURRENT_WALLET_VERSION => Ok(false),
             unsupported_version => Err(WalletError::UnsupportedWalletVersion(unsupported_version)),
         }
@@ -302,6 +321,7 @@ impl<B: storage::Backend> Wallet<B> {
         match db.get_storage_version()? {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
             WALLET_VERSION_V1 => Self::migration_v2(db, chain_config)?,
+            WALLET_VERSION_V2 => Self::migration_v3(db, chain_config)?,
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
                 return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
