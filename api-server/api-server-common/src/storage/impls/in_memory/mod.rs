@@ -21,7 +21,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Unbounded},
 };
 
@@ -32,6 +32,7 @@ struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, Amount>>,
+    address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
@@ -44,6 +45,7 @@ impl ApiServerInMemoryStorage {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
             address_balance_table: BTreeMap::new(),
+            address_transactions_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
@@ -64,6 +66,18 @@ impl ApiServerInMemoryStorage {
             || Ok(None),
             |balance| Ok(balance.last_key_value().map(|(_, &v)| v)),
         )
+    }
+
+    fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        Ok(self
+            .address_transactions_table
+            .get(address)
+            .map_or_else(Vec::new, |transactions| {
+                transactions.iter().flat_map(|(_, txs)| txs.iter()).cloned().collect()
+            }))
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
@@ -154,6 +168,26 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn del_address_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        // Inefficient, but acceptable for testing with InMemoryStorage
+
+        self.address_transactions_table.iter_mut().for_each(|(_, transactions)| {
+            transactions
+                .range((Excluded(block_height), Unbounded))
+                .map(|b| b.0.into_int())
+                .collect::<Vec<_>>()
+                .iter()
+                .for_each(|&b| {
+                    transactions.remove(&BlockHeight::new(b));
+                })
+        });
+
+        Ok(())
+    }
+
     fn set_address_balance_at_height(
         &mut self,
         address: &str,
@@ -164,6 +198,20 @@ impl ApiServerInMemoryStorage {
             .entry(address.to_string())
             .or_default()
             .insert(block_height, amount);
+
+        Ok(())
+    }
+
+    fn set_address_transactions_at_height(
+        &mut self,
+        address: &str,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.address_transactions_table
+            .entry(address.to_string())
+            .or_default()
+            .insert(block_height, transaction_ids.into_iter().collect());
 
         Ok(())
     }

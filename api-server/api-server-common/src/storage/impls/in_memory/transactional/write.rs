@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
@@ -41,6 +43,13 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.del_address_balance_above_height(block_height)
     }
 
+    async fn del_address_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_address_transactions_above_height(block_height)
+    }
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &str,
@@ -48,6 +57,16 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_address_balance_at_height(address, amount, block_height)
+    }
+
+    async fn set_address_transactions_at_height(
+        &mut self,
+        address: &str,
+        transactions: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction
+            .set_address_transactions_at_height(address, transactions, block_height)
     }
 
     async fn set_block(
@@ -114,6 +133,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         address: &str,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_address_balance(address)
+    }
+
+    async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        self.transaction.get_address_transactions(address)
     }
 
     async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {

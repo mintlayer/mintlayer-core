@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
@@ -50,6 +52,16 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         Ok(())
     }
 
+    async fn del_address_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_address_transactions_above_height(block_height).await?;
+
+        Ok(())
+    }
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &str,
@@ -58,6 +70,19 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.set_address_balance_at_height(address, amount, block_height).await?;
+
+        Ok(())
+    }
+
+    async fn set_address_transactions_at_height(
+        &mut self,
+        address: &str,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_address_transactions_at_height(address, transaction_ids, block_height)
+            .await?;
 
         Ok(())
     }
@@ -151,6 +176,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_transactions(address).await?;
 
         Ok(res)
     }
