@@ -225,6 +225,18 @@ impl FungibleTokenData {
             Err(self)
         }
     }
+
+    pub fn change_authority(self, new_authority: Destination) -> Self {
+        Self::new_unchecked(
+            self.token_ticker,
+            self.number_of_decimals,
+            self.metadata_uri,
+            self.total_supply,
+            self.locked,
+            self.frozen,
+            new_authority,
+        )
+    }
 }
 
 impl From<TokenIssuance> for FungibleTokenData {

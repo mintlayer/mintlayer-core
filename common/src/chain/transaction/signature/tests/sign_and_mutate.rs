@@ -991,7 +991,7 @@ fn mutate_first_input(
                     .nonce()
                     .increment()
                     .unwrap_or_else(|| outpoint.nonce().decrement().unwrap());
-                TxInput::Account(AccountOutPoint::new(new_nonce, *outpoint.account()))
+                TxInput::Account(AccountOutPoint::new(new_nonce, outpoint.account().clone()))
             }
         }
     };

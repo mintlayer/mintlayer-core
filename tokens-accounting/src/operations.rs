@@ -15,7 +15,10 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::tokens::{IsTokenUnfreezable, TokenId},
+    chain::{
+        tokens::{IsTokenUnfreezable, TokenId},
+        Destination,
+    },
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
@@ -59,6 +62,12 @@ pub struct UnfreezeTokenUndo {
     pub(crate) undo_data: DataDeltaUndo<TokenData>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct ChangeTokenAuthorityUndo {
+    pub(crate) id: TokenId,
+    pub(crate) undo_data: DataDeltaUndo<TokenData>,
+}
+
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum TokenAccountingUndo {
@@ -68,6 +77,7 @@ pub enum TokenAccountingUndo {
     LockSupply(LockSupplyUndo),
     FreezeToken(FreezeTokenUndo),
     UnfreezeToken(UnfreezeTokenUndo),
+    ChangeTokenAuthority(ChangeTokenAuthorityUndo),
 }
 
 pub trait TokensAccountingOperations {
@@ -85,6 +95,12 @@ pub trait TokensAccountingOperations {
         is_unfreezable: IsTokenUnfreezable,
     ) -> Result<TokenAccountingUndo>;
     fn unfreeze_token(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
+
+    fn change_authority(
+        &mut self,
+        id: TokenId,
+        new_authority: Destination,
+    ) -> Result<TokenAccountingUndo>;
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<()>;
 }

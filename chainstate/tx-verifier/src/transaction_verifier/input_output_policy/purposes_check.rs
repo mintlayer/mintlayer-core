@@ -162,7 +162,9 @@ pub fn check_tx_inputs_outputs_purposes(
     tx.inputs().iter().for_each(|input| match input {
         TxInput::Utxo(_) => { /* do nothing */ }
         TxInput::Account(account) => match account.account() {
-            AccountOp::SpendDelegationBalance(_, _) | AccountOp::MintTokens(_, _) => {/* do nothing */}
+            AccountOp::SpendDelegationBalance(_, _)
+            | AccountOp::MintTokens(_, _)
+            | AccountOp::ChangeTokenAuthority(_, _) => { /* do nothing */ }
             AccountOp::UnmintTokens(token_id) => {
                 unmint_tokens_inputs_count
                     .entry(*token_id)
@@ -176,17 +178,17 @@ pub fn check_tx_inputs_outputs_purposes(
                     .or_insert(1);
             }
             AccountOp::FreezeToken(token_id, _) => {
-               freeze_token_inputs_count
+                freeze_token_inputs_count
                     .entry(*token_id)
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
             }
             AccountOp::UnfreezeToken(token_id) => {
-               unfreeze_token_inputs_count
+                unfreeze_token_inputs_count
                     .entry(*token_id)
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
-            },
+            }
         },
     });
 

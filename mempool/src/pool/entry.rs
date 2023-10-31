@@ -56,14 +56,15 @@ impl TxDependency {
     fn from_account(acct: &AccountOp, nonce: AccountNonce) -> Self {
         match acct {
             AccountOp::SpendDelegationBalance(_, _) => {
-                Self::DelegationAccount(TxAccountDependency::new((*acct).into(), nonce))
+                Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
             AccountOp::MintTokens(_, _)
             | AccountOp::UnmintTokens(_)
             | AccountOp::LockTokenSupply(_)
             | AccountOp::FreezeToken(_, _)
-            | AccountOp::UnfreezeToken(_) => {
-                Self::TokenSupplyAccount(TxAccountDependency::new((*acct).into(), nonce))
+            | AccountOp::UnfreezeToken(_)
+            | AccountOp::ChangeTokenAuthority(_, _) => {
+                Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
         }
     }

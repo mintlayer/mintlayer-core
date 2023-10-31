@@ -1223,6 +1223,7 @@ impl Account {
                 | AccountOp::LockTokenSupply(token_id)
                 | AccountOp::FreezeToken(token_id, _)
                 | AccountOp::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
+                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1529,6 +1530,7 @@ fn group_preselected_inputs(
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
+                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         }
     }

@@ -15,7 +15,10 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::tokens::{IsTokenUnfreezable, TokenId, TokenTotalSupply},
+    chain::{
+        tokens::{IsTokenUnfreezable, TokenId, TokenTotalSupply},
+        Destination,
+    },
     primitives::Amount,
 };
 
@@ -23,8 +26,8 @@ use crate::{
     data::{TokenData, TokensAccountingDeltaData},
     error::Error,
     operations::{
-        FreezeTokenUndo, IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
-        TokensAccountingOperations, UnfreezeTokenUndo, UnmintTokenUndo,
+        ChangeTokenAuthorityUndo, FreezeTokenUndo, IssueTokenUndo, LockSupplyUndo, MintTokenUndo,
+        TokenAccountingUndo, TokensAccountingOperations, UnfreezeTokenUndo, UnmintTokenUndo,
     },
     view::TokensAccountingView,
     FlushableTokensAccountingView,
@@ -268,6 +271,34 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         }))
     }
 
+    fn change_authority(
+        &mut self,
+        id: TokenId,
+        new_authority: Destination,
+    ) -> Result<TokenAccountingUndo, Error> {
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+
+        let undo_data = match token_data {
+            TokenData::FungibleToken(data) => {
+                if data.is_frozen() {
+                    return Err(Error::CannotChangeAuthorityForFrozenToken(id));
+                }
+
+                let new_data = data.clone().change_authority(new_authority);
+                self.data.token_data.merge_delta_data_element(
+                    id,
+                    accounting::DataDelta::new(
+                        Some(TokenData::FungibleToken(data)),
+                        Some(TokenData::FungibleToken(new_data)),
+                    ),
+                )?
+            }
+        };
+        Ok(TokenAccountingUndo::ChangeTokenAuthority(
+            ChangeTokenAuthorityUndo { id, undo_data },
+        ))
+    }
+
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<(), Error> {
         match undo_data {
             TokenAccountingUndo::IssueToken(undo) => {
@@ -347,6 +378,20 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                     TokenData::FungibleToken(data) => {
                         if data.is_frozen() {
                             return Err(Error::CannotUndoUnfreezeTokenThatIsFrozen(undo.id));
+                        }
+                    }
+                };
+                self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
+                Ok(())
+            }
+            TokenAccountingUndo::ChangeTokenAuthority(undo) => {
+                let data = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if data.is_frozen() {
+                            return Err(Error::CannotUndoChangeAuthorityForFrozenToken(undo.id));
                         }
                     }
                 };

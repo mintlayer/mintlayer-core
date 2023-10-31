@@ -216,6 +216,24 @@ impl<'a> RandomTxMaker<'a> {
                         result_inputs.extend(inputs);
                         result_outputs.extend(outputs);
                     }
+                } else if rng.gen_bool(0.1) {
+                    // Change token authority
+                    // TODO: use real keys that are changing
+                    let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
+                    let account_input = TxInput::Account(AccountOutPoint::new(
+                        new_nonce,
+                        AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
+                    ));
+
+                    let inputs = vec![account_input, fee_inputs[i].clone()];
+                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+
+                    let _ = tokens_cache
+                        .change_authority(token_id, Destination::AnyoneCanSpend)
+                        .unwrap();
+
+                    result_inputs.extend(inputs);
+                    result_outputs.extend(outputs);
                 } else if !token_data.is_locked() {
                     if rng.gen_bool(0.9) {
                         let circulating_supply = tokens_cache
