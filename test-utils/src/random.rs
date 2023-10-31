@@ -60,3 +60,51 @@ impl From<u64> for Seed {
 pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
     ChaChaRng::seed_from_u64(seed.0)
 }
+
+// This is similar to SliceRandom::shuffle, but it makes sure that the resulting order
+// will be different from the original one.
+pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut impl Rng) {
+    const MAX_ATTEMPTS: usize = 1000;
+
+    for _ in 0..MAX_ATTEMPTS {
+        let mut swapped = false;
+
+        for i in (1..slice.len()).rev() {
+            let other_idx = rng.gen_range(0..(i + 1));
+            if other_idx != i {
+                slice.swap(i, other_idx);
+                swapped = true;
+            }
+        }
+
+        if swapped {
+            return;
+        }
+    }
+
+    panic!("Can't shuffle the slice");
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn shuffle_until_different_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let vec = vec![1, 2];
+        let mut shuffled_vec = vec.clone();
+        shuffle_until_different(&mut shuffled_vec, &mut rng);
+        assert_ne!(vec, shuffled_vec);
+
+        let vec = vec![1, 2, 3];
+        let mut shuffled_vec = vec.clone();
+        shuffle_until_different(&mut shuffled_vec, &mut rng);
+        assert_ne!(vec, shuffled_vec);
+    }
+}

@@ -49,8 +49,15 @@ pub enum ProtocolError {
     DuplicatedBlockRequest(Id<Block>),
     #[error("Headers aren't connected")]
     DisconnectedHeaders,
-    #[error("Received a message ({0}) that wasn't expected")]
+    #[error("Peer sent a message ({0}) that wasn't expected")]
     UnexpectedMessage(String),
+    #[error("Peer sent a block ({0}) that wasn't requested")]
+    UnsolicitedBlockReceived(Id<Block>),
+    #[error("Peer sent block {expected_block_id} while it was expected to send {actual_block_id}")]
+    BlocksReceivedInWrongOrder {
+        expected_block_id: Id<Block>,
+        actual_block_id: Id<Block>,
+    },
     #[error("Empty block list requested")]
     ZeroBlocksInRequest,
     #[error("Handshake expected")]
@@ -227,6 +234,11 @@ impl BanScore for ProtocolError {
             ProtocolError::DuplicatedBlockRequest(_) => 20,
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnexpectedMessage(_) => 20,
+            ProtocolError::UnsolicitedBlockReceived(_) => 20,
+            ProtocolError::BlocksReceivedInWrongOrder {
+                expected_block_id: _,
+                actual_block_id: _,
+            } => 20,
             ProtocolError::ZeroBlocksInRequest => 20,
             ProtocolError::HandshakeExpected => 100,
             ProtocolError::AddressListLimitExceeded => 100,
