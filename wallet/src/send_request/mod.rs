@@ -78,10 +78,7 @@ pub fn make_issue_token_outputs(
 
     let issuance_output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
 
-    let token_issuance_fee =
-        TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
-
-    Ok(vec![issuance_output, token_issuance_fee])
+    Ok(vec![issuance_output])
 }
 
 pub fn make_mint_token_outputs(
@@ -93,31 +90,17 @@ pub fn make_mint_token_outputs(
     let destination = address.decode_object(chain_config)?;
     let mint_output = TxOutput::Transfer(OutputValue::TokenV1(token_id, amount), destination);
 
-    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
-        chain_config.token_min_supply_change_fee(),
-    ));
-
-    Ok(vec![mint_output, token_change_supply_fee])
+    Ok(vec![mint_output])
 }
 
-pub fn make_unmint_token_outputs(
-    token_id: TokenId,
-    amount: Amount,
-    chain_config: &ChainConfig,
-) -> WalletResult<Vec<TxOutput>> {
+pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> WalletResult<Vec<TxOutput>> {
     let burn_tokens = TxOutput::Burn(OutputValue::TokenV1(token_id, amount));
 
-    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
-        chain_config.token_min_supply_change_fee(),
-    ));
-
-    Ok(vec![burn_tokens, token_change_supply_fee])
+    Ok(vec![burn_tokens])
 }
 
-pub fn make_lock_token_outputs(chain_config: &ChainConfig) -> WalletResult<Vec<TxOutput>> {
-    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
-        chain_config.token_min_supply_change_fee(),
-    ));
+pub fn make_lock_token_outputs() -> WalletResult<Vec<TxOutput>> {
+    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(Amount::ZERO));
 
     Ok(vec![token_change_supply_fee])
 }

@@ -89,6 +89,7 @@ impl OrphanType {
             | CTE::TokensAccountingError(_)
             | CTE::TokensAccountingBlockUndoError(_)
             | CTE::TotalFeeRequiredOverflow
+            | CTE::InsufficientCoinsFee(_, _)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

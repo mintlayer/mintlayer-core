@@ -693,41 +693,39 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         };
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                issuance_data.clone().into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(coins_value),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
+            )))
+            .build();
+        let tx_id = tx.transaction().get_id();
         let block = tf
             .make_block_builder()
             // All coins in inputs added to outputs, fee = 0 coins
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        issuance_data.clone().into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin(coins_value),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(
-                        (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
-                    )))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build();
 
         let result = tf.process_block(block, BlockSource::Local);
 
         // Try to process tx with insufficient token fees
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::InsufficientTokenFees(_, _)
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(tx_id))
             ))
-        ));
+        );
 
         // Valid issuance
         let genesis_outpoint_id = tf.genesis().get_id().into();
