@@ -183,8 +183,9 @@ class WalletCliController:
                               number_of_decimals: int,
                               metadata_uri: str,
                               destination_address: str,
-                              token_supply: str = 'unlimited') -> Tuple[Optional[str], Optional[str]]:
-        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply}\n')
+                              token_supply: str = 'unlimited',
+                              is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
+        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
         if output.startswith("A new token has been issued with ID"):
             return output[output.find(':')+2:], None
 
@@ -198,6 +199,12 @@ class WalletCliController:
 
     async def lock_token_supply(self, token_id: str) -> str:
         return await self._write_command(f"locktokensupply {token_id}\n")
+
+    async def freeze_token(self, token_id: str, is_unfreezable: str) -> str:
+        return await self._write_command(f"freezetoken {token_id} {is_unfreezable}\n")
+
+    async def unfreeze_token(self, token_id: str) -> str:
+        return await self._write_command(f"unfreezetoken {token_id}\n")
 
     async def issue_new_nft(self,
                             destination_address: str,

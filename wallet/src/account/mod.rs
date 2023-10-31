@@ -33,8 +33,8 @@ use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_tx_output_destination, make_address_output, make_address_output_from_delegation,
-    make_address_output_token, make_decomission_stake_pool_output, make_lock_token_outputs,
-    make_mint_token_outputs, make_stake_output, make_unmint_token_outputs, IssueNftArguments,
+    make_address_output_token, make_decomission_stake_pool_output, make_mint_token_outputs,
+    make_stake_output, make_unmint_token_outputs, make_zero_burn_output, IssueNftArguments,
     StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -45,7 +45,8 @@ use common::chain::signature::inputsig::standard_signature::StandardInputSignatu
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{
-    make_token_id, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, TokenData, TokenId,
+    TokenTransfer,
 };
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -580,6 +581,15 @@ impl Account {
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
+    pub fn check_token_can_be_used(&self, token_id: &TokenId) -> WalletResult<()> {
+        self.output_cache
+            .token_data(token_id)
+            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
+            .map_or(Ok(()), |token_issuance_data| {
+                token_issuance_data.frozen_state.check_can_be_used()
+            })
+    }
+
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -748,7 +758,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_unmint_token_outputs(token_id, amount)?;
+        let outputs = make_unmint_token_outputs(token_id, amount);
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_unmint(amount)?;
@@ -780,7 +790,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs()?;
+        let outputs = make_zero_burn_output();
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_lock()?;
@@ -792,6 +802,71 @@ impl Account {
         let tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
             AccountOp::LockTokenSupply(token_id),
+        ));
+        let authority = token_data.authority.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn freeze_token(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        is_token_unfreezable: IsTokenUnfreezable,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_zero_burn_output();
+
+        let token_data = self.find_token(&token_id)?;
+        token_data.frozen_state.check_can_freeze()?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::FreezeToken(token_id, is_token_unfreezable),
+        ));
+        let authority = token_data.authority.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn unfreeze_token(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_zero_burn_output();
+
+        let token_data = self.find_token(&token_id)?;
+        token_data.frozen_state.check_can_unfreeze()?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::UnfreezeToken(token_id),
         ));
         let authority = token_data.authority.clone();
 
@@ -1145,9 +1220,9 @@ impl Account {
                 }
                 AccountOp::MintTokens(token_id, _)
                 | AccountOp::UnmintTokens(token_id)
-                | AccountOp::LockTokenSupply(token_id) => self.find_token(token_id).is_ok(),
-                AccountOp::FreezeToken(_, _) => unimplemented!(),
-                AccountOp::UnfreezeToken(_) => unimplemented!(),
+                | AccountOp::LockTokenSupply(token_id)
+                | AccountOp::FreezeToken(token_id, _)
+                | AccountOp::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1443,11 +1518,17 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
+                AccountOp::FreezeToken(token_id, _) | AccountOp::UnfreezeToken(token_id) => {
+                    update_preselected_inputs(
+                        Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_min_freeze_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
+                }
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
-                AccountOp::FreezeToken(_, _) => unimplemented!(),
-                AccountOp::UnfreezeToken(_) => unimplemented!(),
             },
         }
     }

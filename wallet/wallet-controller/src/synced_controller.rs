@@ -18,7 +18,10 @@ use std::collections::BTreeSet;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
+        },
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -32,6 +35,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use logging::log;
+use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
     send_request::{
@@ -39,7 +43,7 @@ use wallet::{
         StakePoolDataArguments,
     },
     wallet_events::WalletEvents,
-    DefaultWallet, WalletError,
+    DefaultWallet, WalletError, WalletResult,
 };
 
 use crate::{ControllerConfig, ControllerError};
@@ -111,30 +115,31 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
         token_total_supply: TokenTotalSupply,
+        is_freezable: IsTokenFreezable,
     ) -> Result<TokenId, ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
         let destination = address.decode_object(self.chain_config.as_ref())?;
-        let (token_id, tx) = self
-            .wallet
-            .issue_new_token(
-                self.account_index,
-                TokenIssuance::V1(TokenIssuanceV1 {
-                    token_ticker,
-                    number_of_decimals,
-                    metadata_uri,
-                    total_supply: token_total_supply,
-                    authority: destination,
-                    is_freezable: common::chain::tokens::IsTokenFreezable::No, // TODO: pass from outside
-                }),
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await?;
-
-        Ok(token_id)
+        self.create_and_send_tx_with_id(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.issue_new_token(
+                    account_index,
+                    TokenIssuance::V1(TokenIssuanceV1 {
+                        token_ticker,
+                        number_of_decimals,
+                        metadata_uri,
+                        total_supply: token_total_supply,
+                        authority: destination,
+                        is_freezable,
+                    }),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn issue_new_nft(
@@ -142,22 +147,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         metadata: Metadata,
     ) -> Result<TokenId, ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-        let (token_id, tx) = self
-            .wallet
-            .issue_new_nft(
-                self.account_index,
-                address,
-                metadata,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await?;
-
-        Ok(token_id)
+        self.create_and_send_tx_with_id(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.issue_new_nft(
+                    account_index,
+                    address,
+                    metadata,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn mint_tokens(
@@ -166,61 +170,105 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         amount: Amount,
         address: Address<Destination>,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
-        let tx = self
-            .wallet
-            .mint_tokens(
-                self.account_index,
-                token_id,
-                amount,
-                address,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_token_tx(
+            token_id,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.mint_tokens(
+                    account_index,
+                    token_id,
+                    amount,
+                    address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
-
     pub async fn unmint_tokens(
         &mut self,
         token_id: TokenId,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
-        let tx = self
-            .wallet
-            .unmint_tokens(
-                self.account_index,
-                token_id,
-                amount,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_token_tx(
+            token_id,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.unmint_tokens(
+                    account_index,
+                    token_id,
+                    amount,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn lock_token_supply(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
+        self.create_and_send_token_tx(
+            token_id,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.lock_token_supply(
+                    account_index,
+                    token_id,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
 
-        let tx = self
-            .wallet
-            .lock_token_supply(
-                self.account_index,
-                token_id,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
+    /// After freezing a token all operations (transfer, mint, unmint...)
+    /// on that token are forbidden until it is unfrozen
+    pub async fn freeze_token(
+        &mut self,
+        token_id: TokenId,
+        is_token_unfreezable: IsTokenUnfreezable,
+    ) -> Result<(), ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.freeze_token(
+                    account_index,
+                    token_id,
+                    is_token_unfreezable,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
 
-        self.broadcast_to_mempool(tx).await
+    /// After unfreezing a token all operations on that token are again permitted
+    pub async fn unfreeze_token(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.unfreeze_token(
+                    account_index,
+                    token_id,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn send_to_address(
@@ -231,21 +279,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(self.chain_config, address, amount)
             .map_err(ControllerError::WalletError)?;
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
-        let tx = self
-            .wallet
-            .create_transaction_to_addresses(
-                self.account_index,
-                [output],
-                selected_utxos,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    selected_utxos,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn create_delegation(
@@ -253,23 +301,22 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         pool_id: PoolId,
     ) -> Result<DelegationId, ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
         let output = make_create_delegation_output(self.chain_config, address, pool_id)
             .map_err(ControllerError::WalletError)?;
-        let (delegation_id, tx) = self
-            .wallet
-            .create_delegation(
-                self.account_index,
-                vec![output],
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await?;
-
-        Ok(delegation_id)
+        self.create_and_send_tx_with_id(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_delegation(
+                    account_index,
+                    vec![output],
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn delegate_staking(
@@ -278,22 +325,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         delegation_id: DelegationId,
     ) -> Result<(), ControllerError<T>> {
         let output = TxOutput::DelegateStaking(amount, delegation_id);
-
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
-        let tx = self
-            .wallet
-            .create_transaction_to_addresses(
-                self.account_index,
-                [output],
-                [],
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    [],
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn send_to_address_from_delegation(
@@ -302,8 +348,6 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         amount: Amount,
         delegation_id: DelegationId,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, _) = self.get_current_and_consolidation_fee_rate().await?;
-
         let pool_id = self
             .wallet
             .get_delegation(self.account_index, delegation_id)
@@ -319,19 +363,22 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 WalletError::DelegationNotFound(delegation_id),
             ))?;
 
-        let tx = self
-            .wallet
-            .create_transaction_to_addresses_from_delegation(
-                self.account_index,
-                address,
-                amount,
-                delegation_id,
-                delegation_share,
-                current_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  _consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_transaction_to_addresses_from_delegation(
+                    account_index,
+                    address,
+                    amount,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn send_tokens_to_address(
@@ -340,23 +387,24 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
         let output = make_address_output_token(self.chain_config, address, amount, token_id)
             .map_err(ControllerError::WalletError)?;
-        let tx = self
-            .wallet
-            .create_transaction_to_addresses(
-                self.account_index,
-                [output],
-                [],
-                current_fee_rate,
-                consolidate_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_token_tx(
+            token_id,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    [],
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub async fn create_stake_pool_tx(
@@ -366,33 +414,31 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, consolidate_fee_rate) =
-            self.get_current_and_consolidation_fee_rate().await?;
-
-        let tx = self
-            .wallet
-            .create_stake_pool_tx(
-                self.account_index,
-                decommission_key,
-                current_fee_rate,
-                consolidate_fee_rate,
-                StakePoolDataArguments {
-                    amount,
-                    margin_ratio_per_thousand,
-                    cost_per_block,
-                },
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_stake_pool_tx(
+                    account_index,
+                    decommission_key,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    StakePoolDataArguments {
+                        amount,
+                        margin_ratio_per_thousand,
+                        cost_per_block,
+                    },
+                )
+            },
+        )
+        .await
     }
 
     pub async fn decommission_stake_pool(
         &mut self,
         pool_id: PoolId,
     ) -> Result<(), ControllerError<T>> {
-        let (current_fee_rate, _) = self.get_current_and_consolidation_fee_rate().await?;
-
         let staker_balance = self
             .rpc_client
             .get_stake_pool_pledge(pool_id)
@@ -402,17 +448,20 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 pool_id,
             )))?;
 
-        let tx = self
-            .wallet
-            .decommission_stake_pool(
-                self.account_index,
-                pool_id,
-                staker_balance,
-                current_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  _consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.decommission_stake_pool(
+                    account_index,
+                    pool_id,
+                    staker_balance,
+                    current_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
@@ -456,5 +505,66 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .map_err(ControllerError::WalletError)?;
 
         Ok(())
+    }
+
+    /// Create a transaction and broadcast it
+    async fn create_and_send_tx<
+        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
+    >(
+        &mut self,
+        tx_maker: F,
+    ) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = tx_maker(
+            current_fee_rate,
+            consolidate_fee_rate,
+            self.wallet,
+            self.account_index,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    /// Create and broadcast a transaction that uses token,
+    /// check if that token can be used i.e. not frozen
+    async fn create_and_send_token_tx<
+        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
+    >(
+        &mut self,
+        token_id: TokenId,
+        tx_maker: F,
+    ) -> Result<(), ControllerError<T>> {
+        // make sure we can use the token before create an tx using it
+        self.wallet
+            .check_token_can_be_used(self.account_index, token_id)
+            .map_err(ControllerError::WalletError)?;
+        self.create_and_send_tx(tx_maker).await
+    }
+
+    /// Similar to create_and_send_tx but some transactions also create an ID
+    /// e.g. newly issued token, nft or delegation id
+    async fn create_and_send_tx_with_id<
+        ID,
+        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<(ID, SignedTransaction)>,
+    >(
+        &mut self,
+        tx_maker: F,
+    ) -> Result<ID, ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let (id, tx) = tx_maker(
+            current_fee_rate,
+            consolidate_fee_rate,
+            self.wallet,
+            self.account_index,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await?;
+        Ok(id)
     }
 }

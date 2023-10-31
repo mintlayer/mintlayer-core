@@ -22,7 +22,8 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{
-            is_token_or_nft_issuance, make_token_id, TokenId, TokenIssuance, TokenTotalSupply,
+            is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId,
+            TokenIssuance, TokenTotalSupply,
         },
         AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
         TxInput, TxOutput, UtxoOutPoint,
@@ -221,21 +222,94 @@ impl TokenCurrentSupplyState {
     }
 }
 
+pub enum TokenFreezableState {
+    NotFrozen(IsTokenFreezable),
+    Frozen(IsTokenFreezable, IsTokenUnfreezable),
+}
+
+impl TokenFreezableState {
+    pub fn check_can_be_used(&self) -> WalletResult<()> {
+        match self {
+            Self::Frozen(_, _) => Err(WalletError::CannotUseFrozenToken),
+            Self::NotFrozen(_) => Ok(()),
+        }
+    }
+    fn freeze(&self, is_unfreezable: IsTokenUnfreezable) -> WalletResult<Self> {
+        match self {
+            Self::NotFrozen(IsTokenFreezable::Yes) => {
+                Ok(Self::Frozen(IsTokenFreezable::Yes, is_unfreezable))
+            }
+            Self::NotFrozen(IsTokenFreezable::No) => {
+                Err(WalletError::CannotFreezeNotFreezableToken)
+            }
+            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
+        }
+    }
+
+    pub fn check_can_freeze(&self) -> WalletResult<()> {
+        match self {
+            Self::NotFrozen(IsTokenFreezable::Yes) => Ok(()),
+            Self::NotFrozen(IsTokenFreezable::No) => {
+                Err(WalletError::CannotFreezeNotFreezableToken)
+            }
+            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
+        }
+    }
+
+    fn unfreeze(&self) -> WalletResult<Self> {
+        match self {
+            Self::Frozen(is_freezable, IsTokenUnfreezable::Yes) => {
+                Ok(Self::NotFrozen(*is_freezable))
+            }
+            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
+        }
+    }
+
+    pub fn check_can_unfreeze(&self) -> WalletResult<()> {
+        match self {
+            Self::Frozen(_, IsTokenUnfreezable::Yes) => Ok(()),
+            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
+        }
+    }
+
+    fn undo_freeze(&self) -> WalletResult<Self> {
+        match self {
+            Self::Frozen(is_freezable, _) => Ok(Self::NotFrozen(*is_freezable)),
+            Self::NotFrozen(_) => Err(WalletError::MissingTokenId),
+        }
+    }
+
+    fn undo_unfreeze(&self) -> WalletResult<Self> {
+        match self {
+            Self::NotFrozen(IsTokenFreezable::Yes) => {
+                Ok(Self::Frozen(IsTokenFreezable::Yes, IsTokenUnfreezable::Yes))
+            }
+            Self::NotFrozen(IsTokenFreezable::No) | Self::Frozen(_, _) => {
+                Err(WalletError::MissingTokenId)
+            }
+        }
+    }
+}
+
 pub struct TokenIssuanceData {
     pub total_supply: TokenCurrentSupplyState,
     pub authority: Destination,
     pub last_nonce: Option<AccountNonce>,
     /// last parent transaction if the parent is unconfirmed
     pub last_parent: Option<OutPointSourceId>,
+    pub frozen_state: TokenFreezableState,
 }
 
 impl TokenIssuanceData {
-    fn new(data: TokenTotalSupply, authority: Destination) -> Self {
+    fn new(data: TokenTotalSupply, authority: Destination, is_freezable: IsTokenFreezable) -> Self {
         Self {
             total_supply: data.into(),
             authority,
             last_nonce: None,
             last_parent: None,
+            frozen_state: TokenFreezableState::NotFrozen(is_freezable),
         }
     }
 }
@@ -431,7 +505,11 @@ impl OutputCache {
                         TokenIssuance::V1(data) => {
                             self.token_issuance.insert(
                                 token_id,
-                                TokenIssuanceData::new(data.total_supply, data.authority.clone()),
+                                TokenIssuanceData::new(
+                                    data.total_supply,
+                                    data.authority.clone(),
+                                    data.is_freezable,
+                                ),
                             );
                         }
                     }
@@ -515,8 +593,31 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.lock()?;
                                 }
                             }
-                            AccountOp::FreezeToken(_, _) => unimplemented!(),
-                            AccountOp::UnfreezeToken(_) => unimplemented!(),
+                            AccountOp::FreezeToken(token_id, is_unfreezable) => {
+                                if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                    Self::update_token_issuance_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        token_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
+                                    data.frozen_state =
+                                        data.frozen_state.freeze(*is_unfreezable)?;
+                                }
+                            }
+                            AccountOp::UnfreezeToken(token_id) => {
+                                if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                    Self::update_token_issuance_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        token_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
+                                    data.frozen_state = data.frozen_state.unfreeze()?;
+                                }
+                            }
                         }
                     }
                 }
@@ -630,8 +731,23 @@ impl OutputCache {
                                 data.total_supply = data.total_supply.unlock()?;
                             }
                         }
-                        AccountOp::FreezeToken(_, _) => unimplemented!(),
-                        AccountOp::UnfreezeToken(_) => unimplemented!(),
+                        AccountOp::FreezeToken(token_id, _) => {
+                            if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+
+                                data.frozen_state = data.frozen_state.undo_freeze()?;
+                            }
+                        }
+                        AccountOp::UnfreezeToken(token_id) => {
+                            if let Some(data) = self.token_issuance.get_mut(token_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                                data.frozen_state = data.frozen_state.undo_unfreeze()?;
+                            }
+                        }
                     },
                 }
             }
@@ -688,6 +804,13 @@ impl OutputCache {
             WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
             WalletTx::Block(_) => None,
         };
+
+        // check token is not frozen and can be used
+        token_id
+            .and_then(|token_id| self.token_data(&token_id))
+            .map_or(Ok(()), |token_data| {
+                token_data.frozen_state.check_can_be_used()
+            })?;
 
         Ok((output, token_id))
     }
@@ -845,8 +968,32 @@ impl OutputCache {
                                                 data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
-                                        AccountOp::FreezeToken(_, _) => unimplemented!(),
-                                        AccountOp::UnfreezeToken(_) => unimplemented!(),
+                                        AccountOp::FreezeToken(token_id, _) => {
+                                            if let Some(data) =
+                                                self.token_issuance.get_mut(token_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                                data.frozen_state =
+                                                    data.frozen_state.undo_freeze()?;
+                                            }
+                                        }
+                                        AccountOp::UnfreezeToken(token_id) => {
+                                            if let Some(data) =
+                                                self.token_issuance.get_mut(token_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                                data.frozen_state =
+                                                    data.frozen_state.undo_unfreeze()?;
+                                            }
+                                        }
                                     },
                                 }
                             }

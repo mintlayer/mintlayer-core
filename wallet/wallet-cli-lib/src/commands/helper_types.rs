@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
-        tokens::{TokenId, TokenTotalSupply},
+        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenTotalSupply},
         ChainConfig, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
@@ -329,6 +329,36 @@ mod tests {
                 ("block", false)
             };
             check(format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliIsFreezable {
+    NotFreezable,
+    Freezable,
+}
+
+impl CliIsFreezable {
+    pub fn to_wallet_types(self) -> IsTokenFreezable {
+        match self {
+            Self::Freezable => IsTokenFreezable::Yes,
+            Self::NotFreezable => IsTokenFreezable::No,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliIsUnfreezable {
+    NotUnfreezable,
+    Unfreezable,
+}
+
+impl CliIsUnfreezable {
+    pub fn to_wallet_types(self) -> IsTokenUnfreezable {
+        match self {
+            Self::Unfreezable => IsTokenUnfreezable::Yes,
+            Self::NotUnfreezable => IsTokenUnfreezable::No,
         }
     }
 }
