@@ -223,8 +223,8 @@ impl TokenCurrentSupplyState {
 }
 
 pub enum TokenFreezableState {
-    Frozen(IsTokenFreezable, IsTokenUnfreezable),
     NotFrozen(IsTokenFreezable),
+    Frozen(IsTokenFreezable, IsTokenUnfreezable),
 }
 
 impl TokenFreezableState {
@@ -239,7 +239,9 @@ impl TokenFreezableState {
             Self::NotFrozen(IsTokenFreezable::Yes) => {
                 Ok(Self::Frozen(IsTokenFreezable::Yes, is_unfreezable))
             }
-            Self::NotFrozen(IsTokenFreezable::No) => Err(WalletError::CannotFreezeUnfreezableToken),
+            Self::NotFrozen(IsTokenFreezable::No) => {
+                Err(WalletError::CannotFreezeNotFreezableToken)
+            }
             Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
         }
     }
@@ -247,7 +249,9 @@ impl TokenFreezableState {
     pub fn check_can_freeze(&self) -> WalletResult<()> {
         match self {
             Self::NotFrozen(IsTokenFreezable::Yes) => Ok(()),
-            Self::NotFrozen(IsTokenFreezable::No) => Err(WalletError::CannotFreezeUnfreezableToken),
+            Self::NotFrozen(IsTokenFreezable::No) => {
+                Err(WalletError::CannotFreezeNotFreezableToken)
+            }
             Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
         }
     }
@@ -257,18 +261,16 @@ impl TokenFreezableState {
             Self::Frozen(is_freezable, IsTokenUnfreezable::Yes) => {
                 Ok(Self::NotFrozen(*is_freezable))
             }
-            Self::Frozen(_, IsTokenUnfreezable::No) | Self::NotFrozen(_) => {
-                Err(WalletError::CannotUnfreezeToken)
-            }
+            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
         }
     }
 
     pub fn check_can_unfreeze(&self) -> WalletResult<()> {
         match self {
             Self::Frozen(_, IsTokenUnfreezable::Yes) => Ok(()),
-            Self::Frozen(_, IsTokenUnfreezable::No) | Self::NotFrozen(_) => {
-                Err(WalletError::CannotUnfreezeToken)
-            }
+            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
         }
     }
 

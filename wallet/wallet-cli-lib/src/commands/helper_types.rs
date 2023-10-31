@@ -335,8 +335,8 @@ mod tests {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliIsFreezable {
-    Freezable,
     NotFreezable,
+    Freezable,
 }
 
 impl CliIsFreezable {
@@ -350,8 +350,8 @@ impl CliIsFreezable {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliIsUnfreezable {
-    Unfreezable,
     NotUnfreezable,
+    Unfreezable,
 }
 
 impl CliIsUnfreezable {

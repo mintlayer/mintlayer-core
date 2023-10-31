@@ -529,7 +529,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     }
 
     /// Create and broadcast a transaction that uses token,
-    /// check if that token can be used i.e. not friezed
+    /// check if that token can be used i.e. not frozen
     async fn create_and_send_token_tx<
         F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
     >(

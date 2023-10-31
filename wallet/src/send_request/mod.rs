@@ -93,16 +93,15 @@ pub fn make_mint_token_outputs(
     Ok(vec![mint_output])
 }
 
-pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> WalletResult<Vec<TxOutput>> {
+pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> Vec<TxOutput> {
     let burn_tokens = TxOutput::Burn(OutputValue::TokenV1(token_id, amount));
-
-    Ok(vec![burn_tokens])
+    vec![burn_tokens]
 }
 
-pub fn make_lock_token_outputs() -> WalletResult<Vec<TxOutput>> {
+pub fn make_zero_burn_output() -> Vec<TxOutput> {
+    // Just so that the transaction doesn't have 0 outputs
     let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(Amount::ZERO));
-
-    Ok(vec![token_change_supply_fee])
+    vec![token_change_supply_fee]
 }
 
 pub fn make_create_delegation_output(

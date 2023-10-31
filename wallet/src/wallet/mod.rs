@@ -153,12 +153,14 @@ pub enum WalletError {
     CannotMintFixedTokenSupply(Amount, Amount, Amount),
     #[error("Trying to unmint {0:?} but the current supply is {1:?}")]
     CannotUnmintTokenSupply(Amount, Amount),
-    #[error("Cannot freeze an unfreezable token")]
-    CannotFreezeUnfreezableToken,
+    #[error("Cannot freeze a not freezable token")]
+    CannotFreezeNotFreezableToken,
     #[error("Cannot freeze an already frozen token")]
     CannotFreezeAlreadyFrozenToken,
     #[error("Cannot unfreeze this token")]
     CannotUnfreezeToken,
+    #[error("Cannot unfreeze a not frozen token")]
+    CannotUnfreezeANotFrozenToken,
     #[error("Cannot use a frozen token")]
     CannotUseFrozenToken,
 }

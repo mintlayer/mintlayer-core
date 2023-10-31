@@ -1972,7 +1972,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     token_issuance_data.frozen_state.check_can_freeze().unwrap();
     assert_eq!(
         token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
-        WalletError::CannotUnfreezeToken
+        WalletError::CannotUnfreezeANotFrozenToken
     );
 
     assert_eq!(token_issuance_data.last_nonce, None);
@@ -2027,7 +2027,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     token_issuance_data.frozen_state.check_can_freeze().unwrap();
     assert_eq!(
         token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
-        WalletError::CannotUnfreezeToken
+        WalletError::CannotUnfreezeANotFrozenToken
     );
 
     assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
@@ -2047,7 +2047,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     token_issuance_data.frozen_state.check_can_freeze().unwrap();
     assert_eq!(
         token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
-        WalletError::CannotUnfreezeToken
+        WalletError::CannotUnfreezeANotFrozenToken
     );
 
     assert_eq!(token_issuance_data.last_nonce, None);
@@ -2072,7 +2072,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     token_issuance_data.frozen_state.check_can_freeze().unwrap();
     assert_eq!(
         token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
-        WalletError::CannotUnfreezeToken
+        WalletError::CannotUnfreezeANotFrozenToken
     );
 
     // freeze but don't allow unfreezing
@@ -2118,7 +2118,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .unwrap_err();
     assert_eq!(err, WalletError::CannotFreezeAlreadyFrozenToken);
 
-    // cannot unfeeze
+    // cannot unfreeze
     let err = wallet
         .unfreeze_token(
             DEFAULT_ACCOUNT_INDEX,

@@ -33,8 +33,8 @@ use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_tx_output_destination, make_address_output, make_address_output_from_delegation,
-    make_address_output_token, make_decomission_stake_pool_output, make_lock_token_outputs,
-    make_mint_token_outputs, make_stake_output, make_unmint_token_outputs, IssueNftArguments,
+    make_address_output_token, make_decomission_stake_pool_output, make_mint_token_outputs,
+    make_stake_output, make_unmint_token_outputs, make_zero_burn_output, IssueNftArguments,
     StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -758,7 +758,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_unmint_token_outputs(token_id, amount)?;
+        let outputs = make_unmint_token_outputs(token_id, amount);
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_unmint(amount)?;
@@ -790,7 +790,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs()?;
+        let outputs = make_zero_burn_output();
 
         let token_data = self.find_token(&token_id)?;
         token_data.total_supply.check_can_lock()?;
@@ -823,7 +823,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+        let outputs = make_zero_burn_output();
 
         let token_data = self.find_token(&token_id)?;
         token_data.frozen_state.check_can_freeze()?;
@@ -855,7 +855,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+        let outputs = make_zero_burn_output();
 
         let token_data = self.find_token(&token_id)?;
         token_data.frozen_state.check_can_unfreeze()?;
@@ -1517,14 +1517,19 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::LockTokenSupply(token_id)
-                | AccountOp::UnmintTokens(token_id)
-                | AccountOp::FreezeToken(token_id, _)
-                | AccountOp::UnfreezeToken(token_id) => {
+                AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_min_supply_change_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
+                }
+                AccountOp::FreezeToken(token_id, _) | AccountOp::UnfreezeToken(token_id) => {
+                    update_preselected_inputs(
+                        Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_min_freeze_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
