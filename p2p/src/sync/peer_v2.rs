@@ -607,8 +607,7 @@ where
         let last_header = headers.last().expect("Headers shouldn't be empty");
         self.wait_for_clock_diff(last_header.timestamp()).await;
 
-        // The first header must be connected to a known block (it can be in
-        // the chainstate or requested_blocks).
+        // The first header must be connected to the chainstate.
         let first_header_prev_id = *headers
             .first()
             // This is OK because of the `headers.is_empty()` check above.
@@ -616,18 +615,19 @@ where
             .prev_block_id();
 
         // Note: we require a peer to send headers starting from a block that we already have
-        // in our chainstate or from one that we've already requested from the peer.
-        // I.e. peers shouldn't track what block headers they've sent us already and use
-        // the last header (best_sent_block_header) as a starting point for future HeaderList
-        // updates.
-        // This restriction is needed to prevent malicious peers from flooding the node with
-        // headers, potentially exhausting the node's memory.
-        // The downside of this is that the peer may have to send the same headers multiple times.
-        // So, to avoid extra traffic, an honest peer should't send header updates when the node
-        // is already downloading blocks. But still, the node shouldn't punish the peer for
-        // doing so, because it's possible for it to do so on accident, e.g. a "new tip" event
-        // may happen on the peer's side after it has sent us the last requested block but
-        // before we've asked it for more.
+        // in our chainstate. I.e. we don't allow:
+        // 1) Basing new headers on a previously sent header, because this would give a malicious
+        // peer an opportunity to flood the node with headers, potentially exhausting its memory.
+        // The downside of this restriction is that the peer may have to send the same headers
+        // multiple times. So, to avoid extra traffic, an honest peer should't send header updates
+        // when the node is already downloading blocks. (But still, the node shouldn't punish
+        // the peer for doing so, because it's possible for it to do so by accident, e.g.
+        // a "new tip" event may happen on the peer's side after it has sent us the last requested
+        // block but before we've asked it for more.)
+        // 2) Basing new headers on a block that we've requested from the peer but that has not
+        // yet been sent. This is a rather useless optimization (provided that peers don't send
+        // header updates when we're downloading blocks from them, as mentioned above) that
+        // would only complicate the logic.
 
         let first_header_is_connected_to_chainstate = self
             .chainstate_handle
@@ -635,15 +635,7 @@ where
             .await?
             .is_some();
 
-        let first_header_is_connected_to_requested_blocks = first_header_prev_id
-            .classify(&self.chain_config)
-            .chain_block_id()
-            .and_then(|id| self.incoming.requested_blocks.get(&id))
-            .is_some();
-
-        if !(first_header_is_connected_to_chainstate
-            || first_header_is_connected_to_requested_blocks)
-        {
+        if !first_header_is_connected_to_chainstate {
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 

@@ -780,7 +780,9 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
 
 // This is similar to send_headers_connected_to_previously_sent_headers, but here the second
 // header list is connected to a block which the node is trying to download. The headers
-// should not be considered disconnected in this case.
+// should also be considered disconnected in this case.
+// Note that this behavior was allowed at some point in V1. But the implementation never used
+// this fact when sending headers, so we could disallow it without breaking the compatibility.
 #[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
@@ -860,11 +862,16 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
         );
         node.assert_no_peer_manager_event().await;
 
-        // Announce blocks 1, 2, 3 to the node - since block 1 is connected to block 0, which
-        // the node has already requested, the header list should not be considered disconnected.
+        // Announce blocks 1, 2, 3 to the node - block 1 is connected to block 0, which
+        // the node has already requested, but which it hasn't received yet.
         log::debug!("Sending headers 1, 2, 3");
         peer.send_headers(peers_block_headers[1..4].to_owned()).await;
-        node.assert_no_peer_manager_event().await;
+
+        node.assert_peer_score_adjustment(
+            peer.get_id(),
+            P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
+        )
+        .await;
 
         node.assert_no_event().await;
         node.join_subsystem_manager().await;
