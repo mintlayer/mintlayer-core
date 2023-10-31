@@ -23,7 +23,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::{self, EndToEndPublicKey};
 use mempool::tx_accumulator::PackingStrategy;
-use rpc::Result as RpcResult;
+use rpc::RpcResult;
 use serialization::hex_encoded::HexEncoded;
 
 use crate::detail::job_manager::JobKey;
@@ -69,13 +69,13 @@ trait BlockProductionRpc {
 
 #[async_trait::async_trait]
 impl BlockProductionRpcServer for super::BlockProductionHandle {
-    async fn stop_all(&self) -> rpc::Result<usize> {
+    async fn stop_all(&self) -> rpc::RpcResult<usize> {
         rpc::handle_result(
             self.call_async_mut(move |this| Box::pin(async { this.stop_all().await })).await,
         )
     }
 
-    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::Result<bool> {
+    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::RpcResult<bool> {
         rpc::handle_result(
             self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id.take()).await }))
                 .await,
@@ -99,7 +99,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> rpc::Result<HexEncoded<Block>> {
+    ) -> rpc::RpcResult<HexEncoded<Block>> {
         let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
 
         let block: Block = rpc::handle_result(
@@ -117,7 +117,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         Ok(block.into())
     }
 
-    async fn e2e_public_key(&self) -> rpc::Result<HexEncoded<EndToEndPublicKey>> {
+    async fn e2e_public_key(&self) -> rpc::RpcResult<HexEncoded<EndToEndPublicKey>> {
         let public_key: EndToEndPublicKey =
             rpc::handle_result(self.call_async(move |this| this.e2e_public_key()).await)?;
 

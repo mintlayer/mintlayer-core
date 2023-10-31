@@ -15,11 +15,15 @@
 
 //! Error handling machinery for RPC
 
+use std::fmt::Display;
+
 /// RPC error
-pub use jsonrpsee::core::Error;
+use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObject, ErrorObjectOwned};
 
 /// The Result type with RPC-specific error.
-pub type Result<T> = core::result::Result<T, Error>;
+pub type RpcResult<T> = jsonrpsee::core::RpcResult<T>;
+pub type Result<T> = std::result::Result<T, jsonrpsee::core::Error>;
+pub type Error = ErrorObjectOwned;
 
 /// Handle RPC result
 ///
@@ -42,16 +46,16 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// ```
 ///
 /// TODO: Maybe this could be generalized to also handle `anyhow::Error` and moved elsewhere?
-pub fn handle_result<T: HandleResult<R, I>, R, I>(res: T) -> self::Result<R> {
+pub fn handle_result<T: HandleResult<R, I>, R, I>(res: T) -> self::RpcResult<R> {
     res.handle_result()
 }
 
 pub trait HandleResult<R, I> {
-    fn handle_result(self) -> self::Result<R>;
+    fn handle_result(self) -> self::RpcResult<R>;
 }
 
 impl<R> HandleResult<R, ()> for R {
-    fn handle_result(self) -> self::Result<R> {
+    fn handle_result(self) -> self::RpcResult<R> {
         Ok(self)
     }
 }
@@ -59,9 +63,14 @@ impl<R> HandleResult<R, ()> for R {
 impl<R, T, E, I> HandleResult<R, (I,)> for std::result::Result<T, E>
 where
     T: HandleResult<R, I>,
-    E: 'static + Sync + Send + std::error::Error,
+    // Handle both std::error::Error and anyhow::Error
+    // TODO: does this seem ok?
+    E: Into<Box<dyn std::error::Error + Send + Sync + 'static>> + Display,
 {
-    fn handle_result(self) -> self::Result<R> {
-        self.map_err(Error::to_call_error).and_then(T::handle_result)
+    fn handle_result(self) -> self::RpcResult<R> {
+        self.map_err(|err| {
+            ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.to_string(), None::<()>)
+        })
+        .and_then(|t| t.handle_result())
     }
 }

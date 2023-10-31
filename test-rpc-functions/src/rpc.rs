@@ -36,32 +36,32 @@ use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 #[rpc::rpc(server, namespace = "test_functions")]
 trait RpcTestFunctionsRpc {
     #[method(name = "genesis_pool_id")]
-    async fn genesis_pool_id(&self) -> rpc::Result<Option<String>>;
+    async fn genesis_pool_id(&self) -> rpc::RpcResult<Option<String>>;
 
     #[method(name = "genesis_private_key")]
-    async fn genesis_private_key(&self) -> rpc::Result<Option<String>>;
+    async fn genesis_private_key(&self) -> rpc::RpcResult<Option<String>>;
 
     #[method(name = "genesis_public_key")]
-    async fn genesis_public_key(&self) -> rpc::Result<Option<String>>;
+    async fn genesis_public_key(&self) -> rpc::RpcResult<Option<String>>;
 
     #[method(name = "genesis_vrf_private_key")]
-    async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>>;
+    async fn genesis_vrf_private_key(&self) -> rpc::RpcResult<Option<String>>;
 
     #[method(name = "genesis_vrf_public_key")]
-    async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>>;
+    async fn genesis_vrf_public_key(&self) -> rpc::RpcResult<Option<String>>;
 
     #[method(name = "new_private_key")]
-    async fn new_private_key(&self) -> rpc::Result<String>;
+    async fn new_private_key(&self) -> rpc::RpcResult<String>;
 
     #[method(name = "public_key_from_private_key")]
-    async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::Result<String>;
+    async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::RpcResult<String>;
 
     #[method(name = "sign_message_with_private_key")]
     async fn sign_message_with_private_key(
         &self,
         private_key_hex: String,
         message_hex: String,
-    ) -> rpc::Result<String>;
+    ) -> rpc::RpcResult<String>;
 
     #[method(name = "verify_message_with_public_key")]
     async fn verify_message_with_public_key(
@@ -69,14 +69,16 @@ trait RpcTestFunctionsRpc {
         public_key_hex: String,
         message_hex: String,
         signature_hex: String,
-    ) -> rpc::Result<bool>;
+    ) -> rpc::RpcResult<bool>;
 
     #[method(name = "new_vrf_private_key")]
-    async fn new_vrf_private_key(&self) -> rpc::Result<String>;
+    async fn new_vrf_private_key(&self) -> rpc::RpcResult<String>;
 
     #[method(name = "vrf_public_key_from_private_key")]
-    async fn vrf_public_key_from_private_key(&self, private_key_hex: String)
-        -> rpc::Result<String>;
+    async fn vrf_public_key_from_private_key(
+        &self,
+        private_key_hex: String,
+    ) -> rpc::RpcResult<String>;
 
     #[method(name = "sign_message_with_vrf_private_key")]
     async fn sign_message_with_vrf_private_key(
@@ -85,7 +87,7 @@ trait RpcTestFunctionsRpc {
         epoch_index: EpochIndex,
         random_seed: String,
         block_timestamp: u64,
-    ) -> rpc::Result<String>;
+    ) -> rpc::RpcResult<String>;
 
     #[method(name = "verify_then_get_vrf_output")]
     async fn verify_then_get_vrf_output(
@@ -95,7 +97,7 @@ trait RpcTestFunctionsRpc {
         vrf_data: String,
         vrf_public_key: String,
         block_timestamp: BlockTimestamp,
-    ) -> rpc::Result<String>;
+    ) -> rpc::RpcResult<String>;
 
     #[method(name = "generate_transactions")]
     async fn generate_transactions(
@@ -104,12 +106,12 @@ trait RpcTestFunctionsRpc {
         num_transactions: u32,
         amount_to_spend: u64,
         fee_per_tx: u64,
-    ) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>>;
+    ) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 }
 
 #[async_trait::async_trait]
 impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
-    async fn genesis_pool_id(&self) -> rpc::Result<Option<String>> {
+    async fn genesis_pool_id(&self) -> rpc::RpcResult<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) =
             genesis_values(GenesisStakingSettings::default());
 
@@ -120,7 +122,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
     }
 
-    async fn genesis_private_key(&self) -> rpc::Result<Option<String>> {
+    async fn genesis_private_key(&self) -> rpc::RpcResult<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, genesis_stake_private_key, _, _, _) =
             genesis_values(GenesisStakingSettings::default());
 
@@ -131,7 +133,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
     }
 
-    async fn genesis_public_key(&self) -> rpc::Result<Option<String>> {
+    async fn genesis_public_key(&self) -> rpc::RpcResult<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, genesis_stake_public_key, _, _) =
             genesis_values(GenesisStakingSettings::default());
 
@@ -142,7 +144,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
     }
 
-    async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>> {
+    async fn genesis_vrf_private_key(&self) -> rpc::RpcResult<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, genesis_vrf_private_key, _) =
             genesis_values(GenesisStakingSettings::default());
 
@@ -153,7 +155,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
     }
 
-    async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>> {
+    async fn genesis_vrf_public_key(&self) -> rpc::RpcResult<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, _, genesis_vrf_public_key) =
             genesis_values(GenesisStakingSettings::default());
 
@@ -164,14 +166,14 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
     }
 
-    async fn new_private_key(&self) -> rpc::Result<String> {
+    async fn new_private_key(&self) -> rpc::RpcResult<String> {
         let keys =
             crypto::key::PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
 
         Ok(keys.0.hex_encode())
     }
 
-    async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::Result<String> {
+    async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::RpcResult<String> {
         let private_key =
             rpc::handle_result(crypto::key::PrivateKey::hex_decode_all(private_key_hex))?;
 
@@ -184,7 +186,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         &self,
         private_key_hex: String,
         message_hex: String,
-    ) -> rpc::Result<String> {
+    ) -> rpc::RpcResult<String> {
         let private_key: crypto::key::PrivateKey =
             rpc::handle_result(crypto::key::PrivateKey::hex_decode_all(private_key_hex))?;
 
@@ -201,7 +203,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         public_key_hex: String,
         message_hex: String,
         signature_hex: String,
-    ) -> rpc::Result<bool> {
+    ) -> rpc::RpcResult<bool> {
         let public_key: crypto::key::PublicKey =
             rpc::handle_result(crypto::key::PublicKey::hex_decode_all(public_key_hex))?;
 
@@ -213,7 +215,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         Ok(verify_result)
     }
 
-    async fn new_vrf_private_key(&self) -> rpc::Result<String> {
+    async fn new_vrf_private_key(&self) -> rpc::RpcResult<String> {
         let keys =
             crypto::vrf::VRFPrivateKey::new_from_entropy(crypto::vrf::VRFKeyKind::Schnorrkel);
 
@@ -223,7 +225,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     async fn vrf_public_key_from_private_key(
         &self,
         private_key_hex: String,
-    ) -> rpc::Result<String> {
+    ) -> rpc::RpcResult<String> {
         let private_key =
             rpc::handle_result(crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex))?;
 
@@ -238,7 +240,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         epoch_index: EpochIndex,
         random_seed: String,
         block_timestamp: u64,
-    ) -> rpc::Result<String> {
+    ) -> rpc::RpcResult<String> {
         let random_seed: H256 = rpc::handle_result(H256::hex_decode_all(random_seed))?;
 
         let transcript = construct_transcript(
@@ -261,7 +263,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         vrf_data: String,
         vrf_public_key: String,
         block_timestamp: BlockTimestamp,
-    ) -> rpc::Result<String> {
+    ) -> rpc::RpcResult<String> {
         let vrf_data = rpc::handle_result(crypto::vrf::VRFReturn::hex_decode_all(vrf_data))?;
         let vrf_public_key =
             rpc::handle_result(crypto::vrf::VRFPublicKey::hex_decode_all(vrf_public_key))?;
@@ -287,7 +289,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         num_transactions: u32,
         amount_to_spend: u64,
         fee_per_tx: u64,
-    ) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>> {
+    ) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>> {
         let coin_decimals = self
             .call(|this| this.get_chain_config().map(|chain| chain.coin_decimals()))
             .await

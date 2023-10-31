@@ -28,7 +28,7 @@ use jsonrpsee::{
 
 use logging::log;
 
-pub use error::{handle_result, Error, Result};
+pub use error::{handle_result, Error, Result, RpcResult};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
@@ -99,7 +99,7 @@ impl Rpc {
                 .build(http_bind_addr)
                 .await?;
             let http_address = http_server.local_addr()?;
-            let http_handle = http_server.start(methods.clone())?;
+            let http_handle = http_server.start(methods.clone());
             (http_address, http_handle)
         };
 
@@ -209,21 +209,21 @@ mod tests {
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
         #[method(name = "name")]
-        fn name(&self) -> Result<String>;
+        fn name(&self) -> RpcResult<String>;
 
         #[method(name = "add")]
-        fn add(&self, a: u64, b: u64) -> Result<u64>;
+        fn add(&self, a: u64, b: u64) -> RpcResult<u64>;
     }
 
     #[rpc(server, namespace = "example_server")]
     trait RpcInfo {
         #[method(name = "protocol_version")]
-        fn protocol_version(&self) -> Result<String>;
+        fn protocol_version(&self) -> RpcResult<String>;
     }
 
     struct RpcInfo;
     impl RpcInfoServer for RpcInfo {
-        fn protocol_version(&self) -> Result<String> {
+        fn protocol_version(&self) -> RpcResult<String> {
             Ok("version1".into())
         }
     }
@@ -231,11 +231,11 @@ mod tests {
     pub struct SubsystemRpcImpl;
 
     impl SubsystemRpcServer for SubsystemRpcImpl {
-        fn name(&self) -> Result<String> {
+        fn name(&self) -> RpcResult<String> {
             Ok("sub1".into())
         }
 
-        fn add(&self, a: u64, b: u64) -> Result<u64> {
+        fn add(&self, a: u64, b: u64) -> RpcResult<u64> {
             Ok(a + b)
         }
     }

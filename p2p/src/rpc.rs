@@ -21,7 +21,7 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
-use rpc::Result as RpcResult;
+use rpc::RpcResult;
 
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {

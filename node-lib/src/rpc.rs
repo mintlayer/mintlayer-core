@@ -18,7 +18,7 @@
 use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
-use rpc::Result as RpcResult;
+use rpc::{handle_result, RpcResult};
 use subsystem::ShutdownTrigger;
 
 #[rpc::rpc(server, client, namespace = "node")]
@@ -69,8 +69,10 @@ impl NodeRpcServer for NodeRpc {
     }
 
     fn set_mock_time(&self, time: u64) -> RpcResult<()> {
-        crate::mock_time::set_mock_time(*self.chain_config.chain_type(), time)?;
-        Ok(())
+        handle_result(crate::mock_time::set_mock_time(
+            *self.chain_config.chain_type(),
+            time,
+        ))
     }
 }
 

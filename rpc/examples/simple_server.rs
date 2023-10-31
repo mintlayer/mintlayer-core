@@ -47,26 +47,26 @@ type SomeSubsystemHandle = subsystem::Handle<SomeSubsystem>;
 #[rpc::rpc(server, namespace = "some_subsystem")]
 pub trait SomeSubsystemRpc {
     #[method(name = "name")]
-    fn name(&self) -> rpc::Result<String>;
+    fn name(&self) -> rpc::RpcResult<String>;
 
     #[method(name = "add")]
-    fn add(&self, a: u64, b: u64) -> rpc::Result<u64>;
+    fn add(&self, a: u64, b: u64) -> rpc::RpcResult<u64>;
 
     #[method(name = "bump")]
-    async fn bump(&self) -> rpc::Result<u64>;
+    async fn bump(&self) -> rpc::RpcResult<u64>;
 }
 
 #[async_trait::async_trait]
 impl SomeSubsystemRpcServer for SomeSubsystemHandle {
-    fn name(&self) -> rpc::Result<String> {
+    fn name(&self) -> rpc::RpcResult<String> {
         Ok("sub1".into())
     }
 
-    fn add(&self, a: u64, b: u64) -> rpc::Result<u64> {
+    fn add(&self, a: u64, b: u64) -> rpc::RpcResult<u64> {
         Ok(a + b)
     }
 
-    async fn bump(&self) -> rpc::Result<u64> {
+    async fn bump(&self) -> rpc::RpcResult<u64> {
         rpc::handle_result(self.call_mut(SomeSubsystem::bump).await)
     }
 }
