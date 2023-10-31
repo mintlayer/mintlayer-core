@@ -292,6 +292,7 @@ async fn ok(#[case] seed: Seed) {
                 let alice_address =
                     Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
+                let mut alice_transaction_history: Vec<Id<Transaction>> = vec![];
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -300,6 +301,7 @@ async fn ok(#[case] seed: Seed) {
                 let bob_address =
                     Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
                 let mut bob_balance = Amount::ZERO;
+                let mut bob_transaction_history: Vec<Id<Transaction>> = vec![];
 
                 // setup initial transaction
 
@@ -317,6 +319,7 @@ async fn ok(#[case] seed: Seed) {
                     .add_output(previous_tx_out.clone())
                     .build();
 
+                alice_transaction_history.push(transaction.transaction().get_id());
                 let mut previous_transaction_id = transaction.transaction().get_id();
 
                 let mut previous_witness = InputWitness::Standard(
@@ -369,6 +372,8 @@ async fn ok(#[case] seed: Seed) {
                         .add_output(bob_tx_out.clone())
                         .build();
 
+                    alice_transaction_history.push(transaction.transaction().get_id());
+                    bob_transaction_history.push(transaction.transaction().get_id());
                     previous_transaction_id = transaction.transaction().get_id();
 
                     previous_witness = InputWitness::Standard(
@@ -406,12 +411,14 @@ async fn ok(#[case] seed: Seed) {
                         alice_address.get().to_string(),
                         json!({
                         "coin_balance": alice_balance.into_atoms(),
+                        "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
                         "coin_balance": bob_balance.into_atoms(),
+                        "transaction_history": bob_transaction_history,
                                 }),
                     ),
                 ]);
@@ -446,7 +453,7 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state).await
     });
 
-    for (address, expected_balance) in rx.await.unwrap() {
+    for (address, expected_values) in rx.await.unwrap() {
         let url = format!("/api/v1/address/{address}");
 
         // Given that the listener port is open, this will block until a
@@ -465,7 +472,7 @@ async fn ok(#[case] seed: Seed) {
         let body = response.text().await.unwrap();
         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-        assert_eq!(body, expected_balance);
+        assert_eq!(body, expected_values);
     }
 
     task.abort();

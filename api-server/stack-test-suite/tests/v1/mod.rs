@@ -44,9 +44,9 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         transaction::output::timelock::OutputTimeLock,
-        Destination, OutPointSourceId, SignedTransaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use hex::ToHex;
