@@ -140,7 +140,9 @@ impl ConstrainedValueAccumulator {
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
                         AccountOp::ChangeAuthority(_, _) => {
-                            todo!()
+                            total_fee_deducted = (total_fee_deducted
+                                + chain_config.token_min_change_authority_fee())
+                            .ok_or(IOPolicyError::AmountOverflow)?;
                         }
                     };
                 }

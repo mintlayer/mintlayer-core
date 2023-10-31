@@ -852,7 +852,7 @@ fn change_authority_flush_undo(#[case] seed: Seed) {
 
     // undo
     let mut cache = TokensAccountingCache::new(&mut storage);
-    let _ = cache.undo(undo).unwrap();
+    cache.undo(undo).unwrap();
 
     let consumed_data = cache.consume();
     let mut db = TokensAccountingDB::new(&mut storage);
@@ -941,7 +941,6 @@ fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
     let _ = cache.unfreeze_token(token_id).unwrap();
 
     // Change authority again
-
     let _ = cache.change_authority(token_id, new_authority).unwrap();
 
     let consumed_data = cache.consume();

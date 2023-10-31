@@ -195,6 +195,7 @@ pub struct ChainConfig {
     token_min_issuance_fee: Amount,
     token_min_supply_change_fee: Amount,
     token_min_freeze_fee: Amount,
+    token_min_change_authority_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
@@ -462,6 +463,11 @@ impl ChainConfig {
         self.token_min_freeze_fee
     }
 
+    /// The fee for changing authority of a token
+    pub fn token_min_change_authority_fee(&self) -> Amount {
+        self.token_min_change_authority_fee
+    }
+
     /// The maximum length of a URI contained in a token
     #[must_use]
     pub fn token_max_uri_len(&self) -> usize {
@@ -576,6 +582,7 @@ const TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_FREEZE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const DATA_DEPOSIT_MAX_SIZE: usize = 128;
 const DATA_DEPOSIT_MIN_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MAX_DEC_COUNT: u8 = 18;

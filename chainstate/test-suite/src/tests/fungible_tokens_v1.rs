@@ -5068,8 +5068,9 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = make_test_framework_with_v1(&mut rng);
+
         let unfreeze_fee = tf.chain_config().token_min_freeze_fee();
-        let change_authority_fee = tf.chain_config().token_min_freeze_fee(); // FIXME: fee
+        let change_authority_fee = tf.chain_config().token_min_change_authority_fee();
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -5186,4 +5187,98 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
     });
 }
 
-// FIXME: check fee
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_authority_fee(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_change_authority_fee =
+            tf.chainstate.get_chain_config().token_min_change_authority_fee();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::No,
+        );
+
+        let tx_with_fee = TransactionBuilder::new()
+            .add_input(
+                TxInput::Utxo(utxo_with_change),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(
+                    (token_min_change_authority_fee - Amount::from_atoms(1)).unwrap(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_min_change_authority_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_with_fee_id = tx_with_fee.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(tx_with_fee)
+            .build_and_process()
+            .unwrap();
+
+        let (_, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(some_pk);
+
+        // Try change authority with insufficient fee
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::InsufficientCoinsFee(
+                    (token_min_change_authority_fee - Amount::from_atoms(1)).unwrap(),
+                    token_min_change_authority_fee
+                )
+            ))
+        );
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::ChangeAuthority(token_id, new_authority),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_with_fee_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    });
+}
