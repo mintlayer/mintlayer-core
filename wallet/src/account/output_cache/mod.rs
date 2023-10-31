@@ -515,8 +515,8 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.lock()?;
                                 }
                             }
-                            AccountOp::FreezeToken(_, _) => todo!(),
-                            AccountOp::UnfreezeToken(_) => todo!(),
+                            AccountOp::FreezeToken(_, _) => unimplemented!(),
+                            AccountOp::UnfreezeToken(_) => unimplemented!(),
                         }
                     }
                 }
@@ -630,8 +630,8 @@ impl OutputCache {
                                 data.total_supply = data.total_supply.unlock()?;
                             }
                         }
-                        AccountOp::FreezeToken(_, _) => todo!(),
-                        AccountOp::UnfreezeToken(_) => todo!(),
+                        AccountOp::FreezeToken(_, _) => unimplemented!(),
+                        AccountOp::UnfreezeToken(_) => unimplemented!(),
                     },
                 }
             }
@@ -845,8 +845,8 @@ impl OutputCache {
                                                 data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
-                                        AccountOp::FreezeToken(_, _) => todo!(),
-                                        AccountOp::UnfreezeToken(_) => todo!(),
+                                        AccountOp::FreezeToken(_, _) => unimplemented!(),
+                                        AccountOp::UnfreezeToken(_) => unimplemented!(),
                                     },
                                 }
                             }

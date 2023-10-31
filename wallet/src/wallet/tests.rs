@@ -3073,5 +3073,3 @@ fn wallet_address_usage(#[case] seed: Seed) {
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 }
-
-// FIXME: add tests for freeze
