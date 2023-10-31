@@ -122,9 +122,10 @@ where
 }
 
 /// An interface for sending messages and announcements to peers.
+#[async_trait]
 pub trait MessagingService: Clone {
     /// Sends a message to the peer.
-    fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
+    async fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
 }
 
 #[async_trait]

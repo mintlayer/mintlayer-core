@@ -22,7 +22,7 @@ use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 use tokio::{
     sync::{
-        mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
+        mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender},
         oneshot,
     },
     task::JoinHandle,
@@ -74,7 +74,7 @@ pub struct TestNode {
     p2p_config: Arc<P2pConfig>,
     peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
     syncing_event_sender: UnboundedSender<SyncingEvent>,
-    sync_msg_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
+    sync_msg_receiver: Receiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
@@ -106,10 +106,11 @@ impl TestNode {
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
         protocol_version: ProtocolVersion,
+        sync_msg_channel_buffer_size: usize,
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
 
-        let (sync_msg_sender, sync_msg_receiver) = mpsc::unbounded_channel();
+        let (sync_msg_sender, sync_msg_receiver) = mpsc::channel(sync_msg_channel_buffer_size);
         let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock { sync_msg_sender };
         let syncing_event_receiver_mock = SyncingEventReceiverMock {
@@ -156,6 +157,14 @@ impl TestNode {
 
     pub fn chainstate(&self) -> &ChainstateHandle {
         &self.chainstate_handle
+    }
+
+    pub async fn get_block(&self, block_id: Id<Block>) -> Option<Block> {
+        self.chainstate_handle
+            .call(move |cs| cs.get_block(block_id))
+            .await
+            .unwrap()
+            .unwrap()
     }
 
     pub fn mempool(&self) -> &MempoolHandle {
@@ -258,7 +267,7 @@ impl TestNode {
         .unwrap_err();
     }
 
-    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewValidTransactionReceived messages)
+    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewChainstateTip/NewValidTransactionReceived messages)
     // TODO: Rename the function
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
@@ -372,6 +381,7 @@ pub struct TestNodeBuilder {
     time_getter: TimeGetter,
     blocks: Vec<Block>,
     protocol_version: ProtocolVersion,
+    sync_msg_channel_buffer_size: usize,
 }
 
 impl TestNodeBuilder {
@@ -383,6 +393,12 @@ impl TestNodeBuilder {
             time_getter: TimeGetter::default(),
             blocks: Vec::new(),
             protocol_version,
+            // Note: setting the default value here to something small is not a good idea,
+            // because many tests don't care about reading all sync messages. If that happens,
+            // the corresponding Peer task and the test itself may freeze up.
+            // Note: can't use usize::MAX here; also, the actual MAX constant is not exposed,
+            // so we use u32::MAX.
+            sync_msg_channel_buffer_size: u32::MAX as usize,
         }
     }
 
@@ -411,6 +427,11 @@ impl TestNodeBuilder {
         self
     }
 
+    pub fn with_sync_msg_channel_buffer_size(mut self, size: usize) -> Self {
+        self.sync_msg_channel_buffer_size = size;
+        self
+    }
+
     pub async fn build(self) -> TestNode {
         let TestNodeBuilder {
             chain_config,
@@ -419,6 +440,7 @@ impl TestNodeBuilder {
             time_getter,
             blocks,
             protocol_version,
+            sync_msg_channel_buffer_size,
         } = self;
 
         let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
@@ -458,6 +480,7 @@ impl TestNodeBuilder {
             manager_handle,
             time_getter,
             protocol_version,
+            sync_msg_channel_buffer_size,
         )
         .await
     }
@@ -498,12 +521,13 @@ impl NetworkingService for NetworkingServiceStub {
 
 #[derive(Clone)]
 struct MessagingHandleMock {
-    sync_msg_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    sync_msg_sender: Sender<(PeerId, SyncMessage)>,
 }
 
+#[async_trait]
 impl MessagingService for MessagingHandleMock {
-    fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
-        self.sync_msg_sender.send((peer, message)).unwrap();
+    async fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
+        self.sync_msg_sender.send((peer, message)).await.unwrap();
         Ok(())
     }
 }

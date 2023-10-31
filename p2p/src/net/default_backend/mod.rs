@@ -142,8 +142,10 @@ where
     }
 }
 
+#[async_trait]
 impl MessagingService for MessagingHandle {
-    fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+    async fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+        // Note: send_message was made async to be able to use a bounded channel in tests.
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),
