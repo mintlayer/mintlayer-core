@@ -4828,7 +4828,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_block_id = tf.genesis().get_id();
 
-        let (controller_sk, controller_pk) =
+        let (original_sk, original_pk) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
@@ -4836,7 +4836,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
-            authority: Destination::PublicKey(controller_pk.clone()),
+            authority: Destination::PublicKey(original_pk.clone()),
             is_freezable: IsTokenFreezable::No,
         });
 
@@ -4847,12 +4847,15 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             issuance,
         );
 
-        // Try to lock without signature
-        let tx_no_signatures = TransactionBuilder::new()
+        let (new_sk, new_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(new_pk.clone());
+
+        // Try to change authority without signature
+        let tx_1_no_signatures = TransactionBuilder::new()
             .add_input(
                 TxInput::from_account(
                     AccountNonce::new(0),
-                    AccountOp::ChangeAuthority(token_id, Destination::AnyoneCanSpend),
+                    AccountOp::ChangeTokenAuthority(token_id, new_authority),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -4860,12 +4863,15 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(tf.chain_config().token_min_change_authority_fee()),
+                Destination::AnyoneCanSpend,
+            ))
             .build();
 
         let result = tf
             .make_block_builder()
-            .add_transaction(tx_no_signatures.clone())
+            .add_transaction(tx_1_no_signatures.clone())
             .build_and_process();
 
         assert_eq!(
@@ -4883,9 +4889,9 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         ];
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
-        // Try to lock with wrong signature
+        // Try to change authority with wrong signature
         let tx = {
-            let tx = tx_no_signatures.transaction().clone();
+            let tx = tx_1_no_signatures.transaction().clone();
 
             let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -4916,14 +4922,93 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             ))
         );
 
-        // Lock with proper keys
+        // Change authority with proper keys
         let tx = {
-            let tx = tx_no_signatures.transaction().clone();
+            let tx = tx_1_no_signatures.transaction().clone();
 
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
-                &controller_sk,
+                &original_sk,
                 Default::default(),
-                Destination::PublicKey(controller_pk),
+                Destination::PublicKey(original_pk.clone()),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+        let tx_1_id = tx.transaction().get_id();
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        // Now try to change authority once more with original key
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate
+                .utxo(&UtxoOutPoint::new(tx_1_id.into(), 0))
+                .unwrap()
+                .map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        let tx_2_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(1),
+                    AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(tx_1_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+            .build();
+
+        let tx = {
+            let tx = tx_2_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &original_sk,
+                Default::default(),
+                Destination::PublicKey(original_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Change authority with new keys
+        let tx = {
+            let tx = tx_2_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &new_sk,
+                Default::default(),
+                Destination::PublicKey(new_pk),
                 &tx,
                 &inputs_utxos_refs,
                 0,
@@ -4973,7 +5058,7 @@ fn check_change_authority(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(0),
-                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -5031,14 +5116,14 @@ fn check_change_authority_twice(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(0),
-                            AccountOp::ChangeAuthority(token_id, new_authority_1),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority_1),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(1),
-                            AccountOp::ChangeAuthority(token_id, new_authority_2.clone()),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority_2.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -5114,7 +5199,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(1),
-                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -5164,7 +5249,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(2),
-                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -5238,7 +5323,7 @@ fn change_authority_fee(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(0),
-                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -5267,7 +5352,7 @@ fn change_authority_fee(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             AccountNonce::new(0),
-                            AccountOp::ChangeAuthority(token_id, new_authority),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority),
                         ),
                         InputWitness::NoSignature(None),
                     )

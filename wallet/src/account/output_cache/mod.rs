@@ -618,7 +618,7 @@ impl OutputCache {
                                     data.frozen_state = data.frozen_state.unfreeze()?;
                                 }
                             }
-                            AccountOp::ChangeAuthority(_, _) => unimplemented!(),
+                            AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
                         }
                     }
                 }
@@ -749,7 +749,7 @@ impl OutputCache {
                                 data.frozen_state = data.frozen_state.undo_unfreeze()?;
                             }
                         }
-                        AccountOp::ChangeAuthority(_, _) => unimplemented!(),
+                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
                     },
                 }
             }
@@ -996,7 +996,7 @@ impl OutputCache {
                                                     data.frozen_state.undo_unfreeze()?;
                                             }
                                         }
-                                        AccountOp::ChangeAuthority(_, _) => unimplemented!(),
+                                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
                                     },
                                 }
                             }

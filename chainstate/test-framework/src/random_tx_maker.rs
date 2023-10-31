@@ -222,7 +222,7 @@ impl<'a> RandomTxMaker<'a> {
                     let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                     let account_input = TxInput::Account(AccountOutPoint::new(
                         new_nonce,
-                        AccountOp::ChangeAuthority(token_id, Destination::AnyoneCanSpend),
+                        AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
                     ));
 
                     let inputs = vec![account_input, fee_inputs[i].clone()];

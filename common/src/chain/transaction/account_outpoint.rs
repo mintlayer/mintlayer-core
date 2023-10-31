@@ -43,7 +43,7 @@ impl From<AccountOp> for AccountType {
             | AccountOp::LockTokenSupply(id)
             | AccountOp::FreezeToken(id, _)
             | AccountOp::UnfreezeToken(id)
-            | AccountOp::ChangeAuthority(id, _) => AccountType::Token(id),
+            | AccountOp::ChangeTokenAuthority(id, _) => AccountType::Token(id),
         }
     }
 }
@@ -74,7 +74,7 @@ pub enum AccountOp {
     UnfreezeToken(TokenId),
     // Change the authority who can authorize operations for a token
     #[codec(index = 6)]
-    ChangeAuthority(TokenId, Destination),
+    ChangeTokenAuthority(TokenId, Destination),
 }
 
 /// Type of OutPoint that represents spending from an account

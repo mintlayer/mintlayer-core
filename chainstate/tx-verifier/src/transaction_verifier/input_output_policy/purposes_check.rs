@@ -164,7 +164,7 @@ pub fn check_tx_inputs_outputs_purposes(
         TxInput::Account(account) => match account.account() {
             AccountOp::SpendDelegationBalance(_, _)
             | AccountOp::MintTokens(_, _)
-            | AccountOp::ChangeAuthority(_, _) => { /* do nothing */ }
+            | AccountOp::ChangeTokenAuthority(_, _) => { /* do nothing */ }
             AccountOp::UnmintTokens(token_id) => {
                 unmint_tokens_inputs_count
                     .entry(*token_id)

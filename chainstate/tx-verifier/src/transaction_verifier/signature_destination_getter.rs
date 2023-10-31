@@ -150,7 +150,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         | AccountOp::LockTokenSupply(token_id)
                         | AccountOp::FreezeToken(token_id, _)
                         | AccountOp::UnfreezeToken(token_id)
-                        | AccountOp::ChangeAuthority(token_id, _) => {
+                        | AccountOp::ChangeTokenAuthority(token_id, _) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;

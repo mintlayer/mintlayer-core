@@ -218,7 +218,7 @@ where
             | AccountOp::LockTokenSupply(token_id)
             | AccountOp::FreezeToken(token_id, _)
             | AccountOp::UnfreezeToken(token_id)
-            | AccountOp::ChangeAuthority(token_id, _) => {
+            | AccountOp::ChangeTokenAuthority(token_id, _) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -470,7 +470,7 @@ fn calculate_required_fee_burn(
                 | AccountOp::MintTokens(_, _)
                 | AccountOp::UnmintTokens(_)
                 | AccountOp::LockTokenSupply(_)
-                | AccountOp::ChangeAuthority(_, _) => false,
+                | AccountOp::ChangeTokenAuthority(_, _) => false,
                 AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => true,
             },
         })
@@ -488,7 +488,7 @@ fn calculate_required_fee_burn(
                 | AccountOp::LockTokenSupply(_)
                 | AccountOp::FreezeToken(_, _)
                 | AccountOp::UnfreezeToken(_) => false,
-                AccountOp::ChangeAuthority(_, _) => true,
+                AccountOp::ChangeTokenAuthority(_, _) => true,
             },
         })
         .count() as u128;
