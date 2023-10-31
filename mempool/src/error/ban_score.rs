@@ -360,6 +360,7 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 0,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
+            IOPolicyError::AttemptToViolateFeeRequirements => 0,
         }
     }
 }

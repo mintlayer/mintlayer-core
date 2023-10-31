@@ -55,6 +55,8 @@ pub enum IOPolicyError {
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
     AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Attempt to violate operations fee requirements")]
+    AttemptToViolateFeeRequirements,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
     InputsAndInputsUtxosLengthMismatch(usize, usize),
     #[error("Output is not found in the cache or database: {0:?}")]

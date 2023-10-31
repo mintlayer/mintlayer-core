@@ -492,6 +492,7 @@ impl BanScore for IOPolicyError {
             IOPolicyError::MultipleFreezeTokenSupplyInputs => 100,
             IOPolicyError::MultipleUnfreezeTokenSupplyInputs => 100,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
+            IOPolicyError::AttemptToViolateFeeRequirements => 100,
         }
     }
 }
