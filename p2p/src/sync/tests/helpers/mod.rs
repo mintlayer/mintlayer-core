@@ -267,7 +267,7 @@ impl TestNode {
         .unwrap_err();
     }
 
-    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewValidTransactionReceived messages)
+    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewChainstateTip/NewValidTransactionReceived messages)
     // TODO: Rename the function
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
