@@ -17,12 +17,10 @@ use chainstate::ConnectTransactionError;
 use chainstate::{BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
-    signature::inputsig::InputWitness, tokens::TokenIssuanceVersion, ChainstateUpgrade,
-    Destination, TxInput, TxOutput,
+    output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenIssuanceVersion,
+    ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
 };
-use common::chain::{OutPointSourceId, UtxoOutPoint};
-use common::primitives::Amount;
-use common::primitives::{BlockHeight, Idable};
+use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -167,10 +165,18 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), true)]
+#[case(Seed::from_entropy(), true, 1)]
 #[trace]
-#[case(Seed::from_entropy(), false)]
-fn data_deposit_insufficient_fee(#[case] seed: Seed, #[case] expect_success: bool) {
+#[case(Seed::from_entropy(), false, 1)]
+#[trace]
+#[case(Seed::from_entropy(), true, 2)]
+#[trace]
+#[case(Seed::from_entropy(), false, 2)]
+fn data_deposit_insufficient_fee(
+    #[case] seed: Seed,
+    #[case] expect_success: bool,
+    #[case] data_deposit_outputs_count: usize,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
@@ -195,9 +201,11 @@ fn data_deposit_insufficient_fee(#[case] seed: Seed, #[case] expect_success: boo
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 
         let data_fee = if expect_success {
-            tf.chain_config().data_deposit_min_fee()
+            (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128).unwrap()
         } else {
-            (tf.chain_config().data_deposit_min_fee() - Amount::from_atoms(1)).unwrap()
+            (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128)
+                .and_then(|v| v - Amount::from_atoms(1))
+                .unwrap()
         };
 
         let tx_with_fee_as_output = TransactionBuilder::new()
@@ -206,25 +214,29 @@ fn data_deposit_insufficient_fee(#[case] seed: Seed, #[case] expect_success: boo
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                common::chain::output_value::OutputValue::Coin(data_fee),
+                OutputValue::Coin(data_fee),
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let tx_with_fee_as_output_id = tx_with_fee_as_output.transaction().get_id();
 
         // First block creates an output with the specified amount
         let _block_index = tf
             .make_block_builder()
-            .add_transaction(tx_with_fee_as_output.clone())
+            .add_transaction(tx_with_fee_as_output)
             .build_and_process()
             .unwrap()
             .unwrap();
 
+        let outputs = (0..data_deposit_outputs_count)
+            .map(|_| TxOutput::DataDeposit(deposited_data.clone()))
+            .collect();
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(tx_with_fee_as_output.transaction().get_id().into(), 0),
+                TxInput::from_utxo(tx_with_fee_as_output_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::DataDeposit(deposited_data))
+            .with_outputs(outputs)
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build();
@@ -240,7 +252,8 @@ fn data_deposit_insufficient_fee(#[case] seed: Seed, #[case] expect_success: boo
             let expected_err = Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::InsufficientCoinsFee(
                     data_fee,
-                    tf.chain_config().data_deposit_min_fee(),
+                    (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128)
+                        .unwrap(),
                 )),
             ));
 
