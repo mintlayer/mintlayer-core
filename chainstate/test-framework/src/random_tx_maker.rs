@@ -22,8 +22,8 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, NftIssuance, TokenId,
-            TokenIssuance, TokenTotalSupply,
+            make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
+            TokenTotalSupply,
         },
         AccountNonce, AccountOp, AccountOutPoint, AccountType, Destination, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
@@ -178,7 +178,7 @@ impl<'a> RandomTxMaker<'a> {
                 let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
 
                 if token_data.is_frozen() {
-                    if let IsTokenUnfreezable::Yes = token_data.is_unfreezable() {
+                    if token_data.can_be_unfrozen() {
                         // Unfreeze
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                         let account_input = TxInput::Account(AccountOutPoint::new(
@@ -195,7 +195,7 @@ impl<'a> RandomTxMaker<'a> {
                         result_outputs.extend(outputs);
                     }
                 } else if rng.gen_bool(0.1) {
-                    if let IsTokenFreezable::Yes = token_data.is_freezable() {
+                    if token_data.can_be_frozen() {
                         // Freeze
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                         let unfreezable = if rng.gen::<bool>() {

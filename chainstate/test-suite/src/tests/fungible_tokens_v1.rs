@@ -4181,7 +4181,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         );
 
         // Mint some tokens
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
             &mut tf,

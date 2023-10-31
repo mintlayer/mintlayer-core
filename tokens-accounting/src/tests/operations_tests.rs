@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
         },
         Destination, OutPointSourceId, TxInput, UtxoOutPoint,
     },
@@ -44,9 +44,7 @@ fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -
         random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         supply,
         locked,
-        IsTokenFreezable::No,
-        IsTokenUnfreezable::No,
-        false,
+        IsTokenFrozen::No(IsTokenFreezable::No),
         Destination::AnyoneCanSpend,
     ))
 }
@@ -787,14 +785,16 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
 
     let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(token_data.is_frozen());
-    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
+    assert!(!token_data.can_be_frozen());
+    assert!(token_data.can_be_unfrozen());
 
     // Unfreeze the token
     let _ = cache.unfreeze_token(token_id).unwrap();
 
     let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(!token_data.is_frozen());
-    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::Yes);
+    assert!(token_data.can_be_frozen());
+    assert!(!token_data.can_be_unfrozen());
 
     // All operations are now allowed
     let _ = cache.mint_tokens(token_id, Amount::from_atoms(1)).unwrap();
@@ -806,7 +806,8 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
 
     let TokenData::FungibleToken(token_data) = cache.get_token_data(&token_id).unwrap().unwrap();
     assert!(token_data.is_frozen());
-    assert_eq!(token_data.is_unfreezable(), IsTokenUnfreezable::No);
+    assert!(!token_data.can_be_frozen());
+    assert!(!token_data.can_be_unfrozen());
 
     assert_eq!(
         cache.unfreeze_token(token_id),

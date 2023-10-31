@@ -35,20 +35,33 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
+// Indicates whether a token an be frozen
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum IsTokenFreezable {
     #[codec(index = 0)]
-    Yes,
-    #[codec(index = 1)]
     No,
+    #[codec(index = 1)]
+    Yes,
 }
 
+// Indicates whether a token an be unfrozen after being frozen
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum IsTokenUnfreezable {
     #[codec(index = 0)]
-    Yes,
-    #[codec(index = 1)]
     No,
+    #[codec(index = 1)]
+    Yes,
+}
+
+// Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
+// Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
+// is such an option was provided while freezing.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub enum IsTokenFrozen {
+    #[codec(index = 0)]
+    No(IsTokenFreezable),
+    #[codec(index = 1)]
+    Yes(IsTokenUnfreezable),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]

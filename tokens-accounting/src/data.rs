@@ -18,7 +18,10 @@ use std::collections::BTreeMap;
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::{
     chain::{
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenIssuance,
+            TokenTotalSupply,
+        },
         Destination,
     },
     primitives::Amount,
@@ -99,9 +102,7 @@ pub struct FungibleTokenData {
     metadata_uri: Vec<u8>,
     total_supply: TokenTotalSupply,
     locked: bool,
-    is_freezable: IsTokenFreezable,
-    is_unfreezable: IsTokenUnfreezable,
-    frozen: bool,
+    frozen: IsTokenFrozen,
     authority: Destination,
 }
 
@@ -113,9 +114,7 @@ impl FungibleTokenData {
         metadata_uri: Vec<u8>,
         total_supply: TokenTotalSupply,
         locked: bool,
-        is_freezable: IsTokenFreezable,
-        is_unfreezable: IsTokenUnfreezable,
-        frozen: bool,
+        frozen: IsTokenFrozen,
         authority: Destination,
     ) -> Self {
         Self {
@@ -124,8 +123,6 @@ impl FungibleTokenData {
             metadata_uri,
             total_supply,
             locked,
-            is_freezable,
-            is_unfreezable,
             frozen,
             authority,
         }
@@ -164,8 +161,6 @@ impl FungibleTokenData {
                 self.metadata_uri,
                 self.total_supply,
                 true,
-                self.is_freezable,
-                self.is_unfreezable,
                 self.frozen,
                 self.authority,
             )),
@@ -173,48 +168,61 @@ impl FungibleTokenData {
     }
 
     pub fn is_frozen(&self) -> bool {
-        self.frozen
+        match self.frozen {
+            IsTokenFrozen::No(_) => false,
+            IsTokenFrozen::Yes(_) => true,
+        }
     }
 
-    pub fn is_freezable(&self) -> IsTokenFreezable {
-        self.is_freezable
+    pub fn can_be_frozen(&self) -> bool {
+        match self.frozen {
+            IsTokenFrozen::No(freezable) => match freezable {
+                IsTokenFreezable::No => false,
+                IsTokenFreezable::Yes => true,
+            },
+            IsTokenFrozen::Yes(_) => false,
+        }
     }
 
-    pub fn is_unfreezable(&self) -> IsTokenUnfreezable {
-        self.is_unfreezable
+    pub fn can_be_unfrozen(&self) -> bool {
+        match self.frozen {
+            IsTokenFrozen::No(_) => false,
+            IsTokenFrozen::Yes(is_unfreezable) => match is_unfreezable {
+                IsTokenUnfreezable::No => false,
+                IsTokenUnfreezable::Yes => true,
+            },
+        }
     }
 
     pub fn try_freeze(self, is_unfreezable: IsTokenUnfreezable) -> Result<Self, Self> {
-        match self.is_freezable {
-            IsTokenFreezable::No => Err(self),
-            IsTokenFreezable::Yes => Ok(Self::new_unchecked(
+        if self.can_be_frozen() {
+            Ok(Self::new_unchecked(
                 self.token_ticker,
                 self.number_of_decimals,
                 self.metadata_uri,
                 self.total_supply,
                 self.locked,
-                self.is_freezable,
-                is_unfreezable,
-                true,
+                IsTokenFrozen::Yes(is_unfreezable),
                 self.authority,
-            )),
+            ))
+        } else {
+            Err(self)
         }
     }
 
     pub fn try_unfreeze(self) -> Result<Self, Self> {
-        match self.is_unfreezable {
-            IsTokenUnfreezable::No => Err(self),
-            IsTokenUnfreezable::Yes => Ok(Self::new_unchecked(
+        if self.can_be_unfrozen() {
+            Ok(Self::new_unchecked(
                 self.token_ticker,
                 self.number_of_decimals,
                 self.metadata_uri,
                 self.total_supply,
                 self.locked,
-                self.is_freezable,
-                self.is_unfreezable,
-                false,
+                IsTokenFrozen::No(IsTokenFreezable::Yes),
                 self.authority,
-            )),
+            ))
+        } else {
+            Err(self)
         }
     }
 }
@@ -222,23 +230,15 @@ impl FungibleTokenData {
 impl From<TokenIssuance> for FungibleTokenData {
     fn from(issuance: TokenIssuance) -> Self {
         match issuance {
-            TokenIssuance::V1(issuance) => {
-                let is_unfreezable = match issuance.is_freezable {
-                    IsTokenFreezable::Yes => IsTokenUnfreezable::Yes,
-                    IsTokenFreezable::No => IsTokenUnfreezable::No,
-                };
-                Self::new_unchecked(
-                    issuance.token_ticker,
-                    issuance.number_of_decimals,
-                    issuance.metadata_uri,
-                    issuance.total_supply,
-                    false,
-                    issuance.is_freezable,
-                    is_unfreezable,
-                    false,
-                    issuance.authority,
-                )
-            }
+            TokenIssuance::V1(issuance) => Self::new_unchecked(
+                issuance.token_ticker,
+                issuance.number_of_decimals,
+                issuance.metadata_uri,
+                issuance.total_supply,
+                false,
+                IsTokenFrozen::No(issuance.is_freezable),
+                issuance.authority,
+            ),
         }
     }
 }

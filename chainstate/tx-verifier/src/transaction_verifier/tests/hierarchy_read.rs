@@ -22,7 +22,7 @@ use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
         config::Builder as ConfigBuilder,
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenAuxiliaryData, TokenTotalSupply},
+        tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenTotalSupply},
     },
     primitives::H256,
 };
@@ -658,9 +658,7 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Unlimited,
             false,
-            IsTokenFreezable::No,
-            IsTokenUnfreezable::No,
-            false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
     let token_data1 =
@@ -670,9 +668,7 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Unlimited,
             false,
-            IsTokenFreezable::No,
-            IsTokenUnfreezable::No,
-            false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
     let token_data2 =
@@ -682,9 +678,7 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Unlimited,
             false,
-            IsTokenFreezable::No,
-            IsTokenUnfreezable::No,
-            false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
 

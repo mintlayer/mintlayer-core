@@ -704,44 +704,7 @@ where
                     )
                 );
 
-                tx.outputs().iter().try_for_each(
-                    |output| -> Result<(), ConnectTransactionError> {
-                        match output {
-                            TxOutput::Transfer(output_value, _)
-                            | TxOutput::Burn(output_value)
-                            | TxOutput::LockThenTransfer(output_value, _, _) => {
-                                match output_value {
-                                    OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
-                                    OutputValue::TokenV1(token_id, _) => {
-                                        // TODO: when NFTs are stored in accounting None should become an error
-                                        if let Some(token_data) = self.get_token_data(token_id)? {
-                                            match token_data {
-                                                tokens_accounting::TokenData::FungibleToken(
-                                                    data,
-                                                ) => {
-                                                    ensure!(
-                                                        !data.is_frozen(),
-                                                        ConnectTransactionError::AttemptToSpendFrozenToken(
-                                                            *token_id
-                                                        )
-                                                    );
-                                                }
-                                            };
-                                        }
-                                        Ok(())
-                                    }
-                                }
-                            }
-                            TxOutput::CreateStakePool(_, _)
-                            | TxOutput::ProduceBlockFromStake(_, _)
-                            | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::IssueFungibleToken(_)
-                            | TxOutput::IssueNft(_, _, _)
-                            | TxOutput::DataDeposit(_) => Ok(()),
-                        }
-                    },
-                )?;
+                self.check_operations_with_frozen_tokens(tx)?;
             }
         };
 
@@ -850,6 +813,48 @@ where
         } else {
             Ok(())
         }
+    }
+
+    fn check_operations_with_frozen_tokens(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        tx.outputs()
+            .iter()
+            .try_for_each(|output| -> Result<(), ConnectTransactionError> {
+                match output {
+                    TxOutput::Transfer(output_value, _)
+                    | TxOutput::Burn(output_value)
+                    | TxOutput::LockThenTransfer(output_value, _, _) => {
+                        match output_value {
+                            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
+                            OutputValue::TokenV1(token_id, _) => {
+                                // TODO: when NFTs are stored in accounting None should become an error
+                                if let Some(token_data) = self.get_token_data(token_id)? {
+                                    match token_data {
+                                        tokens_accounting::TokenData::FungibleToken(data) => {
+                                            ensure!(
+                                                !data.is_frozen(),
+                                                ConnectTransactionError::AttemptToSpendFrozenToken(
+                                                    *token_id
+                                                )
+                                            );
+                                        }
+                                    };
+                                }
+                                Ok(())
+                            }
+                        }
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => Ok(()),
+                }
+            })
     }
 
     fn disconnect_tokens_accounting_outputs(
