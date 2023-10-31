@@ -767,7 +767,14 @@ where
                         });
                         Some(res)
                     }
-                    | AccountOp::ChangeAuthority(_, _) => todo!(),
+                    | AccountOp::ChangeAuthority(token_id, new_authority) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .change_authority(*token_id, new_authority.clone())
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;

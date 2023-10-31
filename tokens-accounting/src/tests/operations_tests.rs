@@ -814,3 +814,143 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
         Err(crate::Error::CannotUnfreezeNotUnfreezableToken(token_id))
     );
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_authority_flush_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_id = make_token_id(&mut rng);
+    let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
+    let (_, some_pk) =
+        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+    let new_authority = Destination::PublicKey(some_pk);
+    let TokenData::FungibleToken(token_data_2) = token_data_1.clone();
+    let token_data_2 =
+        TokenData::FungibleToken(token_data_2.change_authority(new_authority.clone()));
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_1.clone())]),
+        BTreeMap::new(),
+    );
+    let original_storage = storage.clone();
+
+    // Change authority
+    let mut cache = TokensAccountingCache::new(&mut storage);
+    let undo = cache.change_authority(token_id, new_authority).unwrap();
+
+    let consumed_data = cache.consume();
+    let mut db = TokensAccountingDB::new(&mut storage);
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_2.clone())]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+
+    // undo
+    let mut cache = TokensAccountingCache::new(&mut storage);
+    let _ = cache.undo(undo).unwrap();
+
+    let consumed_data = cache.consume();
+    let mut db = TokensAccountingDB::new(&mut storage);
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    assert_eq!(storage, original_storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_authority_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_id = make_token_id(&mut rng);
+    let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
+
+    let (_, some_pk) =
+        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+    let new_authority_1 = Destination::PublicKey(some_pk);
+
+    let (_, some_pk) =
+        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+    let new_authority_2 = Destination::PublicKey(some_pk);
+    let TokenData::FungibleToken(token_data_3) = token_data_1.clone();
+    let token_data_3 =
+        TokenData::FungibleToken(token_data_3.change_authority(new_authority_2.clone()));
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_1.clone())]),
+        BTreeMap::new(),
+    );
+
+    // Change authority
+    let mut cache = TokensAccountingCache::new(&mut storage);
+    let _ = cache.change_authority(token_id, new_authority_1).unwrap();
+    let _ = cache.change_authority(token_id, new_authority_2).unwrap();
+
+    let consumed_data = cache.consume();
+    let mut db = TokensAccountingDB::new(&mut storage);
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_3.clone())]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data.clone())]),
+        BTreeMap::new(),
+    );
+    let mut cache = TokensAccountingCache::new(&mut storage);
+
+    // Freeze the token
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
+
+    let (_, some_pk) =
+        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+    let new_authority = Destination::PublicKey(some_pk);
+    let TokenData::FungibleToken(token_data) = token_data.clone();
+    let new_token_data =
+        TokenData::FungibleToken(token_data.change_authority(new_authority.clone()));
+
+    // Try change authority while token is freezed
+    let res = cache.change_authority(token_id, new_authority.clone());
+
+    assert_eq!(
+        res.unwrap_err(),
+        crate::Error::CannotChangeAuthorityForFrozenToken(token_id)
+    );
+
+    // Unfreeze token
+    let _ = cache.unfreeze_token(token_id).unwrap();
+
+    // Change authority again
+
+    let _ = cache.change_authority(token_id, new_authority).unwrap();
+
+    let consumed_data = cache.consume();
+    let mut db = TokensAccountingDB::new(&mut storage);
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, new_token_data)]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+}

@@ -4814,3 +4814,376 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(signed_tx).build_and_process().unwrap();
     });
 }
+
+// Issue a token.
+// Try to change authority without providing input signatures, check an error.
+// Try to change authority with random key, check an error.
+// Change the authority with proper key, check ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_change_authority(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let genesis_block_id = tf.genesis().get_id();
+
+        let (controller_sk, controller_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Lockable,
+            authority: Destination::PublicKey(controller_pk.clone()),
+            is_freezable: IsTokenFreezable::No,
+        });
+
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id.into(),
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            issuance,
+        );
+
+        // Try to lock without signature
+        let tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountOp::ChangeAuthority(token_id, Destination::AnyoneCanSpend),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
+            .build();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try to lock with wrong signature
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &some_sk,
+                Default::default(),
+                Destination::PublicKey(some_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Lock with proper keys
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &controller_sk,
+                Default::default(),
+                Destination::PublicKey(controller_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_authority(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::No,
+        );
+
+        let original_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(original_token_data) =
+            original_token_data.unwrap();
+        assert_eq!(
+            original_token_data.authority(),
+            &Destination::AnyoneCanSpend
+        );
+
+        let (_, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(some_pk);
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
+            actual_token_data.unwrap();
+        assert_eq!(actual_token_data.authority(), &new_authority);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_authority_twice(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::No,
+        );
+
+        let original_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(original_token_data) =
+            original_token_data.unwrap();
+        assert_eq!(
+            original_token_data.authority(),
+            &Destination::AnyoneCanSpend
+        );
+
+        let (_, pk_1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority_1 = Destination::PublicKey(pk_1);
+        let (_, pk_2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority_2 = Destination::PublicKey(pk_2);
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::ChangeAuthority(token_id, new_authority_1),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::ChangeAuthority(token_id, new_authority_2.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
+            actual_token_data.unwrap();
+        assert_eq!(actual_token_data.authority(), &new_authority_2);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let unfreeze_fee = tf.chain_config().token_min_freeze_fee();
+        let change_authority_fee = tf.chain_config().token_min_freeze_fee(); // FIXME: fee
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::Yes,
+        );
+
+        // Freeze the token
+        let freeze_token_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_authority_fee + unfreeze_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_token_tx_id = freeze_token_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(freeze_token_tx)
+            .build_and_process()
+            .unwrap();
+
+        // Try change authority when the token is frozen
+        let (_, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(some_pk);
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_token_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(token_id)
+                )
+            ))
+        );
+
+        // Unfreeze token
+        let unfreeze_token_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(freeze_token_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(change_authority_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let unfreeze_token_tx_id = unfreeze_token_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(unfreeze_token_tx)
+            .build_and_process()
+            .unwrap();
+
+        // Change authority after unfreeze
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::ChangeAuthority(token_id, new_authority.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unfreeze_token_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check result
+        let actual_token_data =
+            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
+            actual_token_data.unwrap();
+        assert_eq!(actual_token_data.authority(), &new_authority);
+    });
+}
+
+// FIXME: check fee

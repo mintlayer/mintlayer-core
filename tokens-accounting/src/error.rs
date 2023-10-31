@@ -67,6 +67,10 @@ pub enum Error {
     CannotUndoFreezeTokenThatIsNotFrozen(TokenId),
     #[error("Cannot unfreeze on reversal token '{0}` that is not frozen")]
     CannotUndoUnfreezeTokenThatIsFrozen(TokenId),
+    #[error("Cannot change authority for frozen token '{0}`")]
+    CannotChangeAuthorityForFrozenToken(TokenId),
+    #[error("Cannot undo change authority for frozen token '{0}`")]
+    CannotUndoChangeAuthorityForFrozenToken(TokenId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811
