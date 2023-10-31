@@ -22,12 +22,15 @@ use common::{
     address::Address,
     chain::{
         config::ChainConfig, output_value::OutputValue, transaction::OutPointSourceId, Block,
-        Destination, GenBlock, TxInput, TxOutput,
+        Destination, GenBlock, Transaction, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
-use std::ops::{Add, Sub};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::{Add, Sub},
+    sync::Arc,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -89,6 +92,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             .await
             .expect("Unable to disconnect address balance");
 
+        db_tx
+            .del_address_transactions_above_height(common_block_height)
+            .await
+            .expect("Unable to disconnect address transactions");
+
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
@@ -100,9 +108,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
-            update_balances_from_outputs(
+            update_address_tables_from_outputs(
                 Arc::clone(&self.chain_config),
                 &mut db_tx,
+                None,
                 block_height,
                 block.block_reward().outputs(),
             )
@@ -115,7 +124,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     .await
                     .expect("Unable to set transaction");
 
-                update_balances_from_inputs(
+                update_address_tables_from_inputs(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
                     block_height,
@@ -124,9 +133,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to update balances from inputs");
 
-                update_balances_from_outputs(
+                update_address_tables_from_outputs(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
+                    Some(tx.transaction().get_id()),
                     block_height,
                     tx.outputs(),
                 )
@@ -149,12 +159,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     }
 }
 
-async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
+async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
     inputs: &[TxInput],
 ) -> Result<(), ApiServerStorageError> {
+    let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
+        BTreeMap::new();
+
     for input in inputs {
         match input {
             TxInput::Account(_) => {
@@ -195,6 +208,11 @@ async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
                                             Address::<Destination>::new(&chain_config, destination)
                                                 .expect("Unable to encode destination");
 
+                                        address_transactions
+                                            .entry(address.clone())
+                                            .or_insert_with(BTreeSet::new)
+                                            .insert(transaction_id);
+
                                         match output_value {
                                             OutputValue::TokenV0(_)
                                             | OutputValue::TokenV1(_, _) => {
@@ -234,15 +252,34 @@ async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
         }
     }
 
+    for address_transaction in address_transactions {
+        db_tx
+            .set_address_transactions_at_height(
+                address_transaction.0.get(),
+                address_transaction.1.into_iter().collect(),
+                block_height,
+            )
+            .await
+            .map_err(|_| {
+                ApiServerStorageError::LowLevelStorageError(
+                    "Unable to set address transactions".to_string(),
+                )
+            })?;
+    }
+
     Ok(())
 }
 
-async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
+async fn update_address_tables_from_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
+    transaction_id_maybe: Option<Id<Transaction>>,
     block_height: BlockHeight,
     outputs: &[TxOutput],
 ) -> Result<(), ApiServerStorageError> {
+    let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
+        BTreeMap::new();
+
     for output in outputs {
         match output {
             TxOutput::Burn(_)
@@ -259,6 +296,13 @@ async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
                     Destination::PublicKey(_) | Destination::Address(_) => {
                         let address = Address::<Destination>::new(&chain_config, destination)
                             .expect("Unable to encode destination");
+
+                        transaction_id_maybe.map(|transaction_id| {
+                            address_transactions
+                                .entry(address.clone())
+                                .or_insert_with(BTreeSet::new)
+                                .insert(transaction_id)
+                        });
 
                         match output_value {
                             OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {
@@ -292,6 +336,21 @@ async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
                 }
             }
         }
+    }
+
+    for address_transaction in address_transactions {
+        db_tx
+            .set_address_transactions_at_height(
+                address_transaction.0.get(),
+                address_transaction.1,
+                block_height,
+            )
+            .await
+            .map_err(|_| {
+                ApiServerStorageError::LowLevelStorageError(
+                    "Unable to set address transactions".to_string(),
+                )
+            })?;
     }
 
     Ok(())
