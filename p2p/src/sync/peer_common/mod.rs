@@ -16,7 +16,7 @@
 mod known_transactions;
 
 use chainstate::{ban_score::BanScore, chainstate_interface::ChainstateInterface};
-use common::{chain::GenBlock, primitives::Id};
+use common::{chain::GenBlock, primitives::Id, Uint256};
 use logging::log;
 use mempool::error::{Error as MempoolError, MempoolPolicyError};
 use p2p_types::PeerId;
@@ -124,11 +124,17 @@ pub fn choose_peers_best_block(
         (None, None) => Ok(None),
         (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
         (Some(old_id), Some(new_id)) => {
-            let old_height =
-                chainstate.get_block_height_in_main_chain(&old_id)?.unwrap_or(0.into());
-            let new_height =
-                chainstate.get_block_height_in_main_chain(&new_id)?.unwrap_or(0.into());
-            if new_height >= old_height {
+            let old_block_chain_trust = chainstate
+                .get_gen_block_index(&old_id)?
+                .map_or(Uint256::ZERO, |idx: chainstate::GenBlockIndex| {
+                    idx.chain_trust()
+                });
+            let new_block_chain_trust = chainstate
+                .get_gen_block_index(&new_id)?
+                .map_or(Uint256::ZERO, |idx: chainstate::GenBlockIndex| {
+                    idx.chain_trust()
+                });
+            if new_block_chain_trust >= old_block_chain_trust {
                 Ok(Some(new_id))
             } else {
                 Ok(Some(old_id))
