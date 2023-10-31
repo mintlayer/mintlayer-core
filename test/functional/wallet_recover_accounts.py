@@ -36,6 +36,7 @@ from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCl
 
 import asyncio
 import sys
+from random import randint
 
 
 class WalletRecoverAccounts(BitcoinTestFramework):
@@ -120,8 +121,8 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 10", balance)
 
-            # create 3 new accounts
-            num_accounts = 3
+            # create new accounts
+            num_accounts = randint(1, 3)
             for idx in range(num_accounts):
                 assert_in("Success", await wallet.create_new_account())
                 assert_in("Success", await wallet.select_account(idx+1))

@@ -19,7 +19,9 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::ConsensusData;
 use serialization::{Decode, Encode};
 
-use common::chain::{Block, GenBlock, Genesis, OutPointSourceId, Transaction, TxInput, TxOutput};
+use common::chain::{
+    Block, GenBlock, Genesis, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+};
 use common::primitives::id::WithId;
 use common::primitives::{BlockHeight, Id, Idable};
 
@@ -114,7 +116,7 @@ pub enum WalletTx {
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct TxData {
-    tx: WithId<Transaction>,
+    tx: SignedTransaction,
 
     state: TxState,
 }
@@ -145,7 +147,7 @@ impl WalletTx {
     pub fn id(&self) -> OutPointSourceId {
         match self {
             WalletTx::Block(block) => OutPointSourceId::BlockReward(*block.block_id()),
-            WalletTx::Tx(tx) => OutPointSourceId::Transaction(tx.tx.get_id()),
+            WalletTx::Tx(tx) => OutPointSourceId::Transaction(tx.tx.transaction().get_id()),
         }
     }
 
@@ -172,16 +174,20 @@ impl WalletTx {
 }
 
 impl TxData {
-    pub fn new(tx: WithId<Transaction>, state: TxState) -> Self {
+    pub fn new(tx: SignedTransaction, state: TxState) -> Self {
         Self { tx, state }
     }
 
-    pub fn get_transaction(&self) -> &Transaction {
-        WithId::get(&self.tx)
+    pub fn get_signed_transaction(&self) -> &SignedTransaction {
+        &self.tx
     }
 
-    pub fn get_transaction_with_id(&self) -> &WithId<Transaction> {
-        &self.tx
+    pub fn get_transaction(&self) -> &Transaction {
+        self.tx.transaction()
+    }
+
+    pub fn get_transaction_with_id(&self) -> WithId<&Transaction> {
+        WithId::new(self.tx.transaction())
     }
 
     pub fn state(&self) -> &TxState {

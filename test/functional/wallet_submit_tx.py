@@ -24,6 +24,7 @@ Check that:
 * check balance
 """
 
+import json
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
@@ -32,6 +33,7 @@ from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
 import sys
+import random
 
 
 class WalletSubmitTransaction(BitcoinTestFramework):
@@ -85,15 +87,19 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
+            genesis_block_id = tip_id
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
+            coins_to_send = random.randint(10, 100)
             output = {
-                    'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
+
+            assert_in("No transaction found", await wallet.get_transaction(tx_id))
 
             node.mempool_submit_transaction(encoded_tx)
             assert node.mempool_contains_tx(tx_id)
@@ -111,7 +117,24 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             best_block_id = await wallet.get_best_block()
             assert_equal(best_block_id, block_id)
 
-            assert_in("Coins amount: 10", await wallet.get_balance())
+            block_id = node.chainstate_block_id_at_height(1)
+            block = node.chainstate_get_block_json(block_id)
+            block = json.loads(block)
+            timestamp = block['block']['V1']['header']['block_header']['timestamp']['timestamp']
+
+            output = await wallet.get_transaction(tx_id)
+            expected_tx_inputs = f"inputs: [Utxo(UtxoOutPoint {{ id: BlockReward(Id<GenBlock>{{0x{genesis_block_id}}}), index: 0 }})]"
+            assert_in(expected_tx_inputs, output)
+            expected_tx_outputs = f"outputs: [Transfer(Coin(Amount {{ val: {coins_to_send * ATOMS_PER_COIN} }})"
+            assert_in(expected_tx_outputs, output)
+            expected_tx_state = f"state: Confirmed(BlockHeight(1), BlockTimestamp {{ timestamp: {timestamp} }}, 0)"
+            assert_in(expected_tx_state, output)
+
+            # check the raw encoding
+            output = await wallet.get_raw_signed_transaction(tx_id)
+            assert_equal(output, encoded_tx)
+
+            assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
 
 
 if __name__ == '__main__':

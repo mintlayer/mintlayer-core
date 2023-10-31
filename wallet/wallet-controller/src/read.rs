@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use common::{
     address::Address,
     chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
-    primitives::{id::WithId, Amount},
+    primitives::{id::WithId, Amount, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use futures::{stream::FuturesUnordered, TryStreamExt};
@@ -32,6 +32,7 @@ use wallet::{
 };
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoType, UtxoTypes},
+    wallet_tx::TxData,
     with_locked::WithLocked,
     BlockInfo, KeychainUsageState,
 };
@@ -90,7 +91,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn pending_transactions(&self) -> Result<Vec<&'a WithId<Transaction>>, ControllerError<T>> {
+    pub fn pending_transactions(&self) -> Result<Vec<WithId<&'a Transaction>>, ControllerError<T>> {
         self.wallet
             .pending_transactions(self.account_index)
             .map_err(ControllerError::WalletError)
@@ -103,6 +104,15 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<TransactionList, ControllerError<T>> {
         self.wallet
             .get_transaction_list(self.account_index, skip, count)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<&TxData, ControllerError<T>> {
+        self.wallet
+            .get_transaction(self.account_index, transaction_id)
             .map_err(ControllerError::WalletError)
     }
 

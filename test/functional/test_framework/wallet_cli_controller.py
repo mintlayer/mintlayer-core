@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -166,11 +166,16 @@ class WalletCliController:
         matches = re.findall(pattern, output, re.DOTALL)
         return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
 
+    async def get_transaction(self, tx_id: str) -> str:
+        return await self._write_command(f"gettransaction {tx_id}\n")
+
+    async def get_raw_signed_transaction(self, tx_id: str) -> str:
+        return await self._write_command(f"getrawsignedtransaction {tx_id}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"sendtoaddress {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
-    async def send_tokens_to_address(self, token_id: str, address: str, amount: float):
+    async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"sendtokenstoaddress {token_id} {address} {amount}\n")
 
     async def issue_new_token(self,

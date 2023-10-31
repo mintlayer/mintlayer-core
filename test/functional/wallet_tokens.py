@@ -35,6 +35,9 @@ from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCl
 
 import asyncio
 import sys
+import random
+import string
+import math
 
 class WalletTokens(BitcoinTestFramework):
 
@@ -113,11 +116,13 @@ class WalletTokens(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            token_id, err = await wallet.issue_new_token("asdddd", 2, "http://uri", address)
+            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(6, 10)))
+            token_id, err = await wallet.issue_new_token(invalid_ticker, 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
+            invalid_ticker = "asd" + random.choice(string.punctuation)
             token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
@@ -136,7 +141,9 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            valid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(1, 5)))
+            num_decimals = random.randint(1, 5)
+            token_id, err = await wallet.issue_new_token(valid_ticker, num_decimals, "http://uri", address)
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -144,12 +151,13 @@ class WalletTokens(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 10000))
+            amount_to_mint = random.randint(1, 10000)
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, amount_to_mint))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in(f"{token_id} amount: {amount_to_mint}", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -157,14 +165,23 @@ class WalletTokens(BitcoinTestFramework):
             address = await wallet.new_address()
 
             await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            output = await wallet.send_tokens_to_address(token_id, address, 10.01)
+            amount_to_send = random.randint(0, amount_to_mint - 1)
+            amount_to_send_decimals = random.randint(1, 10**num_decimals)
+            amount_to_send_str = f"{amount_to_send}.{amount_to_send_decimals}".rstrip('0').rstrip('.')
+            self.log.info(f"mint {amount_to_mint} sent {amount_to_send_str} diff {amount_to_mint - amount_to_send - amount_to_send_decimals / 10**num_decimals}")
+
+            output = await wallet.send_tokens_to_address(token_id, address, amount_to_send_str)
             assert_in("The transaction was submitted successfully", output)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
             ## check the new balance
-            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
+            token_balance = amount_to_mint - amount_to_send - 1
+            token_balance_decimals = 10**len(str(amount_to_send_decimals)) - amount_to_send_decimals
+            num_zeroes = len(str(amount_to_send_decimals)) - len(str(token_balance_decimals))
+            token_balance_str = f"{token_balance}.{'0'*num_zeroes}{token_balance_decimals}".rstrip('0').rstrip('.')
+            assert_in(f"{token_id} amount: {token_balance_str}", await wallet.get_balance())
 
             ## try to issue a new token, should fail with not enough coins
             token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)

@@ -48,6 +48,10 @@ def assert_in(thing1: str, thing2: str):
     if thing1 not in thing2:
         raise AssertionError(f"{thing1} is not in {thing2}")
 
+def assert_not_in(thing1: str, thing2: str):
+    if thing1 in thing2:
+        raise AssertionError(f"{thing1} is in {thing2}")
+
 def assert_equal(thing1, thing2, *args):
     if thing1 != thing2 or any(thing1 != arg for arg in args):
         raise AssertionError("not(%s)" % " == ".join(str(arg) for arg in (thing1, thing2) + args))
