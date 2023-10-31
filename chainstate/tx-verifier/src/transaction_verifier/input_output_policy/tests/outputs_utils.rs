@@ -19,8 +19,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
+            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
         },
         DelegationId, Destination, PoolId, TxOutput,
     },
@@ -146,7 +146,8 @@ pub fn issue_tokens() -> TxOutput {
         number_of_decimals: 0,
         metadata_uri: Vec::new(),
         total_supply: TokenTotalSupply::Unlimited,
-        reissuance_controller: Destination::AnyoneCanSpend,
+        authority: Destination::AnyoneCanSpend,
+        is_freezable: IsTokenFreezable::No,
     })))
 }
 

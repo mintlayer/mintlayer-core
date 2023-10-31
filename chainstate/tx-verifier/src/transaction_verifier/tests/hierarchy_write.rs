@@ -21,7 +21,7 @@ use crate::transaction_verifier::{
 use super::*;
 use common::chain::{
     config::Builder as ConfigBuilder,
-    tokens::{TokenAuxiliaryData, TokenTotalSupply},
+    tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenTotalSupply},
 };
 use mockall::predicate::eq;
 use pos_accounting::{AccountingTxUndo, DeltaMergeUndo};
@@ -1100,6 +1100,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Unlimited,
             false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
     let token_data2 =
@@ -1109,6 +1110,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Unlimited,
             false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
 
@@ -1214,6 +1216,7 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Lockable,
             false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
     let token_data2 =
@@ -1223,6 +1226,7 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             Vec::new(),
             TokenTotalSupply::Lockable,
             false,
+            IsTokenFrozen::No(IsTokenFreezable::No),
             Destination::AnyoneCanSpend,
         ));
 

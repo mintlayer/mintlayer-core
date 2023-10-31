@@ -124,7 +124,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     number_of_decimals,
                     metadata_uri,
                     total_supply: token_total_supply,
-                    reissuance_controller: destination,
+                    authority: destination,
+                    is_freezable: common::chain::tokens::IsTokenFreezable::No, // TODO: pass from outside
                 }),
                 current_fee_rate,
                 consolidate_fee_rate,

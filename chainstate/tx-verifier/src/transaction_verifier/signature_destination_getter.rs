@@ -147,13 +147,15 @@ impl<'a> SignatureDestinationGetter<'a> {
                             .clone()),
                         AccountOp::MintTokens(token_id, _)
                         | AccountOp::UnmintTokens(token_id)
-                        | AccountOp::LockTokenSupply(token_id) => {
+                        | AccountOp::LockTokenSupply(token_id)
+                        | AccountOp::FreezeToken(token_id, _)
+                        | AccountOp::UnfreezeToken(token_id) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;
                             let destination = match token_data {
                                 tokens_accounting::TokenData::FungibleToken(data) => {
-                                    data.reissuance_controller().clone()
+                                    data.authority().clone()
                                 }
                             };
                             Ok(destination)

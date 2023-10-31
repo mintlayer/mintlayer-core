@@ -70,6 +70,8 @@ impl ConstrainedValueAccumulator {
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(inputs.len(), inputs_utxos.len())
         );
 
+        let mut total_fee_deducted = Amount::ZERO;
+
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
                 TxInput::Utxo(outpoint) => {
@@ -127,11 +129,24 @@ impl ConstrainedValueAccumulator {
                         }
                         AccountOp::MintTokens(_, _)
                         | AccountOp::LockTokenSupply(_)
-                        | AccountOp::UnmintTokens(_) => { /* do nothing */ }
+                        | AccountOp::UnmintTokens(_) => {
+                            total_fee_deducted = (total_fee_deducted
+                                + chain_config.token_min_supply_change_fee())
+                            .ok_or(IOPolicyError::AmountOverflow)?;
+                        }
+                        AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => {
+                            total_fee_deducted = (total_fee_deducted
+                                + chain_config.token_min_freeze_fee())
+                            .ok_or(IOPolicyError::AmountOverflow)?;
+                        }
                     };
                 }
             }
         }
+
+        self.unconstrained_value = (self.unconstrained_value - total_fee_deducted)
+            .ok_or(IOPolicyError::AttemptToViolateFeeRequirements)?;
+
         Ok(())
     }
 
@@ -209,7 +224,7 @@ impl ConstrainedValueAccumulator {
                 TxOutput::DataDeposit(_) => {
                     let amount = chain_config.data_deposit_min_fee();
                     self.unconstrained_value = (self.unconstrained_value - amount)
-                        .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
+                        .ok_or(IOPolicyError::AttemptToViolateFeeRequirements)?;
                 }
                 TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
                 }

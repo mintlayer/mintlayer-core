@@ -47,10 +47,16 @@ pub enum IOPolicyError {
     MultipleUnmintTokensInputs,
     #[error("Attempted to provide multiple lock token supply inputs in a single tx")]
     MultipleLockTokenSupplyInputs,
+    #[error("Attempted to provide multiple freeze token inputs in a single tx")]
+    MultipleFreezeTokenSupplyInputs,
+    #[error("Attempted to provide multiple unfreeze token inputs in a single tx")]
+    MultipleUnfreezeTokenSupplyInputs,
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
     AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Attempt to violate operations fee requirements")]
+    AttemptToViolateFeeRequirements,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
     InputsAndInputsUtxosLengthMismatch(usize, usize),
     #[error("Output is not found in the cache or database: {0:?}")]

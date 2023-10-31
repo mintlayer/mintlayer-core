@@ -576,7 +576,7 @@ impl Account {
     pub fn find_token(&self, token_id: &TokenId) -> WalletResult<&TokenIssuanceData> {
         self.output_cache
             .token_data(token_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.reissuance_controller))
+            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
@@ -728,10 +728,10 @@ impl Account {
             nonce,
             AccountOp::MintTokens(token_id, amount),
         ));
-        let reissuance_controller = token_data.reissuance_controller.clone();
+        let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
-            reissuance_controller,
+            authority,
             tx_input,
             outputs,
             db_tx,
@@ -761,10 +761,10 @@ impl Account {
             nonce,
             AccountOp::UnmintTokens(token_id),
         ));
-        let reissuance_controller = token_data.reissuance_controller.clone();
+        let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
-            reissuance_controller,
+            authority,
             tx_input,
             outputs,
             db_tx,
@@ -793,10 +793,10 @@ impl Account {
             nonce,
             AccountOp::LockTokenSupply(token_id),
         ));
-        let reissuance_controller = token_data.reissuance_controller.clone();
+        let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
-            reissuance_controller,
+            authority,
             tx_input,
             outputs,
             db_tx,
@@ -807,7 +807,7 @@ impl Account {
 
     fn change_token_supply_transaction(
         &mut self,
-        reissuance_controller: Destination,
+        authority: Destination,
         tx_input: TxInput,
         outputs: Vec<TxOutput>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -816,7 +816,7 @@ impl Account {
     ) -> Result<SignedTransaction, WalletError> {
         let request = SendRequest::new()
             .with_outputs(outputs)
-            .with_inputs_and_destinations([(tx_input, reissuance_controller)]);
+            .with_inputs_and_destinations([(tx_input, authority)]);
 
         let request = self.select_inputs_for_send_request(
             request,
@@ -1146,6 +1146,8 @@ impl Account {
                 AccountOp::MintTokens(token_id, _)
                 | AccountOp::UnmintTokens(token_id)
                 | AccountOp::LockTokenSupply(token_id) => self.find_token(token_id).is_ok(),
+                AccountOp::FreezeToken(_, _) => unimplemented!(),
+                AccountOp::UnfreezeToken(_) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1444,6 +1446,8 @@ fn group_preselected_inputs(
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
+                AccountOp::FreezeToken(_, _) => unimplemented!(),
+                AccountOp::UnfreezeToken(_) => unimplemented!(),
             },
         }
     }

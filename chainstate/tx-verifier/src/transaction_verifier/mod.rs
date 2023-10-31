@@ -34,7 +34,7 @@ pub mod timelock_check;
 mod tx_source;
 use tokens_accounting::{
     TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
-    TokensAccountingOperations, TokensAccountingView,
+    TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
 };
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
@@ -471,7 +471,9 @@ where
                         }
                         AccountOp::MintTokens(_, _)
                         | AccountOp::UnmintTokens(_)
-                        | AccountOp::LockTokenSupply(_) => None,
+                        | AccountOp::LockTokenSupply(_)
+                        | AccountOp::FreezeToken(_, _)
+                        | AccountOp::UnfreezeToken(_) => None,
                     }
                 }
             })
@@ -701,6 +703,8 @@ where
                         ),
                     )
                 );
+
+                self.check_operations_with_frozen_tokens(tx)?;
             }
         };
 
@@ -742,6 +746,22 @@ where
                         let res = self.spend_input_from_account(account_input).and_then(|_| {
                             self.tokens_accounting_cache
                                 .lock_circulating_supply(*token_id)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountOp::FreezeToken(token_id, is_unfreezable) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .freeze_token(*token_id, *is_unfreezable)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountOp::UnfreezeToken(token_id) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .unfreeze_token(*token_id)
                                 .map_err(ConnectTransactionError::TokensAccountingError)
                         });
                         Some(res)
@@ -793,6 +813,48 @@ where
         } else {
             Ok(())
         }
+    }
+
+    fn check_operations_with_frozen_tokens(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        tx.outputs()
+            .iter()
+            .try_for_each(|output| -> Result<(), ConnectTransactionError> {
+                match output {
+                    TxOutput::Transfer(output_value, _)
+                    | TxOutput::Burn(output_value)
+                    | TxOutput::LockThenTransfer(output_value, _, _) => {
+                        match output_value {
+                            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
+                            OutputValue::TokenV1(token_id, _) => {
+                                // TODO: when NFTs are stored in accounting None should become an error
+                                if let Some(token_data) = self.get_token_data(token_id)? {
+                                    match token_data {
+                                        tokens_accounting::TokenData::FungibleToken(data) => {
+                                            ensure!(
+                                                !data.is_frozen(),
+                                                ConnectTransactionError::AttemptToSpendFrozenToken(
+                                                    *token_id
+                                                )
+                                            );
+                                        }
+                                    };
+                                }
+                                Ok(())
+                            }
+                        }
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_) => Ok(()),
+                }
+            })
     }
 
     fn disconnect_tokens_accounting_outputs(

@@ -151,6 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
         }
     }
 }
@@ -488,7 +489,10 @@ impl BanScore for IOPolicyError {
             IOPolicyError::PledgeAmountNotFound(_) => 100,
             IOPolicyError::MultipleUnmintTokensInputs => 100,
             IOPolicyError::MultipleLockTokenSupplyInputs => 100,
+            IOPolicyError::MultipleFreezeTokenSupplyInputs => 100,
+            IOPolicyError::MultipleUnfreezeTokenSupplyInputs => 100,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
+            IOPolicyError::AttemptToViolateFeeRequirements => 100,
         }
     }
 }
@@ -512,6 +516,15 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUnlockNotLockedSupplyOnReversal(_) => 100,
             tokens_accounting::Error::CannotUndoMintForLockedSupplyOnReversal(_) => 100,
             tokens_accounting::Error::CannotUndoUnmintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::TokenIsAlreadyFrozen(_) => 100,
+            tokens_accounting::Error::CannotFreezeNotFreezableToken(_) => 100,
+            tokens_accounting::Error::CannotUnfreezeNotUnfreezableToken(_) => 100,
+            tokens_accounting::Error::CannotUnfreezeTokenThatIsNotFrozen(_) => 100,
+            tokens_accounting::Error::CannotUndoFreezeTokenThatIsNotFrozen(_) => 100,
+            tokens_accounting::Error::CannotUndoUnfreezeTokenThatIsFrozen(_) => 100,
+            tokens_accounting::Error::CannotMintFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotUnmintFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotLockFrozenToken(_) => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
         }

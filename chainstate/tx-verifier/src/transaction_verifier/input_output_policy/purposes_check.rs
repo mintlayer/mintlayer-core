@@ -154,6 +154,10 @@ pub fn check_tx_inputs_outputs_purposes(
     let mut unmint_tokens_inputs_count = BTreeMap::<TokenId, usize>::new();
     // only single lock supply per token per tx is allowed
     let mut lock_token_supply_inputs_count = BTreeMap::<TokenId, usize>::new();
+    // only single freeze per token per tx is allowed
+    let mut freeze_token_inputs_count = BTreeMap::<TokenId, usize>::new();
+    // only single unfreeze per token per tx is allowed
+    let mut unfreeze_token_inputs_count = BTreeMap::<TokenId, usize>::new();
 
     tx.inputs().iter().for_each(|input| match input {
         TxInput::Utxo(_) => { /* do nothing */ }
@@ -171,18 +175,40 @@ pub fn check_tx_inputs_outputs_purposes(
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
             }
+            AccountOp::FreezeToken(token_id, _) => {
+               freeze_token_inputs_count
+                    .entry(*token_id)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+            }
+            AccountOp::UnfreezeToken(token_id) => {
+               unfreeze_token_inputs_count
+                    .entry(*token_id)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+            },
         },
     });
 
-    unmint_tokens_inputs_count.iter().try_for_each(|(_, count)| {
-        ensure!(*count <= 1, IOPolicyError::MultipleUnmintTokensInputs);
-        Ok::<_, IOPolicyError>(())
-    })?;
+    ensure!(
+        unmint_tokens_inputs_count.iter().all(|(_, count)| *count <= 1),
+        IOPolicyError::MultipleUnmintTokensInputs
+    );
 
-    lock_token_supply_inputs_count.iter().try_for_each(|(_, count)| {
-        ensure!(*count <= 1, IOPolicyError::MultipleLockTokenSupplyInputs);
-        Ok::<_, IOPolicyError>(())
-    })?;
+    ensure!(
+        lock_token_supply_inputs_count.iter().all(|(_, count)| *count <= 1),
+        IOPolicyError::MultipleLockTokenSupplyInputs
+    );
+
+    ensure!(
+        freeze_token_inputs_count.iter().all(|(_, count)| *count <= 1),
+        IOPolicyError::MultipleFreezeTokenSupplyInputs
+    );
+
+    ensure!(
+        unfreeze_token_inputs_count.iter().all(|(_, count)| *count <= 1),
+        IOPolicyError::MultipleUnfreezeTokenSupplyInputs
+    );
 
     // Check outputs
     let mut produce_block_outputs_count = 0;

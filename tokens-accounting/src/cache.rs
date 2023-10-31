@@ -15,7 +15,7 @@
 
 use accounting::combine_amount_delta;
 use common::{
-    chain::tokens::{TokenId, TokenTotalSupply},
+    chain::tokens::{IsTokenUnfreezable, TokenId, TokenTotalSupply},
     primitives::Amount,
 };
 
@@ -23,8 +23,8 @@ use crate::{
     data::{TokenData, TokensAccountingDeltaData},
     error::Error,
     operations::{
-        IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
-        TokensAccountingOperations, UnmintTokenUndo,
+        FreezeTokenUndo, IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
+        TokensAccountingOperations, UnfreezeTokenUndo, UnmintTokenUndo,
     },
     view::TokensAccountingView,
     FlushableTokensAccountingView,
@@ -113,21 +113,27 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         let circulating_supply = self.get_circulating_supply(&id)?.unwrap_or(Amount::ZERO);
 
         match token_data {
-            TokenData::FungibleToken(data) => match data.total_supply() {
-                TokenTotalSupply::Fixed(limit) => {
-                    let expected_circulating_supply =
-                        (circulating_supply + amount_to_add).ok_or(Error::AmountOverflow)?;
-                    if expected_circulating_supply > *limit {
-                        return Err(Error::MintExceedsSupplyLimit(amount_to_add, *limit, id));
-                    }
+            TokenData::FungibleToken(data) => {
+                if data.is_frozen() {
+                    return Err(Error::CannotMintFrozenToken(id));
                 }
-                TokenTotalSupply::Lockable => {
-                    if data.is_locked() {
-                        return Err(Error::CannotMintFromLockedSupply(id));
+
+                match data.total_supply() {
+                    TokenTotalSupply::Fixed(limit) => {
+                        let expected_circulating_supply =
+                            (circulating_supply + amount_to_add).ok_or(Error::AmountOverflow)?;
+                        if expected_circulating_supply > *limit {
+                            return Err(Error::MintExceedsSupplyLimit(amount_to_add, *limit, id));
+                        }
                     }
-                }
-                TokenTotalSupply::Unlimited => { /* do nothing */ }
-            },
+                    TokenTotalSupply::Lockable => {
+                        if data.is_locked() {
+                            return Err(Error::CannotMintFromLockedSupply(id));
+                        }
+                    }
+                    TokenTotalSupply::Unlimited => { /* do nothing */ }
+                };
+            }
         };
 
         self.data.circulating_supply.add_unsigned(id, amount_to_add)?;
@@ -151,6 +157,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
                     return Err(Error::CannotUnmintFromLockedSupply(id));
+                } else if data.is_frozen() {
+                    return Err(Error::CannotUnmintFrozenToken(id));
                 }
             }
         };
@@ -181,7 +189,10 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
                     return Err(Error::SupplyIsAlreadyLocked(id));
+                } else if data.is_frozen() {
+                    return Err(Error::CannotLockFrozenToken(id));
                 }
+
                 let new_data =
                     data.clone().try_lock().map_err(|_| Error::CannotLockNotLockableSupply(id))?;
                 self.data.token_data.merge_delta_data_element(
@@ -194,6 +205,64 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             }
         };
         Ok(TokenAccountingUndo::LockSupply(LockSupplyUndo {
+            id,
+            undo_data,
+        }))
+    }
+
+    fn freeze_token(
+        &mut self,
+        id: TokenId,
+        is_unfreezable: IsTokenUnfreezable,
+    ) -> Result<TokenAccountingUndo, Error> {
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+
+        let undo_data = match token_data {
+            TokenData::FungibleToken(data) => {
+                if data.is_frozen() {
+                    return Err(Error::TokenIsAlreadyFrozen(id));
+                }
+                let new_data = data
+                    .clone()
+                    .try_freeze(is_unfreezable)
+                    .map_err(|_| Error::CannotFreezeNotFreezableToken(id))?;
+                self.data.token_data.merge_delta_data_element(
+                    id,
+                    accounting::DataDelta::new(
+                        Some(TokenData::FungibleToken(data)),
+                        Some(TokenData::FungibleToken(new_data)),
+                    ),
+                )?
+            }
+        };
+        Ok(TokenAccountingUndo::FreezeToken(FreezeTokenUndo {
+            id,
+            undo_data,
+        }))
+    }
+
+    fn unfreeze_token(&mut self, id: TokenId) -> Result<TokenAccountingUndo, Error> {
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+
+        let undo_data = match token_data {
+            TokenData::FungibleToken(data) => {
+                if !data.is_frozen() {
+                    return Err(Error::CannotUnfreezeTokenThatIsNotFrozen(id));
+                }
+                let new_data = data
+                    .clone()
+                    .try_unfreeze()
+                    .map_err(|_| Error::CannotUnfreezeNotUnfreezableToken(id))?;
+                self.data.token_data.merge_delta_data_element(
+                    id,
+                    accounting::DataDelta::new(
+                        Some(TokenData::FungibleToken(data)),
+                        Some(TokenData::FungibleToken(new_data)),
+                    ),
+                )?
+            }
+        };
+        Ok(TokenAccountingUndo::UnfreezeToken(UnfreezeTokenUndo {
             id,
             undo_data,
         }))
@@ -250,6 +319,34 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                     TokenData::FungibleToken(data) => {
                         if !data.is_locked() {
                             return Err(Error::CannotUnlockNotLockedSupplyOnReversal(undo.id));
+                        }
+                    }
+                };
+                self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
+                Ok(())
+            }
+            TokenAccountingUndo::FreezeToken(undo) => {
+                let data = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if !data.is_frozen() {
+                            return Err(Error::CannotUndoFreezeTokenThatIsNotFrozen(undo.id));
+                        }
+                    }
+                };
+                self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
+                Ok(())
+            }
+            TokenAccountingUndo::UnfreezeToken(undo) => {
+                let data = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if data.is_frozen() {
+                            return Err(Error::CannotUndoUnfreezeTokenThatIsFrozen(undo.id));
                         }
                     }
                 };

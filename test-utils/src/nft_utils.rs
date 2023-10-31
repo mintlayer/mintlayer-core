@@ -18,8 +18,8 @@ use common::{
     chain::{
         config::ChainConfig,
         tokens::{
-            Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0, TokenIssuanceV1,
-            TokenTotalSupply,
+            IsTokenFreezable, Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0,
+            TokenIssuanceV1, TokenTotalSupply,
         },
         Destination,
     },
@@ -57,7 +57,8 @@ pub fn random_token_issuance_v1(chain_config: &ChainConfig, rng: &mut impl Rng) 
         number_of_decimals: rng.gen_range(1..max_dec_count),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
         total_supply: TokenTotalSupply::Lockable,
-        reissuance_controller: Destination::AnyoneCanSpend,
+        is_freezable: IsTokenFreezable::Yes,
+        authority: Destination::AnyoneCanSpend,
     }
 }
 

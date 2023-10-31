@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use crate::{
-    chain::{tokens::TokenId, AccountNonce, DelegationId},
+    chain::{
+        tokens::{IsTokenUnfreezable, TokenId},
+        AccountNonce, DelegationId,
+    },
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
@@ -24,9 +27,9 @@ use serialization::{Decode, Encode};
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
-    /// Token account type is used to authorize changes in supply of a token.
+    /// Token account type is used to authorize changes in token data.
     #[codec(index = 1)]
-    TokenSupply(TokenId),
+    Token(TokenId),
 }
 
 impl From<AccountOp> for AccountType {
@@ -35,7 +38,9 @@ impl From<AccountOp> for AccountType {
             AccountOp::SpendDelegationBalance(id, _) => AccountType::Delegation(id),
             AccountOp::MintTokens(id, _)
             | AccountOp::UnmintTokens(id)
-            | AccountOp::LockTokenSupply(id) => AccountType::TokenSupply(id),
+            | AccountOp::LockTokenSupply(id)
+            | AccountOp::FreezeToken(id, _)
+            | AccountOp::UnfreezeToken(id) => AccountType::Token(id),
         }
     }
 }
@@ -51,14 +56,19 @@ pub enum AccountOp {
     #[codec(index = 1)]
     MintTokens(TokenId, Amount),
     // Take tokens out of circulation. Not the same as Burn because unminting means that certain amount
-    // of tokens is no longer supported by underlying fiat currency, which can only be done by
-    // reissuance controller.
+    // of tokens is no longer supported by underlying fiat currency, which can only be done by the authority.
     #[codec(index = 2)]
     UnmintTokens(TokenId),
     // After supply is locked tokens cannot be minted or unminted ever again.
     // Works only for Lockable tokens supply.
     #[codec(index = 3)]
     LockTokenSupply(TokenId),
+    // Freezing token forbids any operation with all the tokens (except for optional unfreeze)
+    #[codec(index = 4)]
+    FreezeToken(TokenId, IsTokenUnfreezable),
+    // By unfreezing token all operations are available for the tokens again
+    #[codec(index = 5)]
+    UnfreezeToken(TokenId),
 }
 
 /// Type of OutPoint that represents spending from an account

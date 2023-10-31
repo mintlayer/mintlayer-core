@@ -223,17 +223,17 @@ impl TokenCurrentSupplyState {
 
 pub struct TokenIssuanceData {
     pub total_supply: TokenCurrentSupplyState,
-    pub reissuance_controller: Destination,
+    pub authority: Destination,
     pub last_nonce: Option<AccountNonce>,
     /// last parent transaction if the parent is unconfirmed
     pub last_parent: Option<OutPointSourceId>,
 }
 
 impl TokenIssuanceData {
-    fn new(data: TokenTotalSupply, reissuance_controller: Destination) -> Self {
+    fn new(data: TokenTotalSupply, authority: Destination) -> Self {
         Self {
             total_supply: data.into(),
-            reissuance_controller,
+            authority,
             last_nonce: None,
             last_parent: None,
         }
@@ -431,10 +431,7 @@ impl OutputCache {
                         TokenIssuance::V1(data) => {
                             self.token_issuance.insert(
                                 token_id,
-                                TokenIssuanceData::new(
-                                    data.total_supply,
-                                    data.reissuance_controller.clone(),
-                                ),
+                                TokenIssuanceData::new(data.total_supply, data.authority.clone()),
                             );
                         }
                     }
@@ -518,6 +515,8 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.lock()?;
                                 }
                             }
+                            AccountOp::FreezeToken(_, _) => unimplemented!(),
+                            AccountOp::UnfreezeToken(_) => unimplemented!(),
                         }
                     }
                 }
@@ -631,6 +630,8 @@ impl OutputCache {
                                 data.total_supply = data.total_supply.unlock()?;
                             }
                         }
+                        AccountOp::FreezeToken(_, _) => unimplemented!(),
+                        AccountOp::UnfreezeToken(_) => unimplemented!(),
                     },
                 }
             }
@@ -844,6 +845,8 @@ impl OutputCache {
                                                 data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
+                                        AccountOp::FreezeToken(_, _) => unimplemented!(),
+                                        AccountOp::UnfreezeToken(_) => unimplemented!(),
                                     },
                                 }
                             }

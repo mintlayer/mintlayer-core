@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use accounting::DataDeltaUndo;
-use common::{chain::tokens::TokenId, primitives::Amount};
+use common::{
+    chain::tokens::{IsTokenUnfreezable, TokenId},
+    primitives::Amount,
+};
 use serialization::{Decode, Encode};
 use variant_count::VariantCount;
 
@@ -44,6 +47,18 @@ pub struct LockSupplyUndo {
     pub(crate) undo_data: DataDeltaUndo<TokenData>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct FreezeTokenUndo {
+    pub(crate) id: TokenId,
+    pub(crate) undo_data: DataDeltaUndo<TokenData>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct UnfreezeTokenUndo {
+    pub(crate) id: TokenId,
+    pub(crate) undo_data: DataDeltaUndo<TokenData>,
+}
+
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum TokenAccountingUndo {
@@ -51,6 +66,8 @@ pub enum TokenAccountingUndo {
     MintTokens(MintTokenUndo),
     UnmintTokens(UnmintTokenUndo),
     LockSupply(LockSupplyUndo),
+    FreezeToken(FreezeTokenUndo),
+    UnfreezeToken(UnfreezeTokenUndo),
 }
 
 pub trait TokensAccountingOperations {
@@ -61,6 +78,13 @@ pub trait TokensAccountingOperations {
         -> Result<TokenAccountingUndo>;
 
     fn lock_circulating_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
+
+    fn freeze_token(
+        &mut self,
+        id: TokenId,
+        is_unfreezable: IsTokenUnfreezable,
+    ) -> Result<TokenAccountingUndo>;
+    fn unfreeze_token(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<()>;
 }
