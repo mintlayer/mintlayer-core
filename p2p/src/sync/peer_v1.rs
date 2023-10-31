@@ -103,7 +103,7 @@ struct IncomingDataState {
     /// requested the blocks for.
     pending_headers: Vec<SignedBlockHeader>,
     /// A list of blocks that we requested from this peer.
-    requested_blocks: BTreeSet<Id<Block>>,
+    requested_blocks: VecDeque<Id<Block>>,
     /// The id of the best block header that we've received from the peer and that we also have.
     /// This includes headers received by any means, e.g. via HeaderList messages, as part
     /// of a locator during peer's header requests, via block responses.
@@ -158,7 +158,7 @@ where
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
-                requested_blocks: BTreeSet::new(),
+                requested_blocks: VecDeque::new(),
                 peers_best_block_that_we_have: None,
                 singular_unconnected_headers_count: 0,
             },
@@ -726,10 +726,28 @@ where
         // The code below will set it again if needed.
         self.peer_activity.set_expecting_blocks_since(None);
 
-        if self.incoming.requested_blocks.take(&block.get_id()).is_none() {
-            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "block response".to_owned(),
-            )));
+        if self.incoming.requested_blocks.front().is_some_and(|id| id == &block.get_id()) {
+            self.incoming.requested_blocks.pop_front();
+        } else {
+            let idx = self.incoming.requested_blocks.iter().position(|id| id == &block.get_id());
+            // Note: we treat wrongly ordered blocks in the same way as unsolicited ones, i.e.
+            // we don't remove their ids from the list.
+            if idx.is_some() {
+                return Err(P2pError::ProtocolError(
+                    ProtocolError::BlocksReceivedInWrongOrder {
+                        expected_block_id: *self
+                            .incoming
+                            .requested_blocks
+                            .front()
+                            .expect("The deque is known to be non-empty"),
+                        actual_block_id: block.get_id(),
+                    },
+                ));
+            } else {
+                return Err(P2pError::ProtocolError(
+                    ProtocolError::UnsolicitedBlockReceived(block.get_id()),
+                ));
+            }
         }
 
         let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
@@ -938,7 +956,7 @@ where
     }
 
     async fn send_block(&mut self, id: Id<Block>) -> Result<()> {
-        let (block, index) = self
+        let (block, block_index) = self
             .chainstate_handle
             .call(move |c| {
                 let index = c.get_block_index(&id);
@@ -953,7 +971,20 @@ where
         // to delete block indices of missing blocks when resetting their failure flags).
         // P2p should handle such situations correctly (see issue #1033 for more details).
         let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
-        self.outgoing.best_sent_block = index?;
+        let block_index = block_index?.expect("Block index must exist");
+
+        let old_best_sent_block_id = self.outgoing.best_sent_block.as_ref().map(|idx| {
+            let id: Id<GenBlock> = (*idx.block_id()).into();
+            id
+        });
+        let new_best_sent_block_id = self
+            .chainstate_handle
+            .call(move |c| choose_peers_best_block(c, old_best_sent_block_id, Some(id.into())))
+            .await?;
+
+        if new_best_sent_block_id == Some(id.into()) {
+            self.outgoing.best_sent_block = Some(block_index);
+        }
 
         log::debug!(
             "[peer id = {}] Sending block with id = {} to the peer",

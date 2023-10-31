@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
@@ -22,9 +22,9 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use crypto::random::Rng;
-use p2p_test_utils::create_n_blocks;
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use test_utils::random::Seed;
+use logging::log;
+use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
+use test_utils::random::{shuffle_until_different, Seed};
 
 use crate::{
     error::ProtocolError,
@@ -49,6 +49,7 @@ async fn unrequested_block(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         let block = tf.make_block_builder().build();
+        let block_id = block.get_id();
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -64,7 +65,7 @@ async fn unrequested_block(#[case] seed: Seed) {
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
-            P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
+            P2pError::ProtocolError(ProtocolError::UnsolicitedBlockReceived(block_id)).ban_score()
         );
         node.assert_no_event().await;
 
@@ -122,6 +123,117 @@ async fn valid_response(#[case] seed: Seed) {
         ));
 
         node.assert_no_error().await;
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn block_responses_in_wrong_order(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(create_unit_test_config());
+        let p2p_config = Arc::new(P2pConfig {
+            // We want to count bannable errors in this test, but don't want a disconnect
+            // to happen because of them.
+            ban_threshold: 1000.into(),
+
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+
+            ban_duration: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            user_agent: "test".try_into().unwrap(),
+            sync_stalling_timeout: Default::default(),
+            enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
+            protocol_config: Default::default(),
+        });
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+        let num_blocks = rng.gen_range(2..10);
+        log::debug!("Generating {num_blocks} blocks");
+        let blocks = create_n_blocks(&mut tf, num_blocks);
+
+        let normal_indices: Vec<_> = (0..num_blocks).collect();
+        let shuffled_indices = {
+            let mut indices = normal_indices.clone();
+            shuffle_until_different(&mut indices, &mut rng);
+            indices
+        };
+        log::debug!("Shuffled indices are {shuffled_indices:?}");
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        let headers = blocks.iter().map(|b| b.header().clone()).collect();
+        peer.send_headers(headers).await;
+
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(peer.get_id(), sent_to);
+        let ids = blocks.iter().map(|b| b.get_id()).collect();
+        assert_eq!(
+            message,
+            SyncMessage::BlockListRequest(BlockListRequest::new(ids))
+        );
+
+        {
+            let mut expected_indices = VecDeque::from_iter(&normal_indices);
+            let mut shuffled_indices = VecDeque::from_iter(&shuffled_indices);
+            for _ in 0..num_blocks {
+                let shuffled_index = *shuffled_indices.pop_front().unwrap();
+                let expected_index = *expected_indices[0];
+
+                log::debug!("Expected index = {expected_index}, shuffled index = {shuffled_index}");
+
+                peer.send_message(SyncMessage::BlockResponse(BlockResponse::new(
+                    blocks[shuffled_index].clone(),
+                )))
+                .await;
+
+                if shuffled_index == expected_index {
+                    expected_indices.pop_front();
+                    node.assert_no_peer_manager_event().await;
+                } else {
+                    let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+                    assert_eq!(peer.get_id(), adjusted_peer);
+                    assert_eq!(
+                        score,
+                        P2pError::ProtocolError(ProtocolError::BlocksReceivedInWrongOrder {
+                            expected_block_id: blocks[expected_index].get_id(),
+                            actual_block_id: blocks[shuffled_index].get_id(),
+                        })
+                        .ban_score()
+                    );
+                }
+            }
+
+            assert_ne!(expected_indices.len(), 0);
+        }
+
+        node.assert_no_event().await;
 
         node.join_subsystem_manager().await;
     })

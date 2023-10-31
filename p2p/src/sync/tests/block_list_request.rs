@@ -23,8 +23,7 @@ use common::{
 };
 use crypto::random::Rng;
 use logging::log;
-use p2p_test_utils::create_n_blocks;
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
 use test_utils::random::Seed;
 
 use crate::{
