@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod address;
 mod block;
 mod block_header;
 mod block_reward;
@@ -32,14 +33,22 @@ use api_server_common::storage::{
 };
 use api_web_server::{api::web_server, ApiServerWebServerState};
 use chainstate::BlockSource;
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
-        config::create_unit_test_config, output_value::OutputValue,
-        transaction::output::timelock::OutputTimeLock, Destination, TxOutput,
+        config::create_unit_test_config,
+        output_value::OutputValue,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
+        transaction::output::timelock::OutputTimeLock,
+        Destination, OutPointSourceId, SignedTransaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
+use crypto::key::{KeyKind, PrivateKey};
 use hex::ToHex;
 use rstest::rstest;
 use serde_json::json;

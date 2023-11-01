@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::storage::storage_api::{
@@ -28,6 +28,13 @@ use super::ApiServerInMemoryStorageTransactionalRo;
 impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
+    }
+
+    async fn get_address_balance(
+        &self,
+        address: &str,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction.get_address_balance(address)
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {

@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::storage::storage_api::{
@@ -32,6 +32,22 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.initialize_storage(chain_config)
+    }
+
+    async fn del_address_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_address_balance_above_height(block_height)
+    }
+
+    async fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_address_balance_at_height(address, amount, block_height)
     }
 
     async fn set_block(
@@ -91,6 +107,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
 
     async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         Ok(Some(self.transaction.get_storage_version()?))
+    }
+
+    async fn get_address_balance(
+        &self,
+        address: &str,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction.get_address_balance(address)
     }
 
     async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {

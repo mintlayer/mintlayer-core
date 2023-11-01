@@ -15,14 +15,15 @@
 
 pub mod transactional;
 
-use std::collections::BTreeMap;
-
+use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
-
-use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
+use std::{
+    collections::BTreeMap,
+    ops::Bound::{Excluded, Unbounded},
+};
 
 use super::CURRENT_STORAGE_VERSION;
 
@@ -30,6 +31,7 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
+    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, Amount>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
@@ -41,6 +43,7 @@ impl ApiServerInMemoryStorage {
         let mut result = Self {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
+            address_balance_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
@@ -54,6 +57,13 @@ impl ApiServerInMemoryStorage {
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         Ok(true)
+    }
+
+    fn get_address_balance(&self, address: &str) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.address_balance_table.get(address).map_or_else(
+            || Ok(None),
+            |balance| Ok(balance.last_key_value().map(|(_, &v)| v)),
+        )
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
@@ -120,6 +130,40 @@ impl ApiServerInMemoryStorage {
     ) -> Result<(), ApiServerStorageError> {
         self.best_block = (0.into(), chain_config.genesis_block_id());
         self.storage_version = CURRENT_STORAGE_VERSION;
+
+        Ok(())
+    }
+
+    fn del_address_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        // Inefficient, but acceptable for testing with InMemoryStorage
+
+        self.address_balance_table.iter_mut().for_each(|(_, balance)| {
+            balance
+                .range((Excluded(block_height), Unbounded))
+                .map(|b| b.0.into_int())
+                .collect::<Vec<_>>()
+                .iter()
+                .for_each(|&b| {
+                    balance.remove(&BlockHeight::new(b));
+                })
+        });
+
+        Ok(())
+    }
+
+    fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.address_balance_table
+            .entry(address.to_string())
+            .or_default()
+            .insert(block_height, amount);
 
         Ok(())
     }

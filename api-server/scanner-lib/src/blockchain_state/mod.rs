@@ -19,9 +19,15 @@ use api_server_common::storage::storage_api::{
     ApiServerTransactionRw,
 };
 use common::{
-    chain::{Block, GenBlock},
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    address::Address,
+    chain::{
+        config::ChainConfig, output_value::OutputValue, transaction::OutPointSourceId, Block,
+        Destination, GenBlock, TxInput, TxOutput,
+    },
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
+use std::ops::{Add, Sub};
+use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -30,12 +36,16 @@ pub enum BlockchainStateError {
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
+    chain_config: Arc<ChainConfig>,
     storage: S,
 }
 
 impl<S: ApiServerStorage> BlockchainState<S> {
-    pub fn new(storage: S) -> Self {
-        Self { storage }
+    pub fn new(chain_config: Arc<ChainConfig>, storage: S) -> Self {
+        Self {
+            chain_config,
+            storage,
+        }
     }
 
     pub fn storage(&self) -> &S {
@@ -48,8 +58,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let db_tx = self.storage.transaction_ro().await?;
-        let best_block = db_tx.get_best_block().await?;
+        let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
+        let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
         Ok(best_block)
     }
 
@@ -58,36 +68,231 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw().await?;
+        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
 
         // Disconnect blocks from main-chain
-        while db_tx.get_best_block().await?.0 > common_block_height {
+        while db_tx.get_best_block().await.expect("Unable to get best block").0
+            > common_block_height
+        {
             let current_best = db_tx.get_best_block().await?;
             logging::log::info!("Disconnecting block: {:?}", current_best);
-            db_tx.del_main_chain_block_id(current_best.0).await?;
+
+            db_tx
+                .del_main_chain_block_id(current_best.0)
+                .await
+                .expect("Unable to disconnect block");
         }
+
+        // Disconnect address balances
+        db_tx
+            .del_address_balance_above_height(common_block_height)
+            .await
+            .expect("Unable to disconnect address balance");
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
-            db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
+            db_tx
+                .set_main_chain_block_id(block_height, block.get_id())
+                .await
+                .expect("Unable to connect block");
+
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
+
+            update_balances_from_outputs(
+                Arc::clone(&self.chain_config),
+                &mut db_tx,
+                block_height,
+                block.block_reward().outputs(),
+            )
+            .await
+            .expect("Unable to update balances from block reward outputs");
 
             for tx in block.transactions() {
                 db_tx
                     .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
-                    .await?;
+                    .await
+                    .expect("Unable to set transaction");
+
+                update_balances_from_inputs(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    tx.inputs(),
+                )
+                .await
+                .expect("Unable to update balances from inputs");
+
+                update_balances_from_outputs(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    block_height,
+                    tx.outputs(),
+                )
+                .await
+                .expect("Unable to update balances from transaction outputs");
             }
 
-            db_tx.set_block(block.get_id(), &block).await?;
-            db_tx.set_best_block(block_height, block.get_id().into()).await?;
+            db_tx.set_block(block.get_id(), &block).await.expect("Unable to set block");
+
+            db_tx
+                .set_best_block(block_height, block.get_id().into())
+                .await
+                .expect("Unable to set best block");
         }
 
-        db_tx.commit().await?;
-
+        db_tx.commit().await.expect("Unable to commit transaction");
         logging::log::info!("Database commit completed successfully");
 
         Ok(())
     }
+}
+
+async fn update_balances_from_inputs<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    inputs: &[TxInput],
+) -> Result<(), ApiServerStorageError> {
+    for input in inputs {
+        match input {
+            TxInput::Account(_) => {
+                // TODO
+            }
+            TxInput::Utxo(outpoint) => {
+                match outpoint.source_id() {
+                    OutPointSourceId::BlockReward(_block_id) => {
+                        // TODO
+                    }
+                    OutPointSourceId::Transaction(transaction_id) => {
+                        let input_transaction = db_tx
+                            .get_transaction(transaction_id)
+                            .await?
+                            .expect("Transaction should exist");
+
+                        assert!(
+                            input_transaction.1.transaction().outputs().len()
+                                > outpoint.output_index() as usize
+                        );
+
+                        match &input_transaction.1.transaction().outputs()
+                            [outpoint.output_index() as usize]
+                        {
+                            TxOutput::Burn(_)
+                            | TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::CreateStakePool(_, _)
+                            | TxOutput::DataDeposit(_)
+                            | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::IssueFungibleToken(_)
+                            | TxOutput::IssueNft(_, _, _)
+                            | TxOutput::ProduceBlockFromStake(_, _) => {}
+                            TxOutput::LockThenTransfer(output_value, destination, _)
+                            | TxOutput::Transfer(output_value, destination) => {
+                                match destination {
+                                    Destination::PublicKey(_) | Destination::Address(_) => {
+                                        let address =
+                                            Address::<Destination>::new(&chain_config, destination)
+                                                .expect("Unable to encode destination");
+
+                                        match output_value {
+                                            OutputValue::TokenV0(_)
+                                            | OutputValue::TokenV1(_, _) => {
+                                                // TODO
+                                            }
+                                            OutputValue::Coin(amount) => {
+                                                let current_balance = db_tx
+                                                    .get_address_balance(address.get())
+                                                    .await
+                                                    .expect("Unable to get balance")
+                                                    .unwrap_or(Amount::ZERO);
+
+                                                let new_amount = current_balance
+                                                    .sub(*amount)
+                                                    .expect("Balance should not underflow");
+
+                                                db_tx
+                                                    .set_address_balance_at_height(
+                                                        address.get(),
+                                                        new_amount,
+                                                        block_height,
+                                                    )
+                                                    .await
+                                                    .expect("Unable to update balance")
+                                            }
+                                        }
+                                    }
+                                    Destination::AnyoneCanSpend
+                                    | Destination::ClassicMultisig(_)
+                                    | Destination::ScriptHash(_) => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn update_balances_from_outputs<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    outputs: &[TxOutput],
+) -> Result<(), ApiServerStorageError> {
+    for output in outputs {
+        match output {
+            TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::ProduceBlockFromStake(_, _) => {}
+            TxOutput::Transfer(output_value, destination)
+            | TxOutput::LockThenTransfer(output_value, destination, _) => {
+                match destination {
+                    Destination::PublicKey(_) | Destination::Address(_) => {
+                        let address = Address::<Destination>::new(&chain_config, destination)
+                            .expect("Unable to encode destination");
+
+                        match output_value {
+                            OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {
+                                // TODO
+                            }
+                            OutputValue::Coin(amount) => {
+                                let current_balance = db_tx
+                                    .get_address_balance(address.get())
+                                    .await
+                                    .expect("Unable to get balance")
+                                    .unwrap_or(Amount::ZERO);
+
+                                let new_amount = current_balance
+                                    .add(*amount)
+                                    .expect("Balance should not overflow");
+
+                                db_tx
+                                    .set_address_balance_at_height(
+                                        address.get(),
+                                        new_amount,
+                                        block_height,
+                                    )
+                                    .await
+                                    .expect("Unable to update balance")
+                            }
+                        }
+                    }
+                    Destination::AnyoneCanSpend
+                    | Destination::ClassicMultisig(_)
+                    | Destination::ScriptHash(_) => {}
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

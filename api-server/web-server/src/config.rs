@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::PostgresConfig;
+use api_server_common::{Network, PostgresConfig};
 use clap::Parser;
 use std::{
     net::{SocketAddr, TcpListener},
@@ -24,6 +24,12 @@ const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Parser)]
 pub struct ApiServerWebServerConfig {
+    /// Network
+    /// Default: `testnet`
+    /// Options: `mainnet`, `testnet`, `regtest`, `signet`
+    #[clap(long, value_enum, default_value_t = Network::Testnet)]
+    pub network: Network,
+
     /// The optional network address and port to listen on
     ///
     /// Format: `<ip>:<port>`

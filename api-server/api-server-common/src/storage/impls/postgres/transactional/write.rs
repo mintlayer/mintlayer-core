@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::storage::{
@@ -36,6 +36,28 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.initialize_database(chain_config).await?;
+
+        Ok(())
+    }
+
+    async fn del_address_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_address_balance_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_address_balance_at_height(address, amount, block_height).await?;
 
         Ok(())
     }
@@ -119,6 +141,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_storage_version().await?;
+
+        Ok(res)
+    }
+
+    async fn get_address_balance(
+        &self,
+        address: &str,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_balance(address).await?;
 
         Ok(res)
     }
