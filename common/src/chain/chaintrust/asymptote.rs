@@ -40,10 +40,10 @@ where
 const ALPHA: f64 = 0.025;
 
 // We scale the weights by this factor to ensure that they are resolvable as integers, to avoid using floating-point numbers.
-const SCALING_FACTOR: f64 = 1000000000.;
+const SCALING_FACTOR: f64 = 1e18;
 
 // The size of the precomputed weights
-const VEC_SIZE: u64 = 240;
+const VEC_SIZE: u64 = 1200;
 
 // Epsilon is the smallest positive value that can be represented by the scaled weights.
 const EPSILON: u64 = 1;
