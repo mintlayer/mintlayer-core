@@ -296,7 +296,7 @@ where
                     // If we got here, another "new tip" event should be generated soon,
                     // so we may ignore this one (and it makes sense to ignore it to avoid sending
                     // the same header list multiple times).
-                    log::warn!(
+                    log::debug!(
                         "[peer id = {}] Got new tip event with block id {}, but the tip has changed since then to {}",
                         self.id(),
                         new_tip_id,
@@ -398,7 +398,12 @@ where
 
         if self.chainstate_handle.is_initial_block_download().await? {
             log::debug!("[peer id = {}] Responding with empty headers list because the node is in initial block download", self.id());
-            // Respond with an empty list to avoid being marked as stalled
+            // Respond with an empty list to avoid being marked as stalled.
+            // Note: sending actual headers when in IBD is in general not a good idea, because
+            // we may not be on the correct chain. E.g. the current best block might be below
+            // the first checkpoint, so we'd have no way of knowing that the chain is bogus.
+            // And if we sent such headers to a peer that have seen a checkpointed block, it
+            // would ban us.
             self.send_headers(HeaderList::new(Vec::new()))?;
             return Ok(());
         }
@@ -526,6 +531,14 @@ where
             })
             .await?;
 
+        // Note: we've already checked that the total number of elements in the queue
+        // won't exceed max_request_blocks_count.
+        // TODO: we might want to overwrite the queue here instead of extending it, see
+        // https://github.com/mintlayer/mintlayer-core/issues/1324
+        // But note that it will complicate the requesting part, which will have to maintain
+        // two versions of incoming.requested_blocks, one for the most recent request and
+        // another one for the previous request(s), so that it can distinguish previously
+        // requested blocks that were "cancelled" in-flight from unsolicited ones.
         self.outgoing.blocks_queue.extend(block_ids.into_iter());
 
         Ok(())
@@ -766,7 +779,8 @@ where
             let headers = mem::take(&mut self.incoming.pending_headers);
             // Note: we could have received some of these blocks from another peer in the meantime,
             // so filter out any existing blocks from 'headers' first.
-            // TODO: we can still request the same block from multiple peers, which is sub-optimal.
+            // TODO: we can still request the same block from multiple peers, potentially from all
+            // of them, which is sub-optimal. See https://github.com/mintlayer/mintlayer-core/issues/1323
             let headers = if headers.is_empty() {
                 headers
             } else {
@@ -920,7 +934,10 @@ where
         self.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
             block_ids.clone(),
         )))?;
-        self.incoming.requested_blocks.extend(block_ids);
+        // Even in the hypothetical situation where the "debug_assert!(requested_blocks.is_empty())"
+        // above fires, we still don't want to give the peer a chance to cause uncontrollable memory
+        // allocations on the node. This is why we assign and not "extend".
+        self.incoming.requested_blocks = block_ids.into();
 
         self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
 
