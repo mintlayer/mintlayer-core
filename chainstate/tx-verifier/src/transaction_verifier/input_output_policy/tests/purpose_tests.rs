@@ -36,7 +36,7 @@ use crate::error::SpendStakeError;
 fn tx_stake_multiple_pools(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let source_inputs = super::outputs_utils::valid_tx_inputs();
+    let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
     let source_invalid_outputs = [stake_pool()];
 
@@ -70,7 +70,7 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
 fn tx_create_multiple_delegations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let source_inputs = super::outputs_utils::valid_tx_inputs();
+    let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
     let source_invalid_outputs = [create_delegation()];
 
@@ -106,8 +106,8 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs =
-        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), issue_nft()];
+    let valid_inputs = valid_tx_inputs_utxos();
+    // stake pool and create delegation are skipped to avoid dealing with uniqueness
     let valid_outputs = [
         lock_then_transfer(),
         transfer(),
@@ -115,6 +115,7 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
+        data_deposit(),
     ];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
@@ -137,10 +138,10 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = super::outputs_utils::valid_tx_inputs();
+    let valid_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
 
-    let invalid_inputs = invalid_tx_inputs();
+    let invalid_inputs = invalid_tx_inputs_utxos();
 
     let input_utxos = {
         let mut outputs =
@@ -174,7 +175,7 @@ fn produce_block_in_tx_output(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = super::outputs_utils::valid_tx_inputs();
+    let valid_inputs = super::outputs_utils::valid_tx_inputs_utxos();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
     let invalid_outputs = [produce_block()];
 
@@ -373,5 +374,42 @@ fn reward_many_to_none(#[case] seed: Seed) {
         ConnectTransactionError::SpendStakeError(SpendStakeError::ConsensusPoSError(
             consensus::ConsensusPoSError::MultipleKernels
         ))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reward_accounts_in_inputs(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let number_of_inputs = rng.gen_range(1..10);
+    let number_of_outputs = rng.gen_range(1..10);
+
+    let invalid_inputs = all_account_inputs();
+    let valid_outputs = [lock_then_transfer()];
+
+    let invalid_inputs = {
+        let mut outputs =
+            get_random_inputs_combination(&mut rng, &invalid_inputs, number_of_inputs);
+        outputs.shuffle(&mut rng);
+        outputs
+    };
+    let outputs = get_random_outputs_combination(&mut rng, &valid_outputs, number_of_outputs);
+
+    let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+    let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
+    let block = make_block(invalid_inputs, outputs);
+
+    assert_eq!(
+        check_reward_inputs_outputs_purposes(
+            &block.block_reward_transactable(),
+            &utxo_db,
+            block.get_id(),
+        )
+        .unwrap_err(),
+        ConnectTransactionError::IOPolicyError(
+            IOPolicyError::AttemptToUseAccountInputInReward,
+            block.get_id().into(),
+        )
     );
 }

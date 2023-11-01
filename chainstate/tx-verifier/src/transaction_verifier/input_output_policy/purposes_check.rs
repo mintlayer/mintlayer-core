@@ -37,6 +37,15 @@ pub fn check_reward_inputs_outputs_purposes(
 ) -> Result<(), ConnectTransactionError> {
     match reward.inputs() {
         Some(inputs) => {
+            // accounts cannot be used in block reward
+            inputs.iter().try_for_each(|input| match input {
+                TxInput::Utxo(_) => Ok(()),
+                TxInput::Account(_) => Err(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToUseAccountInputInReward,
+                    block_id.into(),
+                )),
+            })?;
+
             let inputs_utxos = super::get_inputs_utxos(&utxo_view, inputs)?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
@@ -135,7 +144,7 @@ pub fn check_tx_inputs_outputs_purposes(
     tx: &Transaction,
     inputs_utxos: &[TxOutput],
 ) -> Result<(), IOPolicyError> {
-    // Check inputs
+    // Check inputs utxos
     let are_inputs_valid = inputs_utxos.iter().all(|input_utxo| match input_utxo {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)

@@ -704,10 +704,10 @@ where
                         ),
                     )
                 );
-
-                self.check_operations_with_frozen_tokens(tx)?;
             }
         };
+
+        self.check_operations_with_frozen_tokens(tx)?;
 
         let input_undos = tx
             .inputs()
@@ -767,7 +767,7 @@ where
                         });
                         Some(res)
                     }
-                    | AccountOp::ChangeTokenAuthority(token_id, new_authority) => {
+                    AccountOp::ChangeTokenAuthority(token_id, new_authority) => {
                         let res = self.spend_input_from_account(account_input).and_then(|_| {
                             self.tokens_accounting_cache
                                 .change_authority(*token_id, new_authority.clone())
