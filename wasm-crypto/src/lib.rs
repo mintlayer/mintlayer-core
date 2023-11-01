@@ -22,7 +22,7 @@ use common::{
     },
 };
 use crypto::key::{
-    extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
+    extended::{ExtendedKeyKind, ExtendedPrivateKey},
     hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
     KeyKind, PrivateKey, PublicKey, Signature,
 };
@@ -57,8 +57,10 @@ pub fn make_private_key() -> Vec<u8> {
     key.0.encode()
 }
 
+/// Create the default account's extended private key for a given mnemonic
+/// derivation path: 44'/mintlayer_coin_type'/0'
 #[wasm_bindgen]
-pub fn make_default_account_pubkey(mnemonic: &str, network: Network) -> Result<Vec<u8>, Error> {
+pub fn make_default_account_privkey(mnemonic: &str, network: Network) -> Result<Vec<u8>, Error> {
     let mnemonic = bip39::Mnemonic::parse_in(Language::English, mnemonic)
         .map_err(|_| Error::InvalidMnemonic)?;
     let seed = mnemonic.to_seed("");
@@ -79,28 +81,30 @@ pub fn make_default_account_pubkey(mnemonic: &str, network: Network) -> Result<V
         .derive_absolute_path(&account_path)
         .expect("Should not fail to derive path");
 
-    Ok(account_privkey.to_public_key().encode())
+    Ok(account_privkey.encode())
 }
 
+/// From an extended private key create a receiving private key for a given key index
+/// derivation path: 44'/mintlayer_coin_type'/0'/0/key_index
 #[wasm_bindgen]
-pub fn make_receiving_address(public_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
+pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
     const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
 
-    let account_pubkey = ExtendedPublicKey::decode_all(&mut &public_key_bytes[..])
+    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
         .map_err(|_| Error::InvalidPublicKeyEncoding)?;
 
-    let receive_funds_pkey = account_pubkey
+    let receive_funds_pkey = account_privkey
         .derive_child(RECEIVE_FUNDS_INDEX)
         .expect("Should not fail to derive key");
 
-    let public_key: PublicKey = receive_funds_pkey
+    let private_key: PrivateKey = receive_funds_pkey
         .derive_child(ChildNumber::from_normal(
             U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
         ))
         .expect("Should not fail to derive key")
-        .into_public_key();
+        .private_key();
 
-    Ok(public_key.encode())
+    Ok(private_key.encode())
 }
 
 #[wasm_bindgen]

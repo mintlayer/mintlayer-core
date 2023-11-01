@@ -10,7 +10,7 @@ import {
   public_key_from_private_key,
   sign_message,
   verify_signature,
-  make_default_account_pubkey,
+  make_default_account_privkey,
   make_receiving_address,
   pubkey_to_string,
   Network,
@@ -51,7 +51,7 @@ export async function run_test() {
 
   try {
     const invalid_mnemonic = "asd asd";
-    make_default_account_pubkey(invalid_mnemonic, Network.Mainnet);
+    make_default_account_privkey(invalid_mnemonic, Network.Mainnet);
     throw new Error("Invalid mnemonic worked somehow!");
   } catch (e) {
     if (!e.includes("Invalid mnemonic string")) {
@@ -72,11 +72,11 @@ export async function run_test() {
 
   const mnemonic = "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
   {
-    const account_pubkey = make_default_account_pubkey(mnemonic, Network.Mainnet);
+    const account_pubkey = make_default_account_privkey(mnemonic, Network.Mainnet);
     console.log(`acc pubkey = ${account_pubkey}`);
 
-    const receiving_pubkey = make_receiving_address(account_pubkey, 0);
-    console.log(`receiving pubkey = ${receiving_pubkey}`);
+    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+    console.log(`receiving privkey = ${receiving_privkey}`);
 
     // test bad key index
     try {
@@ -89,6 +89,7 @@ export async function run_test() {
       console.log("Tested invalid key index with set MSB bit successfully");
     }
 
+    const receiving_pubkey = public_key_from_private_key(receiving_privkey);
     const address = pubkey_to_string(receiving_pubkey, Network.Mainnet);
     console.log(`address = ${address}`);
     if (address != "mtc1qyqmdpxk2w42w37qsdj0e8g54ysvnlvpny3svzqx") {
@@ -99,11 +100,13 @@ export async function run_test() {
 
   {
     // Test generating an address for Testnet
-    const account_pubkey = make_default_account_pubkey(mnemonic, Network.Testnet);
+    const account_pubkey = make_default_account_privkey(mnemonic, Network.Testnet);
     console.log(`acc pubkey = ${account_pubkey}`);
 
-    const receiving_pubkey = make_receiving_address(account_pubkey, 0);
-    console.log(`receiving pubkey = ${receiving_pubkey}`);
+    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+    console.log(`receiving privkey = ${receiving_privkey}`);
+
+    const receiving_pubkey = public_key_from_private_key(receiving_privkey);
     const address = pubkey_to_string(receiving_pubkey, Network.Testnet);
     console.log(`address = ${address}`);
     if (address != "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n") {
