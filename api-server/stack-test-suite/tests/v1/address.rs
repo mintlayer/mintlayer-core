@@ -136,7 +136,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
 
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
-                
+
                 bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount1)).unwrap();
                 bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount2)).unwrap();
 
