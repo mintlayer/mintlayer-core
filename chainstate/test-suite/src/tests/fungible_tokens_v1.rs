@@ -3416,6 +3416,94 @@ fn reorg_mint_lock_same_tx(#[case] seed: Seed) {
         assert_eq!(actual_data, expected_data);
     });
 }
+
+// Produce `genesis -> a -> b`.
+// Block `a` issues a tokens.
+// Block `b` changes authority and freeze token in the same tx.
+// Then produce parallel chain `genesis -> a -> c -> d`.
+// Check the storage
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_change_authority_freeze_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let genesis_block_id = tf.best_block_id();
+
+        let token_issuance =
+            make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::Yes);
+        let (token_id, issuance_block_id, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            token_issuance.clone(),
+        );
+
+        // Change authority and freeze in the same tx. The order is important to test undo
+        let (_, authority_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let new_authority = Destination::PublicKey(authority_pk);
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(utxo_with_change),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(0),
+                            AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::FreezeToken(token_id, IsTokenUnfreezable::No),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let new_data: tokens_accounting::FungibleTokenData = token_issuance.clone().into();
+        let new_data = new_data.change_authority(new_authority);
+        let new_data = new_data.try_freeze(IsTokenUnfreezable::No).unwrap();
+        assert!(new_data.is_frozen());
+
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(new_data),
+            )]),
+            circulating_supply: BTreeMap::new(),
+        };
+        assert_eq!(actual_data, expected_data);
+
+        // Add blocks from genesis to trigger the reorg
+        let block_e_id = tf.create_chain(&issuance_block_id.into(), 2, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(token_issuance.into()),
+            )]),
+            circulating_supply: BTreeMap::new(),
+        };
+        assert_eq!(actual_data, expected_data);
+    });
+}
+
 // Issue a token.
 // Try to mint without providing input signatures, check an error.
 // Try to mint with random keys, check an error.
