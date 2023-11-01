@@ -37,6 +37,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_address_balance(address)
     }
 
+    async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        self.transaction.get_address_transactions(address)
+    }
+
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
         self.transaction.get_block(block_id)
     }

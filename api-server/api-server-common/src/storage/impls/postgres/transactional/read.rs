@@ -52,6 +52,19 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<
+        Vec<common::primitives::Id<common::chain::Transaction>>,
+        crate::storage::storage_api::ApiServerStorageError,
+    > {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_transactions(address).await?;
+
+        Ok(res)
+    }
+
     async fn get_best_block(
         &self,
     ) -> Result<

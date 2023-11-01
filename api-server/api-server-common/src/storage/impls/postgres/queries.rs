@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use serialization::{DecodeAll, Encode};
 
@@ -187,6 +189,85 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"
+                    SELECT transaction_id
+                    FROM ml_address_transactions
+                    WHERE address = $1
+                    ORDER BY block_height DESC;
+                "#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let mut transaction_ids = vec![];
+
+        for row in &rows {
+            let transaction_id: Vec<u8> = row.get(0);
+            let transaction_id = Id::<Transaction>::decode_all(&mut transaction_id.as_slice())
+                .map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Transaction id deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+            transaction_ids.push(transaction_id);
+        }
+
+        Ok(transaction_ids)
+    }
+
+    pub async fn del_address_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_address_transactions WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn set_address_transactions_at_height(
+        &mut self,
+        address: &str,
+        transaction_ids: BTreeSet<Id<Transaction>>,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        for transaction_id in transaction_ids {
+            self.tx
+                .execute(
+                    r#"
+                        INSERT INTO ml_address_transactions (address, block_height, transaction_id)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (address, block_height, transaction_id)
+                        DO NOTHING;
+                    "#,
+                    &[&address.to_string(), &height, &transaction_id.encode()],
+                )
+                .await
+                .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
     pub async fn get_best_block(
         &mut self,
     ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
@@ -283,6 +364,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     amount bytea NOT NULL,
                     PRIMARY KEY (address, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_address_transactions (
+                    address TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    transaction_id bytea NOT NULL,
+                    PRIMARY KEY (address, block_height, transaction_id)
                 );",
         )
         .await?;

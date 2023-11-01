@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
@@ -56,6 +58,11 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    async fn get_address_transactions(
+        &self,
+        address: &str,
+    ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
+
     async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
@@ -89,10 +96,22 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn del_address_transactions_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_address_balance_at_height(
         &mut self,
         address: &str,
         amount: Amount,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_address_transactions_at_height(
+        &mut self,
+        address: &str,
+        transaction_ids: BTreeSet<Id<Transaction>>,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 

@@ -369,10 +369,23 @@ pub async fn address<T: ApiServerStorage>(
             ApiServerWebServerClientError::AddressNotFound,
         ))?;
 
+    let transaction_history = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_address_transactions(&address.to_string())
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
     Ok(Json(json!({
     "coin_balance": coin_balance.into_atoms(),
+    "transaction_history": transaction_history
     //TODO "token_balances": destination_summary.token_balances(),
-    //TODO "transaction_history": destination_summary.transaction_history(),
     })))
 
     // Ok(Json(json!({
