@@ -43,14 +43,8 @@ pub enum IOPolicyError {
     MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
-    #[error("Attempted to provide multiple unmint tokens inputs in a single tx")]
-    MultipleUnmintTokensInputs,
-    #[error("Attempted to provide multiple lock token supply inputs in a single tx")]
-    MultipleLockTokenSupplyInputs,
-    #[error("Attempted to provide multiple freeze token inputs in a single tx")]
-    MultipleFreezeTokenSupplyInputs,
-    #[error("Attempted to provide multiple unfreeze token inputs in a single tx")]
-    MultipleUnfreezeTokenSupplyInputs,
+    #[error("Attempted to provide multiple account operation inputs in a single tx")]
+    MultipleAccountOperations,
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
@@ -105,7 +99,7 @@ pub fn check_tx_inputs_outputs_policy(
                 )?;
                 Ok(Some(utxo.take_output()))
             }
-            TxInput::Account(_) => Ok(None),
+            TxInput::Account(..) | TxInput::AccountOp(..) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
@@ -142,7 +136,7 @@ fn get_inputs_utxos(
         .iter()
         .filter_map(|input| match input {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_) => None,
+            TxInput::Account(..) | TxInput::AccountOp(..) => None,
         })
         .map(|outpoint| {
             utxo_view

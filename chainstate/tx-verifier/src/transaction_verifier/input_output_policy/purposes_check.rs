@@ -13,12 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common::{
     chain::{
-        block::BlockRewardTransactable, signature::Signable, tokens::TokenId, AccountOp, Block,
-        Transaction, TxInput, TxOutput,
+        block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxInput, TxOutput,
     },
     primitives::Id,
 };
@@ -40,10 +37,12 @@ pub fn check_reward_inputs_outputs_purposes(
             // accounts cannot be used in block reward
             inputs.iter().try_for_each(|input| match input {
                 TxInput::Utxo(_) => Ok(()),
-                TxInput::Account(_) => Err(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToUseAccountInputInReward,
-                    block_id.into(),
-                )),
+                TxInput::Account(..) | TxInput::AccountOp(..) => {
+                    Err(ConnectTransactionError::IOPolicyError(
+                        IOPolicyError::AttemptToUseAccountInputInReward,
+                        block_id.into(),
+                    ))
+                }
             })?;
 
             let inputs_utxos = super::get_inputs_utxos(&utxo_view, inputs)?;
@@ -159,66 +158,19 @@ pub fn check_tx_inputs_outputs_purposes(
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
-    // only single unmint per token per tx is allowed
-    let mut unmint_tokens_inputs_count = BTreeMap::<TokenId, usize>::new();
-    // only single lock supply per token per tx is allowed
-    let mut lock_token_supply_inputs_count = BTreeMap::<TokenId, usize>::new();
-    // only single freeze per token per tx is allowed
-    let mut freeze_token_inputs_count = BTreeMap::<TokenId, usize>::new();
-    // only single unfreeze per token per tx is allowed
-    let mut unfreeze_token_inputs_count = BTreeMap::<TokenId, usize>::new();
-
-    tx.inputs().iter().for_each(|input| match input {
-        TxInput::Utxo(_) => { /* do nothing */ }
-        TxInput::Account(account) => match account.account() {
-            AccountOp::SpendDelegationBalance(_, _)
-            | AccountOp::MintTokens(_, _)
-            | AccountOp::ChangeTokenAuthority(_, _) => { /* do nothing */ }
-            AccountOp::UnmintTokens(token_id) => {
-                unmint_tokens_inputs_count
-                    .entry(*token_id)
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-            AccountOp::LockTokenSupply(token_id) => {
-                lock_token_supply_inputs_count
-                    .entry(*token_id)
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-            AccountOp::FreezeToken(token_id, _) => {
-                freeze_token_inputs_count
-                    .entry(*token_id)
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-            AccountOp::UnfreezeToken(token_id) => {
-                unfreeze_token_inputs_count
-                    .entry(*token_id)
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-        },
-    });
+    // if provided account operation must be unique and no other inputs is allowed
+    let account_operations_count = tx
+        .inputs()
+        .iter()
+        .filter(|input| match input {
+            TxInput::Utxo(_) | TxInput::Account(..) => false,
+            TxInput::AccountOp(..) => true,
+        })
+        .count();
 
     ensure!(
-        unmint_tokens_inputs_count.iter().all(|(_, count)| *count <= 1),
-        IOPolicyError::MultipleUnmintTokensInputs
-    );
-
-    ensure!(
-        lock_token_supply_inputs_count.iter().all(|(_, count)| *count <= 1),
-        IOPolicyError::MultipleLockTokenSupplyInputs
-    );
-
-    ensure!(
-        freeze_token_inputs_count.iter().all(|(_, count)| *count <= 1),
-        IOPolicyError::MultipleFreezeTokenSupplyInputs
-    );
-
-    ensure!(
-        unfreeze_token_inputs_count.iter().all(|(_, count)| *count <= 1),
-        IOPolicyError::MultipleUnfreezeTokenSupplyInputs
+        account_operations_count <= 1,
+        IOPolicyError::MultipleAccountOperations
     );
 
     // Check outputs

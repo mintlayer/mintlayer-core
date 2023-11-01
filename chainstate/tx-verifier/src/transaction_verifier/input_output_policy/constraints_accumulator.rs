@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TxInput, TxOutput},
+    chain::{
+        timelock::OutputTimeLock, AccountOp, AccountSpending, ChainConfig, PoolId, TxInput,
+        TxOutput,
+    },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
@@ -114,9 +117,9 @@ impl ConstrainedValueAccumulator {
                         }
                     };
                 }
-                TxInput::Account(account) => {
-                    match account.account() {
-                        AccountOp::SpendDelegationBalance(_, spend_amount) => {
+                TxInput::Account(_, account) => {
+                    match account {
+                        AccountSpending::DelegationBalance(_, spend_amount) => {
                             let block_distance =
                                 chain_config.as_ref().spend_share_maturity_distance(block_height);
 
@@ -127,6 +130,10 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
+                    };
+                }
+                TxInput::AccountOp(_, account) => {
+                    match account {
                         AccountOp::MintTokens(_, _)
                         | AccountOp::LockTokenSupply(_)
                         | AccountOp::UnmintTokens(_) => {
@@ -246,9 +253,8 @@ mod tests {
     use common::{
         chain::{
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-            timelock::OutputTimeLock, AccountNonce, AccountOp, ConsensusUpgrade, DelegationId,
-            Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
-            UtxoOutPoint,
+            timelock::OutputTimeLock, AccountNonce, ConsensusUpgrade, DelegationId, Destination,
+            NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
     };
@@ -353,7 +359,7 @@ mod tests {
         let inputs_utxos = vec![None];
         let inputs = vec![TxInput::from_account(
             AccountNonce::new(0),
-            AccountOp::SpendDelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
+            AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
         )];
 
         let outputs = vec![TxOutput::LockThenTransfer(
@@ -636,7 +642,7 @@ mod tests {
             ),
             TxInput::from_account(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(
+                AccountSpending::DelegationBalance(
                     delegation_id,
                     Amount::from_atoms(delegated_atoms),
                 ),

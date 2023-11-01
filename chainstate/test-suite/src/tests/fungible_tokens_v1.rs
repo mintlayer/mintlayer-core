@@ -149,7 +149,7 @@ fn mint_tokens_in_block(
 
     let tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::from_account(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
+            TxInput::from_account_op(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
             InputWitness::NoSignature(None),
         )
         .add_input(
@@ -221,7 +221,7 @@ fn unmint_tokens_in_block(
 
     let tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+            TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
             InputWitness::NoSignature(None),
         )
         .add_input(
@@ -716,7 +716,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             nonce,
                             AccountOp::MintTokens(token_id, amount_to_mint_over_limit),
                         ),
@@ -750,7 +750,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
+                TxInput::from_account_op(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -781,7 +781,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -815,7 +815,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -869,14 +869,14 @@ fn mint_twice_in_same_tx(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
@@ -938,11 +938,11 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
         // Unmint tokens twice
         let unmint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnmintTokens(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(AccountNonce::new(2), AccountOp::UnmintTokens(token_id)),
+                TxInput::from_account_op(AccountNonce::new(2), AccountOp::UnmintTokens(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -965,7 +965,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::MultipleUnmintTokensInputs,
+                    chainstate::IOPolicyError::MultipleAccountOperations,
                     unmint_tx_id.into()
                 )
             ))
@@ -1032,11 +1032,11 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
         // Unmint both tokens tokens same tx
         let unmint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_1)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_1)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_2)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnmintTokens(token_id_2)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -1114,7 +1114,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, Amount::from_atoms(1)),
                         ),
@@ -1162,7 +1162,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::MintTokens(token_id, Amount::from_atoms(2)),
                         ),
@@ -1214,7 +1214,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(3),
                             AccountOp::MintTokens(token_id, amount_to_unmint_plus_1),
                         ),
@@ -1251,7 +1251,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(3),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
@@ -1300,7 +1300,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
         // Mint more than i128::MAX
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, Amount::from_atoms(i128::MAX as u128 + 1)),
                 ),
@@ -1335,7 +1335,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
         // Mint tokens <= i128::MAX
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -1383,7 +1383,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         // Mint tokens i128::MAX
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, max_amount_to_mint),
                 ),
@@ -1412,7 +1412,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         // Try mint one more over i128::MAX
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(1),
                     AccountOp::MintTokens(token_id, Amount::from_atoms(1)),
                 ),
@@ -1442,7 +1442,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         let random_amount = Amount::from_atoms(rng.gen_range(0..i128::MAX as u128));
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(1),
                     AccountOp::MintTokens(token_id, random_amount),
                 ),
@@ -1496,7 +1496,7 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::from_account(AccountNonce::new(0), account_spending),
+                            TxInput::from_account_op(AccountNonce::new(0), account_spending),
                             InputWitness::NoSignature(None),
                         )
                         .add_input(
@@ -1583,7 +1583,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::MintTokens(token_id, amount_to_mint_input),
                         ),
@@ -1648,7 +1648,7 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, amount_to_unmint),
                         ),
@@ -1717,7 +1717,7 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -1796,7 +1796,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -1863,7 +1863,7 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -1962,7 +1962,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -2072,7 +2072,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
                     .with_inputs(inputs_to_unmint)
                     .with_witnesses(witnesses)
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -2122,7 +2122,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
+                TxInput::from_account_op(nonce, AccountOp::MintTokens(token_id, amount_to_mint)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -2156,7 +2156,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
         // Lock the supply
         let lock_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(nonce, AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(nonce, AccountOp::LockTokenSupply(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -2189,7 +2189,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             nonce,
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
@@ -2222,7 +2222,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::UnmintTokens(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::UnmintTokens(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -2272,7 +2272,7 @@ fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSu
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -2319,7 +2319,7 @@ fn try_lock_twice(#[case] seed: Seed) {
         // Lock the supply
         let lock_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(nonce, AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(nonce, AccountOp::LockTokenSupply(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
@@ -2345,7 +2345,7 @@ fn try_lock_twice(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(nonce, AccountOp::LockTokenSupply(token_id)),
+                        TxInput::from_account_op(nonce, AccountOp::LockTokenSupply(token_id)),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
@@ -2388,11 +2388,17 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
 
         let lock_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(
+                    AccountNonce::new(0),
+                    AccountOp::LockTokenSupply(token_id),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(
+                    AccountNonce::new(1),
+                    AccountOp::LockTokenSupply(token_id),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -2408,7 +2414,7 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::MultipleLockTokenSupplyInputs,
+                    chainstate::IOPolicyError::MultipleAccountOperations,
                     lock_tx_id.into()
                 )
             ))
@@ -2445,11 +2451,17 @@ fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
         // Unmint both tokens tokens same tx
         let unmint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id_1)),
+                TxInput::from_account_op(
+                    AccountNonce::new(0),
+                    AccountOp::LockTokenSupply(token_id_1),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id_2)),
+                TxInput::from_account_op(
+                    AccountNonce::new(0),
+                    AccountOp::LockTokenSupply(token_id_2),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
@@ -2518,7 +2530,7 @@ fn mint_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::MintTokens(token_id, some_amount),
                         ),
@@ -2550,7 +2562,7 @@ fn mint_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::MintTokens(token_id, some_amount),
                         ),
@@ -2627,7 +2639,7 @@ fn unmint_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, some_amount),
                         ),
@@ -2656,7 +2668,7 @@ fn unmint_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, some_amount),
                         ),
@@ -2718,7 +2730,7 @@ fn lock_supply_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -2747,7 +2759,7 @@ fn lock_supply_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -2788,7 +2800,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -2874,7 +2886,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -2935,7 +2947,7 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -3008,14 +3020,14 @@ fn mint_unmint_same_tx(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::UnmintTokens(token_id),
                         ),
@@ -3261,14 +3273,14 @@ fn reorg_mint_unmint_same_tx(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, second_mint),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::UnmintTokens(token_id),
                         ),
@@ -3363,14 +3375,14 @@ fn reorg_mint_lock_same_tx(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::MintTokens(token_id, second_mint),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -3452,14 +3464,14 @@ fn reorg_change_authority_freeze_same_tx(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::FreezeToken(token_id, IsTokenUnfreezable::No),
                         ),
@@ -3541,7 +3553,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
         // Try to mint without signature
         let tx_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -3681,7 +3693,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
 
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::from_account(
+                    TxInput::from_account_op(
                         AccountNonce::new(0),
                         AccountOp::MintTokens(token_id, amount_to_mint),
                     ),
@@ -3725,7 +3737,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         // Try to unmint without signature
         let tx_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnmintTokens(token_id)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnmintTokens(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -3870,7 +3882,10 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         // Try to lock without signature
         let tx_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(0), AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(
+                    AccountNonce::new(0),
+                    AccountOp::LockTokenSupply(token_id),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -3985,7 +4000,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
         // Mint with locked output
         let mint_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
@@ -4205,14 +4220,17 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::MintTokens(token_id, amount_to_mint),
                 ),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::LockTokenSupply(token_id)),
+                TxInput::from_account_op(
+                    AccountNonce::new(1),
+                    AccountOp::LockTokenSupply(token_id),
+                ),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
@@ -4235,7 +4253,7 @@ fn token_issue_mint_and_lock_and_data_deposit_not_enough_fee(#[case] seed: Seed)
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
@@ -4290,7 +4308,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         // Freeze the token
         let freeze_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(1),
                     AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                 ),
@@ -4321,7 +4339,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
@@ -4351,7 +4369,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::LockTokenSupply(token_id),
                         ),
@@ -4451,7 +4469,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         // Unfreeze the token
         let unfreeze_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(2), AccountOp::UnfreezeToken(token_id)),
+                TxInput::from_account_op(AccountNonce::new(2), AccountOp::UnfreezeToken(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -4481,14 +4499,14 @@ fn check_freezable_supply(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(3),
                             AccountOp::MintTokens(token_id, amount_to_mint),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(4),
                             AccountOp::UnmintTokens(token_id),
                         ),
@@ -4561,7 +4579,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                         ),
@@ -4588,7 +4606,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                         ),
@@ -4626,7 +4644,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
 
         let freeze_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                 ),
@@ -4670,7 +4688,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::UnfreezeToken(token_id),
                         ),
@@ -4697,7 +4715,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::UnfreezeToken(token_id),
                         ),
@@ -4754,7 +4772,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         // Try to freeze without signature
         let freeze_tx_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                 ),
@@ -4840,7 +4858,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         // Try to unfreeze without signature
         let unfreeze_tx_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -4941,7 +4959,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         // Try to change authority without signature
         let tx_1_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::ChangeTokenAuthority(token_id, new_authority),
                 ),
@@ -5046,7 +5064,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
 
         let tx_2_no_signatures = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(1),
                     AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
                 ),
@@ -5144,7 +5162,7 @@ fn check_change_authority(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
@@ -5202,14 +5220,14 @@ fn check_change_authority_twice(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority_1),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority_2.clone()),
                         ),
@@ -5255,7 +5273,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         // Freeze the token
         let freeze_token_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(
+                TxInput::from_account_op(
                     AccountNonce::new(0),
                     AccountOp::FreezeToken(token_id, IsTokenUnfreezable::Yes),
                 ),
@@ -5285,7 +5303,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(1),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
@@ -5312,7 +5330,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         // Unfreeze token
         let unfreeze_token_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_account(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
+                TxInput::from_account_op(AccountNonce::new(1), AccountOp::UnfreezeToken(token_id)),
                 InputWitness::NoSignature(None),
             )
             .add_input(
@@ -5335,7 +5353,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(2),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
@@ -5409,7 +5427,7 @@ fn change_authority_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority.clone()),
                         ),
@@ -5438,7 +5456,7 @@ fn change_authority_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_account(
+                        TxInput::from_account_op(
                             AccountNonce::new(0),
                             AccountOp::ChangeTokenAuthority(token_id, new_authority),
                         ),

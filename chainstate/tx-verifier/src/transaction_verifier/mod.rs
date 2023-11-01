@@ -70,7 +70,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
-        AccountNonce, AccountOp, AccountOutPoint, AccountType, Block, ChainConfig, DelegationId,
+        AccountNonce, AccountOp, AccountSpending, AccountType, Block, ChainConfig, DelegationId,
         GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
@@ -357,12 +357,12 @@ where
 
     fn spend_input_from_account(
         &mut self,
-        account_input: &AccountOutPoint,
+        nonce: AccountNonce,
+        account: AccountType,
     ) -> Result<(), ConnectTransactionError> {
-        let account = account_input.account();
         // Check that account nonce increments previous value
         let expected_nonce = match self
-            .get_account_nonce_count(account.clone().into())
+            .get_account_nonce_count(account)
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
         {
             Some(nonce) => nonce
@@ -371,27 +371,19 @@ where
             None => AccountNonce::new(0),
         };
         ensure!(
-            expected_nonce == account_input.nonce(),
-            ConnectTransactionError::NonceIsNotIncremental(
-                account.clone().into(),
-                expected_nonce,
-                account_input.nonce(),
-            )
+            expected_nonce == nonce,
+            ConnectTransactionError::NonceIsNotIncremental(account, expected_nonce, nonce,)
         );
         // store new nonce
-        self.account_nonce.insert(
-            account.clone().into(),
-            CachedOperation::Write(account_input.nonce()),
-        );
+        self.account_nonce.insert(account, CachedOperation::Write(nonce));
 
         Ok(())
     }
 
     fn unspend_input_from_account(
         &mut self,
-        account_input: &AccountOutPoint,
+        account: AccountType,
     ) -> Result<(), ConnectTransactionError> {
-        let account: AccountType = (account_input.account().clone()).into();
         let new_nonce = self
             .get_account_nonce_count(account)
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
@@ -452,31 +444,28 @@ where
                 TxInput::Utxo(outpoint) => {
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
-                TxInput::Account(account_input) => {
-                    match account_input.account() {
-                        AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount) => {
+                TxInput::Account(nonce, account_spending) => {
+                    match account_spending {
+                        AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
                             check_for_delegation_cleanup = Some(*delegation_id);
-                            let res = self.spend_input_from_account(account_input).and_then(|_| {
-                                // If the input spends from delegation account, this means the user is
-                                // spending part of their share in the pool.
-                                self.pos_accounting_adapter
-                                    .operations(tx_source)
-                                    .spend_share_from_delegation_id(
-                                        *delegation_id,
-                                        *withdraw_amount,
-                                    )
-                                    .map_err(ConnectTransactionError::PoSAccountingError)
-                            });
+                            let res = self
+                                .spend_input_from_account(*nonce, account_spending.clone().into())
+                                .and_then(|_| {
+                                    // If the input spends from delegation account, this means the user is
+                                    // spending part of their share in the pool.
+                                    self.pos_accounting_adapter
+                                        .operations(tx_source)
+                                        .spend_share_from_delegation_id(
+                                            *delegation_id,
+                                            *withdraw_amount,
+                                        )
+                                        .map_err(ConnectTransactionError::PoSAccountingError)
+                                });
                             Some(res)
                         }
-                        AccountOp::MintTokens(_, _)
-                        | AccountOp::UnmintTokens(_)
-                        | AccountOp::LockTokenSupply(_)
-                        | AccountOp::FreezeToken(_, _)
-                        | AccountOp::UnfreezeToken(_)
-                        | AccountOp::ChangeTokenAuthority(_, _) => None,
                     }
                 }
+                TxInput::AccountOp(..) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -613,8 +602,11 @@ where
         for input in tx.inputs() {
             match input {
                 TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(account_input) => {
-                    self.unspend_input_from_account(account_input)?;
+                TxInput::Account(_, account_spending) => {
+                    self.unspend_input_from_account(account_spending.clone().into())?;
+                }
+                TxInput::AccountOp(_, account_op) => {
+                    self.unspend_input_from_account(account_op.clone().into())?;
                 }
             };
         }
@@ -713,20 +705,21 @@ where
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(_) => None,
-                TxInput::Account(account_input) => match account_input.account() {
-                    AccountOp::SpendDelegationBalance(_, _) => None,
+                TxInput::Utxo(_) | TxInput::Account(_, _) => None,
+                TxInput::AccountOp(nonce, account_op) => match account_op {
                     AccountOp::MintTokens(token_id, amount) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .mint_tokens(*token_id, *amount)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .mint_tokens(*token_id, *amount)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                     AccountOp::UnmintTokens(token_id) => {
                         let res = self
-                            .spend_input_from_account(account_input)
+                            .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
                                 // actual amount to unmint is determined by the number of burned tokens in the outputs
                                 let total_burned =
@@ -744,35 +737,43 @@ where
                         Some(res)
                     }
                     AccountOp::LockTokenSupply(token_id) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .lock_circulating_supply(*token_id)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .lock_circulating_supply(*token_id)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                     AccountOp::FreezeToken(token_id, is_unfreezable) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .freeze_token(*token_id, *is_unfreezable)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .freeze_token(*token_id, *is_unfreezable)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                     AccountOp::UnfreezeToken(token_id) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .unfreeze_token(*token_id)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .unfreeze_token(*token_id)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                     AccountOp::ChangeTokenAuthority(token_id, new_authority) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .change_authority(*token_id, new_authority.clone())
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .change_authority(*token_id, new_authority.clone())
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                 },

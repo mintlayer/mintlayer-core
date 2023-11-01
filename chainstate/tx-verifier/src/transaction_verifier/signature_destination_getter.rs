@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
+    tokens::TokenId, AccountOp, AccountSpending, DelegationId, Destination, PoolId, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -137,14 +138,16 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(account_input) => match account_input.account() {
-                        AccountOp::SpendDelegationBalance(delegation_id, _) => Ok(accounting_view
+                    TxInput::Account(_, account_spending) => match account_spending {
+                        AccountSpending::DelegationBalance(delegation_id, _) => Ok(accounting_view
                             .get_delegation_data(*delegation_id)?
                             .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
                                 *delegation_id,
                             ))?
                             .spend_destination()
                             .clone()),
+                    },
+                    TxInput::AccountOp(_, account_op) => match account_op {
                         AccountOp::MintTokens(token_id, _)
                         | AccountOp::UnmintTokens(token_id)
                         | AccountOp::LockTokenSupply(token_id)
@@ -214,7 +217,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(_) => {
+                    TxInput::Account(..) | TxInput::AccountOp(..) => {
                         Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }

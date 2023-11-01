@@ -25,8 +25,8 @@ use common::{
             is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId,
             TokenIssuance, TokenTotalSupply,
         },
-        AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOp, AccountSpending, DelegationId, Destination, OutPointSourceId,
+        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
 };
@@ -542,27 +542,33 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                 }
-                TxInput::Account(outpoint) => {
+                TxInput::Account(nonce, spending) => {
                     if !already_present {
-                        match outpoint.account() {
-                            AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                        match spending {
+                            AccountSpending::DelegationBalance(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         delegation_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                 }
                             }
+                        }
+                    }
+                }
+                TxInput::AccountOp(nonce, op) => {
+                    if !already_present {
+                        match op {
                             AccountOp::MintTokens(token_id, amount) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.total_supply = data.total_supply.mint(*amount)?;
@@ -574,7 +580,7 @@ impl OutputCache {
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
@@ -587,7 +593,7 @@ impl OutputCache {
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.total_supply = data.total_supply.lock()?;
@@ -599,7 +605,7 @@ impl OutputCache {
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.frozen_state =
@@ -612,7 +618,7 @@ impl OutputCache {
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.frozen_state = data.frozen_state.unfreeze()?;
@@ -632,7 +638,7 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut DelegationData,
         delegation_id: &DelegationId,
-        outpoint: &common::chain::AccountOutPoint,
+        delegation_nonce: AccountNonce,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
         let next_nonce = data
@@ -641,11 +647,11 @@ impl OutputCache {
             .ok_or(WalletError::DelegationNonceOverflow(*delegation_id))?;
 
         ensure!(
-            outpoint.nonce() == next_nonce,
-            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, outpoint.nonce())
+            delegation_nonce == next_nonce,
+            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, delegation_nonce)
         );
 
-        data.last_nonce = Some(outpoint.nonce());
+        data.last_nonce = Some(delegation_nonce);
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
@@ -663,7 +669,7 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut TokenIssuanceData,
         delegation_id: &TokenId,
-        outpoint: &common::chain::AccountOutPoint,
+        token_nonce: AccountNonce,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
         let next_nonce = data
@@ -672,11 +678,11 @@ impl OutputCache {
             .ok_or(WalletError::TokenIssuanceNonceOverflow(*delegation_id))?;
 
         ensure!(
-            outpoint.nonce() == next_nonce,
-            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, outpoint.nonce())
+            token_nonce == next_nonce,
+            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, token_nonce)
         );
 
-        data.last_nonce = Some(outpoint.nonce());
+        data.last_nonce = Some(token_nonce);
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
@@ -698,17 +704,19 @@ impl OutputCache {
                         self.consumed.remove(outpoint);
                         self.unconfirmed_descendants.remove(tx_id);
                     }
-                    TxInput::Account(outpoint) => match outpoint.account() {
-                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                    TxInput::Account(nonce, spending) => match spending {
+                        AccountSpending::DelegationBalance(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
+                    },
+                    TxInput::AccountOp(nonce, op) => match op {
                         AccountOp::MintTokens(token_id, amount) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.total_supply = data.total_supply.unmint(*amount)?;
@@ -717,7 +725,7 @@ impl OutputCache {
 
                         AccountOp::UnmintTokens(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
@@ -726,7 +734,7 @@ impl OutputCache {
                         }
                         AccountOp::LockTokenSupply(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.total_supply = data.total_supply.unlock()?;
@@ -734,7 +742,7 @@ impl OutputCache {
                         }
                         AccountOp::FreezeToken(token_id, _) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
 
@@ -743,7 +751,7 @@ impl OutputCache {
                         }
                         AccountOp::UnfreezeToken(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.frozen_state = data.frozen_state.undo_unfreeze()?;
@@ -916,23 +924,25 @@ impl OutputCache {
                                     TxInput::Utxo(outpoint) => {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
-                                    TxInput::Account(outpoint) => match outpoint.account() {
-                                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                                    TxInput::Account(nonce, spending) => match spending {
+                                        AccountSpending::DelegationBalance(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
                                                 );
                                             }
                                         }
+                                    },
+                                    TxInput::AccountOp(nonce, op) => match op {
                                         AccountOp::MintTokens(token_id, amount) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -945,7 +955,7 @@ impl OutputCache {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -962,7 +972,7 @@ impl OutputCache {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -974,7 +984,7 @@ impl OutputCache {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -987,7 +997,7 @@ impl OutputCache {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),

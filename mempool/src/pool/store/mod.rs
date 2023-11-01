@@ -305,7 +305,7 @@ impl MempoolStore {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
-                TxInput::Account(_) => None,
+                TxInput::Account(..) | TxInput::AccountOp(..) => None,
             })
             .filter(|id| self.txs_by_id.contains_key(id))
             .collect::<BTreeSet<_>>();

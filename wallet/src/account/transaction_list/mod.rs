@@ -137,7 +137,7 @@ fn own_input<'a>(
                 .filter(|&output| own_output(key_chain, output)),
             None => None,
         },
-        TxInput::Account(_) => None,
+        TxInput::Account(..) | TxInput::AccountOp(..) => None,
     }
 }
 

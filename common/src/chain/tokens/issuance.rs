@@ -56,7 +56,7 @@ pub enum IsTokenUnfreezable {
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum IsTokenFrozen {
     #[codec(index = 0)]
     No(IsTokenFreezable),

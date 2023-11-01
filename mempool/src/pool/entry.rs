@@ -15,7 +15,8 @@
 
 use common::{
     chain::{
-        AccountNonce, AccountOp, AccountType, SignedTransaction, Transaction, TxInput, UtxoOutPoint,
+        AccountNonce, AccountOp, AccountSpending, AccountType, SignedTransaction, Transaction,
+        TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -53,11 +54,16 @@ impl TxDependency {
             .map(|id| Self::TxOutput(*id, outpt.output_index()))
     }
 
-    fn from_account(acct: &AccountOp, nonce: AccountNonce) -> Self {
+    fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
         match acct {
-            AccountOp::SpendDelegationBalance(_, _) => {
+            AccountSpending::DelegationBalance(_, _) => {
                 Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
+        }
+    }
+
+    fn from_account_op(acct: &AccountOp, nonce: AccountNonce) -> Self {
+        match acct {
             AccountOp::MintTokens(_, _)
             | AccountOp::UnmintTokens(_)
             | AccountOp::LockTokenSupply(_)
@@ -72,8 +78,11 @@ impl TxDependency {
     fn from_input_requires(input: &TxInput) -> Option<Self> {
         match input {
             TxInput::Utxo(utxo) => Self::from_utxo(utxo),
-            TxInput::Account(acct) => {
-                acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
+            TxInput::Account(nonce, spending) => {
+                nonce.decrement().map(|nonce| Self::from_account(spending, nonce))
+            }
+            TxInput::AccountOp(nonce, op) => {
+                nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
             }
         }
     }
@@ -81,7 +90,8 @@ impl TxDependency {
     fn from_input_provides(input: &TxInput) -> Option<Self> {
         match input {
             TxInput::Utxo(_) => None,
-            TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
+            TxInput::Account(nonce, spending) => Some(Self::from_account(spending, *nonce)),
+            TxInput::AccountOp(nonce, op) => Some(Self::from_account_op(op, *nonce)),
         }
     }
 }

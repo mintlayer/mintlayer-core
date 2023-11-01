@@ -30,7 +30,8 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        AccountOp, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
+        tokens::TokenId,
+        AccountOp, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
@@ -977,21 +978,32 @@ fn mutate_first_input(
                 ))
             }
         }
-        TxInput::Account(outpoint) => {
+        TxInput::Account(nonce, spending) => {
             if rng.gen::<bool>() {
-                TxInput::Account(AccountOutPoint::new(
-                    outpoint.nonce(),
-                    AccountOp::SpendDelegationBalance(
+                TxInput::Account(
+                    *nonce,
+                    AccountSpending::DelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
                         Amount::from_atoms(rng.gen()),
                     ),
-                ))
+                )
             } else {
-                let new_nonce = outpoint
-                    .nonce()
-                    .increment()
-                    .unwrap_or_else(|| outpoint.nonce().decrement().unwrap());
-                TxInput::Account(AccountOutPoint::new(new_nonce, outpoint.account().clone()))
+                let new_nonce = nonce.increment().unwrap_or_else(|| nonce.decrement().unwrap());
+                TxInput::Account(new_nonce, spending.clone())
+            }
+        }
+        TxInput::AccountOp(nonce, op) => {
+            if rng.gen::<bool>() {
+                TxInput::AccountOp(
+                    *nonce,
+                    AccountOp::ChangeTokenAuthority(
+                        TokenId::new(H256::random_using(rng)),
+                        Destination::AnyoneCanSpend,
+                    ),
+                )
+            } else {
+                let new_nonce = nonce.increment().unwrap_or_else(|| nonce.decrement().unwrap());
+                TxInput::AccountOp(new_nonce, op.clone())
             }
         }
     };

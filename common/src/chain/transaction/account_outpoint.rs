@@ -16,7 +16,7 @@
 use crate::{
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        AccountNonce, DelegationId,
+        DelegationId,
     },
     primitives::Amount,
 };
@@ -34,10 +34,17 @@ pub enum AccountType {
     Token(TokenId),
 }
 
-impl From<AccountOp> for AccountType {
-    fn from(spending: AccountOp) -> Self {
+impl From<AccountSpending> for AccountType {
+    fn from(spending: AccountSpending) -> Self {
         match spending {
-            AccountOp::SpendDelegationBalance(id, _) => AccountType::Delegation(id),
+            AccountSpending::DelegationBalance(id, _) => AccountType::Delegation(id),
+        }
+    }
+}
+
+impl From<AccountOp> for AccountType {
+    fn from(op: AccountOp) -> Self {
+        match op {
             AccountOp::MintTokens(id, _)
             | AccountOp::UnmintTokens(id)
             | AccountOp::LockTokenSupply(id)
@@ -52,48 +59,33 @@ impl From<AccountOp> for AccountType {
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
-pub enum AccountOp {
+pub enum AccountSpending {
     #[codec(index = 0)]
-    SpendDelegationBalance(DelegationId, Amount),
+    DelegationBalance(DelegationId, Amount),
+}
+
+// Represents an operation that can be performed on an account.
+// Operation must be unique and authorized.
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+pub enum AccountOp {
     // Create certain amount of tokens and add them to circulating supply
-    #[codec(index = 1)]
+    #[codec(index = 0)]
     MintTokens(TokenId, Amount),
     // Take tokens out of circulation. Not the same as Burn because unminting means that certain amount
     // of tokens is no longer supported by underlying fiat currency, which can only be done by the authority.
-    #[codec(index = 2)]
+    #[codec(index = 1)]
     UnmintTokens(TokenId),
     // After supply is locked tokens cannot be minted or unminted ever again.
     // Works only for Lockable tokens supply.
-    #[codec(index = 3)]
+    #[codec(index = 2)]
     LockTokenSupply(TokenId),
     // Freezing token forbids any operation with all the tokens (except for optional unfreeze)
-    #[codec(index = 4)]
+    #[codec(index = 3)]
     FreezeToken(TokenId, IsTokenUnfreezable),
     // By unfreezing token all operations are available for the tokens again
-    #[codec(index = 5)]
+    #[codec(index = 4)]
     UnfreezeToken(TokenId),
     // Change the authority who can authorize operations for a token
-    #[codec(index = 6)]
+    #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
-}
-
-/// Type of OutPoint that represents spending from an account
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
-pub struct AccountOutPoint {
-    nonce: AccountNonce,
-    account: AccountOp,
-}
-
-impl AccountOutPoint {
-    pub fn new(nonce: AccountNonce, account: AccountOp) -> Self {
-        Self { nonce, account }
-    }
-
-    pub fn nonce(&self) -> AccountNonce {
-        self.nonce
-    }
-
-    pub fn account(&self) -> &AccountOp {
-        &self.account
-    }
 }

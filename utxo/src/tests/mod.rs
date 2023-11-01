@@ -38,8 +38,8 @@ use common::{
         },
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -908,7 +908,7 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
     // spend from an account in a transaction
     let input = TxInput::from_account(
         AccountNonce::new(rng.gen()),
-        AccountOp::SpendDelegationBalance(
+        AccountSpending::DelegationBalance(
             DelegationId::new(H256::random_using(&mut rng)),
             Amount::from_atoms(rng.gen()),
         ),
