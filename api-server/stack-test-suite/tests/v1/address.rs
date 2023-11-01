@@ -251,7 +251,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
         assert_eq!(
             response.status(),
             200,
-            "Failed getting adddress balance for {address}"
+            "Failed getting address balance for {address}"
         );
 
         let body = response.text().await.unwrap();
@@ -459,7 +459,7 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(
             response.status(),
             200,
-            "Failed getting adddress balance for {address}"
+            "Failed getting address balance for {address}"
         );
 
         let body = response.text().await.unwrap();
