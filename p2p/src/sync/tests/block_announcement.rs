@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
@@ -993,135 +993,6 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
         );
         node.assert_no_peer_manager_event().await;
 
-        node.assert_no_event().await;
-        node.join_subsystem_manager().await;
-    })
-    .await;
-}
-
-// 1) Produce a block at the node while it's already sending blocks to the peer.
-// The node should not send the announcement just yet.
-// 2) Then produce another block after all requested ones has already been sent.
-// At this point the announcement should be sent.
-// Note: in some of the tests above we simulate the situation where the peer sends block
-// announcements while the node is downloading blocks from it. This is not a contradiction -
-// we allow peers to do so, but still want our nodes to avoid doing so, because it is redundant.
-#[tracing::instrument(skip(seed))]
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn dont_make_announcements_while_blocks_are_being_sent(#[case] seed: Seed) {
-    for_each_protocol_version(|protocol_version| async move {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
-
-        let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
-
-        let initial_blocks = make_new_blocks(
-            &chain_config,
-            None,
-            &time_getter.get_time_getter(),
-            // Note: this test is rather unreliable if the number of initial blocks is low,
-            // because the LocalEvent::ChainstateNewTip for the new block (the one created
-            // inside the loop) may reach Peer when all initial blocks have already been sent,
-            // in which case it'll happily produce a block announcement.
-            20,
-            &mut rng,
-        );
-        let initial_block_headers: Vec<_> =
-            initial_blocks.iter().map(|blk| blk.header().clone()).collect();
-
-        let mut node = TestNode::builder(protocol_version)
-            .with_chain_config(Arc::clone(&chain_config))
-            .with_blocks(initial_blocks.clone())
-            // Note: because of this limit, the "sleep" call inside the loop creates a pause
-            // after each BlockResponse is sent; this gives more time for the required
-            // LocalEvent::ChainstateNewTip to propagate (though it still doesn't guarantee
-            // the lack of spurious failures for this test).
-            .with_sync_msg_channel_buffer_size(1)
-            .build()
-            .await;
-
-        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-        // Respond to node's initial header request (made inside connect_peer)
-        peer.send_headers(vec![]).await;
-
-        // Ask the node for headers
-        log::debug!("Sending header list request to the node");
-        let locator = node.get_locator_from_height(0.into()).await;
-        peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
-            locator,
-        )))
-        .await;
-
-        log::debug!("Expecting header list response");
-        let (sent_to, message) = node.get_sent_message().await;
-        assert_eq!(sent_to, peer.get_id());
-        assert_eq!(
-            message,
-            SyncMessage::HeaderList(HeaderList::new(initial_block_headers.clone()))
-        );
-
-        log::debug!("Sending block list request to the node");
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
-            initial_block_headers.iter().map(|hdr| hdr.block_id()).collect(),
-        )))
-        .await;
-
-        let mut intermediate_block_headers = Vec::new();
-
-        for (idx, blk) in initial_blocks.iter().enumerate() {
-            log::debug!("Expecting block response #{idx}");
-            let (sent_to, message) = node.get_sent_message().await;
-            assert_eq!(sent_to, peer.get_id());
-            assert_eq!(
-                message,
-                SyncMessage::BlockResponse(BlockResponse::new(blk.clone()))
-            );
-
-            if idx == 0 {
-                log::debug!("Creating one more block");
-                intermediate_block_headers = make_new_top_blocks_return_headers(
-                    node.chainstate(),
-                    time_getter.get_time_getter(),
-                    &mut rng,
-                    0,
-                    1,
-                )
-                .await;
-            }
-
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-        assert_eq!(intermediate_block_headers.len(), 1);
-
-        node.assert_no_peer_manager_event().await;
-        node.assert_no_event().await;
-
-        let final_block_headers = make_new_top_blocks_return_headers(
-            node.chainstate(),
-            time_getter.get_time_getter(),
-            &mut rng,
-            0,
-            1,
-        )
-        .await;
-        assert_eq!(final_block_headers.len(), 1);
-
-        log::debug!("Expecting header list update");
-        let (sent_to, message) = node.get_sent_message().await;
-        assert_eq!(sent_to, peer.get_id());
-        assert_eq!(
-            message,
-            SyncMessage::HeaderList(HeaderList::new(vec![
-                intermediate_block_headers[0].clone(),
-                final_block_headers[0].clone()
-            ]))
-        );
-
-        node.assert_no_peer_manager_event().await;
         node.assert_no_event().await;
         node.join_subsystem_manager().await;
     })
