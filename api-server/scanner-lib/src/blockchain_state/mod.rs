@@ -210,7 +210,7 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
 
                                         address_transactions
                                             .entry(address.clone())
-                                            .or_insert_with(BTreeSet::new)
+                                            .or_default()
                                             .insert(transaction_id);
 
                                         match output_value {
@@ -300,7 +300,7 @@ async fn update_address_tables_from_outputs<T: ApiServerStorageWrite>(
                         transaction_id_maybe.map(|transaction_id| {
                             address_transactions
                                 .entry(address.clone())
-                                .or_insert_with(BTreeSet::new)
+                                .or_default()
                                 .insert(transaction_id)
                         });
 
