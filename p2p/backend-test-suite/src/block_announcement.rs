@@ -94,7 +94,6 @@ where
             peer2.peer_id,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
-        .await
         .unwrap();
 
     let mut sync_msg_rx_2 = match sync2.poll_next().await.unwrap() {
@@ -131,7 +130,6 @@ where
             peer1.peer_id,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
-        .await
         .unwrap();
 
     let mut sync_msg_rx_1 = match sync1.poll_next().await.unwrap() {
@@ -238,7 +236,6 @@ where
             peer2.peer_id,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
-        .await
         .unwrap();
 
     shutdown.store(true);
