@@ -113,7 +113,7 @@ pub async fn handle_message_processing_result(
 }
 
 /// This function is used to update peers_best_block_that_we_have.
-/// The "better" block is the one that is on the main chain and has bigger height.
+/// The "better" block is the one that is on the main chain and has a higher chain-trust.
 /// In the case of a tie, new_block_id is preferred.
 pub fn choose_peers_best_block(
     chainstate: &dyn ChainstateInterface,
@@ -126,14 +126,10 @@ pub fn choose_peers_best_block(
         (Some(old_id), Some(new_id)) => {
             let old_block_chain_trust = chainstate
                 .get_gen_block_index(&old_id)?
-                .map_or(Uint256::ZERO, |idx: chainstate::GenBlockIndex| {
-                    idx.chain_trust()
-                });
+                .map_or(Uint256::ZERO, |idx| idx.chain_trust());
             let new_block_chain_trust = chainstate
                 .get_gen_block_index(&new_id)?
-                .map_or(Uint256::ZERO, |idx: chainstate::GenBlockIndex| {
-                    idx.chain_trust()
-                });
+                .map_or(Uint256::ZERO, |idx| idx.chain_trust());
             if new_block_chain_trust >= old_block_chain_trust {
                 Ok(Some(new_id))
             } else {
