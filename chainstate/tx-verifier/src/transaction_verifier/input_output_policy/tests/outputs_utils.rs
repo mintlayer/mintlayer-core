@@ -19,10 +19,10 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
+            TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        DelegationId, Destination, PoolId, TxOutput,
+        AccountNonce, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -76,15 +76,15 @@ pub fn valid_tx_outputs() -> [TxOutput; 9] {
     ]
 }
 
-pub fn valid_tx_inputs() -> [TxOutput; 5] {
+pub fn valid_tx_inputs_utxos() -> [TxOutput; 5] {
     [transfer(), lock_then_transfer(), stake_pool(), produce_block(), issue_nft()]
 }
 
-pub fn invalid_tx_inputs() -> [TxOutput; 5] {
+pub fn invalid_tx_inputs_utxos() -> [TxOutput; 5] {
     [burn(), delegate_staking(), create_delegation(), issue_tokens(), data_deposit()]
 }
 
-pub fn invalid_block_reward_for_pow() -> [TxOutput; 8] {
+pub fn invalid_block_reward_for_pow() -> [TxOutput; 9] {
     [
         transfer(),
         burn(),
@@ -94,6 +94,40 @@ pub fn invalid_block_reward_for_pow() -> [TxOutput; 8] {
         delegate_staking(),
         issue_nft(),
         issue_tokens(),
+        data_deposit(),
+    ]
+}
+
+pub fn all_account_inputs() -> [TxInput; 7] {
+    [
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::SpendDelegationBalance(DelegationId::new(H256::zero()), Amount::ZERO),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::MintTokens(TokenId::zero(), Amount::ZERO),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::UnmintTokens(TokenId::zero()),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::LockTokenSupply(TokenId::zero()),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::FreezeToken(TokenId::zero(), IsTokenUnfreezable::No),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::UnfreezeToken(TokenId::zero()),
+        ),
+        TxInput::from_account(
+            AccountNonce::new(0),
+            AccountOp::ChangeTokenAuthority(TokenId::zero(), Destination::AnyoneCanSpend),
+        ),
     ]
 }
 

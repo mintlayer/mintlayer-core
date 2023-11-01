@@ -361,6 +361,7 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::PledgeAmountNotFound(_) => 0,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
             IOPolicyError::AttemptToViolateFeeRequirements => 0,
+            IOPolicyError::AttemptToUseAccountInputInReward => 100,
         }
     }
 }

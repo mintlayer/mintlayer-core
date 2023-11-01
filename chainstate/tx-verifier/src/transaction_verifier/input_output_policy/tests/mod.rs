@@ -35,6 +35,21 @@ mod constraints_tests;
 mod outputs_utils;
 mod purpose_tests;
 
+fn get_random_inputs_combination(
+    rng: &mut impl Rng,
+    source: &[TxInput],
+    result_len: usize,
+) -> Vec<TxInput> {
+    source
+        .iter()
+        .combinations_with_replacement(result_len)
+        .choose(rng)
+        .unwrap()
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>()
+}
+
 fn get_random_outputs_combination(
     rng: &mut impl Rng,
     source: &[TxOutput],

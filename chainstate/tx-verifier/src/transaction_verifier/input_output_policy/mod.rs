@@ -69,6 +69,8 @@ pub enum IOPolicyError {
     PledgeAmountNotFound(PoolId),
     #[error("Spending non-spendable output: `{0:?}`")]
     SpendingNonSpendableOutput(UtxoOutPoint),
+    #[error("Attempt to use account input in block reward")]
+    AttemptToUseAccountInputInReward,
 }
 
 pub fn check_reward_inputs_outputs_policy(
