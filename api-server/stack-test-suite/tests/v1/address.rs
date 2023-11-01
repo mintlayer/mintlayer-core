@@ -82,6 +82,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let alice_address =
                     Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
+                let mut alice_transaction_history: Vec<Id<Transaction>> = vec![];
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -90,6 +91,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let bob_address =
                     Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
                 let mut bob_balance = Amount::ZERO;
+                let mut bob_transaction_history: Vec<Id<Transaction>> = vec![];
 
                 // setup initial transaction
 
@@ -107,6 +109,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .add_output(previous_tx_out.clone())
                     .build();
 
+                alice_transaction_history.push(transaction.transaction().get_id());
                 let previous_transaction_id = transaction.transaction().get_id();
 
                 let mut previous_witness = InputWitness::Standard(
@@ -166,6 +169,9 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .add_output(bob_tx_out2.clone())
                     .build();
 
+                alice_transaction_history.push(transaction.transaction().get_id());
+                bob_transaction_history.push(transaction.transaction().get_id());
+
                 previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &alice_sk,
@@ -198,12 +204,14 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                         alice_address.get().to_string(),
                         json!({
                         "coin_balance": alice_balance.into_atoms(),
+                        "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
                         "coin_balance": bob_balance.into_atoms(),
+                        "transaction_history": bob_transaction_history,
                                 }),
                     ),
                 ]);
