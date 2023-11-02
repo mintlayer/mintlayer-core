@@ -98,12 +98,6 @@ pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> Vec<TxOut
     vec![burn_tokens]
 }
 
-pub fn make_zero_burn_output() -> Vec<TxOutput> {
-    // Just so that the transaction doesn't have 0 outputs
-    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(Amount::ZERO));
-    vec![token_change_supply_fee]
-}
-
 pub fn make_create_delegation_output(
     chain_config: &ChainConfig,
     address: Address<Destination>,

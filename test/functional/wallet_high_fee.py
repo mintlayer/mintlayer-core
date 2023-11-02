@@ -148,4 +148,3 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletSubmitTransaction().main()
-

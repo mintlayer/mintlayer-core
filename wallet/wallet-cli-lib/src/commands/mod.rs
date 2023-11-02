@@ -237,6 +237,12 @@ pub enum WalletCommand {
         token_id: String,
     },
 
+    /// Change the authority of a token
+    ChangeTokenAuthority {
+        token_id: String,
+        address: String,
+    },
+
     /// Rescan
     Rescan,
 
@@ -880,20 +886,20 @@ impl CommandHandler {
                 address,
                 amount,
             } => {
+                // TODO: maybe extract token_id and token_info in a helper function
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
                 let address = parse_address(chain_config, &address)?;
-                let amount = {
-                    let token_number_of_decimals = self
-                        .controller()?
-                        .get_token_number_of_decimals(token_id)
-                        .await
-                        .map_err(WalletCliError::Controller)?;
-                    parse_token_amount(token_number_of_decimals, &amount)?
-                };
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                let amount = parse_token_amount(token_info.token_number_of_decimals(), &amount)?;
 
                 self.get_synced_controller()
                     .await?
-                    .mint_tokens(token_id, amount, address)
+                    .mint_tokens(token_info, amount, address)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -901,18 +907,17 @@ impl CommandHandler {
 
             WalletCommand::UnmintTokens { token_id, amount } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
-                let amount = {
-                    let token_number_of_decimals = self
-                        .controller()?
-                        .get_token_number_of_decimals(token_id)
-                        .await
-                        .map_err(WalletCliError::Controller)?;
-                    parse_token_amount(token_number_of_decimals, &amount)?
-                };
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                let amount = parse_token_amount(token_info.token_number_of_decimals(), &amount)?;
 
                 self.get_synced_controller()
                     .await?
-                    .unmint_tokens(token_id, amount)
+                    .unmint_tokens(token_info, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
 
@@ -921,10 +926,15 @@ impl CommandHandler {
 
             WalletCommand::LockTokenSupply { token_id } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
 
                 self.get_synced_controller()
                     .await?
-                    .lock_token_supply(token_id)
+                    .lock_token_supply(token_info)
                     .await
                     .map_err(WalletCliError::Controller)?;
 
@@ -936,10 +946,15 @@ impl CommandHandler {
                 is_unfreezable,
             } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
 
                 self.get_synced_controller()
                     .await?
-                    .freeze_token(token_id, is_unfreezable.to_wallet_types())
+                    .freeze_token(token_info, is_unfreezable.to_wallet_types())
                     .await
                     .map_err(WalletCliError::Controller)?;
 
@@ -948,10 +963,33 @@ impl CommandHandler {
 
             WalletCommand::UnfreezeToken { token_id } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
 
                 self.get_synced_controller()
                     .await?
-                    .unfreeze_token(token_id)
+                    .unfreeze_token(token_info)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::ChangeTokenAuthority { token_id, address } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let address = parse_address(chain_config, &address)?;
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                self.get_synced_controller()
+                    .await?
+                    .change_token_authority(token_info, address)
                     .await
                     .map_err(WalletCliError::Controller)?;
 
@@ -1100,7 +1138,7 @@ impl CommandHandler {
                 amount,
                 utxos,
             } => {
-                let utxos: Vec<UtxoOutPoint> = utxos
+                let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
                     .collect::<Result<Vec<_>, WalletCliError>>()?;
@@ -1108,7 +1146,7 @@ impl CommandHandler {
                 let address = parse_address(chain_config, &address)?;
                 self.get_synced_controller()
                     .await?
-                    .send_to_address(address, amount, utxos)
+                    .send_to_address(address, amount, input_utxos)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -1121,18 +1159,17 @@ impl CommandHandler {
             } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
                 let address = parse_address(chain_config, &address)?;
-                let amount = {
-                    let token_number_of_decimals = self
-                        .controller()?
-                        .get_token_number_of_decimals_if_not_frozen(token_id)
-                        .await
-                        .map_err(WalletCliError::Controller)?;
-                    parse_token_amount(token_number_of_decimals, &amount)?
-                };
+                let token_info = self
+                    .controller()?
+                    .get_token_info(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                let amount = parse_token_amount(token_info.token_number_of_decimals(), &amount)?;
 
                 self.get_synced_controller()
                     .await?
-                    .send_tokens_to_address(token_id, address, amount)
+                    .send_tokens_to_address(token_info, address, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())

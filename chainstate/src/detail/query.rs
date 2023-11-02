@@ -19,8 +19,8 @@ use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         tokens::{
-            NftIssuance, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
-            RPCTokenTotalSupply, TokenAuxiliaryData, TokenData, TokenId,
+            NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
+            RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
         Block, GenBlock, Transaction, TxOutput,
     },
@@ -265,7 +265,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         token_data.metadata_uri().to_owned(),
                         circulating_supply,
                         (*token_data.total_supply()).into(),
-                        token_data.is_frozen(),
+                        token_data.is_locked(),
+                        RPCIsTokenFrozen::new(token_data.frozen_state()),
+                        token_data.authority().clone(),
                     ));
                     Ok(Some(rpc_issuance))
                 }
@@ -282,12 +284,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 .iter()
                 // find tokens
                 .find_map(|output| match output {
-                    TxOutput::Transfer(v, _)
-                    | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => v.token_data().and_then(|token_data| {
-                        to_rpc_token_info(token_data, token_id, &token_aux_data)
-                    }),
-                    TxOutput::CreateStakePool(_, _)
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
@@ -342,34 +342,5 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         id: &TokenId,
     ) -> Result<Option<Amount>, PropertyQueryError> {
         self.chainstate_ref.get_circulating_supply(id).map_err(PropertyQueryError::from)
-    }
-}
-
-fn to_rpc_token_info(
-    token_data: &TokenData,
-    token_id: TokenId,
-    token_aux_data: &TokenAuxiliaryData,
-) -> Option<RPCTokenInfo> {
-    match token_data {
-        TokenData::TokenIssuance(issuance) => {
-            Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
-                token_id,
-                issuance.token_ticker.clone(),
-                issuance.number_of_decimals,
-                issuance.metadata_uri.clone(),
-                issuance.amount_to_issue,
-                RPCTokenTotalSupply::Fixed(issuance.amount_to_issue),
-                false,
-            )))
-        }
-        TokenData::NftIssuance(nft) => {
-            Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
-                token_id,
-                token_aux_data.issuance_tx().get_id(),
-                token_aux_data.issuance_block_id(),
-                &nft.metadata,
-            )))
-        }
-        TokenData::TokenTransfer(_) => None,
     }
 }

@@ -167,6 +167,10 @@ impl FungibleTokenData {
         }
     }
 
+    pub fn frozen_state(&self) -> IsTokenFrozen {
+        self.frozen
+    }
+
     pub fn is_frozen(&self) -> bool {
         match self.frozen {
             IsTokenFrozen::No(_) => false,

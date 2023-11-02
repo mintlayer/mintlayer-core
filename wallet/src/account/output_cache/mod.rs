@@ -22,14 +22,16 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{
-            is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId,
-            TokenIssuance, TokenTotalSupply,
+            is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
+            RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen, RPCIsTokenUnfreezable,
+            RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId,
         PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
 };
+use itertools::Itertools;
 use pos_accounting::make_delegation_id;
 use utils::ensure;
 use wallet_types::{
@@ -40,6 +42,8 @@ use wallet_types::{
 };
 
 use crate::{WalletError, WalletResult};
+
+pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
 pub struct DelegationData {
     pub pool_id: PoolId,
@@ -98,6 +102,18 @@ impl From<TokenTotalSupply> for TokenCurrentSupplyState {
     }
 }
 
+impl From<RPCTokenTotalSupply> for TokenCurrentSupplyState {
+    fn from(value: RPCTokenTotalSupply) -> Self {
+        match value {
+            RPCTokenTotalSupply::Fixed(amount) => {
+                TokenCurrentSupplyState::Fixed(amount, Amount::ZERO)
+            }
+            RPCTokenTotalSupply::Lockable => TokenCurrentSupplyState::Lockable(Amount::ZERO),
+            RPCTokenTotalSupply::Unlimited => TokenCurrentSupplyState::Unlimited(Amount::ZERO),
+        }
+    }
+}
+
 impl TokenCurrentSupplyState {
     pub fn str_state(&self) -> &'static str {
         match self {
@@ -105,6 +121,16 @@ impl TokenCurrentSupplyState {
             Self::Locked(_) => "Locked",
             Self::Lockable(_) => "Lockable",
             Self::Fixed(_, _) => "Fixed",
+        }
+    }
+
+    #[cfg(test)]
+    pub fn current_supply(&self) -> Amount {
+        match self {
+            Self::Unlimited(amount)
+            | Self::Fixed(_, amount)
+            | Self::Locked(amount)
+            | Self::Lockable(amount) => *amount,
         }
     }
 
@@ -144,15 +170,6 @@ impl TokenCurrentSupplyState {
             | TokenCurrentSupplyState::Locked(_) => {
                 Err(WalletError::CannotLockTokenSupply(self.str_state()))
             }
-        }
-    }
-
-    pub fn current_supply(&self) -> Amount {
-        match self {
-            Self::Unlimited(amount)
-            | Self::Fixed(_, amount)
-            | Self::Locked(amount)
-            | Self::Lockable(amount) => *amount,
         }
     }
 
@@ -207,42 +224,170 @@ impl TokenCurrentSupplyState {
             }
         }
     }
+}
 
-    fn unlock(&self) -> WalletResult<TokenCurrentSupplyState> {
+pub struct FungibleTokenInfo {
+    frozen: TokenFreezableState,
+    last_nonce: Option<AccountNonce>,
+    total_supply: TokenCurrentSupplyState,
+    authority: Destination,
+}
+
+pub enum UnconfirmedTokenInfo {
+    OwnFungibleToken(TokenId, FungibleTokenInfo),
+    FungibleToken(TokenId, TokenFreezableState),
+    NonFungibleToken(TokenId),
+}
+
+impl UnconfirmedTokenInfo {
+    pub fn token_id(&self) -> &TokenId {
         match self {
-            TokenCurrentSupplyState::Locked(current) => {
-                Ok(TokenCurrentSupplyState::Lockable(*current))
+            Self::OwnFungibleToken(token_id, _)
+            | Self::FungibleToken(token_id, _)
+            | Self::NonFungibleToken(token_id) => token_id,
+        }
+    }
+
+    pub fn check_can_be_used(&self) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.frozen.check_can_be_used(),
+            Self::FungibleToken(_, state) => state.check_can_be_used(),
+            Self::NonFungibleToken(_) => Ok(()),
+        }
+    }
+
+    pub fn check_can_freeze(&self) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.frozen.check_can_freeze(),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            TokenCurrentSupplyState::Unlimited(_)
-            | TokenCurrentSupplyState::Fixed(_, _)
-            | TokenCurrentSupplyState::Lockable(_) => {
-                Err(WalletError::InconsistentUnlockTokenSupply(self.str_state()))
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
             }
+        }
+    }
+
+    pub fn check_can_unfreeze(&self) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.frozen.check_can_unfreeze(),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    pub fn get_next_nonce(&self) -> WalletResult<AccountNonce> {
+        match self {
+            Self::OwnFungibleToken(token_id, state) => state
+                .last_nonce
+                .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+                .ok_or(WalletError::TokenIssuanceNonceOverflow(*token_id)),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    pub fn authority(&self) -> WalletResult<&Destination> {
+        match self {
+            Self::OwnFungibleToken(_, state) => Ok(&state.authority),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    pub fn check_can_mint(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_mint(amount),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    pub fn check_can_unmint(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_unmint(amount),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    pub fn check_can_lock(&self) -> WalletResult<()> {
+        match self {
+            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_lock(),
+            Self::FungibleToken(token_id, _) => {
+                Err(WalletError::CannotChangeNotOwnedToken(*token_id))
+            }
+            Self::NonFungibleToken(token_id) => {
+                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn current_supply(&self) -> Option<Amount> {
+        match self {
+            Self::OwnFungibleToken(_, state) => Some(state.total_supply.current_supply()),
+            Self::FungibleToken(_, _) => None,
+            Self::NonFungibleToken(_) => None,
         }
     }
 }
 
 pub enum TokenFreezableState {
     NotFrozen(IsTokenFreezable),
-    Frozen(IsTokenFreezable, IsTokenUnfreezable),
+    Frozen(IsTokenUnfreezable),
+}
+
+impl From<RPCIsTokenFrozen> for TokenFreezableState {
+    fn from(value: RPCIsTokenFrozen) -> Self {
+        match value {
+            RPCIsTokenFrozen::No(is_freezable) => match is_freezable {
+                RPCIsTokenFreezable::No => Self::NotFrozen(IsTokenFreezable::No),
+                RPCIsTokenFreezable::Yes => Self::NotFrozen(IsTokenFreezable::Yes),
+            },
+            RPCIsTokenFrozen::Yes(is_unfreezable) => match is_unfreezable {
+                RPCIsTokenUnfreezable::No => Self::Frozen(IsTokenUnfreezable::No),
+                RPCIsTokenUnfreezable::Yes => Self::Frozen(IsTokenUnfreezable::Yes),
+            },
+        }
+    }
 }
 
 impl TokenFreezableState {
     pub fn check_can_be_used(&self) -> WalletResult<()> {
         match self {
-            Self::Frozen(_, _) => Err(WalletError::CannotUseFrozenToken),
+            Self::Frozen(_) => Err(WalletError::CannotUseFrozenToken),
             Self::NotFrozen(_) => Ok(()),
         }
     }
+
     fn freeze(&self, is_unfreezable: IsTokenUnfreezable) -> WalletResult<Self> {
         match self {
-            Self::NotFrozen(IsTokenFreezable::Yes) => {
-                Ok(Self::Frozen(IsTokenFreezable::Yes, is_unfreezable))
-            }
+            Self::NotFrozen(IsTokenFreezable::Yes) => Ok(Self::Frozen(is_unfreezable)),
             Self::NotFrozen(IsTokenFreezable::No) => {
                 Err(WalletError::CannotFreezeNotFreezableToken)
             }
-            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
+            Self::Frozen(_) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
         }
     }
 
@@ -252,64 +397,46 @@ impl TokenFreezableState {
             Self::NotFrozen(IsTokenFreezable::No) => {
                 Err(WalletError::CannotFreezeNotFreezableToken)
             }
-            Self::Frozen(_, _) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
+            Self::Frozen(_) => Err(WalletError::CannotFreezeAlreadyFrozenToken),
         }
     }
 
     fn unfreeze(&self) -> WalletResult<Self> {
         match self {
-            Self::Frozen(is_freezable, IsTokenUnfreezable::Yes) => {
-                Ok(Self::NotFrozen(*is_freezable))
-            }
-            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::Frozen(IsTokenUnfreezable::Yes) => Ok(Self::NotFrozen(IsTokenFreezable::Yes)),
+            Self::Frozen(IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
             Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
         }
     }
 
     pub fn check_can_unfreeze(&self) -> WalletResult<()> {
         match self {
-            Self::Frozen(_, IsTokenUnfreezable::Yes) => Ok(()),
-            Self::Frozen(_, IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
+            Self::Frozen(IsTokenUnfreezable::Yes) => Ok(()),
+            Self::Frozen(IsTokenUnfreezable::No) => Err(WalletError::CannotUnfreezeToken),
             Self::NotFrozen(_) => Err(WalletError::CannotUnfreezeANotFrozenToken),
         }
     }
-
-    fn undo_freeze(&self) -> WalletResult<Self> {
-        match self {
-            Self::Frozen(is_freezable, _) => Ok(Self::NotFrozen(*is_freezable)),
-            Self::NotFrozen(_) => Err(WalletError::MissingTokenId),
-        }
-    }
-
-    fn undo_unfreeze(&self) -> WalletResult<Self> {
-        match self {
-            Self::NotFrozen(IsTokenFreezable::Yes) => {
-                Ok(Self::Frozen(IsTokenFreezable::Yes, IsTokenUnfreezable::Yes))
-            }
-            Self::NotFrozen(IsTokenFreezable::No) | Self::Frozen(_, _) => {
-                Err(WalletError::MissingTokenId)
-            }
-        }
-    }
 }
 
+#[derive(Debug)]
 pub struct TokenIssuanceData {
-    pub total_supply: TokenCurrentSupplyState,
     pub authority: Destination,
     pub last_nonce: Option<AccountNonce>,
+
     /// last parent transaction if the parent is unconfirmed
     pub last_parent: Option<OutPointSourceId>,
-    pub frozen_state: TokenFreezableState,
+
+    /// unconfirmed transactions that modify the total supply or frozen state of this token
+    unconfirmed_txs: BTreeSet<OutPointSourceId>,
 }
 
 impl TokenIssuanceData {
-    fn new(data: TokenTotalSupply, authority: Destination, is_freezable: IsTokenFreezable) -> Self {
+    fn new(authority: Destination) -> Self {
         Self {
-            total_supply: data.into(),
             authority,
             last_nonce: None,
             last_parent: None,
-            frozen_state: TokenFreezableState::NotFrozen(is_freezable),
+            unconfirmed_txs: BTreeSet::new(),
         }
     }
 }
@@ -349,18 +476,7 @@ impl OutputCache {
     pub fn new(mut txs: Vec<(AccountWalletTxId, WalletTx)>) -> WalletResult<Self> {
         let mut cache = Self::empty();
 
-        txs.sort_by(|x, y| match (x.1.state(), y.1.state()) {
-            (TxState::Confirmed(h1, _, idx1), TxState::Confirmed(h2, _, idx2)) => {
-                (h1, idx1).cmp(&(h2, idx2))
-            }
-            (TxState::Confirmed(_, _, _), _) => std::cmp::Ordering::Less,
-            (_, TxState::Confirmed(_, _, _)) => std::cmp::Ordering::Greater,
-            (TxState::InMempool(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
-            (TxState::InMempool(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
-            (TxState::Inactive(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
-            (TxState::Inactive(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
-            (_, _) => std::cmp::Ordering::Equal,
-        });
+        txs.sort_by(|x, y| wallet_tx_order(&x.1, &y.1));
         for (tx_id, tx) in txs {
             cache.add_tx(tx_id.into_item_id(), tx)?;
         }
@@ -411,6 +527,61 @@ impl OutputCache {
 
     pub fn token_data(&self, token_id: &TokenId) -> Option<&TokenIssuanceData> {
         self.token_issuance.get(token_id)
+    }
+
+    pub fn get_token_unconfirmed_info<F: Fn(&Destination) -> bool>(
+        &self,
+        token_info: &RPCFungibleTokenInfo,
+        is_mine: F,
+    ) -> WalletResult<UnconfirmedTokenInfo> {
+        let token_data = match self.token_issuance.get(&token_info.token_id) {
+            Some(token_data) => {
+                if !is_mine(&token_data.authority) {
+                    return Ok(UnconfirmedTokenInfo::FungibleToken(
+                        token_info.token_id,
+                        token_info.frozen.into(),
+                    ));
+                }
+                token_data
+            }
+            // If it is not ours just return what is in the token_info
+            None => {
+                return Ok(UnconfirmedTokenInfo::FungibleToken(
+                    token_info.token_id,
+                    token_info.frozen.into(),
+                ));
+            }
+        };
+
+        let unconfirmed_txs = token_data
+            .unconfirmed_txs
+            .iter()
+            .map(|tx_id| self.txs.get(tx_id).expect("tx must be present"))
+            .sorted_by(|x, y| wallet_tx_order(x, y))
+            .collect_vec();
+
+        let mut frozen_state = token_info.frozen.into();
+        let mut total_supply: TokenCurrentSupplyState = token_info.total_supply.into();
+        total_supply = total_supply.mint(token_info.circulating_supply)?;
+        if token_info.is_locked {
+            total_supply = total_supply.lock()?;
+        }
+
+        for tx in unconfirmed_txs {
+            frozen_state = apply_freeze_mutations_from_tx(frozen_state, tx, &token_info.token_id)?;
+            total_supply =
+                apply_total_supply_mutations_from_tx(total_supply, tx, &token_info.token_id)?;
+        }
+
+        Ok(UnconfirmedTokenInfo::OwnFungibleToken(
+            token_info.token_id,
+            FungibleTokenInfo {
+                frozen: frozen_state,
+                last_nonce: token_data.last_nonce,
+                total_supply,
+                authority: token_data.authority.clone(),
+            },
+        ))
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
@@ -503,14 +674,8 @@ impl OutputCache {
                     let token_id = make_token_id(input0_outpoint).ok_or(WalletError::NoUtxos)?;
                     match issuance.as_ref() {
                         TokenIssuance::V1(data) => {
-                            self.token_issuance.insert(
-                                token_id,
-                                TokenIssuanceData::new(
-                                    data.total_supply,
-                                    data.authority.clone(),
-                                    data.is_freezable,
-                                ),
-                            );
+                            self.token_issuance
+                                .insert(token_id, TokenIssuanceData::new(data.authority.clone()));
                         }
                     }
                 }
@@ -542,92 +707,68 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                 }
-                TxInput::Account(outpoint) => {
-                    if !already_present {
-                        match outpoint.account() {
-                            AccountSpending::DelegationBalance(delegation_id, _) => {
-                                if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                    Self::update_delegation_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        delegation_id,
-                                        outpoint.nonce(),
-                                        tx_id,
-                                    )?;
-                                }
+                TxInput::Account(outpoint) => match outpoint.account() {
+                    AccountSpending::DelegationBalance(delegation_id, _) => {
+                        if !already_present {
+                            if let Some(data) = self.delegations.get_mut(delegation_id) {
+                                Self::update_delegation_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    delegation_id,
+                                    outpoint.nonce(),
+                                    tx_id,
+                                )?;
                             }
                         }
                     }
-                }
-                TxInput::AccountCommand(nonce, op) => {
-                    if !already_present {
-                        match op {
-                            AccountCommand::MintTokens(token_id, amount) => {
-                                if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                    Self::update_token_issuance_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        token_id,
-                                        *nonce,
-                                        tx_id,
-                                    )?;
-                                    data.total_supply = data.total_supply.mint(*amount)?;
-                                }
+                },
+                TxInput::AccountCommand(nonce, op) => match op {
+                    AccountCommand::MintTokens(token_id, _)
+                    | AccountCommand::UnmintTokens(token_id)
+                    | AccountCommand::LockTokenSupply(token_id)
+                    | AccountCommand::FreezeToken(token_id, _)
+                    | AccountCommand::UnfreezeToken(token_id) => {
+                        if let Some(data) = self.token_issuance.get_mut(token_id) {
+                            if !already_present {
+                                Self::update_token_issuance_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    token_id,
+                                    *nonce,
+                                    tx_id,
+                                )?;
                             }
-                            AccountCommand::UnmintTokens(token_id) => {
-                                if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                    Self::update_token_issuance_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        token_id,
-                                        *nonce,
-                                        tx_id,
-                                    )?;
-                                    let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                                    data.total_supply = data.total_supply.unmint(amount)?;
-                                }
+                            if is_unconfirmed {
+                                data.unconfirmed_txs.insert(tx_id.clone());
+                            } else {
+                                data.unconfirmed_txs.remove(tx_id);
                             }
-                            | AccountCommand::LockTokenSupply(token_id) => {
-                                if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                    Self::update_token_issuance_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        token_id,
-                                        *nonce,
-                                        tx_id,
-                                    )?;
-                                    data.total_supply = data.total_supply.lock()?;
-                                }
-                            }
-                            AccountCommand::FreezeToken(token_id, is_unfreezable) => {
-                                if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                    Self::update_token_issuance_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        token_id,
-                                        *nonce,
-                                        tx_id,
-                                    )?;
-                                    data.frozen_state =
-                                        data.frozen_state.freeze(*is_unfreezable)?;
-                                }
-                            }
-                            AccountCommand::UnfreezeToken(token_id) => {
-                                if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                    Self::update_token_issuance_state(
-                                        &mut self.unconfirmed_descendants,
-                                        data,
-                                        token_id,
-                                        *nonce,
-                                        tx_id,
-                                    )?;
-                                    data.frozen_state = data.frozen_state.unfreeze()?;
-                                }
-                            }
-                            AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                         }
                     }
-                }
+                    AccountCommand::ChangeTokenAuthority(token_id, authority) => {
+                        if let Some(data) = self.token_issuance.get_mut(token_id) {
+                            if !already_present {
+                                Self::update_token_issuance_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    token_id,
+                                    *nonce,
+                                    tx_id,
+                                )?;
+                                data.authority = authority.clone();
+                            }
+                            if is_unconfirmed {
+                                data.unconfirmed_txs.insert(tx_id.clone());
+                            } else {
+                                data.unconfirmed_txs.remove(tx_id);
+                            }
+                        } else if !is_unconfirmed {
+                            let mut data = TokenIssuanceData::new(authority.clone());
+                            data.last_nonce = Some(*nonce);
+                            self.token_issuance.insert(*token_id, data);
+                        }
+                    }
+                },
             }
         }
         Ok(())
@@ -714,50 +855,19 @@ impl OutputCache {
                         }
                     },
                     TxInput::AccountCommand(nonce, op) => match op {
-                        AccountCommand::MintTokens(token_id, amount) => {
+                        AccountCommand::MintTokens(token_id, _)
+                        | AccountCommand::UnmintTokens(token_id)
+                        | AccountCommand::LockTokenSupply(token_id)
+                        | AccountCommand::FreezeToken(token_id, _)
+                        | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.total_supply = data.total_supply.unmint(*amount)?;
+                                data.unconfirmed_txs.remove(tx_id);
                             }
                         }
-
-                        AccountCommand::UnmintTokens(token_id) => {
-                            if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                                data.total_supply = data.total_supply.mint(amount)?;
-                            }
-                        }
-                        AccountCommand::LockTokenSupply(token_id) => {
-                            if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.total_supply = data.total_supply.unlock()?;
-                            }
-                        }
-                        AccountCommand::FreezeToken(token_id, _) => {
-                            if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-
-                                data.frozen_state = data.frozen_state.undo_freeze()?;
-                            }
-                        }
-                        AccountCommand::UnfreezeToken(token_id) => {
-                            if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = nonce.decrement();
-                                data.last_parent =
-                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.frozen_state = data.frozen_state.undo_unfreeze()?;
-                            }
-                        }
-                        AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                     },
                 }
             }
@@ -811,25 +921,35 @@ impl OutputCache {
         );
 
         let token_id = match tx {
-            WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
+            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
+                .then_some(make_token_id(tx_data.get_transaction().inputs()))
+                .flatten(),
             WalletTx::Block(_) => None,
         };
 
-        // check token is not frozen and can be used
-        token_id
-            .and_then(|token_id| self.token_data(&token_id))
-            .map_or(Ok(()), |token_data| {
-                token_data.frozen_state.check_can_be_used()
-            })?;
-
         Ok((output, token_id))
+    }
+
+    pub fn find_used_tokens(
+        &self,
+        current_block_info: BlockInfo,
+        inputs: &[UtxoOutPoint],
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        inputs
+            .iter()
+            .filter_map(|utxo| {
+                self.find_unspent_unlocked_utxo(utxo, current_block_info)
+                    .map(|(_, token_id)| token_id)
+                    .transpose()
+            })
+            .collect()
     }
 
     pub fn find_utxos(
         &self,
         current_block_info: BlockInfo,
         inputs: Vec<UtxoOutPoint>,
-    ) -> WalletResult<BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>> {
+    ) -> WalletResult<Vec<UtxoWithTxOutput>> {
         inputs
             .into_iter()
             .map(|utxo| {
@@ -839,12 +959,14 @@ impl OutputCache {
             .collect()
     }
 
-    pub fn utxos_with_token_ids(
+    pub fn utxos_with_token_ids<F: Fn(&TxOutput) -> bool>(
         &self,
         current_block_info: BlockInfo,
         utxo_states: UtxoStates,
         locked_state: WithLocked,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+        output_filter: F,
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+        let output_filter = &output_filter;
         self.txs
             .values()
             .filter(|tx| is_in_state(tx, utxo_states))
@@ -865,6 +987,7 @@ impl OutputCache {
                                 outpoint,
                             )
                             && !is_v0_token_output(output)
+                            && output_filter(output)
                     })
                     .map(move |(output, outpoint)| {
                         let token_id = match tx {
@@ -938,7 +1061,12 @@ impl OutputCache {
                                         }
                                     },
                                     TxInput::AccountCommand(nonce, op) => match op {
-                                        AccountCommand::MintTokens(token_id, amount) => {
+                                        AccountCommand::MintTokens(token_id, _)
+                                        | AccountCommand::UnmintTokens(token_id)
+                                        | AccountCommand::LockTokenSupply(token_id)
+                                        | AccountCommand::FreezeToken(token_id, _)
+                                        | AccountCommand::UnfreezeToken(token_id)
+                                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -947,67 +1075,8 @@ impl OutputCache {
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
                                                 );
-                                                data.total_supply =
-                                                    data.total_supply.unmint(*amount)?;
+                                                data.unconfirmed_txs.remove(&tx_id.into());
                                             }
-                                        }
-                                        | AccountCommand::UnmintTokens(token_id) => {
-                                            if let Some(data) =
-                                                self.token_issuance.get_mut(token_id)
-                                            {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                                let amount = sum_burned_token_amount(
-                                                    tx.get_transaction().outputs(),
-                                                    token_id,
-                                                )?;
-                                                data.total_supply =
-                                                    data.total_supply.mint(amount)?;
-                                            }
-                                        }
-                                        | AccountCommand::LockTokenSupply(token_id) => {
-                                            if let Some(data) =
-                                                self.token_issuance.get_mut(token_id)
-                                            {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                                data.total_supply = data.total_supply.unlock()?;
-                                            }
-                                        }
-                                        AccountCommand::FreezeToken(token_id, _) => {
-                                            if let Some(data) =
-                                                self.token_issuance.get_mut(token_id)
-                                            {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                                data.frozen_state =
-                                                    data.frozen_state.undo_freeze()?;
-                                            }
-                                        }
-                                        AccountCommand::UnfreezeToken(token_id) => {
-                                            if let Some(data) =
-                                                self.token_issuance.get_mut(token_id)
-                                            {
-                                                data.last_nonce = nonce.decrement();
-                                                data.last_parent = find_parent(
-                                                    &self.unconfirmed_descendants,
-                                                    tx_id.into(),
-                                                );
-                                                data.frozen_state =
-                                                    data.frozen_state.undo_unfreeze()?;
-                                            }
-                                        }
-                                        AccountCommand::ChangeTokenAuthority(_, _) => {
-                                            unimplemented!()
                                         }
                                     },
                                 }
@@ -1029,6 +1098,21 @@ impl OutputCache {
             None | Some(WalletTx::Block(_)) => Err(WalletError::NoTransactionFound(transaction_id)),
             Some(WalletTx::Tx(tx)) => Ok(tx),
         }
+    }
+}
+
+fn wallet_tx_order(x: &WalletTx, y: &WalletTx) -> std::cmp::Ordering {
+    match (x.state(), y.state()) {
+        (TxState::Confirmed(h1, _, idx1), TxState::Confirmed(h2, _, idx2)) => {
+            (h1, idx1).cmp(&(h2, idx2))
+        }
+        (TxState::Confirmed(_, _, _), _) => std::cmp::Ordering::Less,
+        (_, TxState::Confirmed(_, _, _)) => std::cmp::Ordering::Greater,
+        (TxState::InMempool(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
+        (TxState::InMempool(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
+        (TxState::Inactive(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
+        (TxState::Inactive(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
+        (_, _) => std::cmp::Ordering::Equal,
     }
 }
 
@@ -1144,4 +1228,71 @@ fn find_parent(
         .iter()
         .find_map(|(parent_id, descendants)| descendants.contains(&tx_id).then_some(parent_id))
         .cloned()
+}
+
+fn apply_freeze_mutations_from_tx(
+    mut frozen_state: TokenFreezableState,
+    tx: &WalletTx,
+    own_token_id: &TokenId,
+) -> WalletResult<TokenFreezableState> {
+    for inp in tx.inputs() {
+        match inp {
+            TxInput::Utxo(_) => {}
+            TxInput::Account(acc) => match acc.account() {
+                AccountSpending::DelegationBalance(_, _) => {}
+            },
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::FreezeToken(token_id, is_unfreezable) => {
+                    if token_id == own_token_id {
+                        frozen_state = frozen_state.freeze(*is_unfreezable)?;
+                    }
+                }
+                AccountCommand::UnfreezeToken(token_id) => {
+                    if token_id == own_token_id {
+                        frozen_state = frozen_state.unfreeze()?;
+                    }
+                }
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenAuthority(_, _) => {}
+            },
+        }
+    }
+
+    Ok(frozen_state)
+}
+
+fn apply_total_supply_mutations_from_tx(
+    mut total_supply: TokenCurrentSupplyState,
+    tx: &WalletTx,
+    own_token_id: &TokenId,
+) -> WalletResult<TokenCurrentSupplyState> {
+    for inp in tx.inputs() {
+        match inp {
+            TxInput::Utxo(_) => {}
+            TxInput::Account(acc) => match acc.account() {
+                AccountSpending::DelegationBalance(_, _) => {}
+            },
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::MintTokens(token_id, amount) => {
+                    if token_id == own_token_id {
+                        total_supply = total_supply.mint(*amount)?;
+                    }
+                }
+                AccountCommand::UnmintTokens(token_id) => {
+                    let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
+                    total_supply = total_supply.unmint(amount)?;
+                }
+                AccountCommand::LockTokenSupply(_) => {
+                    total_supply = total_supply.lock()?;
+                }
+                AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenAuthority(_, _) => {}
+            },
+        }
+    }
+
+    Ok(total_supply)
 }

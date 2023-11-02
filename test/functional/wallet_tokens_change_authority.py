@@ -14,7 +14,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet tokens freeze and unfreeze test
+"""Wallet tokens change authority test
 
 Check that:
 * We can create a new wallet,
@@ -25,9 +25,9 @@ Check that:
 * issue new token
 * transfer some tokens
 * check balance
-* freeze the token
-* check that no more tokens can be sent, minted or unminted
-* unfreeze check that all operations are now allowed again
+* transfer authority to another account
+* check we can't modify the token from the original acc
+* check we can modify the token from the new acc
 """
 
 from test_framework.test_framework import BitcoinTestFramework
@@ -94,7 +94,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 501 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -111,12 +111,12 @@ class WalletTokens(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block_height(), '1')
             assert_equal(await wallet.get_best_block(), block_id)
 
-            assert_in("Coins amount: 501", await wallet.get_balance())
+            assert_in("Coins amount: 1001", await wallet.get_balance())
 
             address = await wallet.new_address()
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address, token_supply='lockable')
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -134,11 +134,13 @@ class WalletTokens(BitcoinTestFramework):
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
             await wallet.select_account(1)
-            address = await wallet.new_address()
+            new_acc_address = await wallet.new_address()
 
             await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            output = await wallet.send_tokens_to_address(token_id, address, 10.01)
+            output = await wallet.send_tokens_to_address(token_id, new_acc_address, 10.01)
             assert_in("The transaction was submitted successfully", output)
+            # send some coins for fees
+            assert_in("The transaction was submitted successfully", await wallet.send_to_address(new_acc_address, 600))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -146,33 +148,36 @@ class WalletTokens(BitcoinTestFramework):
             ## check the new balance
             assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
 
+
+            assert_in("The transaction was submitted successfully", await wallet.change_token_authority(token_id, new_acc_address))
+
+            # randomly put the tx in a block or keep in mempool unconfirmed
+            produce_block = random.choice([True, False])
+            if produce_block:
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
+
+
+            # try to mint, unmint, lock, freeze and unfreeze
+            assert_in("Cannot change a not owned token", await wallet.mint_tokens(token_id, address, 1))
+            assert_in("Cannot change a not owned token", await wallet.unmint_tokens(token_id, 1))
+            assert_in("Cannot change a not owned token", await wallet.lock_token_supply(token_id))
+            assert_in("Cannot change a not owned token", await wallet.freeze_token(token_id, 'unfreezable'))
+            assert_in("Cannot change a not owned token", await wallet.unfreeze_token(token_id))
+
+
+            await wallet.select_account(1)
+            # make sure the transfer of authority is confirmed
+            if not produce_block:
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
+
+            # check that the other account is now the owner and can do anything
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 1))
+            assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, 1))
+            assert_in("The transaction was submitted successfully", await wallet.lock_token_supply(token_id))
             assert_in("The transaction was submitted successfully", await wallet.freeze_token(token_id, 'unfreezable'))
-
-            # randomly put the tx in a block or keep in mempool unconfirmed
-            if random.choice([True, False]):
-                self.generate_block()
-                assert_in("Success", await wallet.sync())
-
-            # try to send tokens should fail
-            output = await wallet.send_tokens_to_address(token_id, address, 1)
-            assert_in("Cannot use a frozen token", output)
-
-            assert_in("Cannot use a frozen token", await wallet.mint_tokens(token_id, address, 1))
-            assert_in("Cannot use a frozen token", await wallet.unmint_tokens(token_id, 1))
-            assert_in("Cannot use a frozen token", await wallet.lock_token_supply(token_id))
-
-            # unfreeze the token
             assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
-
-            # randomly put the tx in a block or keep in mempool unconfirmed
-            if random.choice([True, False]):
-                self.generate_block()
-                assert_in("Success", await wallet.sync())
-
-            # sending tokens should work again
-            output = await wallet.send_tokens_to_address(token_id, address, 1)
-            assert_in("The transaction was submitted successfully", output)
-
 
 
 if __name__ == '__main__':

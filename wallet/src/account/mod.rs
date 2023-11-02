@@ -34,8 +34,7 @@ use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_tx_output_destination, make_address_output, make_address_output_from_delegation,
     make_address_output_token, make_decomission_stake_pool_output, make_mint_token_outputs,
-    make_stake_output, make_unmint_token_outputs, make_zero_burn_output, IssueNftArguments,
-    StakePoolDataArguments,
+    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -45,8 +44,8 @@ use common::chain::signature::inputsig::standard_signature::StandardInputSignatu
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, TokenData, TokenId,
-    TokenTransfer,
+    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenData,
+    TokenId, TokenTransfer,
 };
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -60,7 +59,7 @@ use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
 use std::cmp::Reverse;
 use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
 use std::sync::Arc;
 use wallet_storage::{
@@ -74,7 +73,9 @@ use wallet_types::{
     KeychainUsageState, WalletTx,
 };
 
-pub use self::output_cache::DelegationData;
+pub use self::output_cache::{
+    DelegationData, FungibleTokenInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+};
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
 use self::utxo_selector::{CoinSelectionAlgo, PayFee};
@@ -149,6 +150,18 @@ impl Account {
         Ok(account)
     }
 
+    pub fn find_used_tokens(
+        &self,
+        input_utxos: &[UtxoOutPoint],
+        median_time: BlockTimestamp,
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        self.output_cache.find_used_tokens(current_block_info, input_utxos)
+    }
+
     fn select_inputs_for_send_request(
         &mut self,
         request: SendRequest,
@@ -180,11 +193,6 @@ impl Account {
         let (coin_change_fee, token_change_fee) =
             coin_and_token_output_change_fees(current_fee_rate)?;
 
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
-
         let mut preselected_inputs =
             group_preselected_inputs(&request, current_fee_rate, &self.chain_config)?;
 
@@ -199,6 +207,10 @@ impl Account {
                 CoinSelectionAlgo::Randomize,
             )
         } else {
+            let current_block_info = BlockInfo {
+                height: self.account_info.best_block_height(),
+                timestamp: median_time,
+            };
             (
                 self.output_cache.find_utxos(current_block_info, input_utxos)?,
                 CoinSelectionAlgo::UsePreselected,
@@ -346,7 +358,7 @@ impl Account {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         pay_fee_with_currency: &Currency,
-        utxos: BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>,
+        utxos: Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))>,
     ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -583,12 +595,13 @@ impl Account {
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
-    pub fn check_token_can_be_used(&self, token_id: &TokenId) -> WalletResult<()> {
+    pub fn get_token_unconfirmed_info(
+        &self,
+        token_info: &RPCFungibleTokenInfo,
+    ) -> WalletResult<UnconfirmedTokenInfo> {
         self.output_cache
-            .token_data(token_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
-            .map_or(Ok(()), |token_issuance_data| {
-                token_issuance_data.frozen_state.check_can_be_used()
+            .get_token_unconfirmed_info(token_info, |destination: &Destination| {
+                self.is_mine_or_watched_destination(destination)
             })
     }
 
@@ -720,24 +733,21 @@ impl Account {
     pub fn mint_tokens(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         address: Address<Destination>,
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
+        let token_id = *token_info.token_id();
         let outputs =
             make_mint_token_outputs(token_id, amount, address, self.chain_config.as_ref())?;
 
-        let token_data = self.find_token(&token_id)?;
-        token_data.total_supply.check_can_mint(amount)?;
+        token_info.check_can_mint(amount)?;
 
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, amount));
-        let authority = token_data.authority.clone();
+        let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
             authority,
@@ -752,22 +762,19 @@ impl Account {
     pub fn unmint_tokens(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
+        let token_id = *token_info.token_id();
         let outputs = make_unmint_token_outputs(token_id, amount);
 
-        let token_data = self.find_token(&token_id)?;
-        token_data.total_supply.check_can_unmint(amount)?;
+        token_info.check_can_unmint(amount)?;
 
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnmintTokens(token_id));
-        let authority = token_data.authority.clone();
+        let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
             authority,
@@ -782,26 +789,21 @@ impl Account {
     pub fn lock_token_supply(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
+        let token_id = *token_info.token_id();
+        token_info.check_can_lock()?;
 
-        let token_data = self.find_token(&token_id)?;
-        token_data.total_supply.check_can_lock()?;
-
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(nonce, AccountCommand::LockTokenSupply(token_id));
-        let authority = token_data.authority.clone();
+        let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -811,30 +813,24 @@ impl Account {
     pub fn freeze_token(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
+        token_info.check_can_freeze()?;
 
-        let token_data = self.find_token(&token_id)?;
-        token_data.frozen_state.check_can_freeze()?;
-
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::FreezeToken(token_id, is_token_unfreezable),
+            AccountCommand::FreezeToken(*token_info.token_id(), is_token_unfreezable),
         );
-        let authority = token_data.authority.clone();
+        let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -844,26 +840,48 @@ impl Account {
     pub fn unfreeze_token(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
+        token_info.check_can_unfreeze()?;
 
-        let token_data = self.find_token(&token_id)?;
-        token_data.frozen_state.check_can_unfreeze()?;
-
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_id));
-        let authority = token_data.authority.clone();
+        let nonce = token_info.get_next_nonce()?;
+        let tx_input =
+            TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(*token_info.token_id()));
+        let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn change_token_authority(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_info: &UnconfirmedTokenInfo,
+        address: Address<Destination>,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let new_authority = address.decode_object(&self.chain_config)?;
+
+        let nonce = token_info.get_next_nonce()?;
+        let tx_input = TxInput::AccountCommand(
+            nonce,
+            AccountCommand::ChangeTokenAuthority(*token_info.token_id(), new_authority),
+        );
+        let authority = token_info.authority()?.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -1128,19 +1146,20 @@ impl Account {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        let mut all_outputs =
-            self.output_cache
-                .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
-        all_outputs.retain(|_outpoint, (txo, _token_id)| {
-            self.is_mine_or_watched(txo)
-                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        });
-        all_outputs
+        self.output_cache.utxos_with_token_ids(
+            current_block_info,
+            utxo_states,
+            with_locked,
+            |txo| {
+                self.is_mine_or_watched(txo)
+                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            },
+        )
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {
@@ -1215,7 +1234,10 @@ impl Account {
                 | AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::FreezeToken(token_id, _)
                 | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
-                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
+                AccountCommand::ChangeTokenAuthority(token_id, address) => {
+                    self.find_token(token_id).is_ok()
+                        || self.is_mine_or_watched_destination(address)
+                }
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1526,7 +1548,14 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
+                AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                    update_preselected_inputs(
+                        Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_min_change_authority_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
+                }
             },
         }
     }

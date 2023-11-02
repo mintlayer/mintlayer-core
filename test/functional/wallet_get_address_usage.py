@@ -169,5 +169,3 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletGetAddressUsage().main()
-
-

@@ -31,7 +31,7 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{TokenData, TokenIssuanceV0, TokenIssuanceV1},
+        tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
@@ -801,7 +801,7 @@ fn wallet_accounts_creation() {
                 OutputValue::Coin(Amount::from_atoms(1)),
                 Destination::PublicKey(acc1_pk),
             )],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -959,7 +959,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         wallet.create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output.clone()],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         ),
@@ -975,7 +975,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
-                [],
+                vec![],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -1003,7 +1003,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
-                [],
+                vec![],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -1029,7 +1029,7 @@ fn wallet_get_transaction(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [gen_random_transfer(&mut rng, Amount::from_atoms(1))],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1095,7 +1095,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [gen_random_transfer(&mut rng, Amount::from_atoms(1))],
-                [],
+                vec![],
                 very_big_feerate,
                 very_big_feerate,
             )
@@ -1118,7 +1118,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
 
     let feerate = FeeRate::new(Amount::from_atoms(1000));
     let transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, [], feerate, feerate)
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, vec![], feerate, feerate)
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
@@ -1199,15 +1199,21 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 FeeRate::new(Amount::ZERO),
             )
             .unwrap_err();
+        assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
 
-        assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo))
+        let err = wallet
+            .find_used_tokens(DEFAULT_ACCOUNT_INDEX, &[missing_utxo.clone()])
+            .unwrap_err();
+
+        assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo));
     }
 
     let selected_utxos = utxos
-        .keys()
+        .iter()
+        .map(|(outpoint, _)| outpoint)
         .take(rng.gen_range(1..utxos.len()))
         .cloned()
-        .collect::<BTreeSet<_>>();
+        .collect_vec();
 
     let tx = wallet
         .create_transaction_to_addresses(
@@ -1421,7 +1427,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::DelegateStaking(delegation_amount, unknown_delegation_id)],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1573,7 +1579,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1746,30 +1752,45 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
     let (issued_token_id, token_issuance_transaction) = if issue_token {
+        let token_issuance = TokenIssuanceV1 {
+            token_ticker: "XXXX".as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+            authority: address2.decode_object(&chain_config).unwrap(),
+            is_freezable: common::chain::tokens::IsTokenFreezable::No,
+        };
         let (issued_token_id, token_issuance_transaction) = wallet
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
-                TokenIssuance::V1(TokenIssuanceV1 {
-                    token_ticker: "XXXX".as_bytes().to_vec(),
-                    number_of_decimals: rng.gen_range(1..18),
-                    metadata_uri: "http://uri".as_bytes().to_vec(),
-                    total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-                    authority: address2.decode_object(&chain_config).unwrap(),
-                    is_freezable: common::chain::tokens::IsTokenFreezable::No,
-                }),
+                TokenIssuance::V1(token_issuance.clone()),
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
             .unwrap();
 
+        let token_info = RPCFungibleTokenInfo::new(
+            issued_token_id,
+            token_issuance.token_ticker,
+            token_issuance.number_of_decimals,
+            token_issuance.metadata_uri,
+            Amount::ZERO,
+            token_issuance.total_supply.into(),
+            false,
+            RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+            token_issuance.authority,
+        );
+
         wallet
             .add_unconfirmed_tx(token_issuance_transaction.clone(), &WalletEventsNoOp)
             .unwrap();
 
+        let unconfirmed_token_info =
+            wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
         let mint_transaction = wallet
             .mint_tokens(
                 DEFAULT_ACCOUNT_INDEX,
-                issued_token_id,
+                &unconfirmed_token_info,
                 token_amount_to_issue,
                 address2,
                 FeeRate::new(Amount::ZERO),
@@ -1837,7 +1858,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1885,7 +1906,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1946,7 +1967,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
                 )))),
                 address2.decode_object(&chain_config).unwrap(),
             )],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1990,17 +2011,19 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     let fixed_max_amount = Amount::from_atoms(rng.gen_range(1..100000));
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_issuance = TokenIssuanceV1 {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
+        authority: address2.decode_object(&chain_config).unwrap(),
+        is_freezable: common::chain::tokens::IsTokenFreezable::Yes,
+    };
+
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
-            TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-                total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
-                authority: address2.decode_object(&chain_config).unwrap(),
-                is_freezable: common::chain::tokens::IsTokenFreezable::Yes,
-            }),
+            TokenIssuance::V1(token_issuance.clone()),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2015,25 +2038,25 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         1,
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    token_issuance_data.frozen_state.check_can_freeze().unwrap();
-    assert_eq!(
-        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
-        WalletError::CannotUnfreezeANotFrozenToken
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        token_issuance.authority,
     );
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let freeze_tx = wallet
         .freeze_token(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             IsTokenUnfreezable::Yes,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2042,27 +2065,26 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_freeze().unwrap_err(),
+        unconfirmed_token_info.check_can_freeze().unwrap_err(),
         WalletError::CannotFreezeAlreadyFrozenToken
     );
-    token_issuance_data.frozen_state.check_can_unfreeze().unwrap();
+    unconfirmed_token_info.check_can_unfreeze().unwrap();
 
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(1)
+    );
 
     // unfreeze the token
 
     let unfreeze_tx = wallet
         .unfreeze_token(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2070,40 +2092,38 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(unfreeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
-    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    unconfirmed_token_info.check_can_freeze().unwrap();
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        unconfirmed_token_info.check_can_unfreeze().unwrap_err(),
         WalletError::CannotUnfreezeANotFrozenToken
     );
 
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(2)
+    );
 
     // test abandoning a transaction
     wallet
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, freeze_tx.transaction().get_id())
         .unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
-    token_issuance_data.frozen_state.check_can_freeze().unwrap();
+    unconfirmed_token_info.check_can_freeze().unwrap();
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        unconfirmed_token_info.check_can_unfreeze().unwrap_err(),
         WalletError::CannotUnfreezeANotFrozenToken
     );
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(0)
+    );
 
     let _ = create_block(
         &chain_config,
@@ -2113,18 +2133,17 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         2,
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
-
-    token_issuance_data.frozen_state.check_can_freeze().unwrap();
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(2)
+    );
+
+    unconfirmed_token_info.check_can_freeze().unwrap();
+    assert_eq!(
+        unconfirmed_token_info.check_can_unfreeze().unwrap_err(),
         WalletError::CannotUnfreezeANotFrozenToken
     );
 
@@ -2132,7 +2151,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let freeze_tx = wallet
         .freeze_token(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             IsTokenUnfreezable::No,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2141,29 +2160,28 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_freeze().unwrap_err(),
+        unconfirmed_token_info.check_can_freeze().unwrap_err(),
         WalletError::CannotFreezeAlreadyFrozenToken
     );
     assert_eq!(
-        token_issuance_data.frozen_state.check_can_unfreeze().unwrap_err(),
+        unconfirmed_token_info.check_can_unfreeze().unwrap_err(),
         WalletError::CannotUnfreezeToken
     );
 
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(2)));
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(3)
+    );
 
-    // cannot feeze again
+    // cannot freeze again
     let err = wallet
         .freeze_token(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             IsTokenUnfreezable::No,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2175,7 +2193,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let err = wallet
         .unfreeze_token(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2207,17 +2225,18 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 
     let fixed_max_amount = Amount::from_atoms(rng.gen_range(1..100000));
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_issuance = TokenIssuanceV1 {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
+        authority: address2.decode_object(&chain_config).unwrap(),
+        is_freezable: common::chain::tokens::IsTokenFreezable::No,
+    };
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
-            TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-                total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
-                authority: address2.decode_object(&chain_config).unwrap(),
-                is_freezable: common::chain::tokens::IsTokenFreezable::No,
-            }),
+            TokenIssuance::V1(token_issuance.clone()),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2232,22 +2251,33 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         1,
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(
-        token_issuance_data.authority,
-        address2.decode_object(&chain_config).unwrap()
+    let mut token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        token_issuance.authority,
     );
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.authority().unwrap(),
+        &address2.decode_object(&chain_config).unwrap()
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(0)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         Amount::ZERO,
     );
 
@@ -2255,7 +2285,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
             FeeRate::new(Amount::ZERO),
@@ -2265,6 +2295,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
 
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
     // Try to mint more then the fixed maximum
     let leftover = (fixed_max_amount - token_amount_to_mint).unwrap();
     let token_amount_to_mint_more_than_maximum =
@@ -2272,7 +2305,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     let err = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_mint_more_than_maximum,
             address2.clone(),
             FeeRate::new(Amount::ZERO),
@@ -2289,41 +2322,38 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         )
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(1)
+    );
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.current_supply().unwrap(),
         token_amount_to_mint,
     );
 
     // test abandoning a transaction
-    wallet
-        .abandon_transaction(
-            DEFAULT_ACCOUNT_INDEX,
-            mint_transaction.transaction().get_id(),
-        )
-        .unwrap();
+    {
+        wallet
+            .abandon_transaction(
+                DEFAULT_ACCOUNT_INDEX,
+                mint_transaction.transaction().get_id(),
+            )
+            .unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
+        let unconfirmed_token_info =
+            wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+        assert_eq!(
+            unconfirmed_token_info.get_next_nonce().unwrap(),
+            AccountNonce::new(0)
+        );
 
-    assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
-        Amount::ZERO,
-    );
+        assert_eq!(
+            unconfirmed_token_info.current_supply().unwrap(),
+            Amount::ZERO,
+        );
+    }
 
     let _ = create_block(
         &chain_config,
@@ -2332,18 +2362,18 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         block2_amount,
         2,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(1)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         token_amount_to_mint,
     );
 
@@ -2352,7 +2382,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     let err = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2368,12 +2398,18 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+
+    wallet
+        .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
+        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2382,29 +2418,29 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         block2_amount,
         3,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(2)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
     assert_eq!(
-        token_issuance_data.total_supply.check_can_lock().unwrap_err(),
+        unconfirmed_token_info.check_can_lock().unwrap_err(),
         WalletError::CannotLockTokenSupply("Fixed")
     );
 
     let err = wallet
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2435,17 +2471,18 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_issuance = TokenIssuanceV1 {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+        authority: address2.decode_object(&chain_config).unwrap(),
+        is_freezable: common::chain::tokens::IsTokenFreezable::No,
+    };
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
-            TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-                total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-                authority: address2.decode_object(&chain_config).unwrap(),
-                is_freezable: common::chain::tokens::IsTokenFreezable::No,
-            }),
+            TokenIssuance::V1(token_issuance.clone()),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2461,22 +2498,33 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         1,
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(
-        token_issuance_data.authority,
-        address2.decode_object(&chain_config).unwrap()
+    let mut token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        token_issuance.authority,
     );
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.authority().unwrap(),
+        &address2.decode_object(&chain_config).unwrap()
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(0)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         Amount::ZERO,
     );
 
@@ -2484,7 +2532,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
             FeeRate::new(Amount::ZERO),
@@ -2493,6 +2541,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         .unwrap();
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2501,18 +2551,18 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         block2_amount,
         2,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(1)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         token_amount_to_mint,
     );
 
@@ -2521,7 +2571,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     let err = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2537,12 +2587,17 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+    wallet
+        .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
+        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2551,29 +2606,29 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         block2_amount,
         3,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(2)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
     assert_eq!(
-        token_issuance_data.total_supply.check_can_lock().unwrap_err(),
+        unconfirmed_token_info.check_can_lock().unwrap_err(),
         WalletError::CannotLockTokenSupply("Unlimited")
     );
 
     let err = wallet
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2604,17 +2659,18 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_issuance = TokenIssuanceV1 {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        total_supply: common::chain::tokens::TokenTotalSupply::Lockable,
+        authority: address2.decode_object(&chain_config).unwrap(),
+        is_freezable: common::chain::tokens::IsTokenFreezable::No,
+    };
     let (issued_token_id, token_issuance_transaction) = wallet
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
-            TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-                total_supply: common::chain::tokens::TokenTotalSupply::Lockable,
-                authority: address2.decode_object(&chain_config).unwrap(),
-                is_freezable: common::chain::tokens::IsTokenFreezable::No,
-            }),
+            TokenIssuance::V1(token_issuance.clone()),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2630,22 +2686,33 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         1,
     );
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(
-        token_issuance_data.authority,
-        address2.decode_object(&chain_config).unwrap()
+    let mut token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        token_issuance.authority,
     );
 
-    assert_eq!(token_issuance_data.last_nonce, None);
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.authority().unwrap(),
+        &address2.decode_object(&chain_config).unwrap()
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(0)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         Amount::ZERO,
     );
 
@@ -2653,13 +2720,16 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let mint_transaction = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+    wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2668,18 +2738,18 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         block2_amount,
         2,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(1)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         token_amount_to_mint,
     );
 
@@ -2688,7 +2758,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let err = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2704,12 +2774,18 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+
+    wallet
+        .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
+        .unwrap();
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2718,26 +2794,26 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         block2_amount,
         3,
     );
+    token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(2)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
-    assert!(token_issuance_data.total_supply.check_can_lock().is_ok());
+    assert!(unconfirmed_token_info.check_can_lock().is_ok());
 
     let lock_transaction = wallet
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2750,30 +2826,30 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         block2_amount,
         4,
     );
+    token_info.is_locked = true;
 
-    let token_issuance_data = wallet
-        .accounts
-        .get(&DEFAULT_ACCOUNT_INDEX)
-        .unwrap()
-        .find_token(&issued_token_id)
-        .unwrap();
-
-    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(2)));
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
     assert_eq!(
-        token_issuance_data.total_supply.current_supply(),
+        unconfirmed_token_info.get_next_nonce().unwrap(),
+        AccountNonce::new(3)
+    );
+
+    assert_eq!(
+        unconfirmed_token_info.current_supply().unwrap(),
         (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
 
     assert_eq!(
-        token_issuance_data.total_supply.check_can_lock(),
+        unconfirmed_token_info.check_can_lock(),
         Err(WalletError::CannotLockTokenSupply("Locked"))
     );
 
     let err = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
             FeeRate::new(Amount::ZERO),
@@ -2784,7 +2860,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let err = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
@@ -2795,7 +2871,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let err = wallet
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
-            issued_token_id,
+            &unconfirmed_token_info,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2872,7 +2948,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2998,7 +3074,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
-                [],
+                vec![],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -3088,7 +3164,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output, change_output],
-                [],
+                vec![],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -3122,7 +3198,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -3160,7 +3236,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -3185,7 +3261,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
-            [],
+            vec![],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -3268,7 +3344,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output, change_output],
-                [],
+                vec![],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )

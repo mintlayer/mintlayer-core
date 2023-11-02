@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{Currency, CurrentFeeRate, DelegationData, UtxoSelectorError};
+use crate::account::{
+    Currency, CurrentFeeRate, DelegationData, UnconfirmedTokenInfo, UtxoSelectorError,
+};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -27,7 +29,9 @@ pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{make_token_id, IsTokenUnfreezable, Metadata, TokenId, TokenIssuance};
+use common::chain::tokens::{
+    make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
+};
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -164,6 +168,10 @@ pub enum WalletError {
     CannotUnfreezeANotFrozenToken,
     #[error("Cannot use a frozen token")]
     CannotUseFrozenToken,
+    #[error("Cannot change a not owned token")]
+    CannotChangeNotOwnedToken(TokenId),
+    #[error("Cannot change a nonfungable token")]
+    CannotChangeNonFungableToken(TokenId),
 }
 
 /// Result type used for the wallet
@@ -358,7 +366,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
-        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)
+        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        db_tx.commit()?;
+        Ok(())
     }
 
     fn reset_wallet_transactions(
@@ -416,6 +426,8 @@ impl<B: storage::Backend> Wallet<B> {
         for account in self.accounts.values_mut() {
             account.reset_to_height(&mut db_tx, wallet_events, BlockHeight::new(0))?;
         }
+
+        db_tx.commit()?;
 
         Ok(())
     }
@@ -666,7 +678,7 @@ impl<B: storage::Backend> Wallet<B> {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(
             utxo_types,
@@ -800,14 +812,13 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
-        inputs: impl IntoIterator<Item = UtxoOutPoint>,
+        inputs: Vec<UtxoOutPoint>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let inputs = inputs.into_iter().collect();
             account.process_send_request(
                 db_tx,
                 request,
@@ -845,7 +856,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn mint_tokens(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         amount: Amount,
         destination: Address<Destination>,
         current_fee_rate: FeeRate,
@@ -855,7 +866,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.mint_tokens(
                 db_tx,
-                token_id,
+                token_info,
                 destination,
                 amount,
                 latest_median_time,
@@ -870,7 +881,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn unmint_tokens(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         amount: Amount,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -879,7 +890,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.unmint_tokens(
                 db_tx,
-                token_id,
+                token_info,
                 amount,
                 latest_median_time,
                 CurrentFeeRate {
@@ -893,7 +904,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn lock_token_supply(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
@@ -901,7 +912,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.lock_token_supply(
                 db_tx,
-                token_id,
+                token_info,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
@@ -914,7 +925,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn freeze_token(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -923,7 +934,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.freeze_token(
                 db_tx,
-                token_id,
+                token_info,
                 is_token_unfreezable,
                 latest_median_time,
                 CurrentFeeRate {
@@ -937,7 +948,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn unfreeze_token(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
+        token_info: &UnconfirmedTokenInfo,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
@@ -945,7 +956,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.unfreeze_token(
                 db_tx,
-                token_id,
+                token_info,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
@@ -955,12 +966,44 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn check_token_can_be_used(
+    pub fn change_token_authority(
         &mut self,
         account_index: U31,
-        token_id: TokenId,
-    ) -> WalletResult<()> {
-        self.get_account(account_index)?.check_token_can_be_used(&token_id)
+        token_info: &UnconfirmedTokenInfo,
+        address: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.change_token_authority(
+                db_tx,
+                token_info,
+                address,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn find_used_tokens(
+        &self,
+        account_index: U31,
+        input_utxos: &[UtxoOutPoint],
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        self.get_account(account_index)?
+            .find_used_tokens(input_utxos, self.latest_median_time)
+    }
+
+    pub fn get_token_unconfirmed_info(
+        &self,
+        account_index: U31,
+        token_info: &RPCFungibleTokenInfo,
+    ) -> WalletResult<UnconfirmedTokenInfo> {
+        self.get_account(account_index)?.get_token_unconfirmed_info(token_info)
     }
 
     pub fn create_delegation(
@@ -973,7 +1016,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            [],
+            vec![],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -1004,7 +1047,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            [],
+            vec![],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -1214,6 +1257,8 @@ impl<B: storage::Backend> Wallet<B> {
             account.scan_new_inmempool_transactions(transactions, &mut db_tx, wallet_events)?;
         }
 
+        db_tx.commit()?;
+
         Ok(())
     }
 
@@ -1231,12 +1276,16 @@ impl<B: storage::Backend> Wallet<B> {
             account.scan_new_inactive_transactions(&txs, &mut db_tx, wallet_events)?;
         }
 
+        db_tx.commit()?;
+
         Ok(())
     }
 
     pub fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.latest_median_time = median_time;
-        self.db.transaction_rw(None)?.set_median_time(median_time)?;
+        let mut db_tx = self.db.transaction_rw(None)?;
+        db_tx.set_median_time(median_time)?;
+        db_tx.commit()?;
         Ok(())
     }
 }
