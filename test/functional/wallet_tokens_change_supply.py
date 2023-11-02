@@ -138,7 +138,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            number_of_decimals = random.randrange(1, 4)
+            number_of_decimals = random.randrange(0, 4)
             token_id, err = await wallet.issue_new_token("XXX", number_of_decimals, "http://uri", address, 'lockable')
             assert token_id is not None
             assert err is None
