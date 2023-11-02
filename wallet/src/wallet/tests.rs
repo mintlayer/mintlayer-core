@@ -396,7 +396,10 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let wallet = Wallet::load_wallet(Arc::clone(&chain_config), new_db, password).unwrap();
 
     // Migration has been done and new version is v2
-    assert_eq!(wallet.db.get_storage_version().unwrap(), WALLET_VERSION_V2);
+    assert_eq!(
+        wallet.db.transaction_ro().unwrap().get_storage_version().unwrap(),
+        WALLET_VERSION_V2
+    );
 
     // accounts have been reset back to genesis to rescan the blockchain
     assert_eq!(

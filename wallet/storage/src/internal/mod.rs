@@ -13,19 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
-use common::{
-    address::Address,
-    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
-};
-use crypto::key::extended::ExtendedPublicKey;
 use storage::raw;
 
 use crate::{
-    schema::Schema, TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorage,
-    WalletStorageEncryptionRead, WalletStorageEncryptionWrite, WalletStorageReadLocked,
-    WalletStorageWriteLocked,
+    schema::Schema, TransactionRwUnlocked, Transactional, WalletStorageEncryptionRead,
+    WalletStorageEncryptionWrite,
 };
 
 mod password;
@@ -33,10 +25,6 @@ use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
-use wallet_types::{
-    chain_info::ChainInfo, wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
-};
 
 use self::store_tx::EncryptionState;
 
@@ -223,72 +211,6 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
                 .map_err(crate::Error::from)
                 .map(|tx| StoreTxRwUnlocked::new(tx, key)),
         }
-    }
-}
-
-impl<B: storage::Backend + 'static> WalletStorage for Store<B> {}
-
-macro_rules! delegate_to_transaction {
-    ($($(#[size=$s:expr])? fn $func:ident $args:tt -> $ret:ty;)*) => {
-        $(delegate_to_transaction!(@FN $(#[size = $s])? $func $args -> $ret);)*
-    };
-    (@FN $f:ident(&self $(, $arg:ident: $aty:ty)* $(,)?) -> $ret:ty) => {
-        fn $f(&self $(, $arg: $aty)*) -> $ret {
-            self.transaction_ro().and_then(|tx| tx.$f($($arg),*))
-        }
-    };
-    (@FN $(#[size=$s:expr])? $f:ident(&mut self $(, $arg:ident: $aty:ty)* $(,)?) -> $ret:ty) => {
-        fn $f(&mut self $(, $arg: $aty)*) -> $ret {
-            let size = delegate_to_transaction!(@SIZE $($s)?);
-            let mut tx = self.transaction_rw(size)?;
-            let val = tx.$f($($arg),*)?;
-            tx.commit()?;
-            Ok(val)
-        }
-    };
-    (@SIZE) => { None };
-    (@SIZE $s:literal) => { Some($s) };
-}
-
-impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
-    delegate_to_transaction! {
-        fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_chain_info(&self) -> crate::Result<ChainInfo>;
-        fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
-        fn get_transactions(&self, account_id: &AccountId) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>>;
-        fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
-        fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> crate::Result<Option<u64>>;
-        fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
-        fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>>;
-        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, String>>;
-        fn check_root_keys_sanity(&self) -> crate::Result<()>;
-        fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
-        fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
-        fn get_public_key(&self, id: &AccountDerivationPathId) -> crate::Result<Option<ExtendedPublicKey>>;
-        fn get_public_keys(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
-        fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>>;
-    }
-}
-
-impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
-    delegate_to_transaction! {
-        fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()>;
-        fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
-        fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
-        fn clear_transactions(&mut self) -> crate::Result<()>;
-        fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> crate::Result<()>;
-        fn set_user_transaction(&mut self, id: &AccountWalletCreatedTxId, tx: &SignedTransaction) -> crate::Result<()>;
-        fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
-        fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
-        fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
-        fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address<Destination>) -> crate::Result<()>;
-        fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
-        fn set_keychain_usage_state(&mut self, id: &AccountKeyPurposeId, address: &KeychainUsageState) -> crate::Result<()>;
-        fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()>;
-        fn set_public_key(&mut self, id: &AccountDerivationPathId, content: &ExtendedPublicKey) -> crate::Result<()>;
-        fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
-        fn set_median_time(&mut self, median_time: BlockTimestamp) -> crate::Result<()>;
     }
 }
 
