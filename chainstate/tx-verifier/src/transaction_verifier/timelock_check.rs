@@ -104,7 +104,7 @@ where
                 )?;
                 Ok(Some((outpoint.clone(), utxo)))
             }
-            TxInput::Account(..) | TxInput::AccountOp(..) => Ok(None),
+            TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     debug_assert_eq!(inputs.len(), input_utxos.len());

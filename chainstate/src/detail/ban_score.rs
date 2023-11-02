@@ -487,7 +487,7 @@ impl BanScore for IOPolicyError {
             IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
-            IOPolicyError::MultipleAccountOperations => 100,
+            IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
             IOPolicyError::AttemptToViolateFeeRequirements => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,

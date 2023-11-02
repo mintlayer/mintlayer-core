@@ -436,7 +436,7 @@ where
                         None => Ok(None),
                     }
                 }
-                TxInput::Account(..) | TxInput::AccountOp(..) => Ok(None),
+                TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
             })
             .collect::<Result<Vec<_>, _>>()
     }

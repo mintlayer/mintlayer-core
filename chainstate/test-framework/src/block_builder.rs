@@ -142,7 +142,7 @@ impl<'f> BlockBuilder<'f> {
                     TxInput::Account(nonce, spending) => {
                         self.account_nonce_tracker.insert(spending.clone().into(), *nonce);
                     }
-                    TxInput::AccountOp(nonce, op) => {
+                    TxInput::AccountCommand(nonce, op) => {
                         self.account_nonce_tracker.insert(op.clone().into(), *nonce);
                     }
                 };

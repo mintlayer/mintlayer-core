@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        timelock::OutputTimeLock, AccountOp, AccountSpending, ChainConfig, PoolId, TxInput,
+        timelock::OutputTimeLock, AccountCommand, AccountSpending, ChainConfig, PoolId, TxInput,
         TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight},
@@ -132,21 +132,21 @@ impl ConstrainedValueAccumulator {
                         }
                     };
                 }
-                TxInput::AccountOp(_, account) => {
+                TxInput::AccountCommand(_, account) => {
                     match account {
-                        AccountOp::MintTokens(_, _)
-                        | AccountOp::LockTokenSupply(_)
-                        | AccountOp::UnmintTokens(_) => {
+                        AccountCommand::MintTokens(_, _)
+                        | AccountCommand::LockTokenSupply(_)
+                        | AccountCommand::UnmintTokens(_) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_supply_change_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => {
+                        AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_freeze_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountOp::ChangeTokenAuthority(_, _) => {
+                        AccountCommand::ChangeTokenAuthority(_, _) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_change_authority_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;

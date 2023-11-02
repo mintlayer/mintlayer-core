@@ -15,7 +15,7 @@
 
 use common::{
     chain::{
-        AccountNonce, AccountOp, AccountSpending, AccountType, SignedTransaction, Transaction,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction,
         TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
@@ -62,14 +62,14 @@ impl TxDependency {
         }
     }
 
-    fn from_account_op(acct: &AccountOp, nonce: AccountNonce) -> Self {
+    fn from_account_op(acct: &AccountCommand, nonce: AccountNonce) -> Self {
         match acct {
-            AccountOp::MintTokens(_, _)
-            | AccountOp::UnmintTokens(_)
-            | AccountOp::LockTokenSupply(_)
-            | AccountOp::FreezeToken(_, _)
-            | AccountOp::UnfreezeToken(_)
-            | AccountOp::ChangeTokenAuthority(_, _) => {
+            AccountCommand::MintTokens(_, _)
+            | AccountCommand::UnmintTokens(_)
+            | AccountCommand::LockTokenSupply(_)
+            | AccountCommand::FreezeToken(_, _)
+            | AccountCommand::UnfreezeToken(_)
+            | AccountCommand::ChangeTokenAuthority(_, _) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
         }
@@ -81,7 +81,7 @@ impl TxDependency {
             TxInput::Account(nonce, spending) => {
                 nonce.decrement().map(|nonce| Self::from_account(spending, nonce))
             }
-            TxInput::AccountOp(nonce, op) => {
+            TxInput::AccountCommand(nonce, op) => {
                 nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
             }
         }
@@ -91,7 +91,7 @@ impl TxDependency {
         match input {
             TxInput::Utxo(_) => None,
             TxInput::Account(nonce, spending) => Some(Self::from_account(spending, *nonce)),
-            TxInput::AccountOp(nonce, op) => Some(Self::from_account_op(op, *nonce)),
+            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
         }
     }
 }

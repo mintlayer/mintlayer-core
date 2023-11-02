@@ -17,7 +17,7 @@ use serialization::{Decode, Encode};
 
 use crate::chain::AccountNonce;
 
-use super::{AccountOp, AccountSpending, OutPointSourceId, UtxoOutPoint};
+use super::{AccountCommand, AccountSpending, OutPointSourceId, UtxoOutPoint};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub enum TxInput {
@@ -26,7 +26,7 @@ pub enum TxInput {
     #[codec(index = 1)]
     Account(AccountNonce, AccountSpending),
     #[codec(index = 2)]
-    AccountOp(AccountNonce, AccountOp),
+    AccountCommand(AccountNonce, AccountCommand),
 }
 
 impl TxInput {
@@ -38,14 +38,14 @@ impl TxInput {
         TxInput::Account(nonce, account)
     }
 
-    pub fn from_account_op(nonce: AccountNonce, op: AccountOp) -> Self {
-        TxInput::AccountOp(nonce, op)
+    pub fn from_command(nonce: AccountNonce, op: AccountCommand) -> Self {
+        TxInput::AccountCommand(nonce, op)
     }
 
     pub fn utxo_outpoint(&self) -> Option<&UtxoOutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_, _) | TxInput::AccountOp(_, _) => None,
+            TxInput::Account(_, _) | TxInput::AccountCommand(_, _) => None,
         }
     }
 }

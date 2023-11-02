@@ -25,8 +25,8 @@ use common::{
             get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenData,
             TokenId, TokenIssuanceVersion,
         },
-        AccountOp, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction, TxInput,
-        TxOutput,
+        AccountCommand, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -213,15 +213,15 @@ where
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
         },
-        TxInput::AccountOp(_, account_op) => match account_op {
-            AccountOp::MintTokens(token_id, amount) => {
+        TxInput::AccountCommand(_, account_op) => match account_op {
+            AccountCommand::MintTokens(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
-            AccountOp::UnmintTokens(token_id)
-            | AccountOp::LockTokenSupply(token_id)
-            | AccountOp::FreezeToken(token_id, _)
-            | AccountOp::UnfreezeToken(token_id)
-            | AccountOp::ChangeTokenAuthority(token_id, _) => {
+            AccountCommand::UnmintTokens(token_id)
+            | AccountCommand::LockTokenSupply(token_id)
+            | AccountCommand::FreezeToken(token_id, _)
+            | AccountCommand::UnfreezeToken(token_id)
+            | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -468,12 +468,12 @@ fn calculate_required_fee_burn(
         .iter()
         .filter(|&input| match input {
             TxInput::Utxo(_) | TxInput::Account(_, _) => false,
-            TxInput::AccountOp(_, account_op) => match account_op {
-                AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_)
-                | AccountOp::ChangeTokenAuthority(_, _) => false,
-                AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => true,
+            TxInput::AccountCommand(_, account_op) => match account_op {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenAuthority(_, _) => false,
+                AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => true,
             },
         })
         .count() as u128;
@@ -483,13 +483,13 @@ fn calculate_required_fee_burn(
         .iter()
         .filter(|&input| match input {
             TxInput::Utxo(_) | TxInput::Account(_, _) => false,
-            TxInput::AccountOp(_, account_op) => match account_op {
-                AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_)
-                | AccountOp::FreezeToken(_, _)
-                | AccountOp::UnfreezeToken(_) => false,
-                AccountOp::ChangeTokenAuthority(_, _) => true,
+            TxInput::AccountCommand(_, account_op) => match account_op {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_) => false,
+                AccountCommand::ChangeTokenAuthority(_, _) => true,
             },
         })
         .count() as u128;

@@ -42,15 +42,15 @@ impl From<AccountSpending> for AccountType {
     }
 }
 
-impl From<AccountOp> for AccountType {
-    fn from(op: AccountOp) -> Self {
+impl From<AccountCommand> for AccountType {
+    fn from(op: AccountCommand) -> Self {
         match op {
-            AccountOp::MintTokens(id, _)
-            | AccountOp::UnmintTokens(id)
-            | AccountOp::LockTokenSupply(id)
-            | AccountOp::FreezeToken(id, _)
-            | AccountOp::UnfreezeToken(id)
-            | AccountOp::ChangeTokenAuthority(id, _) => AccountType::Token(id),
+            AccountCommand::MintTokens(id, _)
+            | AccountCommand::UnmintTokens(id)
+            | AccountCommand::LockTokenSupply(id)
+            | AccountCommand::FreezeToken(id, _)
+            | AccountCommand::UnfreezeToken(id)
+            | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
         }
     }
 }
@@ -64,10 +64,10 @@ pub enum AccountSpending {
     DelegationBalance(DelegationId, Amount),
 }
 
-// Represents an operation that can be performed on an account.
+// Represents a command that can be performed on an account.
 // Operation must be unique and authorized.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
-pub enum AccountOp {
+pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
     MintTokens(TokenId, Amount),

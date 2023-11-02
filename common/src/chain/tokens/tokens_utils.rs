@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId};
 use crate::{
-    chain::{output_value::OutputValue, AccountOp, TxInput, TxOutput},
+    chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -50,13 +50,13 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
         .iter()
         .filter(|&input| match input {
             TxInput::Utxo(_) | TxInput::Account(_, _) => false,
-            TxInput::AccountOp(_, op) => match op {
-                AccountOp::FreezeToken(_, _)
-                | AccountOp::UnfreezeToken(_)
-                | AccountOp::ChangeTokenAuthority(_, _) => false,
-                AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_) => true,
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenAuthority(_, _) => false,
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_) => true,
             },
         })
         .count()

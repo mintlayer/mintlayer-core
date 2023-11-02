@@ -37,7 +37,7 @@ pub fn check_reward_inputs_outputs_purposes(
             // accounts cannot be used in block reward
             inputs.iter().try_for_each(|input| match input {
                 TxInput::Utxo(_) => Ok(()),
-                TxInput::Account(..) | TxInput::AccountOp(..) => {
+                TxInput::Account(..) | TxInput::AccountCommand(..) => {
                     Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::AttemptToUseAccountInputInReward,
                         block_id.into(),
@@ -158,19 +158,19 @@ pub fn check_tx_inputs_outputs_purposes(
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
-    // if provided account operation must be unique and no other inputs is allowed
-    let account_operations_count = tx
+    // if provided account command must be unique among other inputs
+    let account_commands_count = tx
         .inputs()
         .iter()
         .filter(|input| match input {
             TxInput::Utxo(_) | TxInput::Account(..) => false,
-            TxInput::AccountOp(..) => true,
+            TxInput::AccountCommand(..) => true,
         })
         .count();
 
     ensure!(
-        account_operations_count <= 1,
-        IOPolicyError::MultipleAccountOperations
+        account_commands_count <= 1,
+        IOPolicyError::MultipleAccountCommands
     );
 
     // Check outputs

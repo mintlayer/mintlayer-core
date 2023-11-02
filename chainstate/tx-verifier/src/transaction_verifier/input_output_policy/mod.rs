@@ -43,8 +43,8 @@ pub enum IOPolicyError {
     MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
-    #[error("Attempted to provide multiple account operation inputs in a single tx")]
-    MultipleAccountOperations,
+    #[error("Attempted to provide multiple account command inputs in a single tx")]
+    MultipleAccountCommands,
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
@@ -99,7 +99,7 @@ pub fn check_tx_inputs_outputs_policy(
                 )?;
                 Ok(Some(utxo.take_output()))
             }
-            TxInput::Account(..) | TxInput::AccountOp(..) => Ok(None),
+            TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
@@ -136,7 +136,7 @@ fn get_inputs_utxos(
         .iter()
         .filter_map(|input| match input {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(..) | TxInput::AccountOp(..) => None,
+            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
         })
         .map(|outpoint| {
             utxo_view

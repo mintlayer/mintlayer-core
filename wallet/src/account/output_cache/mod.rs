@@ -25,7 +25,7 @@ use common::{
             is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId,
             TokenIssuance, TokenTotalSupply,
         },
-        AccountNonce, AccountOp, AccountSpending, DelegationId, Destination, OutPointSourceId,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId,
         PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
@@ -559,10 +559,10 @@ impl OutputCache {
                         }
                     }
                 }
-                TxInput::AccountOp(nonce, op) => {
+                TxInput::AccountCommand(nonce, op) => {
                     if !already_present {
                         match op {
-                            AccountOp::MintTokens(token_id, amount) => {
+                            AccountCommand::MintTokens(token_id, amount) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
@@ -574,7 +574,7 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.mint(*amount)?;
                                 }
                             }
-                            AccountOp::UnmintTokens(token_id) => {
+                            AccountCommand::UnmintTokens(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
@@ -587,7 +587,7 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.unmint(amount)?;
                                 }
                             }
-                            | AccountOp::LockTokenSupply(token_id) => {
+                            | AccountCommand::LockTokenSupply(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
@@ -599,7 +599,7 @@ impl OutputCache {
                                     data.total_supply = data.total_supply.lock()?;
                                 }
                             }
-                            AccountOp::FreezeToken(token_id, is_unfreezable) => {
+                            AccountCommand::FreezeToken(token_id, is_unfreezable) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
@@ -612,7 +612,7 @@ impl OutputCache {
                                         data.frozen_state.freeze(*is_unfreezable)?;
                                 }
                             }
-                            AccountOp::UnfreezeToken(token_id) => {
+                            AccountCommand::UnfreezeToken(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
@@ -624,7 +624,7 @@ impl OutputCache {
                                     data.frozen_state = data.frozen_state.unfreeze()?;
                                 }
                             }
-                            AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                            AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                         }
                     }
                 }
@@ -713,8 +713,8 @@ impl OutputCache {
                             }
                         }
                     },
-                    TxInput::AccountOp(nonce, op) => match op {
-                        AccountOp::MintTokens(token_id, amount) => {
+                    TxInput::AccountCommand(nonce, op) => match op {
+                        AccountCommand::MintTokens(token_id, amount) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
@@ -723,7 +723,7 @@ impl OutputCache {
                             }
                         }
 
-                        AccountOp::UnmintTokens(token_id) => {
+                        AccountCommand::UnmintTokens(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
@@ -732,7 +732,7 @@ impl OutputCache {
                                 data.total_supply = data.total_supply.mint(amount)?;
                             }
                         }
-                        AccountOp::LockTokenSupply(token_id) => {
+                        AccountCommand::LockTokenSupply(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
@@ -740,7 +740,7 @@ impl OutputCache {
                                 data.total_supply = data.total_supply.unlock()?;
                             }
                         }
-                        AccountOp::FreezeToken(token_id, _) => {
+                        AccountCommand::FreezeToken(token_id, _) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
@@ -749,7 +749,7 @@ impl OutputCache {
                                 data.frozen_state = data.frozen_state.undo_freeze()?;
                             }
                         }
-                        AccountOp::UnfreezeToken(token_id) => {
+                        AccountCommand::UnfreezeToken(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
                                 data.last_parent =
@@ -757,7 +757,7 @@ impl OutputCache {
                                 data.frozen_state = data.frozen_state.undo_unfreeze()?;
                             }
                         }
-                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                        AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                     },
                 }
             }
@@ -937,8 +937,8 @@ impl OutputCache {
                                             }
                                         }
                                     },
-                                    TxInput::AccountOp(nonce, op) => match op {
-                                        AccountOp::MintTokens(token_id, amount) => {
+                                    TxInput::AccountCommand(nonce, op) => match op {
+                                        AccountCommand::MintTokens(token_id, amount) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -951,7 +951,7 @@ impl OutputCache {
                                                     data.total_supply.unmint(*amount)?;
                                             }
                                         }
-                                        | AccountOp::UnmintTokens(token_id) => {
+                                        | AccountCommand::UnmintTokens(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -968,7 +968,7 @@ impl OutputCache {
                                                     data.total_supply.mint(amount)?;
                                             }
                                         }
-                                        | AccountOp::LockTokenSupply(token_id) => {
+                                        | AccountCommand::LockTokenSupply(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -980,7 +980,7 @@ impl OutputCache {
                                                 data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
-                                        AccountOp::FreezeToken(token_id, _) => {
+                                        AccountCommand::FreezeToken(token_id, _) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -993,7 +993,7 @@ impl OutputCache {
                                                     data.frozen_state.undo_freeze()?;
                                             }
                                         }
-                                        AccountOp::UnfreezeToken(token_id) => {
+                                        AccountCommand::UnfreezeToken(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
@@ -1006,7 +1006,9 @@ impl OutputCache {
                                                     data.frozen_state.undo_unfreeze()?;
                                             }
                                         }
-                                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                                        AccountCommand::ChangeTokenAuthority(_, _) => {
+                                            unimplemented!()
+                                        }
                                     },
                                 }
                             }

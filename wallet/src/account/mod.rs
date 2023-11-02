@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::{AccountOp, AccountSpending};
+use common::chain::{AccountCommand, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::Uint256;
@@ -634,7 +634,7 @@ impl Account {
             .expect("selector must have selected something or returned an error")
         {
             TxInput::Utxo(input0_outpoint) => Some(pos_accounting::make_pool_id(input0_outpoint)),
-            TxInput::Account(..) | TxInput::AccountOp(..) => None,
+            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
         }
         .ok_or(WalletError::NoUtxos)?;
 
@@ -736,7 +736,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountOp(nonce, AccountOp::MintTokens(token_id, amount));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, amount));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -766,7 +766,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountOp(nonce, AccountOp::UnmintTokens(token_id));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnmintTokens(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -795,7 +795,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountOp(nonce, AccountOp::LockTokenSupply(token_id));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::LockTokenSupply(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -825,9 +825,9 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountOp(
+        let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountOp::FreezeToken(token_id, is_token_unfreezable),
+            AccountCommand::FreezeToken(token_id, is_token_unfreezable),
         );
         let authority = token_data.authority.clone();
 
@@ -857,7 +857,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::AccountOp(nonce, AccountOp::UnfreezeToken(token_id));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -1209,13 +1209,13 @@ impl Account {
                     self.find_delegation(delegation_id).is_ok()
                 }
             },
-            TxInput::AccountOp(_, op) => match op {
-                AccountOp::MintTokens(token_id, _)
-                | AccountOp::UnmintTokens(token_id)
-                | AccountOp::LockTokenSupply(token_id)
-                | AccountOp::FreezeToken(token_id, _)
-                | AccountOp::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
-                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::MintTokens(token_id, _)
+                | AccountCommand::UnmintTokens(token_id)
+                | AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
+                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1499,8 +1499,8 @@ fn group_preselected_inputs(
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
             },
-            TxInput::AccountOp(_, op) => match op {
-                AccountOp::MintTokens(token_id, amount) => {
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::MintTokens(token_id, amount) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         *amount,
@@ -1508,7 +1508,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
+                AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::UnmintTokens(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
@@ -1516,7 +1517,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::FreezeToken(token_id, _) | AccountOp::UnfreezeToken(token_id) => {
+                AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnfreezeToken(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
@@ -1524,7 +1526,7 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         }
     }

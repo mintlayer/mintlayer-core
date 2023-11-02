@@ -25,7 +25,7 @@ use common::{
             make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountNonce, AccountOp, AccountType, Destination, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountType, Destination, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
     primitives::Amount,
@@ -181,8 +181,10 @@ impl<'a> RandomTxMaker<'a> {
                     if token_data.can_be_unfrozen() {
                         // Unfreeze
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input =
-                            TxInput::AccountOp(new_nonce, AccountOp::UnfreezeToken(token_id));
+                        let account_input = TxInput::AccountCommand(
+                            new_nonce,
+                            AccountCommand::UnfreezeToken(token_id),
+                        );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
                         let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
@@ -201,9 +203,9 @@ impl<'a> RandomTxMaker<'a> {
                         } else {
                             IsTokenUnfreezable::No
                         };
-                        let account_input = TxInput::AccountOp(
+                        let account_input = TxInput::AccountCommand(
                             new_nonce,
-                            AccountOp::FreezeToken(token_id, unfreezable),
+                            AccountCommand::FreezeToken(token_id, unfreezable),
                         );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
@@ -218,9 +220,9 @@ impl<'a> RandomTxMaker<'a> {
                     // Change token authority
                     // TODO: use real keys that are changing
                     let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                    let account_input = TxInput::AccountOp(
+                    let account_input = TxInput::AccountCommand(
                         new_nonce,
-                        AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
+                        AccountCommand::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
                     );
 
                     let inputs = vec![account_input, fee_inputs[i].clone()];
@@ -251,8 +253,10 @@ impl<'a> RandomTxMaker<'a> {
                             Amount::from_atoms(rng.gen_range(1..supply_left.into_atoms()));
 
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input =
-                            TxInput::AccountOp(new_nonce, AccountOp::MintTokens(token_id, to_mint));
+                        let account_input = TxInput::AccountCommand(
+                            new_nonce,
+                            AccountCommand::MintTokens(token_id, to_mint),
+                        );
                         result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
                         let outputs = vec![TxOutput::Transfer(
@@ -272,8 +276,10 @@ impl<'a> RandomTxMaker<'a> {
 
                         if !is_locked {
                             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                            let account_input =
-                                TxInput::AccountOp(new_nonce, AccountOp::LockTokenSupply(token_id));
+                            let account_input = TxInput::AccountCommand(
+                                new_nonce,
+                                AccountCommand::LockTokenSupply(token_id),
+                            );
                             result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
                             // fake output to avoid empty outputs error
@@ -458,8 +464,10 @@ impl<'a> RandomTxMaker<'a> {
                             .and_modify(|e| *e = ((e.0 + to_unmint).unwrap(), true));
 
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input =
-                            TxInput::AccountOp(new_nonce, AccountOp::UnmintTokens(token_id));
+                        let account_input = TxInput::AccountCommand(
+                            new_nonce,
+                            AccountCommand::UnmintTokens(token_id),
+                        );
                         result_inputs.extend(vec![account_input, fee_tx_input.clone()]);
 
                         let outputs =

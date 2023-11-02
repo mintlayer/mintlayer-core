@@ -154,7 +154,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => Some(outpoint.source_id()),
-                TxInput::Account(..) | TxInput::AccountOp(..) => None,
+                TxInput::Account(..) | TxInput::AccountCommand(..) => None,
             })
             .collect();
 
@@ -163,7 +163,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .map(|input| match input {
                 TxInput::Utxo(outpoint) => self.spend_utxo(outpoint).map(Some),
-                TxInput::Account(..) | TxInput::AccountOp(..) => Ok(None),
+                TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
@@ -194,7 +194,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .filter_map(|(input, undo)| {
                 undo.map(|utxo| match input {
                     TxInput::Utxo(outpoint) => Ok((outpoint, utxo)),
-                    TxInput::Account(..) | TxInput::AccountOp(..) => {
+                    TxInput::Account(..) | TxInput::AccountCommand(..) => {
                         Err(Error::TxInputAndUndoMismatch(tx.get_id()))
                     }
                 })
@@ -220,7 +220,7 @@ impl<P: UtxosView> UtxosCache<P> {
                     .iter()
                     .filter_map(|input| match input {
                         TxInput::Utxo(outpoint) => Some(self.spend_utxo(outpoint)),
-                        TxInput::Account(..) | TxInput::AccountOp(..) => None,
+                        TxInput::Account(..) | TxInput::AccountCommand(..) => None,
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 (!utxos.is_empty()).then(|| UtxosBlockRewardUndo::new(utxos))
@@ -263,7 +263,7 @@ impl<P: UtxosView> UtxosCache<P> {
                 .zip(block_undo.into_inner().into_iter())
                 .filter_map(|(tx_in, utxo)| match tx_in {
                     TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
-                    TxInput::Account(..) | TxInput::AccountOp(..) => None,
+                    TxInput::Account(..) | TxInput::AccountCommand(..) => None,
                 })
                 .try_for_each(|(outpoint, utxo)| self.add_utxo(outpoint, utxo, false))?;
         }

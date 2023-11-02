@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountOp, AccountSpending, DelegationId, Destination, PoolId, TxInput,
+    tokens::TokenId, AccountCommand, AccountSpending, DelegationId, Destination, PoolId, TxInput,
     TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
@@ -147,13 +147,13 @@ impl<'a> SignatureDestinationGetter<'a> {
                             .spend_destination()
                             .clone()),
                     },
-                    TxInput::AccountOp(_, account_op) => match account_op {
-                        AccountOp::MintTokens(token_id, _)
-                        | AccountOp::UnmintTokens(token_id)
-                        | AccountOp::LockTokenSupply(token_id)
-                        | AccountOp::FreezeToken(token_id, _)
-                        | AccountOp::UnfreezeToken(token_id)
-                        | AccountOp::ChangeTokenAuthority(token_id, _) => {
+                    TxInput::AccountCommand(_, account_op) => match account_op {
+                        AccountCommand::MintTokens(token_id, _)
+                        | AccountCommand::UnmintTokens(token_id)
+                        | AccountCommand::LockTokenSupply(token_id)
+                        | AccountCommand::FreezeToken(token_id, _)
+                        | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;
@@ -217,7 +217,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(..) | TxInput::AccountOp(..) => {
+                    TxInput::Account(..) | TxInput::AccountCommand(..) => {
                         Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }

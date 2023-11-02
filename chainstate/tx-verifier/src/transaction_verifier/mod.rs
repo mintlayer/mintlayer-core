@@ -70,8 +70,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
-        AccountNonce, AccountOp, AccountSpending, AccountType, Block, ChainConfig, DelegationId,
-        GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
+        DelegationId, GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -465,7 +465,7 @@ where
                         }
                     }
                 }
-                TxInput::AccountOp(..) => None,
+                TxInput::AccountCommand(..) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -605,7 +605,7 @@ where
                 TxInput::Account(_, account_spending) => {
                     self.unspend_input_from_account(account_spending.clone().into())?;
                 }
-                TxInput::AccountOp(_, account_op) => {
+                TxInput::AccountCommand(_, account_op) => {
                     self.unspend_input_from_account(account_op.clone().into())?;
                 }
             };
@@ -706,8 +706,8 @@ where
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(_) | TxInput::Account(_, _) => None,
-                TxInput::AccountOp(nonce, account_op) => match account_op {
-                    AccountOp::MintTokens(token_id, amount) => {
+                TxInput::AccountCommand(nonce, account_op) => match account_op {
+                    AccountCommand::MintTokens(token_id, amount) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -717,7 +717,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountOp::UnmintTokens(token_id) => {
+                    AccountCommand::UnmintTokens(token_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -736,7 +736,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountOp::LockTokenSupply(token_id) => {
+                    AccountCommand::LockTokenSupply(token_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -746,7 +746,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountOp::FreezeToken(token_id, is_unfreezable) => {
+                    AccountCommand::FreezeToken(token_id, is_unfreezable) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -756,7 +756,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountOp::UnfreezeToken(token_id) => {
+                    AccountCommand::UnfreezeToken(token_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -766,7 +766,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountOp::ChangeTokenAuthority(token_id, new_authority) => {
+                    AccountCommand::ChangeTokenAuthority(token_id, new_authority) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
