@@ -135,7 +135,7 @@ fn get_set_transactions() {
             Ok(())
         );
 
-        drop(db_tx);
+        db_tx.commit().unwrap();
 
         // Concurrently bump version and run a transaction that reads the version twice.
         let thr1 = {
