@@ -138,7 +138,8 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address, 'lockable')
+            number_of_decimals = random.randrange(1, 4)
+            token_id, err = await wallet.issue_new_token("XXX", number_of_decimals, "http://uri", address, 'lockable')
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -167,7 +168,7 @@ class WalletTokens(BitcoinTestFramework):
                         total_tokens_supply = total_tokens_supply - tokens_to_unmint
                         assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                     else:
-                        assert_in(f"Trying to unmint Amount {{ val: {tokens_to_unmint}00 }} but the current supply is Amount {{ val: {total_tokens_supply}00 }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                        assert_in(f"Trying to unmint Amount {{ val: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ val: {total_tokens_supply * 10**number_of_decimals} }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                         continue
 
                 # either generate a new block or leave the transaction as in-memory state
