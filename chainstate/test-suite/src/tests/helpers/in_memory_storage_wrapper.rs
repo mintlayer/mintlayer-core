@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
 };
-use chainstate_storage::{inmemory::Store, BlockchainStorageRead, TipStorageTag};
+use chainstate_storage::{inmemory::Store, BlockchainStorageRead, TipStorageTag, Transactional};
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -53,7 +53,11 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_id: Id<Transaction>,
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
-        self.storage.get_token_id(&tx_id).map_err(TransactionVerifierStorageError::from)
+        self.storage
+            .transaction_ro()
+            .unwrap()
+            .get_token_id(&tx_id)
+            .map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_gen_block_index(
@@ -64,9 +68,12 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
                 self.chain_config.genesis_block(),
             )))),
-            GenBlockId::Block(id) => {
-                self.storage.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block))
-            }
+            GenBlockId::Block(id) => self
+                .storage
+                .transaction_ro()
+                .unwrap()
+                .get_block_index(&id)
+                .map(|b| b.map(GenBlockIndex::Block)),
         }
     }
 
@@ -75,6 +82,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         self.storage
+            .transaction_ro()
+            .unwrap()
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
@@ -84,6 +93,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         id: Id<Block>,
     ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
         self.storage
+            .transaction_ro()
+            .unwrap()
             .get_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
     }
@@ -93,6 +104,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         account: AccountType,
     ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
         self.storage
+            .transaction_ro()
+            .unwrap()
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
     }
@@ -102,6 +115,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         id: Id<Block>,
     ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
         self.storage
+            .transaction_ro()
+            .unwrap()
             .get_tokens_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
     }
@@ -114,18 +129,18 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
         &self,
         outpoint: &common::chain::UtxoOutPoint,
     ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
-        self.storage.get_utxo(outpoint)
+        self.storage.transaction_ro().unwrap().get_utxo(outpoint)
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error> {
-        self.storage.get_best_block_for_utxos()
+        self.storage.transaction_ro().unwrap().get_best_block_for_utxos()
     }
 
     fn get_undo_data(
         &self,
         id: Id<Block>,
     ) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error> {
-        self.storage.get_undo_data(id)
+        self.storage.transaction_ro().unwrap().get_undo_data(id)
     }
 }
 
@@ -183,10 +198,10 @@ impl TokensAccountingStorageRead for InMemoryStorageWrapper {
         &self,
         id: &TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
-        self.storage.get_token_data(id)
+        self.storage.transaction_ro().unwrap().get_token_data(id)
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        self.storage.get_circulating_supply(id)
+        self.storage.transaction_ro().unwrap().get_circulating_supply(id)
     }
 }

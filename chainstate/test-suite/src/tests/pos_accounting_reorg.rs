@@ -231,7 +231,10 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 storage
             };
 
-            assert_eq!(storage.dump_raw(), expected_storage.dump_raw());
+            assert_eq!(
+                storage.transaction_ro().unwrap().dump_raw(),
+                expected_storage.transaction_ro().unwrap().dump_raw()
+            );
         }
     });
 }

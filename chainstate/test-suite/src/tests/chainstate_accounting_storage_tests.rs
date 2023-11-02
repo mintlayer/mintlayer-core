@@ -163,11 +163,16 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
-        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .read_pos_accounting_data_sealed()
+            .unwrap()
+            .is_empty());
     });
 }
 
@@ -250,12 +255,17 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
         // check that result is not stored to sealed
-        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .read_pos_accounting_data_sealed()
+            .unwrap()
+            .is_empty());
 
         // check that delta for epoch is stored
         let expected_epoch_delta = pos_accounting::PoSAccountingDeltaData {
@@ -279,12 +289,19 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         };
 
         let epoch_delta = storage
+            .transaction_ro()
+            .unwrap()
             .get_accounting_epoch_delta(expected_epoch_index)
             .expect("ok")
             .expect("some");
         assert_eq!(epoch_delta, expected_epoch_delta);
 
-        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(0)
+            .unwrap()
+            .is_none());
     });
 }
 
@@ -366,13 +383,15 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
 
+        let db_tx = storage.transaction_ro().unwrap();
+
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            db_tx.read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
         // check that result is not stored to sealed
-        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
+        assert!(db_tx.read_pos_accounting_data_sealed().unwrap().is_empty());
 
         // check that deltas per block are stored
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
@@ -387,10 +406,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch1_delta = storage
-            .get_accounting_epoch_delta(block1_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch1_delta =
+            db_tx.get_accounting_epoch_delta(block1_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
         let expected_epoch2_delta = pos_accounting::PoSAccountingDeltaData {
@@ -405,15 +422,13 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch2_delta = storage
-            .get_accounting_epoch_delta(block2_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch2_delta =
+            db_tx.get_accounting_epoch_delta(block2_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
-        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
-        assert!(storage.get_accounting_epoch_undo_delta(block1_epoch_index).unwrap().is_none());
-        assert!(storage.get_accounting_epoch_undo_delta(block2_epoch_index).unwrap().is_none());
+        assert!(db_tx.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(db_tx.get_accounting_epoch_undo_delta(block1_epoch_index).unwrap().is_none());
+        assert!(db_tx.get_accounting_epoch_undo_delta(block2_epoch_index).unwrap().is_none());
     });
 }
 
@@ -498,7 +513,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
@@ -511,7 +526,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_pos_accounting_data_sealed().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_sealed().unwrap(),
             expected_sealed_storage_data
         );
 
@@ -529,6 +544,8 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         };
 
         let epoch1_delta = storage
+            .transaction_ro()
+            .unwrap()
             .get_accounting_epoch_delta(block1_epoch_index)
             .expect("ok")
             .expect("some");
@@ -547,14 +564,31 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         };
 
         let epoch2_delta = storage
+            .transaction_ro()
+            .unwrap()
             .get_accounting_epoch_delta(block2_epoch_index)
             .expect("ok")
             .expect("some");
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
-        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
-        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_some());
-        assert!(storage.get_accounting_epoch_undo_delta(2).unwrap().is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(0)
+            .unwrap()
+            .is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(1)
+            .unwrap()
+            .is_some());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(2)
+            .unwrap()
+            .is_none());
     });
 }
 
@@ -611,11 +645,11 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap(),
             expected_storage_data
         );
         assert_eq!(
-            storage.read_pos_accounting_data_sealed().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_sealed().unwrap(),
             expected_storage_data
         );
 
@@ -633,13 +667,25 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         };
 
         let epoch1_delta = storage
+            .transaction_ro()
+            .unwrap()
             .get_accounting_epoch_delta(block1_epoch_index)
             .expect("ok")
             .expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
-        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
-        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_some());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(0)
+            .unwrap()
+            .is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(1)
+            .unwrap()
+            .is_some());
     });
 }
 
@@ -695,19 +741,34 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
 
         // check that result is stored to tip and sealed
         assert_eq!(
-            storage.read_pos_accounting_data_tip().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_tip().unwrap(),
             pos_accounting::PoSAccountingData::new()
         );
         assert_eq!(
-            storage.read_pos_accounting_data_sealed().unwrap(),
+            storage.transaction_ro().unwrap().read_pos_accounting_data_sealed().unwrap(),
             pos_accounting::PoSAccountingData::new()
         );
 
         // check that deltas per epoch are not stored
-        assert!(storage.get_accounting_epoch_delta(block1_epoch_index).unwrap().is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_delta(block1_epoch_index)
+            .unwrap()
+            .is_none());
 
         // check that undo per epoch are not stored
-        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
-        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(0)
+            .unwrap()
+            .is_none());
+        assert!(storage
+            .transaction_ro()
+            .unwrap()
+            .get_accounting_epoch_undo_delta(1)
+            .unwrap()
+            .is_none());
     });
 }

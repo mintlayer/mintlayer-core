@@ -155,10 +155,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
-        let best_block_id = chainstate_storage
-            .get_best_block_id()
-            .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))
-            .log_err()?;
+        let best_block_id = {
+            let db_tx = chainstate_storage
+                .transaction_ro()
+                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
+            db_tx
+                .get_best_block_id()
+                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))
+                .log_err()?
+        };
 
         let mut chainstate = Self::new_no_genesis(
             chain_config,

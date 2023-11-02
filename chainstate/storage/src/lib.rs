@@ -258,4 +258,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
 }
 
-pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}
+pub trait BlockchainStorage: for<'tx> Transactional<'tx> + Send {}
