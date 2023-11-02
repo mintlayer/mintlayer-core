@@ -172,6 +172,10 @@ pub enum WalletError {
     CannotChangeNotOwnedToken(TokenId),
     #[error("Cannot change a nonfungable token")]
     CannotChangeNonFungableToken(TokenId),
+    #[error("The size of the data to be deposited: {0} is too big, max size is: {1}")]
+    DataDepositToBig(usize, usize),
+    #[error("Cannot deposit empty data")]
+    EmptyDataDeposit,
 }
 
 /// Result type used for the wallet

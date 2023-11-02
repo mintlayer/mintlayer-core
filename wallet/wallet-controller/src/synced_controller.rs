@@ -42,7 +42,7 @@ use wallet::{
     account::UnconfirmedTokenInfo,
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
-        StakePoolDataArguments,
+        make_data_deposit_output, StakePoolDataArguments,
     },
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -353,6 +353,27 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     account_index,
                     token_info,
                     address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    pub async fn deposit_data(&mut self, data: Vec<u8>) -> Result<(), ControllerError<T>> {
+        let outputs = make_data_deposit_output(self.chain_config, data)
+            .map_err(ControllerError::WalletError)?;
+
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    outputs,
+                    vec![],
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
