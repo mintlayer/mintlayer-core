@@ -2583,7 +2583,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     );
 
     let token_amount_to_unmint =
-        Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.gen_range(1..=token_amount_to_mint.into_atoms()));
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
@@ -2770,7 +2770,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     );
 
     let token_amount_to_unmint =
-        Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
+        Amount::from_atoms(rng.gen_range(1..=token_amount_to_mint.into_atoms()));
     let unmint_transaction = wallet
         .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
