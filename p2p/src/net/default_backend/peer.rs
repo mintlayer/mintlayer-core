@@ -146,8 +146,11 @@ where
         // in the interval [`init_time - tolerance`, `recv_time + tolerance`].
         //
         // Since the distance between `init_time` and `recv_time` is bounded by the handshake
-        // timeout, the effective max peer time offset is:
+        // timeout, the effective max clock diff between a node and any of its peers is:
         // ```tolerance + (recv_time - init_time) <= tolerance + handshake_timeout```
+        //
+        // The effective tolerance of clock diff between any two peers the node is connected to is
+        // given by the span of the acceptable time interval: `handshake_timeout + 2 * tolerance`.
 
         let max_offset = *p2p_config.max_clock_diff;
         let accepted_peer_time_start = (local_time_start - max_offset)
