@@ -19,7 +19,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenIssuance,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
@@ -38,6 +38,7 @@ use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
+    account::UnconfirmedTokenInfo,
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         StakePoolDataArguments,
@@ -166,19 +167,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     pub async fn mint_tokens(
         &mut self,
-        token_id: TokenId,
+        token_info: RPCTokenInfo,
         amount: Amount,
         address: Address<Destination>,
     ) -> Result<(), ControllerError<T>> {
         self.create_and_send_token_tx(
-            token_id,
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
                 wallet.mint_tokens(
                     account_index,
-                    token_id,
+                    token_info,
                     amount,
                     address,
                     current_fee_rate,
@@ -190,18 +193,20 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     }
     pub async fn unmint_tokens(
         &mut self,
-        token_id: TokenId,
+        token_info: RPCTokenInfo,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
         self.create_and_send_token_tx(
-            token_id,
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
                 wallet.unmint_tokens(
                     account_index,
-                    token_id,
+                    token_info,
                     amount,
                     current_fee_rate,
                     consolidate_fee_rate,
@@ -211,16 +216,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
-    pub async fn lock_token_supply(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
+    pub async fn lock_token_supply(
+        &mut self,
+        token_info: RPCTokenInfo,
+    ) -> Result<(), ControllerError<T>> {
         self.create_and_send_token_tx(
-            token_id,
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
                 wallet.lock_token_supply(
                     account_index,
-                    token_id,
+                    token_info,
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -233,17 +243,19 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     /// on that token are forbidden until it is unfrozen
     pub async fn freeze_token(
         &mut self,
-        token_id: TokenId,
+        token_info: RPCTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
     ) -> Result<(), ControllerError<T>> {
-        self.create_and_send_tx(
+        self.create_and_send_token_tx(
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
                 wallet.freeze_token(
                     account_index,
-                    token_id,
+                    token_info,
                     is_token_unfreezable,
                     current_fee_rate,
                     consolidate_fee_rate,
@@ -254,15 +266,46 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     }
 
     /// After unfreezing a token all operations on that token are again permitted
-    pub async fn unfreeze_token(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
-        self.create_and_send_tx(
+    pub async fn unfreeze_token(
+        &mut self,
+        token_info: RPCTokenInfo,
+    ) -> Result<(), ControllerError<T>> {
+        self.create_and_send_token_tx(
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
                 wallet.unfreeze_token(
                     account_index,
-                    token_id,
+                    token_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    /// After changing the authority of the token, all operations like mint/unmint/freeze/unfreeze
+    /// will be controlled by the new authority
+    pub async fn change_token_authority(
+        &mut self,
+        token_info: RPCTokenInfo,
+        address: Address<Destination>,
+    ) -> Result<(), ControllerError<T>> {
+        self.create_and_send_token_tx(
+            &token_info,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                wallet.change_token_authority(
+                    account_index,
+                    token_info,
+                    address,
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -383,18 +426,21 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     pub async fn send_tokens_to_address(
         &mut self,
-        token_id: TokenId,
+        token_info: RPCTokenInfo,
         address: Address<Destination>,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
-        let output = make_address_output_token(self.chain_config, address, amount, token_id)
-            .map_err(ControllerError::WalletError)?;
+        let output =
+            make_address_output_token(self.chain_config, address, amount, token_info.token_id())
+                .map_err(ControllerError::WalletError)?;
         self.create_and_send_token_tx(
-            token_id,
+            &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
-                  account_index: U31| {
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
@@ -531,17 +577,42 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     /// Create and broadcast a transaction that uses token,
     /// check if that token can be used i.e. not frozen
     async fn create_and_send_token_tx<
-        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
+        F: FnOnce(
+            FeeRate,
+            FeeRate,
+            &mut DefaultWallet,
+            U31,
+            &UnconfirmedTokenInfo,
+        ) -> WalletResult<SignedTransaction>,
     >(
         &mut self,
-        token_id: TokenId,
+        token_info: &RPCTokenInfo,
         tx_maker: F,
     ) -> Result<(), ControllerError<T>> {
         // make sure we can use the token before create an tx using it
-        self.wallet
-            .check_token_can_be_used(self.account_index, token_id)
-            .map_err(ControllerError::WalletError)?;
-        self.create_and_send_tx(tx_maker).await
+        let token_freezable_info = match token_info {
+            RPCTokenInfo::FungibleToken(token_info) => self
+                .wallet
+                .get_token_unconfirmed_info(self.account_index, token_info)
+                .map_err(ControllerError::WalletError)?,
+            RPCTokenInfo::NonFungibleToken(info) => {
+                UnconfirmedTokenInfo::NonFungibleToken(info.token_id)
+            }
+        };
+
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = tx_maker(
+            current_fee_rate,
+            consolidate_fee_rate,
+            self.wallet,
+            self.account_index,
+            &token_freezable_info,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     /// Similar to create_and_send_tx but some transactions also create an ID

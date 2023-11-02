@@ -38,6 +38,7 @@ from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCl
 
 import asyncio
 import sys
+import random
 
 class WalletTokens(BitcoinTestFramework):
 
@@ -147,6 +148,11 @@ class WalletTokens(BitcoinTestFramework):
 
             assert_in("The transaction was submitted successfully", await wallet.freeze_token(token_id, 'unfreezable'))
 
+            # randomly put the tx in a block or keep in mempool unconfirmed
+            if random.choice([True, False]):
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
+
             # try to send tokens should fail
             output = await wallet.send_tokens_to_address(token_id, address, 1)
             assert_in("Cannot use a frozen token", output)
@@ -158,6 +164,11 @@ class WalletTokens(BitcoinTestFramework):
             # unfreeze the token
             assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
 
+            # randomly put the tx in a block or keep in mempool unconfirmed
+            if random.choice([True, False]):
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
+
             # sending tokens should work again
             output = await wallet.send_tokens_to_address(token_id, address, 1)
             assert_in("The transaction was submitted successfully", output)
@@ -166,6 +177,4 @@ class WalletTokens(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletTokens().main()
-
-
 

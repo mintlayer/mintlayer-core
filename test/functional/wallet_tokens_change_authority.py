@@ -14,7 +14,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet NFTs test
+"""Wallet tokens change authority test
 
 Check that:
 * We can create a new wallet,
@@ -22,21 +22,25 @@ Check that:
 * send coins to the wallet's address
 * sync the wallet with the node
 * check balance
-* issue new nft
-* transfer the nft
+* issue new token
+* transfer some tokens
 * check balance
+* transfer authority to another account
+* check we can't modify the token from the original acc
+* check we can modify the token from the new acc
 """
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
 from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import WalletCliController
+from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
 import sys
+import random
 
-class WalletNfts(BitcoinTestFramework):
+class WalletTokens(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -90,7 +94,7 @@ class WalletNfts(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 1000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -100,7 +104,6 @@ class WalletNfts(BitcoinTestFramework):
             block_id = self.generate_block() # Block 1
             assert not node.mempool_contains_tx(tx_id)
 
-
             # sync the wallet
             assert_in("Success", await wallet.sync())
 
@@ -108,37 +111,70 @@ class WalletNfts(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block_height(), '1')
             assert_equal(await wallet.get_best_block(), block_id)
 
-            assert_in("Coins amount: 1000", await wallet.get_balance())
+            assert_in("Coins amount: 1001", await wallet.get_balance())
 
             address = await wallet.new_address()
-            nft_id = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", "XXX")
-            assert nft_id is not None
-            self.log.info(f"new nft id: '{nft_id}'")
+
+            # issue a valid token
+            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address, token_supply='lockable')
+            assert token_id is not None
+            assert err is None
+            self.log.info(f"new token id: {token_id}")
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 10000))
 
-            self.log.info(await wallet.get_balance())
-            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
 
-            # create a new account and send some tokens to it
+            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+
+            ## create a new account and send some tokens to it
             await wallet.create_new_account()
             await wallet.select_account(1)
-            address = await wallet.new_address()
+            new_acc_address = await wallet.new_address()
 
-            await wallet.select_account(0)
-            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
-            output = await wallet.send_tokens_to_address(nft_id, address, 1)
-            self.log.info(output)
+            await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
+            output = await wallet.send_tokens_to_address(token_id, new_acc_address, 10.01)
             assert_in("The transaction was submitted successfully", output)
+            # send some coins for fees
+            assert_in("The transaction was submitted successfully", await wallet.send_to_address(new_acc_address, 600))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            # check the new balance nft is not present
-            assert nft_id not in await wallet.get_balance()
+            ## check the new balance
+            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
+
+
+            assert_in("The transaction was submitted successfully", await wallet.change_token_authority(token_id, new_acc_address))
+
+            # randomly put the tx in a block or keep in mempool unconfirmed
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
+
+
+            # try to mint, unmint, lock, freeze and unfreeze
+            assert_in("Cannot change a not owned token", await wallet.mint_tokens(token_id, address, 1))
+            assert_in("Cannot change a not owned token", await wallet.unmint_tokens(token_id, 1))
+            assert_in("Cannot change a not owned token", await wallet.lock_token_supply(token_id))
+            assert_in("Cannot change a not owned token", await wallet.freeze_token(token_id, 'unfreezable'))
+            assert_in("Cannot change a not owned token", await wallet.unfreeze_token(token_id))
+
+
+            await wallet.select_account(1)
+
+            # check that the other account is now the owner and can do anything
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 1))
+            assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, 1))
+            assert_in("The transaction was submitted successfully", await wallet.lock_token_supply(token_id))
+            assert_in("The transaction was submitted successfully", await wallet.freeze_token(token_id, 'unfreezable'))
+            assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
+
+
 
 if __name__ == '__main__':
-    WalletNfts().main()
+    WalletTokens().main()
 

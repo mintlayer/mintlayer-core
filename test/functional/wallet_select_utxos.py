@@ -173,4 +173,3 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
 if __name__ == '__main__':
     WalletSubmitTransactionSpecificUtxo().main()
 
-

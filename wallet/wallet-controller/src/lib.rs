@@ -34,15 +34,12 @@ use std::{
 use mempool::tx_accumulator::PackingStrategy;
 use read::ReadOnlyController;
 use synced_controller::SyncedController;
-use utils::{ensure, tap_error_log::LogError};
+use utils::tap_error_log::LogError;
 
 use common::{
     address::AddressError,
     chain::{
-        tokens::{
-            RPCTokenInfo::{self, FungibleToken, NonFungibleToken},
-            TokenId,
-        },
+        tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{
@@ -353,23 +350,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         token_id: TokenId,
     ) -> Result<u8, ControllerError<T>> {
-        let token_info = self.get_token_info(token_id).await?;
-        Ok(token_number_of_decimals(&token_info))
+        Ok(self.get_token_info(token_id).await?.token_number_of_decimals())
     }
 
-    pub async fn get_token_number_of_decimals_if_not_frozen(
+    pub async fn get_token_info(
         &self,
         token_id: TokenId,
-    ) -> Result<u8, ControllerError<T>> {
-        let token_info = self.get_token_info(token_id).await?;
-        ensure!(
-            !is_token_frozen(&token_info),
-            ControllerError::FrozenToken(token_id)
-        );
-        Ok(token_number_of_decimals(&token_info))
-    }
-
-    async fn get_token_info(&self, token_id: TokenId) -> Result<RPCTokenInfo, ControllerError<T>> {
+    ) -> Result<RPCTokenInfo, ControllerError<T>> {
         self.rpc_client
             .get_token_info(token_id)
             .await
@@ -645,19 +632,5 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             *rebroadcast_txs_again_at = (get_time() + Duration::from_secs(sleep_interval_sec))
                 .expect("Sleep intervals cannot be this large");
         }
-    }
-}
-
-fn token_number_of_decimals(token_info: &RPCTokenInfo) -> u8 {
-    match token_info {
-        FungibleToken(token_info) => token_info.number_of_decimals,
-        NonFungibleToken(_) => 0,
-    }
-}
-
-fn is_token_frozen(token_info: &RPCTokenInfo) -> bool {
-    match token_info {
-        FungibleToken(token_info) => token_info.is_frozen,
-        NonFungibleToken(_) => false,
     }
 }

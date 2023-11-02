@@ -19,8 +19,9 @@ use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         tokens::{
-            NftIssuance, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
-            RPCTokenTotalSupply, TokenAuxiliaryData, TokenData, TokenId,
+            NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen,
+            RPCNonFungibleTokenInfo, RPCTokenInfo, RPCTokenTotalSupply, TokenAuxiliaryData,
+            TokenData, TokenId,
         },
         Block, GenBlock, Transaction, TxOutput,
     },
@@ -265,7 +266,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         token_data.metadata_uri().to_owned(),
                         circulating_supply,
                         (*token_data.total_supply()).into(),
-                        token_data.is_frozen(),
+                        token_data.is_locked(),
+                        RPCIsTokenFrozen::new(token_data.frozen_state()),
+                        Some(token_data.authority().clone()),
                     ));
                     Ok(Some(rpc_issuance))
                 }
@@ -359,7 +362,9 @@ fn to_rpc_token_info(
                 issuance.metadata_uri.clone(),
                 issuance.amount_to_issue,
                 RPCTokenTotalSupply::Fixed(issuance.amount_to_issue),
-                false,
+                true,
+                RPCIsTokenFrozen::No(RPCIsTokenFreezable::No),
+                None,
             )))
         }
         TokenData::NftIssuance(nft) => {

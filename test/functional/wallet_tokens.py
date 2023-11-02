@@ -192,4 +192,3 @@ class WalletTokens(BitcoinTestFramework):
 if __name__ == '__main__':
     WalletTokens().main()
 
-

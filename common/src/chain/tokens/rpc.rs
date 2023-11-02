@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Metadata, TokenCreator, TokenId, TokenTotalSupply};
+use super::{
+    IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, Metadata, TokenCreator, TokenId,
+    TokenTotalSupply,
+};
 use crate::{
-    chain::{Block, Transaction},
+    chain::{Block, Destination, Transaction},
     primitives::{Amount, Id},
 };
 use serialization::{Decode, Encode};
@@ -35,9 +38,23 @@ impl RPCTokenInfo {
     pub fn new_nonfungible(token_info: RPCNonFungibleTokenInfo) -> Self {
         Self::NonFungibleToken(Box::new(token_info))
     }
+
+    pub fn token_id(&self) -> TokenId {
+        match self {
+            Self::NonFungibleToken(info) => info.token_id,
+            Self::FungibleToken(info) => info.token_id,
+        }
+    }
+
+    pub fn token_number_of_decimals(&self) -> u8 {
+        match self {
+            Self::FungibleToken(info) => info.number_of_decimals,
+            Self::NonFungibleToken(_) => 0,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum RPCTokenTotalSupply {
     Fixed(Amount),
     Lockable,
@@ -54,6 +71,62 @@ impl From<TokenTotalSupply> for RPCTokenTotalSupply {
     }
 }
 
+// Indicates whether a token an be frozen
+#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub enum RPCIsTokenFreezable {
+    #[codec(index = 0)]
+    No,
+    #[codec(index = 1)]
+    Yes,
+}
+
+impl From<IsTokenFreezable> for RPCIsTokenFreezable {
+    fn from(value: IsTokenFreezable) -> Self {
+        match value {
+            IsTokenFreezable::No => RPCIsTokenFreezable::No,
+            IsTokenFreezable::Yes => RPCIsTokenFreezable::Yes,
+        }
+    }
+}
+
+// Indicates whether a token an be unfrozen after being frozen
+#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub enum RPCIsTokenUnfreezable {
+    #[codec(index = 0)]
+    No,
+    #[codec(index = 1)]
+    Yes,
+}
+
+impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
+    fn from(value: IsTokenUnfreezable) -> Self {
+        match value {
+            IsTokenUnfreezable::No => RPCIsTokenUnfreezable::No,
+            IsTokenUnfreezable::Yes => RPCIsTokenUnfreezable::Yes,
+        }
+    }
+}
+
+// Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
+// Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
+// is such an option was provided while freezing.
+#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub enum RPCIsTokenFrozen {
+    #[codec(index = 0)]
+    No(RPCIsTokenFreezable),
+    #[codec(index = 1)]
+    Yes(RPCIsTokenUnfreezable),
+}
+
+impl RPCIsTokenFrozen {
+    pub fn new(frozen: IsTokenFrozen) -> Self {
+        match frozen {
+            IsTokenFrozen::No(is_freezable) => Self::No(is_freezable.into()),
+            IsTokenFrozen::Yes(is_unfreezable) => Self::Yes(is_unfreezable.into()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
@@ -63,10 +136,13 @@ pub struct RPCFungibleTokenInfo {
     pub metadata_uri: Vec<u8>,
     pub circulating_supply: Amount,
     pub total_supply: RPCTokenTotalSupply,
-    pub is_frozen: bool,
+    pub is_locked: bool,
+    pub frozen: RPCIsTokenFrozen,
+    pub authority: Option<Destination>,
 }
 
 impl RPCFungibleTokenInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         token_id: TokenId,
         token_ticker: Vec<u8>,
@@ -74,7 +150,9 @@ impl RPCFungibleTokenInfo {
         metadata_uri: Vec<u8>,
         circulating_supply: Amount,
         total_supply: RPCTokenTotalSupply,
-        is_frozen: bool,
+        is_locked: bool,
+        frozen: RPCIsTokenFrozen,
+        authority: Option<Destination>,
     ) -> Self {
         Self {
             token_id,
@@ -83,7 +161,9 @@ impl RPCFungibleTokenInfo {
             metadata_uri,
             circulating_supply,
             total_supply,
-            is_frozen,
+            is_locked,
+            frozen,
+            authority,
         }
     }
 }
