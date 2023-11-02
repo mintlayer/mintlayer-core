@@ -37,8 +37,8 @@ use common::{
         config::EpochIndex,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         tokens::{NftIssuance, TokenAuxiliaryData},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -684,20 +684,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     block.get_id(),
                 ),
             );
-
-            if tx.outputs().is_empty() {
-                let has_commands = tx.inputs().iter().any(|input| match input {
-                    TxInput::Utxo(_) | TxInput::Account(..) => false,
-                    TxInput::AccountCommand(..) => true,
-                });
-                ensure!(
-                    has_commands,
-                    CheckBlockTransactionsError::EmptyOutputsWithoutCommandInTransactionInBlock(
-                        tx.transaction().get_id(),
-                        block.get_id(),
-                    ),
-                );
-            }
 
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {

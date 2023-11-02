@@ -159,8 +159,6 @@ pub enum CheckBlockTransactionsError {
     InvalidWitnessCount,
     #[error("Empty inputs in transaction {0} found in block {1}")]
     EmptyInputsInTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Empty outputs without a command in transaction {0} found in block {1}")]
-    EmptyOutputsWithoutCommandInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
     #[error("No signature data size is too large: {0} > {1}")]

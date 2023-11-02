@@ -270,9 +270,6 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
             CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(_, _) => 100,
-            CheckBlockTransactionsError::EmptyOutputsWithoutCommandInTransactionInBlock(_, _) => {
-                100
-            }
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
             CheckBlockTransactionsError::NoSignatureDataNotAllowed(_, _) => 100,

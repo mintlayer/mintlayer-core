@@ -1150,29 +1150,23 @@ fn empty_outputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.best_block_id();
 
-        let first_tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(tf.best_block_id().into(), 0),
-                empty_witness(&mut rng),
-            )
-            .build();
-        let first_tx_id = first_tx.transaction().get_id();
-
-        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
-        let block_id = block.get_id();
-        assert_eq!(
-            tf.process_block(block, BlockSource::Local).unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::EmptyOutputsWithoutCommandInTransactionInBlock(
-                        first_tx_id,
-                        block_id
+        let new_block_index = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(genesis_id.into(), 0),
+                        empty_witness(&mut rng),
                     )
-                )
-            ))
-        );
-        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+        let new_block_id: Id<GenBlock> = (*new_block_index.block_id()).into();
+        assert_eq!(tf.best_block_id(), new_block_id);
     });
 }
 
