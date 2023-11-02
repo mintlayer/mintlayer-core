@@ -312,7 +312,7 @@ where
         Ok(())
     }
 
-    async fn run_impl(&mut self) -> crate::Result<()> {
+    async fn run_handshake(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
         let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
         match handshake_res {
@@ -339,6 +339,13 @@ where
                 return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
             }
         }
+
+        Ok(())
+    }
+
+    async fn run_impl(&mut self) -> crate::Result<()> {
+        // Run the handshake sequence first
+        self.run_handshake().await?;
 
         // The channel to the sync manager peer task (set when the peer is accepted)
         let mut sync_msg_senders_opt = None;
@@ -395,6 +402,9 @@ where
 #[cfg(test)]
 mod tests {
     use futures::FutureExt;
+    use test_utils::mock_time_getter::{
+        mocked_time_getter_milliseconds, mocked_time_getter_seconds,
+    };
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -426,7 +436,7 @@ mod tests {
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
         let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
-        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
+        let time_getter = mocked_time_getter_seconds(cur_time);
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -508,7 +518,7 @@ mod tests {
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
         let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
-        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
+        let time_getter = mocked_time_getter_seconds(cur_time);
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -592,8 +602,7 @@ mod tests {
         let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
         let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
-        let time_getter =
-            test_utils::mock_time_getter::mocked_time_getter_seconds(Arc::clone(&cur_time));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&cur_time));
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -660,7 +669,7 @@ mod tests {
         let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
         let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
-        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
+        let time_getter = mocked_time_getter_seconds(cur_time);
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -710,5 +719,116 @@ mod tests {
     #[tokio::test]
     async fn invalid_handshake_message_noise() {
         invalid_handshake_message::<TestTransportNoise, NoiseTcpTransport>().await;
+    }
+
+    #[rstest::rstest]
+    #[case::all_in_sync(
+        123456,
+        123456,
+        Duration::from_secs(2),
+        |res| assert_eq!(res, Ok(())),
+    )]
+    #[case::peer_ahead_within_tolerance(
+        100000,
+        100009,
+        Duration::from_secs(2),
+        |res| assert_eq!(res, Ok(())),
+    )]
+    #[case::peer_ahead_within_tolerance_and_delay(
+        100000,
+        100011,
+        Duration::from_secs(2),
+        |res| assert_eq!(res, Ok(())),
+    )]
+    #[case::peer_ahead_too_much(
+        100000,
+        100014,
+        Duration::from_secs(2),
+        |res| assert!(matches!(res, Err(P2pError::PeerError(PeerError::TimeDiff(_, _))))),
+    )]
+    #[case::peer_behind_within_tolerance(
+        100009,
+        100000,
+        Duration::from_secs(2),
+        |res| assert_eq!(res, Ok(())),
+    )]
+    #[case::peer_behind_too_much(
+        100014,
+        100000,
+        Duration::from_secs(2),
+        |res| assert!(matches!(res, Err(P2pError::PeerError(PeerError::TimeDiff(_, _))))),
+    )]
+    #[case::peer_in_sync_but_times_out(
+        100000,
+        100000,
+        Duration::from_secs(11),
+        |res| assert_eq!(res, Err(P2pError::ProtocolError(ProtocolError::Unresponsive))),
+    )]
+    #[tokio::test]
+    async fn handshake_timestamp_verification(
+        #[case] local_init_time: u64,
+        #[case] peer_init_time: u64,
+        #[case] response_delay: Duration,
+        #[case] result_check: impl FnOnce(crate::Result<()>),
+    ) {
+        tokio::time::pause();
+        let local_time = Arc::new(SeqCstAtomicU64::new(1000 * local_init_time));
+        let local_time_getter = mocked_time_getter_milliseconds(Arc::clone(&local_time));
+        let peer_time = Arc::new(SeqCstAtomicU64::new(1000 * peer_init_time));
+        let peer_time_getter = mocked_time_getter_milliseconds(Arc::clone(&peer_time));
+
+        let (socket1, socket2) =
+            get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config = Arc::new(test_p2p_config());
+        let (tx1, _rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
+        let (_tx2, rx2) = mpsc::unbounded_channel();
+        let peer_id3 = PeerId::new();
+
+        let mut peer = Peer::<MpscChannelTransport>::new(
+            peer_id3,
+            ConnectionInfo::Outbound {
+                handshake_nonce: 1,
+                local_services_override: None,
+            },
+            Arc::clone(&chain_config),
+            Arc::clone(&p2p_config),
+            socket1,
+            None,
+            tx1,
+            rx2,
+            TEST_PROTOCOL_VERSION.into(),
+            peer_time_getter,
+        );
+
+        let handle = logging::spawn_in_current_span(async move { peer.run_handshake().await });
+
+        // Advance both peer clocks and tokio time by given delay in 200ms increments to simulate
+        // the flow of time. Doing this in one step makes the test result sensitive to the runtime
+        // scheduler behavior.
+        let increment = 200;
+        for _ in 0..(response_delay.as_millis() as u64 / increment) {
+            local_time.fetch_add(increment);
+            peer_time.fetch_add(increment);
+            tokio::time::advance(Duration::from_millis(increment)).await;
+        }
+
+        let mut socket2 =
+            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+        socket2.recv().await.unwrap();
+        let _ = socket2
+            .send(Message::Handshake(HandshakeMessage::HelloAck {
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
+                software_version: *chain_config.software_version(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_time(local_time_getter.get_time()),
+            }))
+            .await;
+
+        let result = handle.await.unwrap();
+        result_check(result);
     }
 }
