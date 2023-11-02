@@ -34,8 +34,7 @@ use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_tx_output_destination, make_address_output, make_address_output_from_delegation,
     make_address_output_token, make_decomission_stake_pool_output, make_mint_token_outputs,
-    make_stake_output, make_unmint_token_outputs, make_zero_burn_output, IssueNftArguments,
-    StakePoolDataArguments,
+    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -794,8 +793,6 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
-
         let token_id = *token_info.token_id();
         token_info.check_can_lock()?;
 
@@ -806,7 +803,7 @@ impl Account {
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -821,8 +818,6 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
-
         token_info.check_can_freeze()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -835,7 +830,7 @@ impl Account {
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -849,8 +844,6 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
-
         token_info.check_can_unfreeze()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -861,7 +854,7 @@ impl Account {
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,
@@ -876,7 +869,6 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_zero_burn_output();
         let new_authority = address.decode_object(&self.chain_config)?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -889,7 +881,7 @@ impl Account {
         self.change_token_supply_transaction(
             authority,
             tx_input,
-            outputs,
+            vec![],
             db_tx,
             median_time,
             fee_rate,

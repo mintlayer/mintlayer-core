@@ -138,7 +138,7 @@ pub struct RPCFungibleTokenInfo {
     pub total_supply: RPCTokenTotalSupply,
     pub is_locked: bool,
     pub frozen: RPCIsTokenFrozen,
-    pub authority: Option<Destination>,
+    pub authority: Destination,
 }
 
 impl RPCFungibleTokenInfo {
@@ -152,7 +152,7 @@ impl RPCFungibleTokenInfo {
         total_supply: RPCTokenTotalSupply,
         is_locked: bool,
         frozen: RPCIsTokenFrozen,
-        authority: Option<Destination>,
+        authority: Destination,
     ) -> Self {
         Self {
             token_id,

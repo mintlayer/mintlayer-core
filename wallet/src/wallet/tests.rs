@@ -1778,7 +1778,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             token_issuance.total_supply.into(),
             false,
             RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
-            Some(token_issuance.authority),
+            token_issuance.authority,
         );
 
         wallet
@@ -2047,7 +2047,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         token_issuance.total_supply.into(),
         false,
         RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
-        Some(token_issuance.authority),
+        token_issuance.authority,
     );
 
     let unconfirmed_token_info =
@@ -2260,7 +2260,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         token_issuance.total_supply.into(),
         false,
         RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
-        Some(token_issuance.authority),
+        token_issuance.authority,
     );
 
     let unconfirmed_token_info =
@@ -2507,7 +2507,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         token_issuance.total_supply.into(),
         false,
         RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
-        Some(token_issuance.authority),
+        token_issuance.authority,
     );
 
     let unconfirmed_token_info =
@@ -2695,7 +2695,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         token_issuance.total_supply.into(),
         false,
         RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
-        Some(token_issuance.authority),
+        token_issuance.authority,
     );
 
     let unconfirmed_token_info =
