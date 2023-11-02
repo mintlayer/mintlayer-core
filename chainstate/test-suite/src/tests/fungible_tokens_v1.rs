@@ -1818,7 +1818,6 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
                         TxInput::from_utxo(mint_tx_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -2290,7 +2289,6 @@ fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSu
                         InputWitness::NoSignature(None),
                     )
                     .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
                     .build(),
             )
             .build_and_process();
@@ -2363,7 +2361,6 @@ fn try_lock_twice(#[case] seed: Seed) {
                         TxInput::from_utxo(lock_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
                     .build(),
             )
             .build_and_process();
@@ -2416,7 +2413,6 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
                 utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process();
@@ -2476,7 +2472,6 @@ fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process();
@@ -2752,7 +2747,6 @@ fn lock_supply_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -2781,7 +2775,6 @@ fn lock_supply_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -3602,7 +3595,6 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
                 utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO))) // fake output
             .build();
 
         let result = tf
@@ -4059,7 +4051,6 @@ fn check_freezable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(freeze_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -4089,7 +4080,6 @@ fn check_freezable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(freeze_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -4287,7 +4277,6 @@ fn token_freeze_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -4314,7 +4303,6 @@ fn token_freeze_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -4396,7 +4384,6 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -4423,7 +4410,6 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -4566,7 +4552,6 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
                 TxInput::from_utxo(freeze_tx_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
             .build();
 
         let result = tf
@@ -4775,7 +4760,6 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 TxInput::from_utxo(tx_1_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
             .build();
 
         let tx = {
@@ -4873,7 +4857,6 @@ fn check_change_authority(#[case] seed: Seed) {
                         utxo_with_change.clone().into(),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -4936,7 +4919,6 @@ fn check_change_authority_twice(#[case] seed: Seed) {
                 utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
             .build();
         let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -5015,7 +4997,6 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                         TxInput::from_utxo(freeze_token_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -5068,7 +5049,6 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                         TxInput::from_utxo(unfreeze_token_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()
@@ -5142,7 +5122,6 @@ fn change_authority_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process();
@@ -5171,7 +5150,6 @@ fn change_authority_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_with_fee_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(OutputValue::Coin(Amount::ZERO)))
                     .build(),
             )
             .build_and_process()

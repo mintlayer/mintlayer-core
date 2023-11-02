@@ -37,8 +37,8 @@ use common::{
         config::EpochIndex,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         tokens::{NftIssuance, TokenAuxiliaryData},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -677,14 +677,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            if tx.inputs().is_empty() || tx.outputs().is_empty() {
-                return Err(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+            ensure!(
+                !tx.inputs().is_empty(),
+                CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(
+                    tx.transaction().get_id(),
+                    block.get_id(),
+                ),
+            );
+
+            if tx.outputs().is_empty() {
+                let has_commands = tx.inputs().iter().any(|input| match input {
+                    TxInput::Utxo(_) | TxInput::Account(..) => false,
+                    TxInput::AccountCommand(..) => true,
+                });
+                ensure!(
+                    has_commands,
+                    CheckBlockTransactionsError::EmptyOutputsWithoutCommandInTransactionInBlock(
                         tx.transaction().get_id(),
                         block.get_id(),
                     ),
                 );
             }
+
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
                 ensure!(

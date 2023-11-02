@@ -193,12 +193,9 @@ impl<'a> RandomTxMaker<'a> {
                         );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
-                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                        result_inputs.extend(inputs);
 
                         let _ = tokens_cache.unfreeze_token(token_id).unwrap();
-
-                        result_inputs.extend(inputs);
-                        result_outputs.extend(outputs);
 
                         self.account_command_used = true;
                     }
@@ -217,12 +214,9 @@ impl<'a> RandomTxMaker<'a> {
                         );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
-                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                        result_inputs.extend(inputs);
 
                         let _ = tokens_cache.freeze_token(token_id, unfreezable).unwrap();
-
-                        result_inputs.extend(inputs);
-                        result_outputs.extend(outputs);
 
                         self.account_command_used = true;
                     }
@@ -236,14 +230,11 @@ impl<'a> RandomTxMaker<'a> {
                     );
 
                     let inputs = vec![account_input, fee_inputs[i].clone()];
-                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                    result_inputs.extend(inputs);
 
                     let _ = tokens_cache
                         .change_authority(token_id, Destination::AnyoneCanSpend)
                         .unwrap();
-
-                    result_inputs.extend(inputs);
-                    result_outputs.extend(outputs);
 
                     self.account_command_used = true;
                 } else if !token_data.is_locked() {
@@ -295,10 +286,6 @@ impl<'a> RandomTxMaker<'a> {
                                 AccountCommand::LockTokenSupply(token_id),
                             );
                             result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
-
-                            // fake output to avoid empty outputs error
-                            let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
-                            result_outputs.extend(outputs);
 
                             let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
 

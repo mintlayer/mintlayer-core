@@ -38,8 +38,7 @@ use common::{
         config::{create_unit_test_config, Builder as ConfigBuilder},
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId, PoolId,
-        TxInput, TxOutput,
+        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -1133,7 +1132,7 @@ fn empty_inputs_in_tx(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                    CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(
                         first_tx_id,
                         block_id
                     )
@@ -1153,44 +1152,8 @@ fn empty_outputs_in_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(1)),
-                anyonecanspend_address(),
-            ))
-            .build();
-        let first_tx_id = first_tx.transaction().get_id();
-
-        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
-        let block_id = block.get_id();
-        assert_eq!(
-            tf.process_block(block, BlockSource::Local).unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                        first_tx_id,
-                        block_id
-                    )
-                )
-            ))
-        );
-        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
-    });
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn burn_inputs_in_tx(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-
-        let first_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(tf.best_block_id().into(), 0),
                 empty_witness(&mut rng),
             )
             .build();
@@ -1202,7 +1165,7 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                    CheckBlockTransactionsError::EmptyOutputsWithoutCommandInTransactionInBlock(
                         first_tx_id,
                         block_id
                     )
