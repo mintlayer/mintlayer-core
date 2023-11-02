@@ -27,8 +27,10 @@ use axum::{
     routing::{get, IntoMakeService},
     Json, Router, Server,
 };
+use hyper::Method;
 use serde_json::json;
 use std::{net::TcpListener, sync::Arc};
+use tower_http::cors::{Any, CorsLayer};
 
 #[allow(clippy::unused_async)]
 async fn bad_request() -> Result<(), ApiServerWebServerError> {
@@ -48,11 +50,17 @@ pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
     socket: TcpListener,
     state: ApiServerWebServerState<Arc<T>>,
 ) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
+    let cors_layer = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any)
+        .allow_origin(Any);
+
     let routes = Router::new()
         .route("/", get(server_status))
         .nest("/api/v1", api::v1::routes())
         .fallback(bad_request)
-        .with_state(state);
+        .with_state(state)
+        .layer(cors_layer);
 
     axum::Server::from_tcp(socket)
         .expect("API Server Web Server failed to attach to socket")
