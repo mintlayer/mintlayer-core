@@ -339,6 +339,11 @@ pub enum WalletCommand {
         pool_id: String,
     },
 
+    /// Data deposit, the data is provided as hex encoded string
+    DepositData {
+        hex_data: String,
+    },
+
     /// Show the seed phrase for the loaded wallet if it has been stored
     ShowSeedPhrase,
 
@@ -1261,6 +1266,18 @@ impl CommandHandler {
                 self.get_synced_controller()
                     .await?
                     .decommission_stake_pool(pool_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::DepositData { hex_data } => {
+                let data = hex::decode(hex_data).map_err(|e| {
+                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
+                })?;
+                self.get_synced_controller()
+                    .await?
+                    .deposit_data(data)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())

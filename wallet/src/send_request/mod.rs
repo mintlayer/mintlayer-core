@@ -25,6 +25,7 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
+use utils::ensure;
 
 use crate::{WalletError, WalletResult};
 
@@ -167,6 +168,19 @@ pub fn make_stake_output(
         arguments.cost_per_block,
     );
     Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
+}
+
+pub fn make_data_deposit_output(
+    chain_config: &ChainConfig,
+    data: Vec<u8>,
+) -> WalletResult<Vec<TxOutput>> {
+    ensure!(
+        data.len() <= chain_config.data_deposit_max_size(),
+        WalletError::DataDepositToBig(data.len(), chain_config.data_deposit_max_size())
+    );
+    ensure!(!data.is_empty(), WalletError::EmptyDataDeposit);
+
+    Ok(vec![TxOutput::DataDeposit(data)])
 }
 
 pub struct IssueNftArguments {

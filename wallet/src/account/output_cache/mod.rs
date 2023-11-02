@@ -263,7 +263,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -275,7 +275,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -290,7 +290,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -302,7 +302,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -314,7 +314,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -326,7 +326,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }
@@ -338,7 +338,7 @@ impl UnconfirmedTokenInfo {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
             Self::NonFungibleToken(token_id) => {
-                Err(WalletError::CannotChangeNonFungableToken(*token_id))
+                Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
     }

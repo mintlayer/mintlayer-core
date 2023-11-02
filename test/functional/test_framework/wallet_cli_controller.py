@@ -260,6 +260,9 @@ class WalletCliController:
         matches = re.findall(pattern, output)
         return [DelegationData(delegation_id, int(balance)) for delegation_id, balance in matches]
 
+    async def deposit_data(self, data: str) -> str:
+        return await self._write_command(f"depositdata \"{data}\"\n")
+
     async def sync(self) -> str:
         return await self._write_command("syncwallet\n")
 

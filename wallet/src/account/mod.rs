@@ -1649,7 +1649,8 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
                 OutputValue::Coin(chain_config.token_min_issuance_fee())
             }
-            TxOutput::CreateDelegationId(_, _) | TxOutput::DataDeposit(_) => continue,
+            TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_min_fee()),
+            TxOutput::CreateDelegationId(_, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
