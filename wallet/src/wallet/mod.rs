@@ -170,8 +170,8 @@ pub enum WalletError {
     CannotUseFrozenToken,
     #[error("Cannot change a not owned token")]
     CannotChangeNotOwnedToken(TokenId),
-    #[error("Cannot change a nonfungable token")]
-    CannotChangeNonFungableToken(TokenId),
+    #[error("Cannot change a non-fungible token")]
+    CannotChangeNonFungibleToken(TokenId),
     #[error("The size of the data to be deposited: {0} is too big, max size is: {1}")]
     DataDepositToBig(usize, usize),
     #[error("Cannot deposit empty data")]
