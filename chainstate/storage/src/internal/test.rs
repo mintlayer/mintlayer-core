@@ -30,6 +30,15 @@ use utxo::{UtxosStorageRead, UtxosStorageWrite};
 type TestStore = crate::inmemory::Store;
 
 #[test]
+fn test_storage_get_default_version_in_tx() {
+    utils::concurrency::model(|| {
+        let store = TestStore::new_empty().unwrap();
+        let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
+        assert_eq!(vtx, None, "Default storage version wrong");
+    })
+}
+
+#[test]
 #[cfg(not(loom))]
 fn test_storage_manipulation() {
     use common::{
