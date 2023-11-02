@@ -198,7 +198,7 @@ where
                 &issuance_token_id_getter,
             )
         }
-        TxInput::Account(_, account_spending) => match account_spending {
+        TxInput::Account(outpoint) => match outpoint.account() {
             AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
@@ -467,7 +467,7 @@ fn calculate_required_fee_burn(
         .inputs()
         .iter()
         .filter(|&input| match input {
-            TxInput::Utxo(_) | TxInput::Account(_, _) => false,
+            TxInput::Utxo(_) | TxInput::Account(_) => false,
             TxInput::AccountCommand(_, account_op) => match account_op {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -482,7 +482,7 @@ fn calculate_required_fee_burn(
         .inputs()
         .iter()
         .filter(|&input| match input {
-            TxInput::Utxo(_) | TxInput::Account(_, _) => false,
+            TxInput::Utxo(_) | TxInput::Account(_) => false,
             TxInput::AccountCommand(_, account_op) => match account_op {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
@@ -551,7 +551,8 @@ mod tests {
             config::ChainType,
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            AccountNonce, DelegationId, Destination, GenBlock, PoolId, UtxoOutPoint,
+            AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, PoolId,
+            UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -809,10 +810,10 @@ mod tests {
 
         // try overspend balance
         {
-            let input = TxInput::Account(
+            let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
                 AccountSpending::DelegationBalance(delegation_id, overspend_amount),
-            );
+            ));
 
             let output = TxOutput::Transfer(
                 OutputValue::Coin(overspend_amount),
@@ -837,10 +838,10 @@ mod tests {
 
         // try overspend input
         {
-            let input = TxInput::Account(
+            let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
                 AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
-            );
+            ));
 
             let output = TxOutput::Transfer(
                 OutputValue::Coin(overspend_amount),
@@ -863,10 +864,10 @@ mod tests {
             );
         }
 
-        let input = TxInput::Account(
+        let input = TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(0),
             AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
-        );
+        ));
         let output = TxOutput::Transfer(
             OutputValue::Coin(withdraw_amount),
             Destination::AnyoneCanSpend,

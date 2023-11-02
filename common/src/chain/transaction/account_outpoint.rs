@@ -16,7 +16,7 @@
 use crate::{
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        DelegationId,
+        AccountNonce, DelegationId,
     },
     primitives::Amount,
 };
@@ -88,4 +88,25 @@ pub enum AccountCommand {
     // Change the authority who can authorize operations for a token
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
+}
+
+/// Type of OutPoint that represents spending from an account
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+pub struct AccountOutPoint {
+    nonce: AccountNonce,
+    account: AccountSpending,
+}
+
+impl AccountOutPoint {
+    pub fn new(nonce: AccountNonce, account: AccountSpending) -> Self {
+        Self { nonce, account }
+    }
+
+    pub fn nonce(&self) -> AccountNonce {
+        self.nonce
+    }
+
+    pub fn account(&self) -> &AccountSpending {
+        &self.account
+    }
 }

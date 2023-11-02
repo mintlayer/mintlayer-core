@@ -47,8 +47,8 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountSpending, ChainConfig, ConsensusUpgrade, Destination, GenBlock,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
+        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
         RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
@@ -1846,10 +1846,10 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
 
     // Process block_3: spend part of the share including reward
     let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
-    let tx_input_spend_from_delegation = TxInput::Account(
+    let tx_input_spend_from_delegation = TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(0),
         AccountSpending::DelegationBalance(delegation_id, amount_to_withdraw),
-    );
+    ));
     let tx = TransactionBuilder::new()
         .add_input(tx_input_spend_from_delegation, empty_witness(&mut rng))
         .add_output(TxOutput::LockThenTransfer(
@@ -1875,10 +1875,10 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     // try overspend
     {
         let delegation_balance_overspend = (delegation_balance + Amount::from_atoms(1)).unwrap();
-        let tx_input_spend_from_delegation = TxInput::Account(
+        let tx_input_spend_from_delegation = TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(1),
             AccountSpending::DelegationBalance(delegation_id, delegation_balance_overspend),
-        );
+        ));
         let tx = TransactionBuilder::new()
             .add_input(tx_input_spend_from_delegation, empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
@@ -1907,10 +1907,10 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         );
     }
 
-    let tx_input_spend_from_delegation = TxInput::Account(
+    let tx_input_spend_from_delegation = TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(1),
         AccountSpending::DelegationBalance(delegation_id, delegation_balance),
-    );
+    ));
     let tx = TransactionBuilder::new()
         .add_input(tx_input_spend_from_delegation, empty_witness(&mut rng))
         .add_output(TxOutput::LockThenTransfer(

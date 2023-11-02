@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::{AccountCommand, AccountSpending};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::Uint256;
@@ -503,10 +503,10 @@ impl Account {
             .into();
 
         let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
-        let mut tx_input = TxInput::Account(
+        let mut tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
             AccountSpending::DelegationBalance(delegation_id, amount_with_fee),
-        );
+        ));
         // as the input size depends on the amount we specify the fee will also change a bit so
         // loop until it converges.
         let mut input_size = serialization::Encode::encoded_size(&tx_input);
@@ -522,10 +522,10 @@ impl Account {
                 UtxoSelectorError::NotEnoughFunds(delegation_share, new_amount_with_fee)
             );
 
-            tx_input = TxInput::Account(
+            tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
                 AccountSpending::DelegationBalance(delegation_id, new_amount_with_fee),
-            );
+            ));
 
             let new_input_size = serialization::Encode::encoded_size(&tx_input);
             if new_input_size == input_size {
@@ -1204,7 +1204,7 @@ impl Account {
                 .output_cache
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
-            TxInput::Account(_, spending) => match spending {
+            TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
@@ -1494,7 +1494,7 @@ fn group_preselected_inputs(
 
         match input {
             TxInput::Utxo(_) => {}
-            TxInput::Account(_, spending) => match spending {
+            TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }

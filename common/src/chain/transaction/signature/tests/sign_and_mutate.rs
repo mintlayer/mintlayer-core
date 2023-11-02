@@ -31,8 +31,8 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::TokenId,
-        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
+        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
 };
@@ -978,18 +978,21 @@ fn mutate_first_input(
                 ))
             }
         }
-        TxInput::Account(nonce, spending) => {
+        TxInput::Account(outpoint) => {
             if rng.gen::<bool>() {
-                TxInput::Account(
-                    *nonce,
+                TxInput::Account(AccountOutPoint::new(
+                    outpoint.nonce(),
                     AccountSpending::DelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
                         Amount::from_atoms(rng.gen()),
                     ),
-                )
+                ))
             } else {
-                let new_nonce = nonce.increment().unwrap_or_else(|| nonce.decrement().unwrap());
-                TxInput::Account(new_nonce, spending.clone())
+                let new_nonce = outpoint
+                    .nonce()
+                    .increment()
+                    .unwrap_or_else(|| outpoint.nonce().decrement().unwrap());
+                TxInput::Account(AccountOutPoint::new(new_nonce, outpoint.account().clone()))
             }
         }
         TxInput::AccountCommand(nonce, op) => {

@@ -138,7 +138,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(_, account_spending) => match account_spending {
+                    TxInput::Account(outpoint) => match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, _) => Ok(accounting_view
                             .get_delegation_data(*delegation_id)?
                             .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(

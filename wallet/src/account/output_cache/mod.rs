@@ -542,16 +542,16 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                 }
-                TxInput::Account(nonce, spending) => {
+                TxInput::Account(outpoint) => {
                     if !already_present {
-                        match spending {
+                        match outpoint.account() {
                             AccountSpending::DelegationBalance(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         delegation_id,
-                                        *nonce,
+                                        outpoint.nonce(),
                                         tx_id,
                                     )?;
                                 }
@@ -704,10 +704,10 @@ impl OutputCache {
                         self.consumed.remove(outpoint);
                         self.unconfirmed_descendants.remove(tx_id);
                     }
-                    TxInput::Account(nonce, spending) => match spending {
+                    TxInput::Account(outpoint) => match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
-                                data.last_nonce = nonce.decrement();
+                                data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
@@ -924,12 +924,12 @@ impl OutputCache {
                                     TxInput::Utxo(outpoint) => {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
-                                    TxInput::Account(nonce, spending) => match spending {
+                                    TxInput::Account(outpoint) => match outpoint.account() {
                                         AccountSpending::DelegationBalance(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
-                                                data.last_nonce = nonce.decrement();
+                                                data.last_nonce = outpoint.nonce().decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),

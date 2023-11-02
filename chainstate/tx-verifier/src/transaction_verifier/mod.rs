@@ -444,12 +444,15 @@ where
                 TxInput::Utxo(outpoint) => {
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
-                TxInput::Account(nonce, account_spending) => {
-                    match account_spending {
+                TxInput::Account(outpoint) => {
+                    match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
                             check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self
-                                .spend_input_from_account(*nonce, account_spending.clone().into())
+                                .spend_input_from_account(
+                                    outpoint.nonce(),
+                                    outpoint.account().clone().into(),
+                                )
                                 .and_then(|_| {
                                     // If the input spends from delegation account, this means the user is
                                     // spending part of their share in the pool.
@@ -602,8 +605,8 @@ where
         for input in tx.inputs() {
             match input {
                 TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(_, account_spending) => {
-                    self.unspend_input_from_account(account_spending.clone().into())?;
+                TxInput::Account(outpoint) => {
+                    self.unspend_input_from_account(outpoint.account().clone().into())?;
                 }
                 TxInput::AccountCommand(_, account_op) => {
                     self.unspend_input_from_account(account_op.clone().into())?;
@@ -705,7 +708,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(_) | TxInput::Account(_, _) => None,
+                TxInput::Utxo(_) | TxInput::Account(_) => None,
                 TxInput::AccountCommand(nonce, account_op) => match account_op {
                     AccountCommand::MintTokens(token_id, amount) => {
                         let res = self

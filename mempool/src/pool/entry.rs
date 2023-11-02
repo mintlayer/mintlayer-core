@@ -78,8 +78,8 @@ impl TxDependency {
     fn from_input_requires(input: &TxInput) -> Option<Self> {
         match input {
             TxInput::Utxo(utxo) => Self::from_utxo(utxo),
-            TxInput::Account(nonce, spending) => {
-                nonce.decrement().map(|nonce| Self::from_account(spending, nonce))
+            TxInput::Account(acct) => {
+                acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
             }
             TxInput::AccountCommand(nonce, op) => {
                 nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
@@ -90,7 +90,7 @@ impl TxDependency {
     fn from_input_provides(input: &TxInput) -> Option<Self> {
         match input {
             TxInput::Utxo(_) => None,
-            TxInput::Account(nonce, spending) => Some(Self::from_account(spending, *nonce)),
+            TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
             TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
         }
     }

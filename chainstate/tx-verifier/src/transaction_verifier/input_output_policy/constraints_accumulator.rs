@@ -117,8 +117,8 @@ impl ConstrainedValueAccumulator {
                         }
                     };
                 }
-                TxInput::Account(_, account) => {
-                    match account {
+                TxInput::Account(outpoint) => {
+                    match outpoint.account() {
                         AccountSpending::DelegationBalance(_, spend_amount) => {
                             let block_distance =
                                 chain_config.as_ref().spend_share_maturity_distance(block_height);

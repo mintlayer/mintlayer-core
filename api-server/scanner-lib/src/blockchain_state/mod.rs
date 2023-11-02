@@ -170,7 +170,7 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
 
     for input in inputs {
         match input {
-            TxInput::Account(_, _) | TxInput::AccountCommand(_, _) => {
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
                 // TODO
             }
             TxInput::Utxo(outpoint) => {
