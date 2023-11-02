@@ -43,6 +43,8 @@ use wallet_types::{
 
 use crate::{WalletError, WalletResult};
 
+pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
+
 pub struct DelegationData {
     pub pool_id: PoolId,
     pub destination: Destination,
@@ -762,8 +764,6 @@ impl OutputCache {
                             }
                         } else if !is_unconfirmed {
                             let mut data = TokenIssuanceData::new(authority.clone());
-                            // TODO: is this correct should we continue from the previous
-                            // or start from 0
                             data.last_nonce = Some(*nonce);
                             self.token_issuance.insert(*token_id, data);
                         }
@@ -921,26 +921,35 @@ impl OutputCache {
         );
 
         let token_id = match tx {
-            WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
+            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
+                .then_some(make_token_id(tx_data.get_transaction().inputs()))
+                .flatten(),
             WalletTx::Block(_) => None,
         };
 
-        // check token is not frozen and can be used
-        // TODO:
-        // token_id
-        //     .and_then(|token_id| self.token_data(&token_id))
-        //     .map_or(Ok(()), |token_data| {
-        //         token_data.frozen_state.check_can_be_used()
-        //     })?;
-
         Ok((output, token_id))
+    }
+
+    pub fn find_used_tokens(
+        &self,
+        current_block_info: BlockInfo,
+        inputs: &[UtxoOutPoint],
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        inputs
+            .iter()
+            .filter_map(|utxo| {
+                self.find_unspent_unlocked_utxo(utxo, current_block_info)
+                    .map(|(_, token_id)| token_id)
+                    .transpose()
+            })
+            .collect()
     }
 
     pub fn find_utxos(
         &self,
         current_block_info: BlockInfo,
         inputs: Vec<UtxoOutPoint>,
-    ) -> WalletResult<BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>> {
+    ) -> WalletResult<Vec<UtxoWithTxOutput>> {
         inputs
             .into_iter()
             .map(|utxo| {
@@ -950,12 +959,14 @@ impl OutputCache {
             .collect()
     }
 
-    pub fn utxos_with_token_ids(
+    pub fn utxos_with_token_ids<F: Fn(&TxOutput) -> bool>(
         &self,
         current_block_info: BlockInfo,
         utxo_states: UtxoStates,
         locked_state: WithLocked,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+        output_filter: F,
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+        let output_filter = &output_filter;
         self.txs
             .values()
             .filter(|tx| is_in_state(tx, utxo_states))
@@ -976,6 +987,7 @@ impl OutputCache {
                                 outpoint,
                             )
                             && !is_v0_token_output(output)
+                            && output_filter(output)
                     })
                     .map(move |(output, outpoint)| {
                         let token_id = match tx {

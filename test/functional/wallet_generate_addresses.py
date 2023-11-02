@@ -166,4 +166,3 @@ class WalletAddressGenerator(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletAddressGenerator().main()
-

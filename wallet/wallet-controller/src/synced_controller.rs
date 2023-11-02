@@ -34,6 +34,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
+use futures::{stream::FuturesUnordered, TryStreamExt};
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
@@ -78,6 +79,52 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             account_index,
             config,
         }
+    }
+
+    pub async fn get_token_info(
+        &self,
+        token_id: TokenId,
+    ) -> Result<RPCTokenInfo, ControllerError<T>> {
+        self.rpc_client
+            .get_token_info(token_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
+                token_id,
+            )))
+    }
+
+    async fn fetch_token_infos(
+        &self,
+        tokens: BTreeSet<TokenId>,
+    ) -> Result<Vec<RPCTokenInfo>, ControllerError<T>> {
+        let tasks: FuturesUnordered<_> =
+            tokens.into_iter().map(|token_id| self.get_token_info(token_id)).collect();
+        tasks.try_collect().await
+    }
+
+    /// Check that the selected UTXOs not contain tokens that are frozen and can't be used
+    pub async fn check_tokens_in_selected_utxo(
+        &self,
+        input_utxos: &[UtxoOutPoint],
+    ) -> Result<(), ControllerError<T>> {
+        let utxos = self
+            .wallet
+            .find_used_tokens(self.account_index, input_utxos)
+            .map_err(ControllerError::WalletError)?;
+
+        for token_info in self.fetch_token_infos(utxos).await? {
+            match token_info {
+                RPCTokenInfo::FungibleToken(token_info) => self
+                    .wallet
+                    .get_token_unconfirmed_info(self.account_index, &token_info)
+                    .map_err(ControllerError::WalletError)?
+                    .check_can_be_used()
+                    .map_err(ControllerError::WalletError)?,
+                RPCTokenInfo::NonFungibleToken(_) => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn abandon_transaction(
@@ -320,6 +367,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         amount: Amount,
         selected_utxos: Vec<UtxoOutPoint>,
     ) -> Result<(), ControllerError<T>> {
+        self.check_tokens_in_selected_utxo(&selected_utxos).await?;
+
         let output = make_address_output(self.chain_config, address, amount)
             .map_err(ControllerError::WalletError)?;
         self.create_and_send_tx(
@@ -376,7 +425,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
-                    [],
+                    vec![],
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -444,7 +493,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
-                    [],
+                    vec![],
                     current_fee_rate,
                     consolidate_fee_rate,
                 )

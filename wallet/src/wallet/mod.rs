@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -678,7 +678,7 @@ impl<B: storage::Backend> Wallet<B> {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(
             utxo_types,
@@ -812,14 +812,13 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
-        inputs: impl IntoIterator<Item = UtxoOutPoint>,
+        inputs: Vec<UtxoOutPoint>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let inputs = inputs.into_iter().collect();
             account.process_send_request(
                 db_tx,
                 request,
@@ -990,8 +989,17 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn find_used_tokens(
+        &self,
+        account_index: U31,
+        input_utxos: &[UtxoOutPoint],
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        self.get_account(account_index)?
+            .find_used_tokens(input_utxos, self.latest_median_time)
+    }
+
     pub fn get_token_unconfirmed_info(
-        &mut self,
+        &self,
         account_index: U31,
         token_info: &RPCFungibleTokenInfo,
     ) -> WalletResult<UnconfirmedTokenInfo> {
@@ -1008,7 +1016,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            [],
+            vec![],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -1039,7 +1047,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            [],
+            vec![],
             current_fee_rate,
             consolidate_fee_rate,
         )?;

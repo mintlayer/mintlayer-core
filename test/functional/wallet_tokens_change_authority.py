@@ -152,8 +152,10 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.change_token_authority(token_id, new_acc_address))
 
             # randomly put the tx in a block or keep in mempool unconfirmed
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
+            produce_block = random.choice([True, False])
+            if produce_block:
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
 
 
             # try to mint, unmint, lock, freeze and unfreeze
@@ -165,6 +167,10 @@ class WalletTokens(BitcoinTestFramework):
 
 
             await wallet.select_account(1)
+            # make sure the transfer of authority is confirmed
+            if not produce_block:
+                self.generate_block()
+                assert_in("Success", await wallet.sync())
 
             # check that the other account is now the owner and can do anything
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 1))
@@ -174,7 +180,5 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
 
 
-
 if __name__ == '__main__':
     WalletTokens().main()
-

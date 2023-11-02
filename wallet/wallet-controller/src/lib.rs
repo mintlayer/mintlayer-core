@@ -498,7 +498,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 WithLocked::Unlocked,
             )
             .map_err(ControllerError::WalletError)?;
-        let pool_ids = stake_pool_utxos.values().filter_map(|utxo| match utxo {
+        let pool_ids = stake_pool_utxos.into_iter().filter_map(|(_, utxo)| match utxo {
             TxOutput::ProduceBlockFromStake(_, pool_id) | TxOutput::CreateStakePool(pool_id, _) => {
                 Some(pool_id)
             }
@@ -515,11 +515,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         for pool_id in pool_ids {
             let balance_opt = self
                 .rpc_client
-                .get_stake_pool_balance(*pool_id)
+                .get_stake_pool_balance(pool_id)
                 .await
                 .map_err(ControllerError::NodeCallError)?;
             if let Some(balance) = balance_opt {
-                balances.insert(*pool_id, balance);
+                balances.insert(pool_id, balance);
             }
         }
         Ok(balances)

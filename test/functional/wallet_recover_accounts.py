@@ -149,4 +149,3 @@ class WalletRecoverAccounts(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletRecoverAccounts().main()
-

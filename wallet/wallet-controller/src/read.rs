@@ -85,7 +85,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
         self.wallet
             .get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
             .map_err(ControllerError::WalletError)

@@ -1138,7 +1138,7 @@ impl CommandHandler {
                 amount,
                 utxos,
             } => {
-                let utxos: Vec<UtxoOutPoint> = utxos
+                let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
                     .collect::<Result<Vec<_>, WalletCliError>>()?;
@@ -1146,7 +1146,7 @@ impl CommandHandler {
                 let address = parse_address(chain_config, &address)?;
                 self.get_synced_controller()
                     .await?
-                    .send_to_address(address, amount, utxos)
+                    .send_to_address(address, amount, input_utxos)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())

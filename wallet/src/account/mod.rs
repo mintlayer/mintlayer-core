@@ -60,7 +60,7 @@ use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
 use std::cmp::Reverse;
 use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
 use std::sync::Arc;
 use wallet_storage::{
@@ -74,7 +74,9 @@ use wallet_types::{
     KeychainUsageState, WalletTx,
 };
 
-pub use self::output_cache::{DelegationData, FungibleTokenInfo, UnconfirmedTokenInfo};
+pub use self::output_cache::{
+    DelegationData, FungibleTokenInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+};
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
 use self::utxo_selector::{CoinSelectionAlgo, PayFee};
@@ -149,6 +151,18 @@ impl Account {
         Ok(account)
     }
 
+    pub fn find_used_tokens(
+        &self,
+        input_utxos: &[UtxoOutPoint],
+        median_time: BlockTimestamp,
+    ) -> WalletResult<BTreeSet<TokenId>> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        self.output_cache.find_used_tokens(current_block_info, input_utxos)
+    }
+
     fn select_inputs_for_send_request(
         &mut self,
         request: SendRequest,
@@ -180,11 +194,6 @@ impl Account {
         let (coin_change_fee, token_change_fee) =
             coin_and_token_output_change_fees(current_fee_rate)?;
 
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
-
         let mut preselected_inputs =
             group_preselected_inputs(&request, current_fee_rate, &self.chain_config)?;
 
@@ -199,6 +208,10 @@ impl Account {
                 CoinSelectionAlgo::Randomize,
             )
         } else {
+            let current_block_info = BlockInfo {
+                height: self.account_info.best_block_height(),
+                timestamp: median_time,
+            };
             (
                 self.output_cache.find_utxos(current_block_info, input_utxos)?,
                 CoinSelectionAlgo::UsePreselected,
@@ -346,7 +359,7 @@ impl Account {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         pay_fee_with_currency: &Currency,
-        utxos: BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>,
+        utxos: Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))>,
     ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -1141,19 +1154,20 @@ impl Account {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        let mut all_outputs =
-            self.output_cache
-                .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
-        all_outputs.retain(|_outpoint, (txo, _token_id)| {
-            self.is_mine_or_watched(txo)
-                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-        });
-        all_outputs
+        self.output_cache.utxos_with_token_ids(
+            current_block_info,
+            utxo_states,
+            with_locked,
+            |txo| {
+                self.is_mine_or_watched(txo)
+                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            },
+        )
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {

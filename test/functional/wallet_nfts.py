@@ -141,4 +141,3 @@ class WalletNfts(BitcoinTestFramework):
 
 if __name__ == '__main__':
     WalletNfts().main()
-
