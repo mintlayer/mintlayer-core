@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, ops::Range};
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountOp, Destination, NetUpgrades, PoolId,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
         TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
@@ -272,7 +272,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(
+                AccountSpending::DelegationBalance(
                     delegation_id,
                     Amount::from_atoms(atoms_to_spend),
                 ),
@@ -328,7 +328,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(
+                AccountSpending::DelegationBalance(
                     delegation_id,
                     Amount::from_atoms(atoms_to_spend),
                 ),

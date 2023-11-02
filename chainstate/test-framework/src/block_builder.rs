@@ -139,9 +139,12 @@ impl<'f> BlockBuilder<'f> {
                     TxInput::Utxo(utxo_outpoint) => {
                         self.used_utxo.insert(utxo_outpoint.clone());
                     }
-                    TxInput::Account(account) => {
+                    TxInput::Account(outpoint) => {
                         self.account_nonce_tracker
-                            .insert(account.account().clone().into(), account.nonce());
+                            .insert(outpoint.account().clone().into(), outpoint.nonce());
+                    }
+                    TxInput::AccountCommand(nonce, op) => {
+                        self.account_nonce_tracker.insert(op.clone().into(), *nonce);
                     }
                 };
             });

@@ -25,8 +25,8 @@ use common::{
             is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId,
             TokenIssuance, TokenTotalSupply,
         },
-        AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId,
+        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
 };
@@ -545,80 +545,86 @@ impl OutputCache {
                 TxInput::Account(outpoint) => {
                     if !already_present {
                         match outpoint.account() {
-                            AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                            AccountSpending::DelegationBalance(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         delegation_id,
-                                        outpoint,
+                                        outpoint.nonce(),
                                         tx_id,
                                     )?;
                                 }
                             }
-                            AccountOp::MintTokens(token_id, amount) => {
+                        }
+                    }
+                }
+                TxInput::AccountCommand(nonce, op) => {
+                    if !already_present {
+                        match op {
+                            AccountCommand::MintTokens(token_id, amount) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.total_supply = data.total_supply.mint(*amount)?;
                                 }
                             }
-                            AccountOp::UnmintTokens(token_id) => {
+                            AccountCommand::UnmintTokens(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
                                     data.total_supply = data.total_supply.unmint(amount)?;
                                 }
                             }
-                            | AccountOp::LockTokenSupply(token_id) => {
+                            | AccountCommand::LockTokenSupply(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.total_supply = data.total_supply.lock()?;
                                 }
                             }
-                            AccountOp::FreezeToken(token_id, is_unfreezable) => {
+                            AccountCommand::FreezeToken(token_id, is_unfreezable) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.frozen_state =
                                         data.frozen_state.freeze(*is_unfreezable)?;
                                 }
                             }
-                            AccountOp::UnfreezeToken(token_id) => {
+                            AccountCommand::UnfreezeToken(token_id) => {
                                 if let Some(data) = self.token_issuance.get_mut(token_id) {
                                     Self::update_token_issuance_state(
                                         &mut self.unconfirmed_descendants,
                                         data,
                                         token_id,
-                                        outpoint,
+                                        *nonce,
                                         tx_id,
                                     )?;
                                     data.frozen_state = data.frozen_state.unfreeze()?;
                                 }
                             }
-                            AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                            AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                         }
                     }
                 }
@@ -632,7 +638,7 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut DelegationData,
         delegation_id: &DelegationId,
-        outpoint: &common::chain::AccountOutPoint,
+        delegation_nonce: AccountNonce,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
         let next_nonce = data
@@ -641,11 +647,11 @@ impl OutputCache {
             .ok_or(WalletError::DelegationNonceOverflow(*delegation_id))?;
 
         ensure!(
-            outpoint.nonce() == next_nonce,
-            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, outpoint.nonce())
+            delegation_nonce == next_nonce,
+            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, delegation_nonce)
         );
 
-        data.last_nonce = Some(outpoint.nonce());
+        data.last_nonce = Some(delegation_nonce);
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
@@ -663,7 +669,7 @@ impl OutputCache {
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut TokenIssuanceData,
         delegation_id: &TokenId,
-        outpoint: &common::chain::AccountOutPoint,
+        token_nonce: AccountNonce,
         tx_id: &OutPointSourceId,
     ) -> Result<(), WalletError> {
         let next_nonce = data
@@ -672,11 +678,11 @@ impl OutputCache {
             .ok_or(WalletError::TokenIssuanceNonceOverflow(*delegation_id))?;
 
         ensure!(
-            outpoint.nonce() == next_nonce,
-            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, outpoint.nonce())
+            token_nonce == next_nonce,
+            WalletError::InconsistentTokenIssuanceDuplicateNonce(*delegation_id, token_nonce)
         );
 
-        data.last_nonce = Some(outpoint.nonce());
+        data.last_nonce = Some(token_nonce);
         // update unconfirmed descendants
         if let Some(descendants) = data
             .last_parent
@@ -699,57 +705,59 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
-                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                        AccountSpending::DelegationBalance(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountOp::MintTokens(token_id, amount) => {
+                    },
+                    TxInput::AccountCommand(nonce, op) => match op {
+                        AccountCommand::MintTokens(token_id, amount) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.total_supply = data.total_supply.unmint(*amount)?;
                             }
                         }
 
-                        AccountOp::UnmintTokens(token_id) => {
+                        AccountCommand::UnmintTokens(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
                                 data.total_supply = data.total_supply.mint(amount)?;
                             }
                         }
-                        AccountOp::LockTokenSupply(token_id) => {
+                        AccountCommand::LockTokenSupply(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.total_supply = data.total_supply.unlock()?;
                             }
                         }
-                        AccountOp::FreezeToken(token_id, _) => {
+                        AccountCommand::FreezeToken(token_id, _) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
 
                                 data.frozen_state = data.frozen_state.undo_freeze()?;
                             }
                         }
-                        AccountOp::UnfreezeToken(token_id) => {
+                        AccountCommand::UnfreezeToken(token_id) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
-                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_nonce = nonce.decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 data.frozen_state = data.frozen_state.undo_unfreeze()?;
                             }
                         }
-                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                        AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
                     },
                 }
             }
@@ -917,7 +925,7 @@ impl OutputCache {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
                                     TxInput::Account(outpoint) => match outpoint.account() {
-                                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                                        AccountSpending::DelegationBalance(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
@@ -928,11 +936,13 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountOp::MintTokens(token_id, amount) => {
+                                    },
+                                    TxInput::AccountCommand(nonce, op) => match op {
+                                        AccountCommand::MintTokens(token_id, amount) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -941,11 +951,11 @@ impl OutputCache {
                                                     data.total_supply.unmint(*amount)?;
                                             }
                                         }
-                                        | AccountOp::UnmintTokens(token_id) => {
+                                        | AccountCommand::UnmintTokens(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -958,11 +968,11 @@ impl OutputCache {
                                                     data.total_supply.mint(amount)?;
                                             }
                                         }
-                                        | AccountOp::LockTokenSupply(token_id) => {
+                                        | AccountCommand::LockTokenSupply(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -970,11 +980,11 @@ impl OutputCache {
                                                 data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
-                                        AccountOp::FreezeToken(token_id, _) => {
+                                        AccountCommand::FreezeToken(token_id, _) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -983,11 +993,11 @@ impl OutputCache {
                                                     data.frozen_state.undo_freeze()?;
                                             }
                                         }
-                                        AccountOp::UnfreezeToken(token_id) => {
+                                        AccountCommand::UnfreezeToken(token_id) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
                                             {
-                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_nonce = nonce.decrement();
                                                 data.last_parent = find_parent(
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
@@ -996,7 +1006,9 @@ impl OutputCache {
                                                     data.frozen_state.undo_unfreeze()?;
                                             }
                                         }
-                                        AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                                        AccountCommand::ChangeTokenAuthority(_, _) => {
+                                            unimplemented!()
+                                        }
                                     },
                                 }
                             }

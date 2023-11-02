@@ -25,8 +25,8 @@ use common::{
             make_token_id, IsTokenUnfreezable, NftIssuance, TokenId, TokenIssuance,
             TokenTotalSupply,
         },
-        AccountNonce, AccountOp, AccountOutPoint, AccountType, Destination, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Destination, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::Amount,
 };
@@ -51,9 +51,10 @@ pub struct RandomTxMaker<'a> {
     // but tokens can be issued only using input0 so a flag to check is required
     token_can_be_issued: bool,
 
-    // There can be only one Unmint operation per token per transaction.
-    // And in that case all burned tokens must be accounted.
-    unmint_ops: BTreeMap<TokenId, (Amount, bool)>,
+    account_command_used: bool,
+
+    // Accumulate all burns if Unmint command is used.
+    to_burn_on_unmint: Option<(TokenId, Amount)>,
 }
 
 impl<'a> RandomTxMaker<'a> {
@@ -70,7 +71,8 @@ impl<'a> RandomTxMaker<'a> {
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: true,
-            unmint_ops: BTreeMap::new(),
+            account_command_used: false,
+            to_burn_on_unmint: None,
         }
     }
 
@@ -173,6 +175,10 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
 
         for (i, token_id) in inputs.iter().copied().enumerate() {
+            if self.account_command_used {
+                break;
+            }
+
             let token_data = tokens_cache.get_token_data(&token_id).unwrap();
             if let Some(token_data) = token_data {
                 let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
@@ -181,18 +187,17 @@ impl<'a> RandomTxMaker<'a> {
                     if token_data.can_be_unfrozen() {
                         // Unfreeze
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input = TxInput::Account(AccountOutPoint::new(
+                        let account_input = TxInput::AccountCommand(
                             new_nonce,
-                            AccountOp::UnfreezeToken(token_id),
-                        ));
+                            AccountCommand::UnfreezeToken(token_id),
+                        );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
-                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                        result_inputs.extend(inputs);
 
                         let _ = tokens_cache.unfreeze_token(token_id).unwrap();
 
-                        result_inputs.extend(inputs);
-                        result_outputs.extend(outputs);
+                        self.account_command_used = true;
                     }
                 } else if rng.gen_bool(0.1) {
                     if token_data.can_be_frozen() {
@@ -203,37 +208,35 @@ impl<'a> RandomTxMaker<'a> {
                         } else {
                             IsTokenUnfreezable::No
                         };
-                        let account_input = TxInput::Account(AccountOutPoint::new(
+                        let account_input = TxInput::AccountCommand(
                             new_nonce,
-                            AccountOp::FreezeToken(token_id, unfreezable),
-                        ));
+                            AccountCommand::FreezeToken(token_id, unfreezable),
+                        );
 
                         let inputs = vec![account_input, fee_inputs[i].clone()];
-                        let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                        result_inputs.extend(inputs);
 
                         let _ = tokens_cache.freeze_token(token_id, unfreezable).unwrap();
 
-                        result_inputs.extend(inputs);
-                        result_outputs.extend(outputs);
+                        self.account_command_used = true;
                     }
                 } else if rng.gen_bool(0.1) {
                     // Change token authority
                     // TODO: use real keys that are changing
                     let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                    let account_input = TxInput::Account(AccountOutPoint::new(
+                    let account_input = TxInput::AccountCommand(
                         new_nonce,
-                        AccountOp::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
-                    ));
+                        AccountCommand::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
+                    );
 
                     let inputs = vec![account_input, fee_inputs[i].clone()];
-                    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
+                    result_inputs.extend(inputs);
 
                     let _ = tokens_cache
                         .change_authority(token_id, Destination::AnyoneCanSpend)
                         .unwrap();
 
-                    result_inputs.extend(inputs);
-                    result_outputs.extend(outputs);
+                    self.account_command_used = true;
                 } else if !token_data.is_locked() {
                     if rng.gen_bool(0.9) {
                         let circulating_supply = tokens_cache
@@ -253,10 +256,10 @@ impl<'a> RandomTxMaker<'a> {
                             Amount::from_atoms(rng.gen_range(1..supply_left.into_atoms()));
 
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input = TxInput::Account(AccountOutPoint::new(
+                        let account_input = TxInput::AccountCommand(
                             new_nonce,
-                            AccountOp::MintTokens(token_id, to_mint),
-                        ));
+                            AccountCommand::MintTokens(token_id, to_mint),
+                        );
                         result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
                         let outputs = vec![TxOutput::Transfer(
@@ -266,6 +269,8 @@ impl<'a> RandomTxMaker<'a> {
                         result_outputs.extend(outputs);
 
                         let _ = tokens_cache.mint_tokens(token_id, to_mint).unwrap();
+
+                        self.account_command_used = true;
                     } else {
                         let is_locked =
                             match tokens_cache.get_token_data(&token_id).unwrap().unwrap() {
@@ -276,17 +281,15 @@ impl<'a> RandomTxMaker<'a> {
 
                         if !is_locked {
                             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                            let account_input = TxInput::Account(AccountOutPoint::new(
+                            let account_input = TxInput::AccountCommand(
                                 new_nonce,
-                                AccountOp::LockTokenSupply(token_id),
-                            ));
+                                AccountCommand::LockTokenSupply(token_id),
+                            );
                             result_inputs.extend(vec![account_input, fee_inputs[i].clone()]);
 
-                            // fake output to avoid empty outputs error
-                            let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::ZERO))];
-                            result_outputs.extend(outputs);
-
                             let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
+
+                            self.account_command_used = true;
                         }
                     }
                 }
@@ -353,11 +356,9 @@ impl<'a> RandomTxMaker<'a> {
             };
         }
 
-        self.unmint_ops.iter().filter(|(_, (_, was_unminted))| *was_unminted).for_each(
-            |(token_id, (total_burned, _))| {
-                let _ = tokens_cache.unmint_tokens(*token_id, *total_burned).unwrap();
-            },
-        );
+        if let Some((token_id, total_burned)) = self.to_burn_on_unmint {
+            let _ = tokens_cache.unmint_tokens(token_id, total_burned).unwrap();
+        };
 
         (result_inputs, result_outputs)
     }
@@ -440,39 +441,33 @@ impl<'a> RandomTxMaker<'a> {
                     OutputValue::TokenV1(token_id, Amount::from_atoms(atoms)),
                     Destination::AnyoneCanSpend,
                 ));
-            } else if rng.gen_bool(0.9) {
+            } else if rng.gen_bool(0.9) && !self.account_command_used {
                 // unmint
                 let token_data = tokens_cache.get_token_data(&token_id).unwrap();
 
                 // check token_data as well because it can be an nft
                 if let (Some(fee_tx_input), Some(token_data)) = (&fee_input, token_data) {
-                    let was_unminted = !self
-                        .unmint_ops
-                        .get(&token_id)
-                        .is_some_and(|(_, was_unminted)| *was_unminted);
-
                     let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
-                    if !token_data.is_locked() && !token_data.is_frozen() && !was_unminted {
+                    if !token_data.is_locked() && !token_data.is_frozen() {
                         let to_unmint = Amount::from_atoms(atoms);
 
                         let circulating_supply =
                             tokens_cache.get_circulating_supply(&token_id).unwrap();
                         assert!(circulating_supply.unwrap() >= to_unmint);
 
-                        self.unmint_ops
-                            .entry(token_id)
-                            .and_modify(|e| *e = ((e.0 + to_unmint).unwrap(), true));
-
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-                        let account_input = TxInput::Account(AccountOutPoint::new(
+                        let account_input = TxInput::AccountCommand(
                             new_nonce,
-                            AccountOp::UnmintTokens(token_id),
-                        ));
+                            AccountCommand::UnmintTokens(token_id),
+                        );
                         result_inputs.extend(vec![account_input, fee_tx_input.clone()]);
 
                         let outputs =
                             vec![TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint))];
                         result_outputs.extend(outputs);
+
+                        self.to_burn_on_unmint = Some((token_id, Amount::ZERO));
+                        self.account_command_used = true;
                     }
                     *fee_input = None;
                 }
@@ -481,12 +476,9 @@ impl<'a> RandomTxMaker<'a> {
                 let to_burn = Amount::from_atoms(atoms);
                 result_outputs.push(TxOutput::Burn(OutputValue::TokenV1(token_id, to_burn)));
 
-                self.unmint_ops
-                    .entry(token_id)
-                    .and_modify(|(total_burned, _)| {
-                        *total_burned = (*total_burned + to_burn).unwrap()
-                    })
-                    .or_insert((to_burn, false));
+                self.to_burn_on_unmint = self
+                    .to_burn_on_unmint
+                    .map(|(token_id, total_burned)| (token_id, (total_burned + to_burn).unwrap()));
             }
         }
 

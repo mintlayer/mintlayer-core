@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
+    tokens::TokenId, AccountCommand, AccountSpending, DelegationId, Destination, PoolId, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -137,20 +138,22 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(account_input) => match account_input.account() {
-                        AccountOp::SpendDelegationBalance(delegation_id, _) => Ok(accounting_view
+                    TxInput::Account(outpoint) => match outpoint.account() {
+                        AccountSpending::DelegationBalance(delegation_id, _) => Ok(accounting_view
                             .get_delegation_data(*delegation_id)?
                             .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
                                 *delegation_id,
                             ))?
                             .spend_destination()
                             .clone()),
-                        AccountOp::MintTokens(token_id, _)
-                        | AccountOp::UnmintTokens(token_id)
-                        | AccountOp::LockTokenSupply(token_id)
-                        | AccountOp::FreezeToken(token_id, _)
-                        | AccountOp::UnfreezeToken(token_id)
-                        | AccountOp::ChangeTokenAuthority(token_id, _) => {
+                    },
+                    TxInput::AccountCommand(_, account_op) => match account_op {
+                        AccountCommand::MintTokens(token_id, _)
+                        | AccountCommand::UnmintTokens(token_id)
+                        | AccountCommand::LockTokenSupply(token_id)
+                        | AccountCommand::FreezeToken(token_id, _)
+                        | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;
@@ -214,7 +217,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(_) => {
+                    TxInput::Account(..) | TxInput::AccountCommand(..) => {
                         Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }

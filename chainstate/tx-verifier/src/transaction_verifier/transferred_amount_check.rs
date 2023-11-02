@@ -25,7 +25,8 @@ use common::{
             get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenData,
             TokenId, TokenIssuanceVersion,
         },
-        AccountOp, Block, ChainConfig, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountCommand, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -197,8 +198,8 @@ where
                 &issuance_token_id_getter,
             )
         }
-        TxInput::Account(account_input) => match account_input.account() {
-            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount) => {
+        TxInput::Account(outpoint) => match outpoint.account() {
+            AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
@@ -211,14 +212,16 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountOp::MintTokens(token_id, amount) => {
+        },
+        TxInput::AccountCommand(_, account_op) => match account_op {
+            AccountCommand::MintTokens(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
-            AccountOp::UnmintTokens(token_id)
-            | AccountOp::LockTokenSupply(token_id)
-            | AccountOp::FreezeToken(token_id, _)
-            | AccountOp::UnfreezeToken(token_id)
-            | AccountOp::ChangeTokenAuthority(token_id, _) => {
+            AccountCommand::UnmintTokens(token_id)
+            | AccountCommand::LockTokenSupply(token_id)
+            | AccountCommand::FreezeToken(token_id, _)
+            | AccountCommand::UnfreezeToken(token_id)
+            | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -464,14 +467,13 @@ fn calculate_required_fee_burn(
         .inputs()
         .iter()
         .filter(|&input| match input {
-            TxInput::Utxo(_) => false,
-            TxInput::Account(account) => match account.account() {
-                AccountOp::SpendDelegationBalance(_, _)
-                | AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_)
-                | AccountOp::ChangeTokenAuthority(_, _) => false,
-                AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => true,
+            TxInput::Utxo(_) | TxInput::Account(_) => false,
+            TxInput::AccountCommand(_, account_op) => match account_op {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenAuthority(_, _) => false,
+                AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => true,
             },
         })
         .count() as u128;
@@ -480,15 +482,14 @@ fn calculate_required_fee_burn(
         .inputs()
         .iter()
         .filter(|&input| match input {
-            TxInput::Utxo(_) => false,
-            TxInput::Account(account) => match account.account() {
-                AccountOp::SpendDelegationBalance(_, _)
-                | AccountOp::MintTokens(_, _)
-                | AccountOp::UnmintTokens(_)
-                | AccountOp::LockTokenSupply(_)
-                | AccountOp::FreezeToken(_, _)
-                | AccountOp::UnfreezeToken(_) => false,
-                AccountOp::ChangeTokenAuthority(_, _) => true,
+            TxInput::Utxo(_) | TxInput::Account(_) => false,
+            TxInput::AccountCommand(_, account_op) => match account_op {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_) => false,
+                AccountCommand::ChangeTokenAuthority(_, _) => true,
             },
         })
         .count() as u128;
@@ -811,7 +812,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(delegation_id, overspend_amount),
+                AccountSpending::DelegationBalance(delegation_id, overspend_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -839,7 +840,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
+                AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -865,7 +866,7 @@ mod tests {
 
         let input = TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(0),
-            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
+            AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
         ));
         let output = TxOutput::Transfer(
             OutputValue::Coin(withdraw_amount),

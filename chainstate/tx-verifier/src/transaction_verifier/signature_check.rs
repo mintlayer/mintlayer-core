@@ -48,7 +48,7 @@ where
                     outpoint.clone(),
                 ))
                 .map(|utxo| Some(utxo.take_output())),
-            TxInput::Account(_) => Ok(None),
+            TxInput::Account(..) | TxInput::AccountCommand(..) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     let inputs_utxos = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

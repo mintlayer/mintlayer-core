@@ -677,14 +677,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            if tx.inputs().is_empty() || tx.outputs().is_empty() {
-                return Err(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                        tx.transaction().get_id(),
-                        block.get_id(),
-                    ),
-                );
-            }
+            ensure!(
+                !tx.inputs().is_empty(),
+                CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(
+                    tx.transaction().get_id(),
+                    block.get_id(),
+                ),
+            );
+
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
                 ensure!(

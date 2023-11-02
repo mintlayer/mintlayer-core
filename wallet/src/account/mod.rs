@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::AccountOp::{self, SpendDelegationBalance};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::Uint256;
@@ -49,7 +49,7 @@ use common::chain::tokens::{
     TokenTransfer,
 };
 use common::chain::{
-    AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
@@ -505,7 +505,7 @@ impl Account {
         let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
         let mut tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
-            SpendDelegationBalance(delegation_id, amount_with_fee),
+            AccountSpending::DelegationBalance(delegation_id, amount_with_fee),
         ));
         // as the input size depends on the amount we specify the fee will also change a bit so
         // loop until it converges.
@@ -524,7 +524,7 @@ impl Account {
 
             tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
-                SpendDelegationBalance(delegation_id, new_amount_with_fee),
+                AccountSpending::DelegationBalance(delegation_id, new_amount_with_fee),
             ));
 
             let new_input_size = serialization::Encode::encoded_size(&tx_input);
@@ -634,7 +634,7 @@ impl Account {
             .expect("selector must have selected something or returned an error")
         {
             TxInput::Utxo(input0_outpoint) => Some(pos_accounting::make_pool_id(input0_outpoint)),
-            TxInput::Account(_) => None,
+            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
         }
         .ok_or(WalletError::NoUtxos)?;
 
@@ -736,10 +736,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::Account(AccountOutPoint::new(
-            nonce,
-            AccountOp::MintTokens(token_id, amount),
-        ));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::MintTokens(token_id, amount));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -769,10 +766,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::Account(AccountOutPoint::new(
-            nonce,
-            AccountOp::UnmintTokens(token_id),
-        ));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnmintTokens(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -801,10 +795,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::Account(AccountOutPoint::new(
-            nonce,
-            AccountOp::LockTokenSupply(token_id),
-        ));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::LockTokenSupply(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -834,10 +825,10 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::Account(AccountOutPoint::new(
+        let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountOp::FreezeToken(token_id, is_token_unfreezable),
-        ));
+            AccountCommand::FreezeToken(token_id, is_token_unfreezable),
+        );
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -866,10 +857,7 @@ impl Account {
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        let tx_input = TxInput::Account(AccountOutPoint::new(
-            nonce,
-            AccountOp::UnfreezeToken(token_id),
-        ));
+        let tx_input = TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_id));
         let authority = token_data.authority.clone();
 
         self.change_token_supply_transaction(
@@ -1217,15 +1205,17 @@ impl Account {
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(outpoint) => match outpoint.account() {
-                AccountOp::SpendDelegationBalance(delegation_id, _) => {
+                AccountSpending::DelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
-                AccountOp::MintTokens(token_id, _)
-                | AccountOp::UnmintTokens(token_id)
-                | AccountOp::LockTokenSupply(token_id)
-                | AccountOp::FreezeToken(token_id, _)
-                | AccountOp::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
-                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+            },
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::MintTokens(token_id, _)
+                | AccountCommand::UnmintTokens(token_id)
+                | AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
+                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -1504,8 +1494,13 @@ fn group_preselected_inputs(
 
         match input {
             TxInput::Utxo(_) => {}
-            TxInput::Account(acc) => match acc.account() {
-                AccountOp::MintTokens(token_id, amount) => {
+            TxInput::Account(outpoint) => match outpoint.account() {
+                AccountSpending::DelegationBalance(_, amount) => {
+                    update_preselected_inputs(Currency::Coin, *amount, *fee)?;
+                }
+            },
+            TxInput::AccountCommand(_, op) => match op {
+                AccountCommand::MintTokens(token_id, amount) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         *amount,
@@ -1513,7 +1508,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
+                AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::UnmintTokens(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
@@ -1521,7 +1517,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::FreezeToken(token_id, _) | AccountOp::UnfreezeToken(token_id) => {
+                AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnfreezeToken(token_id) => {
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
@@ -1529,10 +1526,7 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountOp::SpendDelegationBalance(_, amount) => {
-                    update_preselected_inputs(Currency::Coin, *amount, *fee)?;
-                }
-                AccountOp::ChangeTokenAuthority(_, _) => unimplemented!(),
+                AccountCommand::ChangeTokenAuthority(_, _) => unimplemented!(),
             },
         }
     }

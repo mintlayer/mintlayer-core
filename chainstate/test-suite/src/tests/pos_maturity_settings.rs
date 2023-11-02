@@ -20,9 +20,8 @@ use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder
 use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountOp, AccountOutPoint, ConsensusUpgrade,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput,
-        UtxoOutPoint,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
+        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable},
     Uint256,
@@ -254,15 +253,12 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     // try spend share at height 2 with wrong maturity setting
     //
 
-    let tx_input_spend_from_delegation = AccountOutPoint::new(
+    let tx_input_spend_from_delegation = TxInput::from_account(
         AccountNonce::new(0),
-        AccountOp::SpendDelegationBalance(delegation_id, amount_to_delegate),
+        AccountSpending::DelegationBalance(delegation_id, amount_to_delegate),
     );
     let spend_share_tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::Account(tx_input_spend_from_delegation),
-            empty_witness(&mut rng),
-        )
+        .add_input(tx_input_spend_from_delegation, empty_witness(&mut rng))
         .add_output(TxOutput::LockThenTransfer(
             OutputValue::Coin(amount_to_delegate),
             Destination::AnyoneCanSpend,

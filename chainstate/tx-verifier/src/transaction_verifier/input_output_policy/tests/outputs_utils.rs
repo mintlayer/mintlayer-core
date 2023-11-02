@@ -22,7 +22,8 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountNonce, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, PoolId, TxInput,
+        TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -102,31 +103,31 @@ pub fn all_account_inputs() -> [TxInput; 7] {
     [
         TxInput::from_account(
             AccountNonce::new(0),
-            AccountOp::SpendDelegationBalance(DelegationId::new(H256::zero()), Amount::ZERO),
+            AccountSpending::DelegationBalance(DelegationId::new(H256::zero()), Amount::ZERO),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::MintTokens(TokenId::zero(), Amount::ZERO),
+            AccountCommand::MintTokens(TokenId::zero(), Amount::ZERO),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::UnmintTokens(TokenId::zero()),
+            AccountCommand::UnmintTokens(TokenId::zero()),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::LockTokenSupply(TokenId::zero()),
+            AccountCommand::LockTokenSupply(TokenId::zero()),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::FreezeToken(TokenId::zero(), IsTokenUnfreezable::No),
+            AccountCommand::FreezeToken(TokenId::zero(), IsTokenUnfreezable::No),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::UnfreezeToken(TokenId::zero()),
+            AccountCommand::UnfreezeToken(TokenId::zero()),
         ),
-        TxInput::from_account(
+        TxInput::from_command(
             AccountNonce::new(0),
-            AccountOp::ChangeTokenAuthority(TokenId::zero(), Destination::AnyoneCanSpend),
+            AccountCommand::ChangeTokenAuthority(TokenId::zero(), Destination::AnyoneCanSpend),
         ),
     ]
 }

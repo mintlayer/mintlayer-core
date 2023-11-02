@@ -29,7 +29,7 @@ impl<M: MemoryUsageEstimator> SpendsUnconfirmed<M> for TxInput {
                 .source_id()
                 .get_tx_id()
                 .map_or(false, |tx_id| mempool.contains_transaction(tx_id)),
-            TxInput::Account(_) => false,
+            TxInput::Account(..) | TxInput::AccountCommand(..) => false,
         }
     }
 }

@@ -25,7 +25,7 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         timelock::OutputTimeLock,
-        AccountNonce, AccountOp, AccountOutPoint, AccountType, DelegationId, Destination,
+        AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
         OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable, H256},
@@ -346,7 +346,7 @@ fn delegate_staking(#[case] seed: Seed) {
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(0),
-                    AccountOp::SpendDelegationBalance(
+                    AccountSpending::DelegationBalance(
                         delegation_id,
                         (amount_to_spend * 2).unwrap(),
                     ),
@@ -380,7 +380,7 @@ fn delegate_staking(#[case] seed: Seed) {
                 .add_input(
                     TxInput::Account(AccountOutPoint::new(
                         AccountNonce::new(0),
-                        AccountOp::SpendDelegationBalance(delegation_id, spend_change),
+                        AccountSpending::DelegationBalance(delegation_id, spend_change),
                     )),
                     empty_witness(&mut rng),
                 )
@@ -409,7 +409,7 @@ fn delegate_staking(#[case] seed: Seed) {
                 .add_input(
                     TxInput::Account(AccountOutPoint::new(
                         AccountNonce::new(2),
-                        AccountOp::SpendDelegationBalance(delegation_id, spend_change),
+                        AccountSpending::DelegationBalance(delegation_id, spend_change),
                     )),
                     empty_witness(&mut rng),
                 )
@@ -437,7 +437,7 @@ fn delegate_staking(#[case] seed: Seed) {
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(1),
-                    AccountOp::SpendDelegationBalance(delegation_id, spend_change),
+                    AccountSpending::DelegationBalance(delegation_id, spend_change),
                 )),
                 empty_witness(&mut rng),
             )
@@ -543,7 +543,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(0),
-                    AccountOp::SpendDelegationBalance(
+                    AccountSpending::DelegationBalance(
                         delegation_id,
                         (amount_to_spend * 2).unwrap(),
                     ),
@@ -576,7 +576,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(1),
-                    AccountOp::SpendDelegationBalance(delegation_id, spend_change),
+                    AccountSpending::DelegationBalance(delegation_id, spend_change),
                 )),
                 empty_witness(&mut rng),
             )
@@ -814,7 +814,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
                     AccountNonce::new(0),
-                    AccountOp::SpendDelegationBalance(delegation_id, available_amount),
+                    AccountSpending::DelegationBalance(delegation_id, available_amount),
                 )),
                 InputWitness::NoSignature(None),
             )

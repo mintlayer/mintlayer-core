@@ -15,7 +15,8 @@
 
 use common::{
     chain::{
-        AccountNonce, AccountOp, AccountType, SignedTransaction, Transaction, TxInput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction,
+        TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -53,17 +54,22 @@ impl TxDependency {
             .map(|id| Self::TxOutput(*id, outpt.output_index()))
     }
 
-    fn from_account(acct: &AccountOp, nonce: AccountNonce) -> Self {
+    fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
         match acct {
-            AccountOp::SpendDelegationBalance(_, _) => {
+            AccountSpending::DelegationBalance(_, _) => {
                 Self::DelegationAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
-            AccountOp::MintTokens(_, _)
-            | AccountOp::UnmintTokens(_)
-            | AccountOp::LockTokenSupply(_)
-            | AccountOp::FreezeToken(_, _)
-            | AccountOp::UnfreezeToken(_)
-            | AccountOp::ChangeTokenAuthority(_, _) => {
+        }
+    }
+
+    fn from_account_op(acct: &AccountCommand, nonce: AccountNonce) -> Self {
+        match acct {
+            AccountCommand::MintTokens(_, _)
+            | AccountCommand::UnmintTokens(_)
+            | AccountCommand::LockTokenSupply(_)
+            | AccountCommand::FreezeToken(_, _)
+            | AccountCommand::UnfreezeToken(_)
+            | AccountCommand::ChangeTokenAuthority(_, _) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
         }
@@ -75,6 +81,9 @@ impl TxDependency {
             TxInput::Account(acct) => {
                 acct.nonce().decrement().map(|nonce| Self::from_account(acct.account(), nonce))
             }
+            TxInput::AccountCommand(nonce, op) => {
+                nonce.decrement().map(|nonce| Self::from_account_op(op, nonce))
+            }
         }
     }
 
@@ -82,6 +91,7 @@ impl TxDependency {
         match input {
             TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
+            TxInput::AccountCommand(nonce, op) => Some(Self::from_account_op(op, *nonce)),
         }
     }
 }

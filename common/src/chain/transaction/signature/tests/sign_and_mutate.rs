@@ -30,8 +30,9 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        AccountOp, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        tokens::TokenId,
+        AccountCommand, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
+        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
 };
@@ -981,7 +982,7 @@ fn mutate_first_input(
             if rng.gen::<bool>() {
                 TxInput::Account(AccountOutPoint::new(
                     outpoint.nonce(),
-                    AccountOp::SpendDelegationBalance(
+                    AccountSpending::DelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
                         Amount::from_atoms(rng.gen()),
                     ),
@@ -992,6 +993,20 @@ fn mutate_first_input(
                     .increment()
                     .unwrap_or_else(|| outpoint.nonce().decrement().unwrap());
                 TxInput::Account(AccountOutPoint::new(new_nonce, outpoint.account().clone()))
+            }
+        }
+        TxInput::AccountCommand(nonce, op) => {
+            if rng.gen::<bool>() {
+                TxInput::AccountCommand(
+                    *nonce,
+                    AccountCommand::ChangeTokenAuthority(
+                        TokenId::new(H256::random_using(rng)),
+                        Destination::AnyoneCanSpend,
+                    ),
+                )
+            } else {
+                let new_nonce = nonce.increment().unwrap_or_else(|| nonce.decrement().unwrap());
+                TxInput::AccountCommand(new_nonce, op.clone())
             }
         }
     };

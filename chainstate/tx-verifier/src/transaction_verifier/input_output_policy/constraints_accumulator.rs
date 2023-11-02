@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TxInput, TxOutput},
+    chain::{
+        timelock::OutputTimeLock, AccountCommand, AccountSpending, ChainConfig, PoolId, TxInput,
+        TxOutput,
+    },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
@@ -114,9 +117,9 @@ impl ConstrainedValueAccumulator {
                         }
                     };
                 }
-                TxInput::Account(account) => {
-                    match account.account() {
-                        AccountOp::SpendDelegationBalance(_, spend_amount) => {
+                TxInput::Account(outpoint) => {
+                    match outpoint.account() {
+                        AccountSpending::DelegationBalance(_, spend_amount) => {
                             let block_distance =
                                 chain_config.as_ref().spend_share_maturity_distance(block_height);
 
@@ -127,19 +130,23 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountOp::MintTokens(_, _)
-                        | AccountOp::LockTokenSupply(_)
-                        | AccountOp::UnmintTokens(_) => {
+                    };
+                }
+                TxInput::AccountCommand(_, account) => {
+                    match account {
+                        AccountCommand::MintTokens(_, _)
+                        | AccountCommand::LockTokenSupply(_)
+                        | AccountCommand::UnmintTokens(_) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_supply_change_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountOp::FreezeToken(_, _) | AccountOp::UnfreezeToken(_) => {
+                        AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_freeze_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountOp::ChangeTokenAuthority(_, _) => {
+                        AccountCommand::ChangeTokenAuthority(_, _) => {
                             total_fee_deducted = (total_fee_deducted
                                 + chain_config.token_min_change_authority_fee())
                             .ok_or(IOPolicyError::AmountOverflow)?;
@@ -246,9 +253,8 @@ mod tests {
     use common::{
         chain::{
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-            timelock::OutputTimeLock, AccountNonce, AccountOp, ConsensusUpgrade, DelegationId,
-            Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
-            UtxoOutPoint,
+            timelock::OutputTimeLock, AccountNonce, ConsensusUpgrade, DelegationId, Destination,
+            NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
     };
@@ -353,7 +359,7 @@ mod tests {
         let inputs_utxos = vec![None];
         let inputs = vec![TxInput::from_account(
             AccountNonce::new(0),
-            AccountOp::SpendDelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
+            AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
         )];
 
         let outputs = vec![TxOutput::LockThenTransfer(
@@ -636,7 +642,7 @@ mod tests {
             ),
             TxInput::from_account(
                 AccountNonce::new(0),
-                AccountOp::SpendDelegationBalance(
+                AccountSpending::DelegationBalance(
                     delegation_id,
                     Amount::from_atoms(delegated_atoms),
                 ),
