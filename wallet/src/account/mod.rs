@@ -232,7 +232,9 @@ impl Account {
                     utxos,
                     output_amount.sub(preselected_amount).unwrap_or(Amount::ZERO),
                     PayFee::DoNotPayFeeWithThisCurrency,
-                    cost_of_change,
+                    // TODO: change this to cost_of_change calculated in this currency
+                    // when we allow paying fees with different currency
+                    Amount::ZERO,
                     selection_algo,
                 )?;
 
