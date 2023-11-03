@@ -360,6 +360,11 @@ fn undo_test(#[case] seed: Seed) {
     db_tx.commit().unwrap();
 
     assert_eq!(
+        store.transaction_ro().unwrap().get_undo_data(id1).unwrap().unwrap(),
+        block_undo1.clone()
+    );
+
+    assert_eq!(
         store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
         block_undo0.clone()
     );
