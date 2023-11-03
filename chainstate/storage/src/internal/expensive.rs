@@ -20,7 +20,7 @@ use common::chain::UtxoOutPoint;
 use storage::MakeMapRef;
 use utxo::Utxo;
 
-impl<'a, B: storage::Backend> StoreTxRo<'a, B> {
+impl<B: storage::Backend> StoreTxRo<'_, B> {
     /// Dump raw database contents
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.0.dump_raw().map_err(crate::Error::from)
