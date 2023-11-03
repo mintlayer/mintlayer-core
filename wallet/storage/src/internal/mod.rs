@@ -161,7 +161,7 @@ impl<B: storage::Backend> Store<B> {
 
     /// Dump raw database contents
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
-        self.storage.transaction_ro().unwrap().dump_raw().map_err(crate::Error::from)
+        self.storage.transaction_ro()?.dump_raw().map_err(crate::Error::from)
     }
 }
 
