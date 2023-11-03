@@ -330,7 +330,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns true if a migration needs to be ran, false if it is already on the latest version
     /// and an error if it is an unsupported version
     pub fn check_db_needs_migration(db: &Store<B>) -> WalletResult<bool> {
-        let db_tx = db.transaction_ro_unlocked()?;
+        let db_tx = db.transaction_ro()?;
         let version_result = db_tx.get_storage_version()?;
         drop(db_tx);
         match version_result {
@@ -343,7 +343,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
-        let db_tx = db.transaction_ro_unlocked()?;
+        let db_tx = db.transaction_ro()?;
         let version_result = db_tx.get_storage_version()?;
         drop(db_tx);
         match version_result {
