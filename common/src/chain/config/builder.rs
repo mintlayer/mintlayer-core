@@ -39,6 +39,9 @@ use crate::{
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
+// The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
+const CHAINSTATE_AND_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
+
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
         match self {
@@ -96,8 +99,7 @@ impl ChainType {
                         },
                     ),
                     (
-                        // TODO: decide on proper height
-                        BlockHeight::new(9999999999),
+                        CHAINSTATE_AND_TOKEN_FORK_HEIGHT,
                         ConsensusUpgrade::PoS {
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
@@ -134,8 +136,7 @@ impl ChainType {
                         ChainstateUpgrade::new(TokenIssuanceVersion::V0),
                     ),
                     (
-                        // TODO: decide on proper height
-                        BlockHeight::new(9999999999),
+                        CHAINSTATE_AND_TOKEN_FORK_HEIGHT,
                         ChainstateUpgrade::new(TokenIssuanceVersion::V1),
                     ),
                 ];
