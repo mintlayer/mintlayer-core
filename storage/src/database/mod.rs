@@ -84,11 +84,6 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
         Ok(Self { backend, _schema })
     }
 
-    /// Dump raw database contents into a data structure
-    pub fn dump_raw(&self) -> crate::Result<raw::StorageContents<Sch>> {
-        raw::dump_storage(self)
-    }
-
     /// Start a read-only transaction
     pub fn transaction_ro(&self) -> crate::Result<TransactionRo<'_, B, Sch>> {
         let dbtx = backend::BackendImpl::transaction_ro(&self.backend)?;
@@ -139,6 +134,11 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
     /// Close the read-only transaction early
     pub fn close(self) {
         // Let backend tx destructor do the heavy lifting
+    }
+
+    /// Dump raw database contents into a data structure
+    pub fn dump_raw(&self) -> crate::Result<raw::StorageContents<Sch>> {
+        raw::dump_storage(self)
     }
 }
 

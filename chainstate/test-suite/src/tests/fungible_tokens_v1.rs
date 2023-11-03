@@ -19,7 +19,7 @@ use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, IOPolicyError, TokensError,
 };
-use chainstate_storage::BlockchainStorageRead;
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
@@ -142,10 +142,12 @@ fn mint_tokens_in_block(
     let token_min_supply_change_fee =
         tf.chainstate.get_chain_config().token_min_supply_change_fee();
 
-    let nonce =
-        BlockchainStorageRead::get_account_nonce_count(&tf.storage, AccountType::Token(token_id))
-            .unwrap()
-            .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+    let nonce = BlockchainStorageRead::get_account_nonce_count(
+        &tf.storage.transaction_ro().unwrap(),
+        AccountType::Token(token_id),
+    )
+    .unwrap()
+    .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
     let tx_builder = TransactionBuilder::new()
         .add_input(
@@ -198,10 +200,12 @@ fn unmint_tokens_in_block(
     let token_min_supply_change_fee =
         tf.chainstate.get_chain_config().token_min_supply_change_fee();
 
-    let nonce =
-        BlockchainStorageRead::get_account_nonce_count(&tf.storage, AccountType::Token(token_id))
-            .unwrap()
-            .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+    let nonce = BlockchainStorageRead::get_account_nonce_count(
+        &tf.storage.transaction_ro().unwrap(),
+        AccountType::Token(token_id),
+    )
+    .unwrap()
+    .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
     let fee_input_utxo_coins = chainstate_test_framework::get_output_value(
         tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
@@ -465,13 +469,19 @@ fn token_issue_test(#[case] seed: Seed) {
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let expected_token_data = tokens_accounting::TokenData::FungibleToken(issuance.into());
         assert_eq!(actual_token_data, Some(expected_token_data));
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, None);
     });
 }
@@ -771,8 +781,11 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         nonce = nonce.increment().unwrap();
 
         // Check result
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Unmint more than minted
@@ -835,8 +848,11 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(
             actual_supply,
             Some((amount_to_mint - amount_to_unmint).unwrap())
@@ -934,8 +950,11 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
             true,
         );
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Unmint tokens twice
@@ -1024,11 +1043,19 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
         );
 
         assert_eq!(
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_1).unwrap(),
+            TokensAccountingStorageRead::get_circulating_supply(
+                &tf.storage.transaction_ro().unwrap(),
+                &token_id_1
+            )
+            .unwrap(),
             Some(amount_to_mint)
         );
         assert_eq!(
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_2).unwrap(),
+            TokensAccountingStorageRead::get_circulating_supply(
+                &tf.storage.transaction_ro().unwrap(),
+                &token_id_2
+            )
+            .unwrap(),
             Some(amount_to_mint)
         );
 
@@ -1282,7 +1309,12 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(
-            tf.storage.get_circulating_supply(&token_id).unwrap().unwrap(),
+            tf.storage
+                .transaction_ro()
+                .unwrap()
+                .get_circulating_supply(&token_id)
+                .unwrap()
+                .unwrap(),
             total_supply
         );
     });
@@ -1363,8 +1395,11 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
     });
 }
@@ -1416,8 +1451,11 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         let mint_tx_id = mint_tx.transaction().get_id();
         tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(max_amount_to_mint));
 
         // Try mint one more over i128::MAX
@@ -1682,8 +1720,11 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let circulating_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let circulating_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(
             circulating_supply,
             Some((amount_to_mint + amount_to_unmint).unwrap())
@@ -1751,12 +1792,18 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let circulating_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let circulating_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(circulating_supply, Some(amount_to_mint));
 
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_locked()),
         };
@@ -1795,7 +1842,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
         );
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
-            &tf.storage,
+            &tf.storage.transaction_ro().unwrap(),
             AccountType::Token(token_id),
         )
         .unwrap()
@@ -1823,8 +1870,11 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
     });
 }
@@ -1862,7 +1912,7 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
         );
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
-            &tf.storage,
+            &tf.storage.transaction_ro().unwrap(),
             AccountType::Token(token_id),
         )
         .unwrap()
@@ -1893,8 +1943,11 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(
             actual_supply,
             Some((amount_to_mint - amount_to_burn).unwrap())
@@ -1959,7 +2012,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             .unwrap();
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
-            &tf.storage,
+            &tf.storage.transaction_ro().unwrap(),
             AccountType::Token(token_id),
         )
         .unwrap()
@@ -2060,7 +2113,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
             .unwrap();
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
-            &tf.storage,
+            &tf.storage.transaction_ro().unwrap(),
             AccountType::Token(token_id),
         )
         .unwrap()
@@ -2095,8 +2148,11 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(
             actual_supply,
             Some((amount_to_mint - amount_to_unmint).unwrap())
@@ -2153,14 +2209,20 @@ fn check_lockable_supply(#[case] seed: Seed) {
         nonce = nonce.increment().unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_locked()),
         };
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Lock the supply
@@ -2183,14 +2245,20 @@ fn check_lockable_supply(#[case] seed: Seed) {
         nonce = nonce.increment().unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_locked()),
         };
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Try to mint some tokens
@@ -2342,8 +2410,11 @@ fn try_lock_twice(#[case] seed: Seed) {
         nonce = nonce.increment().unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_locked()),
         };
@@ -2824,8 +2895,11 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
 
         // Check result
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Try to overspend minted amount
@@ -2969,13 +3043,19 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
             .build_and_process()
             .unwrap();
 
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let expected_token_data = tokens_accounting::TokenData::FungibleToken(issuance.into());
         assert_eq!(actual_token_data, Some(expected_token_data));
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
     });
 }
@@ -3092,7 +3172,8 @@ fn reorg_test_simple(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_b_id);
 
         // Check the storage
-        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let actual_data =
+            tf.storage.transaction_ro().unwrap().read_tokens_accounting_data().unwrap();
         let expected_data = tokens_accounting::TokensAccountingData {
             token_data: BTreeMap::from_iter([(
                 token_id,
@@ -3107,7 +3188,8 @@ fn reorg_test_simple(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_e_id);
 
         // Check the storage
-        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let actual_data =
+            tf.storage.transaction_ro().unwrap().read_tokens_accounting_data().unwrap();
         let expected_data = tokens_accounting::TokensAccountingData {
             token_data: BTreeMap::new(),
             circulating_supply: BTreeMap::new(),
@@ -3207,7 +3289,8 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_f_id);
 
         // Check the storage
-        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let actual_data =
+            tf.storage.transaction_ro().unwrap().read_tokens_accounting_data().unwrap();
         let expected_data = tokens_accounting::TokensAccountingData {
             token_data: BTreeMap::from_iter([(
                 token_id_2,
@@ -3725,8 +3808,11 @@ fn mint_with_timelock(#[case] seed: Seed) {
         let mint_tx_id = mint_tx.transaction().get_id();
         tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
 
-        let actual_supply =
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Try spend tokens at once
@@ -4001,8 +4087,11 @@ fn check_freezable_supply(#[case] seed: Seed) {
         );
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
         };
@@ -4029,8 +4118,11 @@ fn check_freezable_supply(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(freeze_tx).build_and_process().unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_frozen()),
         };
@@ -4191,8 +4283,11 @@ fn check_freezable_supply(#[case] seed: Seed) {
             .unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         match actual_token_data.unwrap() {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
         };
@@ -4832,8 +4927,11 @@ fn check_change_authority(#[case] seed: Seed) {
             IsTokenFreezable::No,
         );
 
-        let original_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let original_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let tokens_accounting::TokenData::FungibleToken(original_token_data) =
             original_token_data.unwrap();
         assert_eq!(
@@ -4863,8 +4961,11 @@ fn check_change_authority(#[case] seed: Seed) {
             .unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
             actual_token_data.unwrap();
         assert_eq!(actual_token_data.authority(), &new_authority);
@@ -4886,8 +4987,11 @@ fn check_change_authority_twice(#[case] seed: Seed) {
             IsTokenFreezable::No,
         );
 
-        let original_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let original_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let tokens_accounting::TokenData::FungibleToken(original_token_data) =
             original_token_data.unwrap();
         assert_eq!(
@@ -5055,8 +5159,11 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
             .unwrap();
 
         // Check result
-        let actual_token_data =
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id).unwrap();
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
         let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
             actual_token_data.unwrap();
         assert_eq!(actual_token_data.authority(), &new_authority);

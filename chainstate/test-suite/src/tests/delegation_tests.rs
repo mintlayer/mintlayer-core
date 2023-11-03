@@ -16,7 +16,7 @@
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
-use chainstate_storage::TipStorageTag;
+use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
 };
@@ -121,7 +121,8 @@ fn prepare_delegation(
 }
 
 fn get_coin_amount_from_outpoint(store: &TestStore, outpoint: &UtxoOutPoint) -> Amount {
-    get_output_value(utxo::UtxosStorageRead::get_utxo(store, outpoint).unwrap().unwrap().output())
+    let db_tx = store.transaction_ro().unwrap();
+    get_output_value(utxo::UtxosStorageRead::get_utxo(&db_tx, outpoint).unwrap().unwrap().output())
         .unwrap()
         .coin_amount()
         .unwrap()

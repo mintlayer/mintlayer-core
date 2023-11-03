@@ -17,7 +17,7 @@
 
 use crate::{
     schema::{self, HasDbMap, Schema},
-    Backend, Storage,
+    Backend, TransactionRo,
 };
 use std::collections::BTreeMap;
 use storage_core::backend::ReadOps;
@@ -129,9 +129,8 @@ pub type StorageContents<Sch> = BTreeMap<DbMapId<Sch>, MapContents>;
 
 /// Get raw database by dumping database data
 pub fn dump_storage<B: Backend, Sch: Schema>(
-    storage: &Storage<B, Sch>,
+    dbtx: &TransactionRo<'_, B, Sch>,
 ) -> crate::Result<StorageContents<Sch>> {
-    let dbtx = storage.transaction_ro()?;
     Sch::desc_iter()
         .enumerate()
         .map(|(idx, _dbinfo)| {
@@ -144,6 +143,8 @@ pub fn dump_storage<B: Backend, Sch: Schema>(
 
 #[cfg(test)]
 mod test {
+    use crate::Storage;
+
     use super::*;
     use storage_inmemory::InMemory;
 
@@ -181,7 +182,7 @@ mod test {
 
             {
                 // Check the DB dump is empty initially
-                let raw_db = storage.dump_raw().unwrap();
+                let raw_db = storage.transaction_ro().unwrap().dump_raw().unwrap();
                 assert_eq!(raw_db.len(), 2);
                 assert!(raw_db.iter().all(|x| x.1.is_empty()));
             }
@@ -193,7 +194,7 @@ mod test {
             dbtx.commit().unwrap();
 
             {
-                let raw_db = storage.dump_raw().unwrap();
+                let raw_db = storage.transaction_ro().unwrap().dump_raw().unwrap();
                 assert_eq!(raw_db[&db1].len(), 1);
                 assert_eq!(raw_db[&db1][[42, 0, 0, 0].as_ref()], vec![57, 5, 0, 0]);
                 assert_eq!(raw_db[&db2].len(), 1);
@@ -207,7 +208,7 @@ mod test {
             dbtx.commit().unwrap();
 
             {
-                let raw_db = storage.dump_raw().unwrap();
+                let raw_db = storage.transaction_ro().unwrap().dump_raw().unwrap();
                 assert_eq!(raw_db[&db1].len(), 0);
                 assert_eq!(raw_db[&db2].len(), 2);
                 assert_eq!(raw_db[&db2][[21, 0].as_ref()], vec![4 << 2, 1, 2, 3, 4]);

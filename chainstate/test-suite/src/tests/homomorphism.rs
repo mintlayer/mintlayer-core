@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use chainstate_storage::Transactional;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
     TxVerificationStrategy,
@@ -111,7 +112,10 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(storage1.dump_raw(), storage2.dump_raw());
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
     });
 }
 
@@ -193,6 +197,9 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(storage1.dump_raw(), storage2.dump_raw());
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
     });
 }

@@ -19,7 +19,7 @@ use crate::framework::BlockOutputs;
 use crate::utils::{create_new_outputs, outputs_from_block};
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
-use chainstate_storage::BlockchainStorageRead;
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_types::BlockIndex;
 use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
@@ -69,7 +69,12 @@ impl<'f> BlockBuilder<'f> {
         let used_utxo = BTreeSet::new();
         let account_nonce_tracker = BTreeMap::new();
 
-        let all_tokens_data = framework.storage.read_tokens_accounting_data().unwrap();
+        let all_tokens_data = framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_tokens_accounting_data()
+            .unwrap();
         let tokens_data = InMemoryTokensAccounting::from_values(
             all_tokens_data.token_data,
             all_tokens_data.circulating_supply,
@@ -107,6 +112,8 @@ impl<'f> BlockBuilder<'f> {
         let utxo_set = self
             .framework
             .storage
+            .transaction_ro()
+            .unwrap()
             .read_utxo_set()
             .unwrap()
             .into_iter()
@@ -114,10 +121,10 @@ impl<'f> BlockBuilder<'f> {
             .collect();
 
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
-            self.account_nonce_tracker
-                .get(&account)
-                .copied()
-                .or_else(|| self.framework.storage.get_account_nonce_count(account).unwrap())
+            self.account_nonce_tracker.get(&account).copied().or_else(|| {
+                let db_tx = self.framework.storage.transaction_ro().unwrap();
+                db_tx.get_account_nonce_count(account).unwrap()
+            })
         });
 
         let (tx, new_tokens_delta) = super::random_tx_maker::RandomTxMaker::new(

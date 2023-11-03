@@ -225,17 +225,14 @@ pub trait BlockchainStorageWrite:
     fn del_account_nonce_count(&mut self, account: AccountType) -> Result<()>;
 }
 
-/// Marker trait for types where read/write operations are run in a transaction
-pub trait IsTransaction: is_transaction_seal::Seal {}
-
 /// Operations on read-only transactions
-pub trait TransactionRo: BlockchainStorageRead + IsTransaction {
+pub trait TransactionRo: BlockchainStorageRead {
     /// Close the transaction
     fn close(self);
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRw: BlockchainStorageWrite + IsTransaction {
+pub trait TransactionRw: BlockchainStorageWrite {
     /// Abort the transaction
     fn abort(self);
 
@@ -258,4 +255,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
 }
 
-pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}
+pub trait BlockchainStorage: for<'tx> Transactional<'tx> + Send {}

@@ -21,6 +21,7 @@ mod storage_compatibility;
 use std::sync::Arc;
 
 use chainstate::InitializationError;
+use chainstate_storage::Transactional;
 use storage_lmdb::resize_callback::MapResizeCallback;
 
 // Some useful reexports
@@ -42,8 +43,13 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     let storage = chainstate_storage::Store::new(storage_backend, &chain_config)
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 
-    storage_compatibility::check_storage_compatibility(&storage, chain_config.as_ref())
+    let db_tx = storage
+        .transaction_ro()
+        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
+
+    storage_compatibility::check_storage_compatibility(&db_tx, chain_config.as_ref())
         .map_err(InitializationError::StorageCompatibilityCheckError)?;
+    drop(db_tx);
 
     let chainstate = chainstate::make_chainstate(
         chain_config,
