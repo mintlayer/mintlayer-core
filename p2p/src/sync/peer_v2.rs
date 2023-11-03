@@ -86,7 +86,6 @@ pub struct Peer<T: NetworkingService> {
     outgoing: OutgoingDataState,
     /// A rolling filter of all known transactions (sent to us or sent by us)
     known_transactions: KnownTransactions,
-    // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
     announced_transactions: BTreeSet<Id<Transaction>>,
@@ -806,6 +805,13 @@ where
     }
 
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
+        // TODO: should we handle a request if we haven't actually announced the tx?
+        // Currently we do.
+        // Note that in bitcoin-core they don't answer requests for txs that didn't exist
+        // in mempool before the last INV and which are not in the most recent block
+        // (see PeerManagerImpl::FindTxForGetData), but they don't punish peers for such
+        // requests either.
+
         if !self.common_services.has_service(Service::Transactions) {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "A transaction request is received, but this node doesn't have the corresponding service".to_owned(),
@@ -862,7 +868,8 @@ where
         self.known_transactions.insert(&txid);
     }
 
-    // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
+    // TODO: This can be optimized, e.g. by implementing something similar to bitcoin's
+    // TxRequestTracker, see https://github.com/mintlayer/mintlayer-core/issues/829
     // for details.
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!(
@@ -888,11 +895,58 @@ where
         if self.announced_transactions.len()
             >= *self.p2p_config.protocol_config.max_peer_tx_announcements
         {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::TransactionAnnouncementLimitExceeded(
-                    *self.p2p_config.protocol_config.max_peer_tx_announcements,
-                ),
-            ));
+            // Note:
+            // 1. We don't punish peers for exceeding the limit. If we did, we'd have to also
+            // take the limit into account when announcing transactions. Otherwise, it'd be
+            // possible for a group of malicious peers to make honest peers ban us: they could
+            // send us (max-1) transactions each, which we'd relay to honest peers. If the total
+            // number of transactions is large, so that honest peers are not able to get
+            // transaction responses fast enough, we'd exceed the limit and they'd ban us.
+            //
+            // 2. "announced_transactions" grows when a transaction request is made by the node
+            // (so it's more like "requested_transactions") and shrinks when the peer replies.
+            // So by not punishing peers here we basically allow them to ignore transaction
+            // requests and for each ignored request "announced_transactions"'s size will
+            // be increased by 1 forever (i.e. until the peer disconnects). Though this is not
+            // nice, it's not a serious issue either, because "announced_transactions" will stop
+            // growing after it reaches "max_peer_tx_announcements" elements (which is 5000 at the
+            // moment), after which all further tx announcements from the peer will be ignored.
+            // So the worst thing an attacker can do is eat up 5000*size_of(tx_id) bytes of memory
+            // on the node per peer, which is insignificant.
+            //
+            // TODO: the "announced_transactions" mechanism needs a revamp. But we also have a TODO
+            // above about introducing something similar to bitcoin's TxRequestTracker to optimize
+            // bandwidth. This can replace "announced_transactions" as well.
+            //
+            // In any case, there are some questions that must be answered before starting
+            // the revamp:
+            // 1. Do we actually need a separate message for transaction announcement, why not send
+            // it right away? (in which case TransactionResponse should probably become just
+            // Transaction).
+            // 2. Should we punish peers for sending unsolicited TransactionResponse's? (if not,
+            // then again, it should probably become just Transaction).
+            // Note that bitcoin-core does use separate messages: INV is used for announcements,
+            // GETDATA for requests and TX for responses, but peers are not punished for
+            // unsolicited TX messages.
+            // (note that using something similar to INV, where multiple tx announcements are sent
+            // at once, should be good for privacy, especially if there is an ability to delay
+            // sending a particular tx announcement until some future INV)
+            // 3. How the max_peer_tx_announcements limit has to be handled? Bitcoin-core has
+            // a similar constant MAX_PEER_TX_ANNOUNCEMENTS; if it's reached, the further
+            // announcements are ignored, but only if the peer doesn't have the "Relay" permission,
+            // in which case any number of announcements seems to be allowed. But they also have
+            // the ability to delay the relaying if there are too many transactions in-flight from
+            // that peer (see PeerManagerImpl::AddTxAnnouncement).
+            // 4. Should we punish peers for duplicated transaction announcements?
+            // Bitcoin-core doesn't do that, but it also avoids requesting the same transaction
+            // twice from the same peer, see the large comment in txrequest.h ("The same transaction
+            // is never requested twice ..."). The stated reason for that is to make "transaction
+            // censoring attacks" harder to perform, but it's not clear whether it's relevant for us
+            // as well.
+            //
+            // To summarize, we should decide what the real purpose of this mechanism should be
+            // in our case, and then revamp it accordingly.
+            return Ok(());
         }
 
         if self.announced_transactions.contains(&tx) {
