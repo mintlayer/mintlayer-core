@@ -354,18 +354,20 @@ fn undo_test(#[case] seed: Seed) {
     let id1: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     assert_eq!(store.transaction_ro().unwrap().get_undo_data(id1), Ok(None));
-    assert_eq!(
-        store.transaction_rw(None).unwrap().set_undo_data(id1, &block_undo1),
-        Ok(())
-    );
+
+    let mut db_tx = store.transaction_rw(None).unwrap();
+    assert_eq!(db_tx.set_undo_data(id1, &block_undo1), Ok(()));
+    db_tx.commit().unwrap();
+
     assert_eq!(
         store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
         block_undo0.clone()
     );
-    assert_eq!(
-        store.transaction_rw(None).unwrap().del_undo_data(id1),
-        Ok(())
-    );
+
+    let mut db_tx = store.transaction_rw(None).unwrap();
+    assert_eq!(db_tx.del_undo_data(id1), Ok(()));
+    db_tx.commit().unwrap();
+
     assert_eq!(store.transaction_ro().unwrap().get_undo_data(id1), Ok(None));
     assert_eq!(
         store.transaction_ro().unwrap().get_undo_data(id0).unwrap().unwrap(),
