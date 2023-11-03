@@ -35,7 +35,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{SyncMessage, TransactionResponse},
-    protocol::ProtocolConfig,
+    protocol::{ProtocolConfig, SupportedProtocolVersion},
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -242,14 +242,21 @@ async fn too_many_announcements(#[case] seed: Seed) {
         let tx = transaction(chain_config.genesis_block_id());
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
-        assert_eq!(peer.get_id(), adjusted_peer);
-        assert_eq!(
-            score,
-            P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0))
-                .ban_score()
-        );
-        node.assert_no_event().await;
+        if protocol_version == SupportedProtocolVersion::V1.into() {
+            let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+            assert_eq!(peer.get_id(), adjusted_peer);
+            assert_eq!(
+                score,
+                P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0))
+                    .ban_score()
+            );
+            node.assert_no_event().await;
+        } else {
+            // In V2 the peer is not punished for sending too many announcements.
+            node.assert_no_peer_manager_event().await;
+            // Still, the node shouldn't react to this announcement.
+            node.assert_no_event().await;
+        }
 
         node.join_subsystem_manager().await;
     })
