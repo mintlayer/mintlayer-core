@@ -53,8 +53,11 @@ pub struct RandomTxMaker<'a> {
 
     account_command_used: bool,
 
-    // Accumulate all burns if Unmint command is used.
-    to_burn_on_unmint: Option<(TokenId, Amount)>,
+    // There can be only one Unmint operation per transaction.
+    // But it's unknown in advance which token burn would be utilized by unmint operation
+    // so we have to collect all burns for all tokens just in case.
+    unmint_for: Option<TokenId>,
+    total_tokens_burned: BTreeMap<TokenId, Amount>,
 }
 
 impl<'a> RandomTxMaker<'a> {
@@ -72,7 +75,8 @@ impl<'a> RandomTxMaker<'a> {
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: true,
             account_command_used: false,
-            to_burn_on_unmint: None,
+            unmint_for: None,
+            total_tokens_burned: BTreeMap::new(),
         }
     }
 
@@ -356,9 +360,12 @@ impl<'a> RandomTxMaker<'a> {
             };
         }
 
-        if let Some((token_id, total_burned)) = self.to_burn_on_unmint {
-            let _ = tokens_cache.unmint_tokens(token_id, total_burned).unwrap();
-        };
+        if let Some(token_id) = self.unmint_for {
+            // it's possible that unmint command was used but no tokens were actually burned
+            if let Some(total_burned) = self.total_tokens_burned.get(&token_id) {
+                let _ = tokens_cache.unmint_tokens(token_id, *total_burned).unwrap();
+            }
+        }
 
         (result_inputs, result_outputs)
     }
@@ -466,7 +473,7 @@ impl<'a> RandomTxMaker<'a> {
                             vec![TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint))];
                         result_outputs.extend(outputs);
 
-                        self.to_burn_on_unmint = Some((token_id, Amount::ZERO));
+                        self.unmint_for = Some(token_id);
                         self.account_command_used = true;
                     }
                     *fee_input = None;
@@ -476,9 +483,12 @@ impl<'a> RandomTxMaker<'a> {
                 let to_burn = Amount::from_atoms(atoms);
                 result_outputs.push(TxOutput::Burn(OutputValue::TokenV1(token_id, to_burn)));
 
-                self.to_burn_on_unmint = self
-                    .to_burn_on_unmint
-                    .map(|(token_id, total_burned)| (token_id, (total_burned + to_burn).unwrap()));
+                self.total_tokens_burned
+                    .entry(token_id)
+                    .and_modify(|total| {
+                        *total = (*total + to_burn).unwrap();
+                    })
+                    .or_insert(to_burn);
             }
         }
 
