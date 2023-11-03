@@ -171,13 +171,11 @@ pub enum UtxoSelectorError {
     AmountArithmeticError,
 }
 
-struct OutputGroupOrd(OutputGroup);
+struct OutputGroupOrd(OutputGroup, PayFee);
 
 impl PartialEq for OutputGroupOrd {
     fn eq(&self, other: &Self) -> bool {
-        self.0
-            .get_effective_value(PayFee::PayFeeWithThisCurrency)
-            .eq(&other.0.get_effective_value(PayFee::PayFeeWithThisCurrency))
+        self.0.get_effective_value(self.1).eq(&other.0.get_effective_value(self.1))
     }
 }
 
@@ -191,9 +189,7 @@ impl Eq for OutputGroupOrd {}
 
 impl Ord for OutputGroupOrd {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0
-            .get_effective_value(PayFee::PayFeeWithThisCurrency)
-            .cmp(&other.0.get_effective_value(PayFee::PayFeeWithThisCurrency))
+        self.0.get_effective_value(self.1).cmp(&other.0.get_effective_value(self.1))
     }
 }
 
@@ -228,7 +224,7 @@ fn select_coins_srd(
         let group = &utxo_pool[i];
 
         // Add group to selection
-        heap.push(OutputGroupOrd(group.clone()));
+        heap.push(OutputGroupOrd(group.clone(), pay_fees));
         selected_eff_value = (selected_eff_value + group.get_effective_value(pay_fees))
             .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         weight += group.weight;
