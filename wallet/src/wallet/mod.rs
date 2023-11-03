@@ -330,7 +330,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns true if a migration needs to be ran, false if it is already on the latest version
     /// and an error if it is an unsupported version
     pub fn check_db_needs_migration(db: &Store<B>) -> WalletResult<bool> {
-        match db.get_storage_version()? {
+        let version = db.transaction_ro()?.get_storage_version()?;
+
+        match version {
             WALLET_VERSION_UNINITIALIZED => Err(WalletError::WalletNotInitialized),
             WALLET_VERSION_V1 | WALLET_VERSION_V2 => Ok(true),
             CURRENT_WALLET_VERSION => Ok(false),
@@ -340,7 +342,9 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
-        match db.get_storage_version()? {
+        let version = db.transaction_ro()?.get_storage_version()?;
+
+        match version {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
             WALLET_VERSION_V1 => Self::migration_v2(db, chain_config)?,
             WALLET_VERSION_V2 => Self::migration_v3(db, chain_config)?,

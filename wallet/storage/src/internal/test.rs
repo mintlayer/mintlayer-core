@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use super::*;
-use crate::DefaultBackend;
-use crate::TransactionRwUnlocked;
-use crate::WalletStorageReadUnlocked;
-use crate::WalletStorageWriteUnlocked;
+use crate::{
+    DefaultBackend, TransactionRwLocked, TransactionRwUnlocked, WalletStorageReadLocked,
+    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+};
 
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::random::{CryptoRng, Rng};
@@ -33,12 +33,14 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
 #[test]
 fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
-        let mut store = Store::new(DefaultBackend::new_in_memory()).unwrap();
-        store.set_storage_version(1).unwrap();
+        let store = Store::new(DefaultBackend::new_in_memory()).unwrap();
+
+        let mut db_tx = store.transaction_rw(None).unwrap();
+        db_tx.set_storage_version(1).unwrap();
+        db_tx.commit().unwrap();
+
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
-        let vst = store.get_storage_version().unwrap();
         assert_eq!(vtx, 1, "Default storage version wrong");
-        assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
     })
 }
 
