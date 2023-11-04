@@ -441,7 +441,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => {
+                TxInput::Utxo(ref outpoint) => {
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
                 TxInput::Account(outpoint) => {
@@ -720,7 +720,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountCommand::UnmintTokens(token_id) => {
+                    AccountCommand::UnmintTokens(ref token_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
@@ -841,7 +841,7 @@ where
                     | TxOutput::LockThenTransfer(output_value, _, _) => {
                         match output_value {
                             OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
-                            OutputValue::TokenV1(token_id, _) => {
+                            OutputValue::TokenV1(ref token_id, _) => {
                                 // TODO: when NFTs are stored in accounting None should become an error
                                 if let Some(token_data) = self.get_token_data(token_id)? {
                                     match token_data {
