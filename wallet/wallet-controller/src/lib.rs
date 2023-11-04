@@ -33,6 +33,7 @@ use std::{
 
 use mempool::tx_accumulator::PackingStrategy;
 use read::ReadOnlyController;
+use sync::InSync;
 use synced_controller::SyncedController;
 use utils::tap_error_log::LogError;
 
@@ -89,6 +90,8 @@ pub enum ControllerError<T: NodeInterface> {
     StakingRunning,
     #[error("End-to-end encryption error: {0}")]
     EndToEndEncryptionError(#[from] crypto::ephemeral_e2e::error::Error),
+    #[error("The node is not in sync yet")]
+    NodeNotInSyncYet,
 }
 
 #[derive(Clone, Copy)]
@@ -136,7 +139,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         };
 
         log::info!("Syncing the wallet...");
-        controller.sync_once().await?;
+        controller.try_sync_once().await?;
 
         Ok(controller)
     }
@@ -527,6 +530,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     /// Synchronize the wallet to the current node tip height and return
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
+        let res = sync::sync_once(
+            &self.chain_config,
+            &self.rpc_client,
+            &mut self.wallet,
+            &self.wallet_events,
+        )
+        .await?;
+
+        match res {
+            InSync::Synced => Ok(()),
+            InSync::NodeOutOfSync => Err(ControllerError::NodeNotInSyncYet),
+        }
+    }
+
+    pub async fn try_sync_once(&mut self) -> Result<(), ControllerError<T>> {
         sync::sync_once(
             &self.chain_config,
             &self.rpc_client,
@@ -534,6 +552,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &self.wallet_events,
         )
         .await?;
+
         Ok(())
     }
 
