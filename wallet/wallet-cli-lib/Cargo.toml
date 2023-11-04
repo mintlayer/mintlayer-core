@@ -29,6 +29,7 @@ crossterm.workspace = true
 directories.workspace = true
 hex.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
+serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

@@ -112,10 +112,9 @@ where
     )
     .await;
 
-    // Note: V2 is not finalized yet, so it should not be selected.
     connect_to_remote_impl::<A, T>(
         SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V1.into(),
+        SupportedProtocolVersion::V2.into(),
     )
     .await;
 }
@@ -211,10 +210,9 @@ where
     )
     .await;
 
-    // Note: V2 is not finalized yet, so it should not be selected.
     accept_incoming_impl::<A, T>(
         SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V1.into(),
+        SupportedProtocolVersion::V2.into(),
     )
     .await;
 }

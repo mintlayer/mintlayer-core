@@ -7821,6 +7821,7 @@ dependencies = [
  "reedline",
  "rpc",
  "rstest",
+ "serde_json",
  "serialization",
  "shlex",
  "subsystem",

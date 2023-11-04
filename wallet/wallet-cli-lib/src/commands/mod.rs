@@ -385,6 +385,9 @@ pub enum WalletCommand {
     /// Get connected peers
     ConnectedPeers,
 
+    /// Get connected peers in JSON format
+    ConnectedPeersJson,
+
     /// Add reserved peer
     AddReservedPeer {
         address: IpOrSocketAddress,
@@ -1384,6 +1387,12 @@ impl CommandHandler {
                 let peers =
                     rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print(format!("{peers:#?}")))
+            }
+            WalletCommand::ConnectedPeersJson => {
+                let peers =
+                    rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
+                let peers_json = serde_json::to_string(&peers)?;
+                Ok(ConsoleCommand::Print(peers_json))
             }
             WalletCommand::AddReservedPeer { address } => {
                 rpc_client
