@@ -108,12 +108,17 @@ enum AccountType {
     UnusedAccount,
 }
 
+pub enum InSync {
+    Synced,
+    NodeOutOfSync,
+}
+
 pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
     wallet_events: &impl WalletEvents,
-) -> Result<(), ControllerError<T>> {
+) -> Result<InSync, ControllerError<T>> {
     let mut print_flag = SetFlag::new();
     let mut _log_on_exit = None;
 
@@ -131,7 +136,17 @@ pub async fn sync_once<T: NodeInterface>(
             .all(|wallet_best_block| chain_info.best_block_id == wallet_best_block.0)
         {
             // if all accounts are on the latest tip nothing to sync
-            return Ok(());
+            return Ok(InSync::Synced);
+        }
+
+        if account_best_blocks
+            .values()
+            .chain(iter::once(&unused_account_best_block))
+            .any(|wallet_best_block| chain_info.best_block_height < wallet_best_block.1)
+        {
+            // If the wallet's block height is > node block height wait for the node to sync first
+            log::info!("Wallet syncing paused until the node syncs up to the height of the wallet");
+            return Ok(InSync::NodeOutOfSync);
         }
 
         wallet
