@@ -561,6 +561,7 @@ impl MainWindow {
             }
             MainWindowMessage::ImportWalletFileCanceled => {
                 self.file_dialog_active = false;
+                self.active_dialog = ActiveDialog::None;
                 Command::none()
             }
 
