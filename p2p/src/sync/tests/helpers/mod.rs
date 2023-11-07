@@ -16,6 +16,7 @@
 use std::{panic, sync::Arc};
 
 use async_trait::async_trait;
+use logging::log;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -57,7 +58,7 @@ use crate::{
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     protocol::{choose_common_protocol_version, ProtocolVersion},
-    sync::{subscribe_to_new_tip, SyncManager},
+    sync::{subscribe_to_new_tip, Observer, SyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
@@ -84,6 +85,7 @@ pub struct TestNode {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
 }
 
@@ -122,8 +124,11 @@ impl TestNode {
         let syncing_event_receiver_mock = SyncingEventReceiverMock {
             events_receiver: syncing_event_receiver,
         };
+        let (sync_mgr_notification_sender, sync_mgr_notification_receiver) =
+            mpsc::unbounded_channel();
+        let sync_mgr_observer = Box::new(SyncManagerObserver::new(sync_mgr_notification_sender));
 
-        let sync_manager = SyncManager::<NetworkingServiceStub>::new(
+        let sync_manager = SyncManager::<NetworkingServiceStub>::new_generic(
             chain_config,
             Arc::clone(&p2p_config),
             messaging_handle,
@@ -132,6 +137,7 @@ impl TestNode {
             mempool_handle.clone(),
             peer_manager_event_sender,
             time_getter,
+            Some(sync_mgr_observer),
         );
 
         let sync_manager_chainstate_handle = sync_manager.chainstate().clone();
@@ -158,6 +164,7 @@ impl TestNode {
             chainstate_handle,
             mempool_handle,
             _new_tip_receiver: new_tip_receiver,
+            sync_mgr_notification_receiver,
             protocol_version,
         }
     }
@@ -366,6 +373,25 @@ impl TestNode {
             .unwrap()
             .unwrap()
     }
+
+    pub async fn wait_for_notification(&mut self, notification: SyncManagerNotification) {
+        let wait_loop = async {
+            loop {
+                if self.sync_mgr_notification_receiver.recv().await.unwrap() == notification {
+                    break;
+                }
+            }
+        };
+
+        expect_future_val!(wait_loop);
+    }
+
+    pub async fn clear_notifications(&mut self) {
+        while time::timeout(SHORT_TIMEOUT, self.sync_mgr_notification_receiver.recv())
+            .await
+            .is_ok()
+        {}
+    }
 }
 
 // Represents a peer that can send messages to a node it is connected to
@@ -567,6 +593,40 @@ struct SyncingEventReceiverMock {
 impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
         expect_future_val!(self.events_receiver.recv()).ok_or(P2pError::ChannelClosed)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncManagerNotification {
+    NewTxSyncManagerMainLoopIteration { peer_id: PeerId },
+}
+
+#[derive(Clone)]
+pub struct SyncManagerObserver {
+    notification_sender: UnboundedSender<SyncManagerNotification>,
+}
+
+impl SyncManagerObserver {
+    pub fn new(notification_sender: UnboundedSender<SyncManagerNotification>) -> Self {
+        Self {
+            notification_sender,
+        }
+    }
+
+    fn send_notification(&self, notification: SyncManagerNotification) {
+        let send_result = self.notification_sender.send(notification.clone());
+
+        if let Err(err) = send_result {
+            log::warn!("Error sending sync manager notification {notification:?}: {err}");
+        }
+    }
+}
+
+impl Observer for SyncManagerObserver {
+    fn on_new_transaction_sync_mgr_main_loop_iteration(&mut self, peer_id: PeerId) {
+        self.send_notification(SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
+            peer_id,
+        });
     }
 }
 
