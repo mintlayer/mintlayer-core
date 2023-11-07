@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use p2p_types::services::Services;
 use tokio::{sync::mpsc, time::timeout};
@@ -40,8 +40,6 @@ use super::{
     transport::BufferedTranscoder,
     types::{CategorizedMessage, HandshakeMessage, HandshakeNonce, Message, P2pTimestamp},
 };
-
-const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionInfo {
@@ -317,7 +315,9 @@ where
 
     async fn run_handshake(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
+        let handshake_timeout = *self.p2p_config.peer_handshake_timeout;
+        let handshake_res = timeout(handshake_timeout, self.handshake()).await;
+
         match handshake_res {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -405,6 +405,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures::FutureExt;
+    use std::time::Duration;
     use test_utils::mock_time_getter::{
         mocked_time_getter_milliseconds, mocked_time_getter_seconds,
     };

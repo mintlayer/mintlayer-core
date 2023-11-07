@@ -222,6 +222,7 @@ async fn disconnect() {
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
+            peer_handshake_timeout: Default::default(),
             max_clock_diff: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),

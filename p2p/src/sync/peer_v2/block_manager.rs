@@ -546,7 +546,7 @@ where
                     )
                 });
 
-            let sleep_time = std::cmp::min(clock_diff, *self.p2p_config.max_clock_diff);
+            let sleep_time = std::cmp::min(clock_diff, self.p2p_config.effective_max_clock_diff());
             log::debug!(
                 "[peer id = {}] Block timestamp from the future ({} seconds)",
                 self.id(),

@@ -56,6 +56,7 @@ async fn ping_timeout() {
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
