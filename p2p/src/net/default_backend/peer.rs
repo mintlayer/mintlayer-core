@@ -24,7 +24,7 @@ use logging::log;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::SyncMessage,
+    message::{BlockSyncMessage, TxnSyncMessage},
     net::{
         default_backend::{
             transport::TransportSocket,
@@ -266,7 +266,8 @@ where
         peer_id: PeerId,
         msg: Message,
         peer_event_tx: &mut mpsc::Sender<PeerEvent>,
-        sync_msg_tx: &mut mpsc::Sender<SyncMessage>,
+        block_sync_msg_tx: &mut mpsc::Sender<BlockSyncMessage>,
+        txn_sync_msg_tx: &mut mpsc::Sender<TxnSyncMessage>,
     ) -> crate::Result<()> {
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
@@ -283,7 +284,8 @@ where
             CategorizedMessage::PeerManagerMessage(msg) => {
                 peer_event_tx.send(PeerEvent::MessageReceived { message: msg }).await?
             }
-            CategorizedMessage::SyncMessage(msg) => sync_msg_tx.send(msg).await?,
+            CategorizedMessage::BlockSyncMessage(msg) => block_sync_msg_tx.send(msg).await?,
+            CategorizedMessage::TxnSyncMessage(msg) => txn_sync_msg_tx.send(msg).await?,
         }
 
         Ok(())
@@ -326,18 +328,20 @@ where
                 biased;
 
                 event = self.backend_event_rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    BackendEvent::Accepted{ sync_msg_tx } => {
-                        sync_msg_tx_opt = Some(sync_msg_tx);
+                    BackendEvent::Accepted{ block_sync_msg_tx, txn_sync_msg_tx } => {
+                        sync_msg_tx_opt = Some((block_sync_msg_tx, txn_sync_msg_tx));
                     },
                     BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
                 event = self.socket.recv(), if sync_msg_tx_opt.is_some() => match event {
                     Ok(message) => {
+                        let sync_msg_tx = sync_msg_tx_opt.as_mut().expect("sync_msg_tx_opt is some");
                         Self::handle_socket_msg(
                             self.peer_id,
                             message,
                             &mut self.peer_event_tx,
-                            sync_msg_tx_opt.as_mut().expect("sync_msg_tx_opt is some")
+                            &mut sync_msg_tx.0,
+                            &mut sync_msg_tx.1,
                         ).await?;
                     }
                     Err(err) => {

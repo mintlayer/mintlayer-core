@@ -42,7 +42,7 @@ use crate::{
         peerdb::storage_impl::PeerDbStorageImpl, PeerManager, PeerManagerQueryInterface,
     },
     protocol::ProtocolVersion,
-    sync::BlockSyncManager,
+    sync::SyncManager,
     testing_utils::peerdb_inmemory_store,
     types::ip_or_socket_address::IpOrSocketAddress,
     utils::oneshot_nofail,
@@ -162,7 +162,7 @@ where
             (peer_mgr, err)
         });
 
-        let sync_mgr = BlockSyncManager::<DefaultNetworkingService<Transport>>::new(
+        let sync_mgr = SyncManager::<DefaultNetworkingService<Transport>>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             messaging_handle,

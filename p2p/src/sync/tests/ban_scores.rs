@@ -28,7 +28,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    message::{HeaderList, SyncMessage},
+    message::{BlockSyncMessage, HeaderList},
     sync::{peer_common, tests::helpers::TestNode},
     testing_utils::for_each_protocol_version,
     types::peer_id::PeerId,
@@ -133,7 +133,7 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
             valid_child_block.header().clone(),
         ])))
         .await;

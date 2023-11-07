@@ -29,7 +29,7 @@ use p2p_types::{services::Services, socket_address::SocketAddress};
 
 use crate::{
     error::P2pError,
-    message::{PeerManagerMessage, SyncMessage},
+    message::{BlockSyncMessage, PeerManagerMessage, TxnSyncMessage},
     net::{
         self,
         types::{ConnectivityEvent, SyncingEvent},
@@ -143,7 +143,22 @@ where
 }
 
 impl MessagingService for MessagingHandle {
-    fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+    fn send_block_sync_message(
+        &mut self,
+        peer_id: PeerId,
+        message: BlockSyncMessage,
+    ) -> crate::Result<()> {
+        Ok(self.command_sender.send(types::Command::SendMessage {
+            peer_id,
+            message: message.into(),
+        })?)
+    }
+
+    fn send_txn_sync_message(
+        &mut self,
+        peer_id: PeerId,
+        message: TxnSyncMessage,
+    ) -> crate::Result<()> {
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),

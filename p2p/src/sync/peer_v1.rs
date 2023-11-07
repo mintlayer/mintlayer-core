@@ -42,8 +42,8 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{
-        BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
-        TransactionResponse,
+        BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest,
+        TransactionResponse, TxnSyncMessage,
     },
     net::{
         types::services::{Service, Services},
@@ -68,7 +68,7 @@ use super::chainstate_handle::ChainstateHandle;
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
-pub struct Peer<T: NetworkingService> {
+pub struct PeerSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
@@ -77,7 +77,8 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_msg_rx: Receiver<SyncMessage>,
+    block_sync_msg_rx: Receiver<BlockSyncMessage>,
+    txn_sync_msg_rx: Receiver<TxnSyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
@@ -123,7 +124,7 @@ struct OutgoingDataState {
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
-impl<T> Peer<T>
+impl<T> PeerSyncManager<T>
 where
     T: NetworkingService,
     T::MessagingHandle: MessagingService,
@@ -137,7 +138,8 @@ where
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_msg_rx: Receiver<SyncMessage>,
+        block_sync_msg_rx: Receiver<BlockSyncMessage>,
+        txn_sync_msg_rx: Receiver<TxnSyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
@@ -153,7 +155,8 @@ where
             mempool_handle,
             peer_manager_sender,
             messaging_handle,
-            sync_msg_rx,
+            block_sync_msg_rx,
+            txn_sync_msg_rx,
             local_event_rx,
             time_getter,
             incoming: IncomingDataState {
@@ -201,9 +204,14 @@ where
 
         loop {
             tokio::select! {
-                message = self.sync_msg_rx.recv() => {
+                message = self.block_sync_msg_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_message(message).await?;
+                    self.handle_block_sync_message(message).await?;
+                }
+
+                message = self.txn_sync_msg_rx.recv() => {
+                    let message = message.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_txn_sync_message(message).await?;
                 }
 
                 block_to_send_to_peer = async {
@@ -225,15 +233,19 @@ where
         }
     }
 
-    fn send_message(&mut self, message: SyncMessage) -> Result<()> {
-        self.messaging_handle.send_message(self.id(), message)
+    fn send_block_sync_message(&mut self, message: BlockSyncMessage) -> Result<()> {
+        self.messaging_handle.send_block_sync_message(self.id(), message)
+    }
+
+    fn send_txn_sync_message(&mut self, message: TxnSyncMessage) -> Result<()> {
+        self.messaging_handle.send_txn_sync_message(self.id(), message)
     }
 
     fn send_headers(&mut self, headers: HeaderList) -> Result<()> {
         if let Some(last_header) = headers.headers().last() {
             self.outgoing.best_sent_block_header = Some(last_header.block_id().into());
         }
-        self.send_message(SyncMessage::HeaderList(headers))
+        self.send_block_sync_message(BlockSyncMessage::HeaderList(headers))
     }
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
@@ -340,7 +352,7 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_message(SyncMessage::NewTransaction(txid))
+                    self.send_txn_sync_message(TxnSyncMessage::NewTransaction(txid))
                 } else {
                     Ok(())
                 }
@@ -360,7 +372,7 @@ where
         }
 
         log::debug!("[peer id = {}] Sending header list request", self.id());
-        self.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        self.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             locator,
         )))?;
 
@@ -370,20 +382,40 @@ where
         Ok(())
     }
 
-    async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
+    async fn handle_block_sync_message(&mut self, message: BlockSyncMessage) -> Result<()> {
         log::trace!(
-            "[peer id = {}] Handling message from the peer: {message:?}",
+            "[peer id = {}] Handling block sync message from the peer: {message:?}",
             self.id()
         );
 
         let res = match message {
-            SyncMessage::HeaderListRequest(r) => self.handle_header_request(r.into_locator()).await,
-            SyncMessage::BlockListRequest(r) => self.handle_block_request(r.into_block_ids()).await,
-            SyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
-            SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
-            SyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
-            SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
-            SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
+            BlockSyncMessage::HeaderListRequest(r) => {
+                self.handle_header_request(r.into_locator()).await
+            }
+            BlockSyncMessage::BlockListRequest(r) => {
+                self.handle_block_request(r.into_block_ids()).await
+            }
+            BlockSyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
+            BlockSyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
+
+            #[cfg(test)]
+            BlockSyncMessage::TestSentinel(id) => {
+                self.send_block_sync_message(BlockSyncMessage::TestSentinel(id))
+            }
+        };
+        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
+    }
+
+    async fn handle_txn_sync_message(&mut self, message: TxnSyncMessage) -> Result<()> {
+        log::trace!(
+            "[peer id = {}] Handling txn sync message from the peer: {message:?}",
+            self.id()
+        );
+
+        let res = match message {
+            TxnSyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
+            TxnSyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
+            TxnSyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
         handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
     }
@@ -831,7 +863,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.send_message(SyncMessage::TransactionResponse(res))?;
+        self.send_txn_sync_message(TxnSyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -915,7 +947,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.send_message(SyncMessage::TransactionRequest(tx))?;
+            self.send_txn_sync_message(TxnSyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 
@@ -944,7 +976,7 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-        self.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        self.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             block_ids.clone(),
         )))?;
         // Even in the hypothetical situation where the "debug_assert!(requested_blocks.is_empty())"
@@ -993,7 +1025,7 @@ where
             self.id(),
             block.get_id()
         );
-        self.send_message(SyncMessage::BlockResponse(BlockResponse::new(block)))
+        self.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
     async fn disconnect_if_stalling(&mut self) -> Result<()> {

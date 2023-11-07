@@ -63,13 +63,14 @@ use super::{
 /// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
 /// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
 /// requests, which may lead to memory exhaustion.
-/// Note: the values were chosen pretty much arbitrarily; the sync messages channel has a lower
-/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events,
-/// on the other hand, are small.
+/// Note: the values were chosen pretty much arbitrarily; the block sync messages channel has a lower
+/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events
+/// and transaction-related messages, on the other hand, are small.
 /// Also note that basic tests of initial block download time showed that there is no real
-/// difference between 20 and 10000 for both of the limits here. These results, of course, depend
+/// difference between 20 and 10000 for any of the limits here. These results, of course, depend
 /// on the hardware and internet connection, so we've chosen larger limits.
-const SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const BLOCK_SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const TXN_SYNC_MSG_CHAN_BUF_SIZE: usize = 1000;
 const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
@@ -238,8 +239,12 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
-        peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
+        let (block_sync_msg_tx, block_sync_msg_rx) = mpsc::channel(BLOCK_SYNC_MSG_CHAN_BUF_SIZE);
+        let (txn_sync_msg_tx, txn_sync_msg_rx) = mpsc::channel(TXN_SYNC_MSG_CHAN_BUF_SIZE);
+        peer.backend_event_tx.send(BackendEvent::Accepted {
+            block_sync_msg_tx,
+            txn_sync_msg_tx,
+        })?;
 
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
@@ -250,7 +255,8 @@ where
                 peer_id,
                 common_services: peer.common_services,
                 protocol_version: peer.protocol_version,
-                sync_msg_rx,
+                block_sync_msg_rx,
+                txn_sync_msg_rx,
             },
             &self.shutdown,
         );

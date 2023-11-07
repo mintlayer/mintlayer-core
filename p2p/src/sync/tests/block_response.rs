@@ -28,7 +28,7 @@ use test_utils::random::{shuffle_until_different, Seed};
 
 use crate::{
     error::ProtocolError,
-    message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     sync::tests::helpers::{make_new_blocks, make_new_top_blocks_return_headers, TestNode},
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -59,7 +59,8 @@ async fn unrequested_block(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::BlockResponse(BlockResponse::new(block))).await;
+        peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(block)))
+            .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -67,7 +68,7 @@ async fn unrequested_block(#[case] seed: Seed) {
             score,
             P2pError::ProtocolError(ProtocolError::UnsolicitedBlockReceived(block_id)).ban_score()
         );
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -99,18 +100,19 @@ async fn valid_response(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = blocks.iter().map(|b| b.header().clone()).collect();
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         let ids = blocks.iter().map(|b| b.get_id()).collect();
         assert_eq!(
             message,
-            SyncMessage::BlockListRequest(BlockListRequest::new(ids))
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(ids))
         );
 
         for block in blocks.into_iter() {
-            peer.send_message(SyncMessage::BlockResponse(BlockResponse::new(
+            peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
                 block.clone(),
             )))
             .await;
@@ -118,8 +120,8 @@ async fn valid_response(#[case] seed: Seed) {
 
         // A peer would request headers after the last block.
         assert!(matches!(
-            node.get_sent_message().await.1,
-            SyncMessage::HeaderListRequest(HeaderListRequest { .. })
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::HeaderListRequest(HeaderListRequest { .. })
         ));
 
         node.assert_no_error().await;
@@ -191,12 +193,12 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
         let headers = blocks.iter().map(|b| b.header().clone()).collect();
         peer.send_headers(headers).await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         let ids = blocks.iter().map(|b| b.get_id()).collect();
         assert_eq!(
             message,
-            SyncMessage::BlockListRequest(BlockListRequest::new(ids))
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(ids))
         );
 
         {
@@ -208,7 +210,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
 
                 log::debug!("Expected index = {expected_index}, shuffled index = {shuffled_index}");
 
-                peer.send_message(SyncMessage::BlockResponse(BlockResponse::new(
+                peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
                     blocks[shuffled_index].clone(),
                 )))
                 .await;
@@ -233,7 +235,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             assert_ne!(expected_indices.len(), 0);
         }
 
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -285,16 +287,16 @@ async fn disconnect(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![block
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
             .await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
         );
 
         tokio::time::sleep(Duration::from_millis(300)).await;
@@ -359,33 +361,34 @@ async fn slow_response(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![block
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
             .await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
         );
 
         time_getter.advance_time(DELAY);
 
-        peer.send_message(SyncMessage::BlockResponse(BlockResponse::new(
+        peer.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
             block.clone(),
         )))
         .await;
 
         assert!(matches!(
-            node.get_sent_message().await.1,
-            SyncMessage::HeaderListRequest(HeaderListRequest { .. })
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::HeaderListRequest(HeaderListRequest { .. })
         ));
 
         time_getter.advance_time(DELAY);
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(Vec::new()))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())))
+            .await;
 
         node.assert_no_error().await;
         // Just in case, check that there were no peer manager events at all, not just disconnects.
@@ -443,7 +446,7 @@ async fn invalidated_block(#[case] seed: Seed) {
 
         // Receive HeaderListRequest from the peer.
         let peers_locator = node.get_locator_from_height(0.into()).await;
-        peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        peer.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             peers_locator,
         )))
         .await;
@@ -451,25 +454,25 @@ async fn invalidated_block(#[case] seed: Seed) {
         // The node sends HeaderList.
         let initial_blocks_headers = initial_blocks.iter().map(|b| b.header().clone()).collect();
         assert_eq!(
-            node.get_sent_message().await.1,
-            SyncMessage::HeaderList(HeaderList::new(initial_blocks_headers))
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::HeaderList(HeaderList::new(initial_blocks_headers))
         );
 
         // Receive BlockListRequest from the peer.
         let initial_blocks_ids = initial_blocks.iter().map(|b| b.get_id()).collect();
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             initial_blocks_ids,
         )))
         .await;
 
         // The node sends block responses.
         assert_eq!(
-            node.get_sent_message().await.1,
-            SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
         );
         assert_eq!(
-            node.get_sent_message().await.1,
-            SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[1].clone()))
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::BlockResponse(BlockResponse::new(initial_blocks[1].clone()))
         );
 
         // After this, initial_blocks[1] is node's best_send_block for this peer.
@@ -496,8 +499,8 @@ async fn invalidated_block(#[case] seed: Seed) {
 
         // The node should send the new tip update
         assert_eq!(
-            node.get_sent_message().await.1,
-            SyncMessage::HeaderList(HeaderList::new(vec![new_header.clone()]))
+            node.get_sent_block_sync_message().await.1,
+            BlockSyncMessage::HeaderList(HeaderList::new(vec![new_header.clone()]))
         );
 
         // Invalidate the newly created block
@@ -511,9 +514,9 @@ async fn invalidated_block(#[case] seed: Seed) {
 
         // The peer requests for the now invalidated block.
         // The node should handle this correctly.
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
-            new_header.block_id(),
-        ])))
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            vec![new_header.block_id()],
+        )))
         .await;
 
         node.assert_no_error().await;

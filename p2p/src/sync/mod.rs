@@ -19,7 +19,8 @@
 mod chainstate_handle;
 mod peer_common;
 mod peer_v1;
-mod peer_v2;
+mod peer_v2_blocks;
+mod peer_v2_txn;
 mod types;
 
 use std::collections::HashMap;
@@ -42,7 +43,7 @@ use utils::{sync::Arc, tap_error_log::LogError};
 use crate::{
     config::P2pConfig,
     error::P2pError,
-    message::SyncMessage,
+    message::{BlockSyncMessage, TxnSyncMessage},
     net::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
@@ -54,20 +55,20 @@ use crate::{
 
 use self::chainstate_handle::ChainstateHandle;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LocalEvent {
     ChainstateNewTip(Id<Block>),
     MempoolNewTx(Id<Transaction>),
 }
 
 pub struct PeerContext {
-    task: JoinHandle<()>,
-    local_event_tx: UnboundedSender<LocalEvent>,
+    tasks: Vec<JoinHandle<()>>,
+    local_event_txs: Vec<UnboundedSender<LocalEvent>>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
 /// and keeping up with updates to different branches of the blockchain.
-pub struct BlockSyncManager<T: NetworkingService> {
+pub struct SyncManager<T: NetworkingService> {
     /// The chain configuration.
     chain_config: Arc<ChainConfig>,
 
@@ -90,7 +91,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
 }
 
 /// Syncing manager
-impl<T> BlockSyncManager<T>
+impl<T> SyncManager<T>
 where
     T: NetworkingService + 'static,
     T::MessagingHandle: MessagingService,
@@ -154,59 +155,87 @@ where
         peer_id: PeerId,
         common_services: Services,
         protocol_version: SupportedProtocolVersion,
-        sync_msg_rx: Receiver<SyncMessage>,
+        block_sync_msg_rx: Receiver<BlockSyncMessage>,
+        txn_sync_msg_rx: Receiver<TxnSyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
-        let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
+        let mut peer_tasks = Vec::new();
+        let mut peer_local_event_txs = Vec::new();
 
-        let peer_task = {
-            match protocol_version {
-                SupportedProtocolVersion::V1 => {
-                    let mut peer = peer_v1::Peer::<T>::new(
-                        peer_id,
-                        common_services,
-                        Arc::clone(&self.chain_config),
-                        Arc::clone(&self.p2p_config),
-                        self.chainstate_handle.clone(),
-                        self.mempool_handle.clone(),
-                        self.peer_manager_sender.clone(),
-                        sync_msg_rx,
-                        self.messaging_handle.clone(),
-                        local_event_rx,
-                        self.time_getter.clone(),
-                    );
+        match protocol_version {
+            SupportedProtocolVersion::V1 => {
+                let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
 
-                    logging::spawn_in_current_span(async move {
-                        peer.run().await;
-                    })
-                }
+                let mut mgr = peer_v1::PeerSyncManager::<T>::new(
+                    peer_id,
+                    common_services,
+                    Arc::clone(&self.chain_config),
+                    Arc::clone(&self.p2p_config),
+                    self.chainstate_handle.clone(),
+                    self.mempool_handle.clone(),
+                    self.peer_manager_sender.clone(),
+                    block_sync_msg_rx,
+                    txn_sync_msg_rx,
+                    self.messaging_handle.clone(),
+                    local_event_rx,
+                    self.time_getter.clone(),
+                );
 
-                SupportedProtocolVersion::V2 => {
-                    let mut peer = peer_v2::Peer::<T>::new(
-                        peer_id,
-                        common_services,
-                        Arc::clone(&self.chain_config),
-                        Arc::clone(&self.p2p_config),
-                        self.chainstate_handle.clone(),
-                        self.mempool_handle.clone(),
-                        self.peer_manager_sender.clone(),
-                        sync_msg_rx,
-                        self.messaging_handle.clone(),
-                        local_event_rx,
-                        self.time_getter.clone(),
-                    );
-
-                    logging::spawn_in_current_span(async move {
-                        peer.run().await;
-                    })
-                }
+                let task = logging::spawn_in_current_span(async move {
+                    mgr.run().await;
+                });
+                peer_tasks.push(task);
+                peer_local_event_txs.push(local_event_tx);
             }
-        };
+
+            SupportedProtocolVersion::V2 => {
+                let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
+                let mut mgr = peer_v2_blocks::PeerBlockSyncManager::<T>::new(
+                    peer_id,
+                    common_services,
+                    Arc::clone(&self.chain_config),
+                    Arc::clone(&self.p2p_config),
+                    self.chainstate_handle.clone(),
+                    self.peer_manager_sender.clone(),
+                    block_sync_msg_rx,
+                    self.messaging_handle.clone(),
+                    local_event_rx,
+                    self.time_getter.clone(),
+                );
+
+                let task = logging::spawn_in_current_span(async move {
+                    mgr.run().await;
+                });
+                peer_tasks.push(task);
+                peer_local_event_txs.push(local_event_tx);
+
+                let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
+                let mut mgr = peer_v2_txn::PeerTxnSyncManager::<T>::new(
+                    peer_id,
+                    common_services,
+                    Arc::clone(&self.chain_config),
+                    Arc::clone(&self.p2p_config),
+                    self.chainstate_handle.clone(),
+                    self.mempool_handle.clone(),
+                    self.peer_manager_sender.clone(),
+                    txn_sync_msg_rx,
+                    self.messaging_handle.clone(),
+                    local_event_rx,
+                    self.time_getter.clone(),
+                );
+
+                let task = logging::spawn_in_current_span(async move {
+                    mgr.run().await;
+                });
+                peer_tasks.push(task);
+                peer_local_event_txs.push(local_event_tx);
+            }
+        }
 
         let peer_context = PeerContext {
-            task: peer_task,
-            local_event_tx,
+            tasks: peer_tasks,
+            local_event_txs: peer_local_event_txs,
         };
 
         let prev_task = self.peers.insert(peer_id, peer_context);
@@ -221,7 +250,17 @@ where
             .remove(&peer_id)
             .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer_id}"));
         // Call `abort` because the peer task may be sleeping for a long time in the `sync_clock` function
-        peer.task.abort();
+        for task in peer.tasks {
+            task.abort();
+        }
+    }
+
+    fn send_local_event(&mut self, event: &LocalEvent) {
+        for peer_ctx in self.peers.values_mut() {
+            for tx in &peer_ctx.local_event_txs {
+                let _ = tx.send(event.clone());
+            }
+        }
     }
 
     /// Announces the header of a new block to peers.
@@ -235,9 +274,8 @@ where
         }
 
         log::debug!("Broadcasting a new tip {}", block_id);
-        for peer in self.peers.values_mut() {
-            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id));
-        }
+        self.send_local_event(&LocalEvent::ChainstateNewTip(block_id));
+
         Ok(())
     }
 
@@ -249,9 +287,7 @@ where
             Ok(()) => {
                 if origin.should_propagate() {
                     log::info!("Broadcasting transaction {tx_id} originating in {origin}");
-                    for peer in self.peers.values_mut() {
-                        let _ = peer.local_event_tx.send(LocalEvent::MempoolNewTx(tx_id));
-                    }
+                    self.send_local_event(&LocalEvent::MempoolNewTx(tx_id));
                 } else {
                     log::trace!("Not propagating transaction {tx_id} originating in {origin}");
                 }
@@ -283,8 +319,15 @@ where
                 peer_id,
                 common_services,
                 protocol_version,
-                sync_msg_rx,
-            } => self.register_peer(peer_id, common_services, protocol_version, sync_msg_rx),
+                block_sync_msg_rx,
+                txn_sync_msg_rx,
+            } => self.register_peer(
+                peer_id,
+                common_services,
+                protocol_version,
+                block_sync_msg_rx,
+                txn_sync_msg_rx,
+            ),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);

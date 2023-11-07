@@ -26,11 +26,22 @@ use serialization::{Decode, Encode};
 use crate::types::peer_address::PeerAddress;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SyncMessage {
+pub enum BlockSyncMessage {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
     HeaderList(HeaderList),
     BlockResponse(BlockResponse),
+
+    // A "sentinel" message for testing purposes that allows to ensure that all block sync messages
+    // that were sent into a channel have been processed by the receiver.
+    // When the sync manager receives it, it should simply send it "back" via MessagingService.
+    // TODO: it would be nice to refactor tests that depend on this, so that it can be removed.
+    #[cfg(test)]
+    TestSentinel(Id<()>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TxnSyncMessage {
     NewTransaction(Id<Transaction>),
     TransactionRequest(Id<Transaction>),
     TransactionResponse(TransactionResponse),

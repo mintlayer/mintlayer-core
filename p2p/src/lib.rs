@@ -167,7 +167,7 @@ where
             }
         });
 
-        let sync_manager = sync::BlockSyncManager::<T>::new(
+        let sync_manager = sync::SyncManager::<T>::new(
             chain_config,
             p2p_config,
             messaging_handle,

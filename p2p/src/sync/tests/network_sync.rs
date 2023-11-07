@@ -23,7 +23,7 @@ use test_utils::random::Seed;
 
 use crate::{
     config::P2pConfig,
-    message::SyncMessage,
+    message::BlockSyncMessage,
     protocol::ProtocolConfig,
     sync::tests::helpers::{
         make_new_block, make_new_blocks, make_new_top_blocks,
@@ -177,7 +177,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
         // Simulate a normal block sync process.
         // There should be no unexpected disconnects.
         while !nodes.all_in_sync(&top_block_id.into()).await {
-            nodes.exchange_sync_messages(&mut rng).await;
+            nodes.exchange_block_sync_messages(&mut rng).await;
             time_getter.advance_time(Duration::from_millis(10));
         }
 
@@ -347,9 +347,9 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         let mut delayed_msgs = Vec::new();
 
         nodes
-            .exchange_sync_messages_while(&mut delayed_msgs, |_, delayed_msgs, msg| {
+            .exchange_block_sync_messages_while(&mut delayed_msgs, |_, delayed_msgs, msg| {
                 if msg.sender_node_idx == 1 {
-                    if let SyncMessage::BlockListRequest(req) = &msg.message {
+                    if let BlockSyncMessage::BlockListRequest(req) = &msg.message {
                         assert_eq!(req.block_ids().len(), initial_block_count);
                         log::debug!(
                             "Got block list request from node idx {}, delaying it",
@@ -364,7 +364,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             })
             .await;
 
-        nodes.delay_sync_messages_from_node(1, true);
+        nodes.delay_block_sync_messages_from_node(1, true);
 
         let new_block_count =
             rng.gen_range(MAX_REQUEST_BLOCKS_COUNT..=MAX_REQUEST_BLOCKS_COUNT * 4);
@@ -379,11 +379,11 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         }
 
         log::debug!("Final best block is {}", best_block_id.unwrap());
-        nodes.exchange_sync_messages(&mut rng).await;
+        nodes.exchange_block_sync_messages(&mut rng).await;
 
         log::debug!("Sending delayed messages");
         nodes.send_sync_messages(delayed_msgs).await;
-        nodes.delay_sync_messages_from_node(1, false);
+        nodes.delay_block_sync_messages_from_node(1, false);
 
         log::debug!("Waiting until all is synced");
         nodes.sync_all(&best_block_id.unwrap().into(), &mut rng).await;

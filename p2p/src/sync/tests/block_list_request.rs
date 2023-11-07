@@ -28,7 +28,7 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    message::{BlockListRequest, BlockResponse, SyncMessage},
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage},
     sync::tests::helpers::{make_new_blocks, TestNode},
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -65,8 +65,10 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
         let blocks = iter::repeat(block.get_id())
             .take(*p2p_config.protocol_config.max_request_blocks_count + 1)
             .collect();
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(blocks)))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            blocks,
+        )))
+        .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -74,7 +76,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
             score,
             P2pError::ProtocolError(ProtocolError::BlocksRequestLimitExceeded(0, 0)).ban_score()
         );
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -110,7 +112,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
         let expected_score =
             P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(unknown_blocks[0]))
                 .ban_score();
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             unknown_blocks,
         )))
         .await;
@@ -118,7 +120,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(score, expected_score);
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -154,15 +156,17 @@ async fn valid_request(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let ids = blocks.iter().map(|b| b.get_id()).collect();
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(ids)))
-            .await;
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            ids,
+        )))
+        .await;
 
         for block in blocks {
-            let (sent_to, message) = node.get_sent_message().await;
+            let (sent_to, message) = node.get_sent_block_sync_message().await;
             assert_eq!(peer.get_id(), sent_to);
             assert_eq!(
                 message,
-                SyncMessage::BlockResponse(BlockResponse::new(block))
+                BlockSyncMessage::BlockResponse(BlockResponse::new(block))
             );
         }
 
@@ -204,25 +208,25 @@ async fn request_same_block_after_downloading(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
-            block.get_id(),
-        ])))
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            vec![block.get_id()],
+        )))
         .await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            SyncMessage::BlockResponse(BlockResponse::new(block.clone()))
+            BlockSyncMessage::BlockResponse(BlockResponse::new(block.clone()))
         );
 
         node.assert_no_error().await;
         node.assert_no_peer_manager_event().await;
 
         // Request the same block twice.
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
-            block.get_id(),
-        ])))
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            vec![block.get_id()],
+        )))
         .await;
 
         node.assert_peer_score_adjustment(
@@ -271,25 +275,25 @@ async fn request_same_block_while_downloading(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         log::debug!("Sending block list request to the node");
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             initial_block_headers.iter().map(|hdr| hdr.block_id()).collect(),
         )))
         .await;
 
         log::debug!("Expecting block response #0");
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(sent_to, peer.get_id());
         assert_eq!(
             message,
-            SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
+            BlockSyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
         );
 
         let duplicate_block_id = initial_blocks.last().unwrap().get_id();
 
         log::debug!("Sending duplicate block request");
-        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
-            duplicate_block_id,
-        ])))
+        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
+            vec![duplicate_block_id],
+        )))
         .await;
 
         node.assert_peer_score_adjustment(

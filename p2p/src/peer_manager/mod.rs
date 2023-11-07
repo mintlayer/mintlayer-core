@@ -1482,7 +1482,7 @@ where
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has this main responsibilities:
-    /// - listening to and handling control events from [`crate::sync::BlockSyncManager`]/RPC
+    /// - listening to and handling control events from [`crate::sync::SyncManager`]/RPC
     /// - listening to network events
     /// - updating internal state
     /// - sending and checking ping requests
