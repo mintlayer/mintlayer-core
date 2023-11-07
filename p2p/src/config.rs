@@ -33,7 +33,7 @@ make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
-make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
+make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(BlockRelayPeers, bool, true);
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
 

@@ -33,6 +33,7 @@ use std::{
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
+    time::Duration,
 };
 
 use tokio::{
@@ -315,6 +316,50 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<P2pInit<S>> {
+    match chain_config.chain_type() {
+        ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => {
+            // These are protocol-sensitive parameters and changing them has to be done with care.
+            // If the change has been sufficiently scrutinized and is deemed desirable, the values
+            // should be updated here as well.
+            //
+            // What to consider when changing these:
+            // * The `max_clock_diff` and `handshake_timeout` settings are related. The effective
+            //   max allowed difference between our clock and peer's clock is the sum of the two.
+            //   If one is changed, it should be considered how the other should be affected.
+            // * Peer may be stalled for the duration of up to `effective_max_clock_diff`.
+            //   This may interact with other timeouts.
+            //
+            // For more details, see `Peer::handshake` and `P2pConfig`.
+            assert_eq!(
+                *p2p_config.peer_handshake_timeout,
+                Duration::from_secs(10),
+                "Handshake timeout changed"
+            );
+            assert_eq!(
+                *p2p_config.max_clock_diff,
+                Duration::from_secs(10),
+                "Max clock diff changed"
+            );
+            assert!(
+                p2p_config.effective_max_clock_diff()
+                    < *chain_config.max_future_block_time_offset(),
+                "Effective max clock diff exceeds future block tolerance",
+            );
+        }
+        ChainType::Regtest => (),
+    }
+
+    // Peer block processing pauses when we get a block from the future. We also detect unresponsive
+    // peers by checking they reply within certain amount of time. In order to avoid spuriously
+    // blaming the peer for being unresponsive while we wait for blocks in the future to be
+    // acceptable to the consensus machinery, the responsiveness timeout has to be greater than
+    // the effective max clock diff (ideally by by some margin).
+    assert!(
+        p2p_config.effective_max_clock_diff()
+            <= *p2p_config.sync_stalling_timeout + Duration::from_secs(1),
+        "Stalling timeout must be greater than effective max clock diff"
+    );
+
     // Perform some early checks to prevent a failure in the run method.
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,
