@@ -27,7 +27,7 @@ use std::collections::HashMap;
 use futures::never::Never;
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
+    task::JoinSet,
 };
 
 use common::{
@@ -37,6 +37,7 @@ use common::{
 };
 use logging::log;
 use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
+use tracing::Instrument;
 use utils::{sync::Arc, tap_error_log::LogError};
 
 use crate::{
@@ -61,7 +62,7 @@ pub enum LocalEvent {
 }
 
 pub struct PeerContext {
-    tasks: Vec<JoinHandle<()>>,
+    tasks: JoinSet<()>,
     local_event_senders: Vec<UnboundedSender<LocalEvent>>,
 }
 
@@ -159,7 +160,7 @@ where
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
-        let mut peer_tasks = Vec::new();
+        let mut peer_tasks = JoinSet::new();
         let mut peer_local_event_senders = Vec::new();
 
         match protocol_version {
@@ -181,10 +182,13 @@ where
                     self.time_getter.clone(),
                 );
 
-                let task = logging::spawn_in_current_span(async move {
-                    mgr.run().await;
-                });
-                peer_tasks.push(task);
+                peer_tasks.spawn(
+                    async move {
+                        mgr.run().await;
+                    }
+                    .in_current_span(),
+                );
+
                 peer_local_event_senders.push(local_event_sender);
             }
 
@@ -203,10 +207,13 @@ where
                     self.time_getter.clone(),
                 );
 
-                let task = logging::spawn_in_current_span(async move {
-                    mgr.run().await;
-                });
-                peer_tasks.push(task);
+                peer_tasks.spawn(
+                    async move {
+                        mgr.run().await;
+                    }
+                    .in_current_span(),
+                );
+
                 peer_local_event_senders.push(local_event_sender);
 
                 let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
@@ -224,10 +231,13 @@ where
                     self.time_getter.clone(),
                 );
 
-                let task = logging::spawn_in_current_span(async move {
-                    mgr.run().await;
-                });
-                peer_tasks.push(task);
+                peer_tasks.spawn(
+                    async move {
+                        mgr.run().await;
+                    }
+                    .in_current_span(),
+                );
+
                 peer_local_event_senders.push(local_event_sender);
             }
         }
@@ -244,14 +254,12 @@ where
     /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer_id: PeerId) {
         log::debug!("Unregister peer {peer_id} from sync manager");
-        let peer = self
+        let mut peer = self
             .peers
             .remove(&peer_id)
             .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer_id}"));
-        // Call `abort` because the peer task may be sleeping for a long time in the `sync_clock` function
-        for task in peer.tasks {
-            task.abort();
-        }
+        // Call `abort` because the peer tasks may be sleeping for a long time in the `sync_clock` function
+        peer.tasks.abort_all();
     }
 
     fn send_local_event(&mut self, event: &LocalEvent) {
