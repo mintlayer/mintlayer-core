@@ -19,8 +19,7 @@
 mod chainstate_handle;
 mod peer_common;
 mod peer_v1;
-mod peer_v2_blocks;
-mod peer_v2_txn;
+mod peer_v2;
 mod types;
 
 use std::collections::HashMap;
@@ -191,7 +190,7 @@ where
 
             SupportedProtocolVersion::V2 => {
                 let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
-                let mut mgr = peer_v2_blocks::PeerBlockSyncManager::<T>::new(
+                let mut mgr = peer_v2::block_mgr::PeerBlockSyncManager::<T>::new(
                     peer_id,
                     common_services,
                     Arc::clone(&self.chain_config),
@@ -211,7 +210,7 @@ where
                 peer_local_event_txs.push(local_event_tx);
 
                 let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
-                let mut mgr = peer_v2_txn::PeerTxnSyncManager::<T>::new(
+                let mut mgr = peer_v2::txn_mgr::PeerTxnSyncManager::<T>::new(
                     peer_id,
                     common_services,
                     Arc::clone(&self.chain_config),

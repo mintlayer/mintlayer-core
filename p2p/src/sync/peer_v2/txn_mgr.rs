@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -36,14 +36,13 @@ use crate::{
         NetworkingService,
     },
     sync::{
+        chainstate_handle::ChainstateHandle,
         peer_common::{handle_message_processing_result, KnownTransactions},
         LocalEvent,
     },
     types::peer_id::PeerId,
     MessagingService, PeerManagerEvent, Result,
 };
-
-use super::chainstate_handle::ChainstateHandle;
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.

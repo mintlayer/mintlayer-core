@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -47,6 +47,7 @@ use crate::{
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
+        chainstate_handle::ChainstateHandle,
         peer_common::{choose_peers_best_block, handle_message_processing_result},
         types::PeerActivity,
         LocalEvent,
@@ -55,8 +56,6 @@ use crate::{
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
-
-use super::chainstate_handle::ChainstateHandle;
 
 // TODO: Take into account the chain work when syncing.
 /// Block syncing manager.
