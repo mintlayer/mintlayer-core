@@ -198,14 +198,9 @@ where
     }
     pm2.handle_connectivity_event(event.unwrap());
 
-    let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(
-        remote_addr,
-        OutboundConnectType::Manual {
-            response_sender: tx,
-        },
-    );
-    let res = rx.await.unwrap();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    pm2.connect(remote_addr, OutboundConnectType::Manual { response_sender });
+    let res = response_receiver.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
         _ => panic!("unexpected result: {res:?}"),
@@ -371,18 +366,18 @@ fn ban_and_disconnect() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle =
-        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_receiver);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
-        peer_rx,
+        peer_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -402,23 +397,23 @@ fn ban_and_disconnect() {
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
-    let (ban_tx, mut ban_rx) = oneshot_nofail::channel();
-    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_tx));
-    ban_rx.try_recv().unwrap().unwrap();
+    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
+    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_sender));
+    ban_receiver.try_recv().unwrap().unwrap();
 
     // Peer is disconnected by the peer manager
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Ok(Command::Disconnect { peer_id }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected command: {v:?}"),
     }

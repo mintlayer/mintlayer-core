@@ -147,15 +147,15 @@ macro_rules! expect_no_future_val {
 /// is reached.
 #[macro_export]
 macro_rules! expect_recv {
-    ($rx:expr) => {
-        $crate::expect_future_val!($rx.recv()).unwrap()
+    ($receiver:expr) => {
+        $crate::expect_future_val!($receiver.recv()).unwrap()
     };
 }
 
 /// Try receiving a message from the tokio channel; expect that a timeout is reached.
 #[macro_export]
 macro_rules! expect_no_recv {
-    ($rx:expr) => {
-        $crate::expect_no_future_val!($rx.recv())
+    ($receiver:expr) => {
+        $crate::expect_no_future_val!($receiver.recv())
     };
 }

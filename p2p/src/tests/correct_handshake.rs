@@ -56,7 +56,8 @@ where
     let transport = TTM::make_transport();
     let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
-    let connect_result_rx = test_node.start_connecting(listener.local_addresses().unwrap()[0]);
+    let connect_result_receiver =
+        test_node.start_connecting(listener.local_addresses().unwrap()[0]);
 
     let (stream, _) = listener.accept().await.unwrap();
 
@@ -79,7 +80,7 @@ where
         .await
         .unwrap();
 
-    let connect_result = connect_result_rx.await.unwrap();
+    let connect_result = connect_result_receiver.await.unwrap();
     assert!(connect_result.is_ok());
 
     // Check that the connection is still up and we can receive the next message (we don't care

@@ -23,16 +23,13 @@ use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::PeerId;
 use tokio::time;
 
-use crate::{
-    message::{SyncMessage, TransactionResponse},
-    PeerManagerEvent,
-};
+use crate::{message::BlockSyncMessage, PeerManagerEvent};
 
 use super::{get_random_hash, TestNode, TestPeer};
 
 struct NodeDataItem {
     node: TestNode,
-    delay_sync_messages_from: bool,
+    delay_block_sync_messages_from: bool,
     connected_peers: BTreeMap<PeerId, TestPeer>,
 }
 
@@ -51,7 +48,7 @@ impl TestNodeGroup {
             .into_iter()
             .map(|h| NodeDataItem {
                 node: h,
-                delay_sync_messages_from: false,
+                delay_block_sync_messages_from: false,
                 connected_peers: Default::default(),
             })
             .collect();
@@ -90,18 +87,18 @@ impl TestNodeGroup {
         &self.data[idx].node
     }
 
-    /// Receive a SyncMessage from any peer for which delay_sync_messages_from is set to false.
+    /// Receive a BlockSyncMessage from any peer for which delay_block_sync_messages_from is set to false.
     /// Panic if a timeout occurs.
-    async fn receive_next_sync_message(&mut self) -> SyncMessageWithNodeIdx {
+    async fn receive_next_block_sync_message(&mut self) -> BlockSyncMessageWithNodeIdx {
         let mut sync_msg_receivers: Vec<_> = self
             .data
             .iter_mut()
             .enumerate()
             .filter_map(|(idx, data_item)| {
-                if data_item.delay_sync_messages_from {
+                if data_item.delay_block_sync_messages_from {
                     None
                 } else {
-                    Some((idx, &mut data_item.node.sync_msg_receiver))
+                    Some((idx, &mut data_item.node.block_sync_msg_receiver))
                 }
             })
             .collect();
@@ -120,7 +117,7 @@ impl TestNodeGroup {
         let (receiver_peer_id, msg) = receiver_peer_id_msg.unwrap();
         let receiver_node_idx = self.node_idx_by_peer_id(receiver_peer_id);
 
-        SyncMessageWithNodeIdx {
+        BlockSyncMessageWithNodeIdx {
             message: msg,
             sender_node_idx,
             receiver_node_idx,
@@ -141,19 +138,19 @@ impl TestNodeGroup {
             .unwrap()
     }
 
-    /// Set the delay_sync_messages_from flag for the specified node; if the flag is true,
+    /// Set the delay_block_sync_messages_from flag for the specified node; if the flag is true,
     /// the sync-message-exchanging functions will not propagate messages from that node.
-    pub fn delay_sync_messages_from_node(&mut self, node_idx: usize, delay: bool) {
-        self.data[node_idx].delay_sync_messages_from = delay;
+    pub fn delay_block_sync_messages_from_node(&mut self, node_idx: usize, delay: bool) {
+        self.data[node_idx].delay_block_sync_messages_from = delay;
     }
 
     // This is only used to prevent infinite loops.
     const MSG_COUNT_LIMIT: usize = 1_000_000;
 
-    /// Exchange sync messages (waiting for them if needed) while the passed function
+    /// Exchange block sync messages (waiting for them if needed) while the passed function
     /// returns SendAndContinue.
     /// The "context" parameter can be anything, it will be forwarded to the function as is.
-    pub async fn exchange_sync_messages_while<F, Context>(
+    pub async fn exchange_block_sync_messages_while<F, Context>(
         &mut self,
         context: &mut Context,
         mut func: F,
@@ -161,7 +158,7 @@ impl TestNodeGroup {
         F: FnMut(
             /*this:*/ &mut TestNodeGroup,
             /*context:*/ &mut Context,
-            /*msg:*/ &SyncMessageWithNodeIdx,
+            /*msg:*/ &BlockSyncMessageWithNodeIdx,
         ) -> MsgAction,
     {
         let mut msg_count: usize = 0;
@@ -169,7 +166,7 @@ impl TestNodeGroup {
         loop {
             self.assert_no_peer_manager_events_if_needed();
 
-            let msg = self.receive_next_sync_message().await;
+            let msg = self.receive_next_block_sync_message().await;
 
             let msg_action = func(self, context, &msg);
             if msg_action == MsgAction::Break {
@@ -191,20 +188,18 @@ impl TestNodeGroup {
         }
     }
 
-    /// Perform "1 round" of exchanging sync messages - exchange only the ones that are already
+    /// Perform "1 round" of exchanging block sync messages - exchange only the ones that are already
     /// in-flight or those that will be in-flight shortly, but don't wait for new messages.
-    pub async fn exchange_sync_messages(&mut self, rng: &mut impl Rng) {
-        // Use a non-existent transaction request as a sentinel to separate the already "in-flight"
-        // messages from those that may appear in the process.
-        let sentinel_tx_id = get_random_hash(rng).into();
-        let sentinel_msg = SyncMessage::TransactionRequest(sentinel_tx_id);
+    pub async fn exchange_block_sync_messages(&mut self, rng: &mut impl Rng) {
+        let sentinel_id = get_random_hash(rng).into();
+        let sentinel_msg = BlockSyncMessage::TestSentinel(sentinel_id);
 
-        log::trace!("Using transaction {sentinel_tx_id} as a sentinel");
+        log::trace!("Using sentinel message with id {sentinel_id}");
 
         let mut msg_count = 0;
 
         for i in 0..self.data.len() {
-            if self.data[i].delay_sync_messages_from {
+            if self.data[i].delay_block_sync_messages_from {
                 continue;
             }
 
@@ -212,7 +207,7 @@ impl TestNodeGroup {
 
             {
                 // Send the sentinel
-                log::trace!("Sending sentinel transaction {sentinel_tx_id} to peer {cur_peer_id}");
+                log::trace!("Sending sentinel message with id {sentinel_id} to peer {cur_peer_id}");
 
                 let tx_sender_peer_id = self
                     .data
@@ -227,7 +222,7 @@ impl TestNodeGroup {
                     .unwrap();
 
                 self.data[i].connected_peers[&tx_sender_peer_id]
-                    .send_message(sentinel_msg.clone())
+                    .send_block_sync_message(sentinel_msg.clone())
                     .await;
             }
 
@@ -235,21 +230,21 @@ impl TestNodeGroup {
                 self.assert_no_peer_manager_events_if_needed();
 
                 let (dest_peer_id, sync_msg) =
-                    self.data[i].node.sync_msg_receiver.recv().await.unwrap();
+                    self.data[i].node.block_sync_msg_receiver.recv().await.unwrap();
 
                 // Send sync messages between peers
                 match &sync_msg {
-                    SyncMessage::TransactionResponse(TransactionResponse::NotFound(tx_id))
-                        if *tx_id == sentinel_tx_id =>
-                    {
-                        log::trace!("Sentinel transaction {tx_id} received by peer {cur_peer_id}");
+                    BlockSyncMessage::TestSentinel(id) if *id == sentinel_id => {
+                        log::trace!(
+                            "Sentinel message with id {sentinel_id} received by peer {cur_peer_id}"
+                        );
                         break;
                     }
                     message => {
                         let dest_peer_idx = self.node_idx_by_peer_id(dest_peer_id);
                         let event_sender =
                             self.data[dest_peer_idx].connected_peers.get(&cur_peer_id).unwrap();
-                        event_sender.send_message(message.clone()).await;
+                        event_sender.send_block_sync_message(message.clone()).await;
                     }
                 }
 
@@ -265,25 +260,25 @@ impl TestNodeGroup {
     pub async fn sync_all(&mut self, required_best_block_id: &Id<GenBlock>, rng: &mut impl Rng) {
         let helper = async move {
             while !self.all_in_sync(required_best_block_id).await {
-                self.exchange_sync_messages(rng).await;
+                self.exchange_block_sync_messages(rng).await;
             }
         };
 
         tokio::time::timeout(LONG_TIMEOUT, helper).await.unwrap();
     }
 
-    pub async fn send_sync_message(&mut self, msg: SyncMessageWithNodeIdx) {
+    pub async fn send_sync_message(&mut self, msg: BlockSyncMessageWithNodeIdx) {
         let receiver_handle = &self.data[msg.receiver_node_idx];
         let sender_handle = &self.data[msg.sender_node_idx].node;
         let receiving_peer_msg_sender =
             receiver_handle.connected_peers.get(&sender_handle.peer_id).unwrap();
 
-        receiving_peer_msg_sender.send_message(msg.message).await;
+        receiving_peer_msg_sender.send_block_sync_message(msg.message).await;
     }
 
     pub async fn send_sync_messages<Msg>(&mut self, msg: Msg)
     where
-        Msg: IntoIterator<Item = SyncMessageWithNodeIdx>,
+        Msg: IntoIterator<Item = BlockSyncMessageWithNodeIdx>,
     {
         for msg in msg.into_iter() {
             self.send_sync_message(msg).await;
@@ -343,8 +338,8 @@ impl TestNodeGroup {
 }
 
 #[derive(Clone, Debug)]
-pub struct SyncMessageWithNodeIdx {
-    pub message: SyncMessage,
+pub struct BlockSyncMessageWithNodeIdx {
+    pub message: BlockSyncMessage,
     pub sender_node_idx: usize,
     pub receiver_node_idx: usize,
 }

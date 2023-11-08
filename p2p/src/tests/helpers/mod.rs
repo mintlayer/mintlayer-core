@@ -63,16 +63,18 @@ pub enum PeerManagerNotification {
 }
 
 pub struct PeerManagerObserver {
-    event_tx: UnboundedSender<PeerManagerNotification>,
+    notification_sender: UnboundedSender<PeerManagerNotification>,
 }
 
 impl PeerManagerObserver {
-    pub fn new(event_tx: UnboundedSender<PeerManagerNotification>) -> Self {
-        Self { event_tx }
+    pub fn new(notification_sender: UnboundedSender<PeerManagerNotification>) -> Self {
+        Self {
+            notification_sender,
+        }
     }
 
     fn send_notification(&self, notification: PeerManagerNotification) {
-        let send_result = self.event_tx.send(notification.clone());
+        let send_result = self.notification_sender.send(notification.clone());
 
         if let Err(err) = send_result {
             log::warn!("Error sending peer manager notification {notification:?}: {err}");

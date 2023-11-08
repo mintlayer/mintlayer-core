@@ -23,7 +23,7 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    message::{BlockListRequest, HeaderList, SyncMessage},
+    message::{BlockListRequest, BlockSyncMessage, HeaderList},
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -58,7 +58,8 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         let headers = iter::repeat(block.header().clone())
             .take(*p2p_config.protocol_config.msg_header_count_limit + 1)
             .collect();
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -66,7 +67,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
             score,
             P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
         );
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -102,7 +103,8 @@ async fn unordered_headers(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -110,7 +112,7 @@ async fn unordered_headers(#[case] seed: Seed) {
             score,
             P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
         );
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -144,7 +146,8 @@ async fn disconnected_headers(#[case] seed: Seed) {
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
@@ -152,7 +155,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
             score,
             P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
         );
-        node.assert_no_event().await;
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })
@@ -183,13 +186,14 @@ async fn valid_headers(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = blocks.iter().map(|b| b.header().clone()).collect();
-        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
 
-        let (sent_to, message) = node.get_sent_message().await;
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            SyncMessage::BlockListRequest(BlockListRequest::new(
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(
                 blocks.into_iter().map(|b| b.get_id()).collect()
             ))
         );

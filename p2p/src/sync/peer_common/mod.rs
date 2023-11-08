@@ -38,7 +38,7 @@ pub use known_transactions::KnownTransactions;
 ///   "ban score" value of the given error.
 /// - Ignored errors aren't propagated and don't affect the peer score.
 pub async fn handle_message_processing_result(
-    peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: &UnboundedSender<PeerManagerEvent>,
     peer_id: PeerId,
     result: Result<()>,
 ) -> Result<()> {
@@ -71,7 +71,7 @@ pub async fn handle_message_processing_result(
                 );
 
                 let (sender, receiver) = oneshot_nofail::channel();
-                peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
+                peer_mgr_event_sender.send(PeerManagerEvent::AdjustPeerScore(
                     peer_id, ban_score, sender,
                 ))?;
                 receiver.await?.or_else(|e| match e {

@@ -54,7 +54,7 @@ where
     let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
     let address = listener.local_addresses().unwrap()[0];
-    let connect_result_rx = test_node.start_connecting(address);
+    let connect_result_receiver = test_node.start_connecting(address);
 
     let (stream, _) = listener.accept().await.unwrap();
 
@@ -79,7 +79,7 @@ where
         .unwrap();
 
     // connect_result should indicate a failed connection
-    let connect_result = connect_result_rx.await.unwrap();
+    let connect_result = connect_result_receiver.await.unwrap();
     assert!(connect_result.is_err());
 
     // The connection should be closed.
@@ -200,7 +200,7 @@ where
     let mut listener1 = transport1.bind(vec![TTM::make_address()]).await.unwrap();
 
     let address1 = listener1.local_addresses().unwrap()[0];
-    let connect_result_rx1 = test_node.start_connecting(address1);
+    let connect_result_receiver1 = test_node.start_connecting(address1);
 
     let (stream1, _) = listener1.accept().await.unwrap();
     let mut msg_stream1 =
@@ -210,7 +210,7 @@ where
     let mut listener2 = transport2.bind(vec![TTM::make_address()]).await.unwrap();
 
     let address2 = listener2.local_addresses().unwrap()[0];
-    let connect_result_rx2 = test_node.start_connecting(address2);
+    let connect_result_receiver2 = test_node.start_connecting(address2);
 
     let (stream2, _) = listener2.accept().await.unwrap();
     let mut msg_stream2 =
@@ -248,14 +248,14 @@ where
         .unwrap();
 
     // connect_result2 should indicate a failed connection
-    let connect_result2 = connect_result_rx2.await.unwrap();
+    let connect_result2 = connect_result_receiver2.await.unwrap();
     assert!(connect_result2.is_err());
 
     // The connection should be closed.
     msg_stream2.recv().await.unwrap_err();
 
     // But connect_result1 should still be fine.
-    let connect_result1 = connect_result_rx1.await.unwrap();
+    let connect_result1 = connect_result_receiver1.await.unwrap();
     assert!(connect_result1.is_ok());
     let _msg = msg_stream1.recv().await.unwrap();
 

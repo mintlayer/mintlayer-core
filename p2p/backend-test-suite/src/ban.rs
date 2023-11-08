@@ -25,12 +25,12 @@ use common::{
 };
 use p2p::{
     error::P2pError,
-    message::{HeaderList, SyncMessage},
+    message::{BlockSyncMessage, HeaderList},
     net::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
     },
-    sync::BlockSyncManager,
+    sync::SyncManager,
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
     PeerManagerEvent,
 };
@@ -51,7 +51,7 @@ where
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
 {
-    let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, mut peer_mgr_event_receiver) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
@@ -75,14 +75,14 @@ where
     .await
     .unwrap();
 
-    let sync1 = BlockSyncManager::<N>::new(
+    let sync1 = SyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         messaging_handle,
         sync_event_receiver,
         chainstate,
         mempool,
-        tx_peer_manager,
+        peer_mgr_event_sender,
         time_getter.clone(),
     );
 
@@ -118,31 +118,35 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     logging::spawn_in_current_span(async move {
-        let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
+        let (peer, mut block_sync_msg_receiver) = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,
                 common_services: _,
                 protocol_version: _,
-                sync_msg_rx,
-            } => (peer_id, sync_msg_rx),
+                block_sync_msg_receiver,
+                transaction_sync_msg_receiver: _,
+            } => (peer_id, block_sync_msg_receiver),
             e => panic!("Unexpected event type: {e:?}"),
         };
-        match sync_msg_rx.recv().await.unwrap() {
-            SyncMessage::HeaderListRequest(_) => {}
+        match block_sync_msg_receiver.recv().await.unwrap() {
+            BlockSyncMessage::HeaderListRequest(_) => {}
             e => panic!("Unexpected event type: {e:?}"),
         };
         messaging_handle_2
-            .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
+            .send_block_sync_message(
+                peer,
+                BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())),
+            )
             .unwrap();
         messaging_handle_2
-            .send_message(
+            .send_block_sync_message(
                 peer,
-                SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+                BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
             )
             .unwrap();
     });
 
-    match rx_peer_manager.recv().await {
+    match peer_mgr_event_receiver.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
             assert_eq!(peer_id, peer_info2.peer_id);
             assert_eq!(

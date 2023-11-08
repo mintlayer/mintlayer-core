@@ -24,7 +24,7 @@ use common::{
 };
 use p2p::{
     config::{NodeType, P2pConfig},
-    message::{HeaderList, SyncMessage},
+    message::{BlockSyncMessage, HeaderList},
     net::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
@@ -90,25 +90,26 @@ where
     )
     .unwrap();
     messaging_handle1
-        .send_message(
+        .send_block_sync_message(
             peer2.peer_id,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+            BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
         .unwrap();
 
-    let mut sync_msg_rx_2 = match sync2.poll_next().await.unwrap() {
+    let mut sync_msg_receiver_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
             protocol_version: _,
-            sync_msg_rx,
-        } => sync_msg_rx,
+            block_sync_msg_receiver,
+            transaction_sync_msg_receiver: _,
+        } => block_sync_msg_receiver,
         event => panic!("Unexpected event: {event:?}"),
     };
 
     // Poll an event from the network for server2.
-    let header = match sync_msg_rx_2.recv().await.unwrap() {
-        SyncMessage::HeaderList(l) => {
+    let header = match sync_msg_receiver_2.recv().await.unwrap() {
+        BlockSyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()
         }
@@ -126,24 +127,25 @@ where
     )
     .unwrap();
     messaging_handle2
-        .send_message(
+        .send_block_sync_message(
             peer1.peer_id,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+            BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
         .unwrap();
 
-    let mut sync_msg_rx_1 = match sync1.poll_next().await.unwrap() {
+    let mut sync_msg_receiver_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
             protocol_version: _,
-            sync_msg_rx,
-        } => sync_msg_rx,
+            block_sync_msg_receiver,
+            transaction_sync_msg_receiver: _,
+        } => block_sync_msg_receiver,
         event => panic!("Unexpected event: {event:?}"),
     };
 
-    let header = match sync_msg_rx_1.recv().await.unwrap() {
-        SyncMessage::HeaderList(l) => {
+    let header = match sync_msg_receiver_1.recv().await.unwrap() {
+        BlockSyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()
         }
@@ -232,9 +234,9 @@ where
     )
     .unwrap();
     messaging_handle1
-        .send_message(
+        .send_block_sync_message(
             peer2.peer_id,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+            BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
         .unwrap();
 

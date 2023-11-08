@@ -27,8 +27,8 @@ use crate::{
     error::P2pError,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
-        HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
-        TransactionResponse,
+        BlockSyncMessage, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
+        PingResponse, TransactionResponse, TransactionSyncMessage,
     },
     net::types::services::Services,
     protocol::{ProtocolVersion, SupportedProtocolVersion},
@@ -112,7 +112,10 @@ pub enum PeerEvent {
 /// Events sent by Backend to Peer
 #[derive(Debug)]
 pub enum BackendEvent {
-    Accepted { sync_msg_tx: Sender<SyncMessage> },
+    Accepted {
+        block_sync_msg_sender: Sender<BlockSyncMessage>,
+        transaction_sync_msg_sender: Sender<TransactionSyncMessage>,
+    },
     SendMessage(Box<Message>),
 }
 
@@ -180,6 +183,11 @@ pub enum Message {
     AddrListRequest(AddrListRequest),
     #[codec(index = 10)]
     AddrListResponse(AddrListResponse),
+
+    // A message that corresponds to BlockSyncMessage::TestSentinel.
+    #[cfg(test)]
+    #[codec(index = 255)]
+    TestBlockSyncMsgSentinel(Id<()>),
 }
 
 impl From<PeerManagerMessage> for Message {
@@ -194,27 +202,37 @@ impl From<PeerManagerMessage> for Message {
     }
 }
 
-impl From<SyncMessage> for Message {
-    fn from(message: SyncMessage) -> Self {
+impl From<BlockSyncMessage> for Message {
+    fn from(message: BlockSyncMessage) -> Self {
         match message {
-            SyncMessage::HeaderListRequest(r) => Message::HeaderListRequest(r),
-            SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
-            SyncMessage::HeaderList(r) => Message::HeaderList(r),
-            SyncMessage::BlockResponse(r) => Message::BlockResponse(r),
-            SyncMessage::NewTransaction(id) => Message::NewTransaction(id),
-            SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
-            SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
+            BlockSyncMessage::HeaderListRequest(r) => Message::HeaderListRequest(r),
+            BlockSyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
+            BlockSyncMessage::HeaderList(r) => Message::HeaderList(r),
+            BlockSyncMessage::BlockResponse(r) => Message::BlockResponse(r),
+            #[cfg(test)]
+            BlockSyncMessage::TestSentinel(id) => Message::TestBlockSyncMsgSentinel(id),
+        }
+    }
+}
+
+impl From<TransactionSyncMessage> for Message {
+    fn from(message: TransactionSyncMessage) -> Self {
+        match message {
+            TransactionSyncMessage::NewTransaction(id) => Message::NewTransaction(id),
+            TransactionSyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
+            TransactionSyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
         }
     }
 }
 
 /// The main purpose of this message type is to simplify conversion from `Message`
-/// to `HandshakeMessage`/`PeerManagerMessage`/`SyncMessage`.
+/// to `HandshakeMessage`/`PeerManagerMessage`/`XxxSyncMessage`.
 #[derive(Debug)]
 pub enum CategorizedMessage {
     Handshake(HandshakeMessage),
     PeerManagerMessage(PeerManagerMessage),
-    SyncMessage(SyncMessage),
+    BlockSyncMessage(BlockSyncMessage),
+    TransactionSyncMessage(TransactionSyncMessage),
 }
 
 impl Message {
@@ -238,27 +256,32 @@ impl Message {
                 CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListResponse(msg))
             }
 
-            Message::NewTransaction(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::NewTransaction(msg))
-            }
             Message::HeaderListRequest(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::HeaderListRequest(msg))
+                CategorizedMessage::BlockSyncMessage(BlockSyncMessage::HeaderListRequest(msg))
             }
             Message::HeaderList(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::HeaderList(msg))
+                CategorizedMessage::BlockSyncMessage(BlockSyncMessage::HeaderList(msg))
             }
             Message::BlockListRequest(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::BlockListRequest(msg))
+                CategorizedMessage::BlockSyncMessage(BlockSyncMessage::BlockListRequest(msg))
             }
             Message::BlockResponse(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::BlockResponse(msg))
+                CategorizedMessage::BlockSyncMessage(BlockSyncMessage::BlockResponse(msg))
             }
-            Message::TransactionRequest(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::TransactionRequest(msg))
+            #[cfg(test)]
+            Message::TestBlockSyncMsgSentinel(id) => {
+                CategorizedMessage::BlockSyncMessage(BlockSyncMessage::TestSentinel(id))
             }
-            Message::TransactionResponse(msg) => {
-                CategorizedMessage::SyncMessage(SyncMessage::TransactionResponse(msg))
-            }
+
+            Message::NewTransaction(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::NewTransaction(msg),
+            ),
+            Message::TransactionRequest(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::TransactionRequest(msg),
+            ),
+            Message::TransactionResponse(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::TransactionResponse(msg),
+            ),
         }
     }
 }

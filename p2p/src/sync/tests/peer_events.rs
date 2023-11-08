@@ -22,7 +22,7 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
-    message::{HeaderList, SyncMessage},
+    message::{BlockSyncMessage, HeaderList},
     protocol::ProtocolVersion,
     protocol::SupportedProtocolVersion,
     sync::tests::helpers::TestNode,
@@ -143,8 +143,8 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         // Peer sends us a header list but we already know the containing block.
-        let msg = SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
-        peer.send_message(msg).await;
+        let msg = BlockSyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
+        peer.send_block_sync_message(msg).await;
 
         // Advance time across the timeout boundary. This would trigger a disconnect in a scenario
         // where we expect additional data from the peer. However, in this case we don't expect

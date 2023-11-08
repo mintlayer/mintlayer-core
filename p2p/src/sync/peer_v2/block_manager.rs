@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -28,32 +28,27 @@ use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSou
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
-        Block, ChainConfig, GenBlock, Transaction,
+        Block, ChainConfig, GenBlock,
     },
     primitives::{time::Time, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::MempoolHandle;
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::{
-        BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
-        TransactionResponse,
-    },
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     net::{
         types::services::{Service, Services},
         NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
-        peer_common::{
-            choose_peers_best_block, handle_message_processing_result, KnownTransactions,
-        },
+        chainstate_handle::ChainstateHandle,
+        peer_common::{choose_peers_best_block, handle_message_processing_result},
         types::PeerActivity,
         LocalEvent,
     },
@@ -62,33 +57,25 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::chainstate_handle::ChainstateHandle;
-
 // TODO: Take into account the chain work when syncing.
-/// A peer context.
+/// Block syncing manager.
 ///
 /// Syncing logic runs in a separate task for each peer.
-pub struct Peer<T: NetworkingService> {
+pub struct PeerBlockSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
-    mempool_handle: MempoolHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_msg_rx: Receiver<SyncMessage>,
-    local_event_rx: UnboundedReceiver<LocalEvent>,
+    sync_msg_receiver: Receiver<BlockSyncMessage>,
+    local_event_receiver: UnboundedReceiver<LocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
     /// Outgoing data state.
     outgoing: OutgoingDataState,
-    /// A rolling filter of all known transactions (sent to us or sent by us)
-    known_transactions: KnownTransactions,
-    /// A list of transactions that have been announced by this peer. An entry is added when the
-    /// identifier is announced and removed when the actual transaction or not found response is received.
-    announced_transactions: BTreeSet<Id<Transaction>>,
     /// Current activity with the peer.
     peer_activity: PeerActivity,
     /// If this is set, it means that we've sent a HeaderList to the peer with the number
@@ -120,7 +107,7 @@ struct OutgoingDataState {
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
-impl<T> Peer<T>
+impl<T> PeerBlockSyncManager<T>
 where
     T: NetworkingService,
     T::MessagingHandle: MessagingService,
@@ -132,26 +119,22 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
-        mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_msg_rx: Receiver<SyncMessage>,
+        peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
+        sync_msg_receiver: Receiver<BlockSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_rx: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
-        let known_transactions = KnownTransactions::new();
-
         Self {
             id: id.into(),
             chain_config,
             p2p_config,
             common_services,
             chainstate_handle,
-            mempool_handle,
-            peer_manager_sender,
+            peer_mgr_event_sender,
             messaging_handle,
-            sync_msg_rx,
-            local_event_rx,
+            sync_msg_receiver,
+            local_event_receiver,
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
@@ -163,8 +146,6 @@ where
                 best_sent_block: None,
                 best_sent_block_header: None,
             },
-            known_transactions,
-            announced_transactions: BTreeSet::new(),
             peer_activity: PeerActivity::new(),
             have_sent_all_headers: false,
         }
@@ -197,7 +178,7 @@ where
 
         loop {
             tokio::select! {
-                message = self.sync_msg_rx.recv() => {
+                message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
@@ -208,7 +189,7 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                event = self.local_event_rx.recv() => {
+                event = self.local_event_receiver.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_local_event(event).await?;
                 }
@@ -221,15 +202,15 @@ where
         }
     }
 
-    fn send_message(&mut self, message: SyncMessage) -> Result<()> {
-        self.messaging_handle.send_message(self.id(), message)
+    fn send_message(&mut self, message: BlockSyncMessage) -> Result<()> {
+        self.messaging_handle.send_block_sync_message(self.id(), message)
     }
 
     fn send_headers(&mut self, headers: HeaderList) -> Result<()> {
         if let Some(last_header) = headers.headers().last() {
             self.outgoing.best_sent_block_header = Some(last_header.block_id().into());
         }
-        self.send_message(SyncMessage::HeaderList(headers))
+        self.send_message(BlockSyncMessage::HeaderList(headers))
     }
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
@@ -331,16 +312,7 @@ where
 
         match event {
             LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
-            LocalEvent::MempoolNewTx(txid) => {
-                if !self.known_transactions.contains(&txid)
-                    && self.common_services.has_service(Service::Transactions)
-                {
-                    self.add_known_transaction(txid);
-                    self.send_message(SyncMessage::NewTransaction(txid))
-                } else {
-                    Ok(())
-                }
-            }
+            LocalEvent::MempoolNewTx(_) => Ok(()),
         }
     }
 
@@ -356,7 +328,7 @@ where
         }
 
         log::debug!("[peer id = {}] Sending header list request", self.id());
-        self.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        self.send_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             locator,
         )))?;
 
@@ -366,22 +338,28 @@ where
         Ok(())
     }
 
-    async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
+    async fn handle_message(&mut self, message: BlockSyncMessage) -> Result<()> {
         log::trace!(
-            "[peer id = {}] Handling message from the peer: {message:?}",
+            "[peer id = {}] Handling block sync message from the peer: {message:?}",
             self.id()
         );
 
         let res = match message {
-            SyncMessage::HeaderListRequest(r) => self.handle_header_request(r.into_locator()).await,
-            SyncMessage::BlockListRequest(r) => self.handle_block_request(r.into_block_ids()).await,
-            SyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
-            SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
-            SyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
-            SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
-            SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
+            BlockSyncMessage::HeaderListRequest(r) => {
+                self.handle_header_request(r.into_locator()).await
+            }
+            BlockSyncMessage::BlockListRequest(r) => {
+                self.handle_block_request(r.into_block_ids()).await
+            }
+            BlockSyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
+            BlockSyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
+
+            #[cfg(test)]
+            BlockSyncMessage::TestSentinel(id) => {
+                self.send_message(BlockSyncMessage::TestSentinel(id))
+            }
         };
-        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -768,7 +746,7 @@ where
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
-            self.peer_manager_sender.send(PeerManagerEvent::NewTipReceived {
+            self.peer_mgr_event_sender.send(PeerManagerEvent::NewTipReceived {
                 peer_id: self.id(),
                 block_id,
             })?;
@@ -804,165 +782,6 @@ where
         Ok(())
     }
 
-    async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
-        // TODO: should we handle a request if we haven't actually announced the tx?
-        // Currently we do.
-        // Note that in bitcoin-core they don't answer requests for txs that didn't exist
-        // in mempool before the last INV and which are not in the most recent block
-        // (see PeerManagerImpl::FindTxForGetData), but they don't punish peers for such
-        // requests either.
-
-        if !self.common_services.has_service(Service::Transactions) {
-            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "A transaction request is received, but this node doesn't have the corresponding service".to_owned(),
-            )));
-        }
-
-        let tx = self.mempool_handle.call(move |m| m.transaction(&id)).await?;
-        let res = match tx {
-            Some(tx) => TransactionResponse::Found(tx),
-            None => TransactionResponse::NotFound(id),
-        };
-
-        self.send_message(SyncMessage::TransactionResponse(res))?;
-
-        Ok(())
-    }
-
-    async fn handle_transaction_response(&mut self, resp: TransactionResponse) -> Result<()> {
-        let (id, tx) = match resp {
-            TransactionResponse::NotFound(id) => (id, None),
-            TransactionResponse::Found(tx) => (tx.transaction().get_id(), Some(tx)),
-        };
-
-        if self.announced_transactions.take(&id).is_none() {
-            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "Unexpected transaction response".to_owned(),
-            )));
-        }
-
-        if let Some(transaction) = tx {
-            let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
-            let txid = transaction.transaction().get_id();
-            let tx_status = self
-                .mempool_handle
-                .call_mut(move |m| m.add_transaction_remote(transaction, origin))
-                .await??;
-            match tx_status {
-                mempool::TxStatus::InMempool => {
-                    self.peer_manager_sender.send(
-                        PeerManagerEvent::NewValidTransactionReceived {
-                            peer_id: self.id(),
-                            txid,
-                        },
-                    )?;
-                }
-                mempool::TxStatus::InOrphanPool => {}
-            }
-        }
-
-        Ok(())
-    }
-
-    fn add_known_transaction(&mut self, txid: Id<Transaction>) {
-        self.known_transactions.insert(&txid);
-    }
-
-    // TODO: This can be optimized, e.g. by implementing something similar to bitcoin's
-    // TxRequestTracker, see https://github.com/mintlayer/mintlayer-core/issues/829
-    // for details.
-    async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
-        log::debug!(
-            "[peer id = {}] Handling transaction announcement: {tx}",
-            self.id()
-        );
-
-        self.add_known_transaction(tx);
-
-        if self.chainstate_handle.is_initial_block_download().await? {
-            log::debug!(
-                "[peer id = {}] Ignoring transaction announcement because the node is in initial block download", self.id()
-            );
-            return Ok(());
-        }
-
-        if !self.common_services.has_service(Service::Transactions) {
-            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "A transaction announcement is received, but this node doesn't have the corresponding service".to_owned(),
-            )));
-        }
-
-        if self.announced_transactions.len()
-            >= *self.p2p_config.protocol_config.max_peer_tx_announcements
-        {
-            // Note:
-            // 1. We don't punish peers for exceeding the limit. If we did, we'd have to also
-            // take the limit into account when announcing transactions. Otherwise, it'd be
-            // possible for a group of malicious peers to make honest peers ban us: they could
-            // send us (max-1) transactions each, which we'd relay to honest peers. If the total
-            // number of transactions is large, so that honest peers are not able to get
-            // transaction responses fast enough, we'd exceed the limit and they'd ban us.
-            //
-            // 2. "announced_transactions" grows when a transaction request is made by the node
-            // (so it's more like "requested_transactions") and shrinks when the peer replies.
-            // So by not punishing peers here we basically allow them to ignore transaction
-            // requests and for each ignored request "announced_transactions"'s size will
-            // be increased by 1 forever (i.e. until the peer disconnects). Though this is not
-            // nice, it's not a serious issue either, because "announced_transactions" will stop
-            // growing after it reaches "max_peer_tx_announcements" elements (which is 5000 at the
-            // moment), after which all further tx announcements from the peer will be ignored.
-            // So the worst thing an attacker can do is eat up 5000*size_of(tx_id) bytes of memory
-            // on the node per peer, which is insignificant.
-            //
-            // TODO: the "announced_transactions" mechanism needs a revamp. But we also have a TODO
-            // above about introducing something similar to bitcoin's TxRequestTracker to optimize
-            // bandwidth. This can replace "announced_transactions" as well.
-            //
-            // In any case, there are some questions that must be answered before starting
-            // the revamp:
-            // 1. Do we actually need a separate message for transaction announcement, why not send
-            // it right away? (in which case TransactionResponse should probably become just
-            // Transaction).
-            // 2. Should we punish peers for sending unsolicited TransactionResponse's? (if not,
-            // then again, it should probably become just Transaction).
-            // Note that bitcoin-core does use separate messages: INV is used for announcements,
-            // GETDATA for requests and TX for responses, but peers are not punished for
-            // unsolicited TX messages.
-            // (note that using something similar to INV, where multiple tx announcements are sent
-            // at once, should be good for privacy, especially if there is an ability to delay
-            // sending a particular tx announcement until some future INV)
-            // 3. How the max_peer_tx_announcements limit has to be handled? Bitcoin-core has
-            // a similar constant MAX_PEER_TX_ANNOUNCEMENTS; if it's reached, the further
-            // announcements are ignored, but only if the peer doesn't have the "Relay" permission,
-            // in which case any number of announcements seems to be allowed. But they also have
-            // the ability to delay the relaying if there are too many transactions in-flight from
-            // that peer (see PeerManagerImpl::AddTxAnnouncement).
-            // 4. Should we punish peers for duplicated transaction announcements?
-            // Bitcoin-core doesn't do that, but it also avoids requesting the same transaction
-            // twice from the same peer, see the large comment in txrequest.h ("The same transaction
-            // is never requested twice ..."). The stated reason for that is to make "transaction
-            // censoring attacks" harder to perform, but it's not clear whether it's relevant for us
-            // as well.
-            //
-            // To summarize, we should decide what the real purpose of this mechanism should be
-            // in our case, and then revamp it accordingly.
-            return Ok(());
-        }
-
-        if self.announced_transactions.contains(&tx) {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::DuplicatedTransactionAnnouncement(tx),
-            ));
-        }
-
-        if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.send_message(SyncMessage::TransactionRequest(tx))?;
-            assert!(self.announced_transactions.insert(tx));
-        }
-
-        Ok(())
-    }
-
     /// Sends a block list request.
     ///
     /// The number of blocks requested equals `P2pConfig::requested_blocks_limit`, the remaining
@@ -985,7 +804,7 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-        self.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        self.send_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             block_ids.clone(),
         )))?;
         // Even in the hypothetical situation where the "debug_assert!(requested_blocks.is_empty())"
@@ -1034,7 +853,7 @@ where
             self.id(),
             block.get_id()
         );
-        self.send_message(SyncMessage::BlockResponse(BlockResponse::new(block)))
+        self.send_message(BlockSyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
     async fn disconnect_if_stalling(&mut self) -> Result<()> {
@@ -1056,7 +875,7 @@ where
         let (sender, receiver) = oneshot_nofail::channel();
         log::warn!("[peer id = {}] Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
             self.id(), headers_req_stalling, blocks_req_stalling);
-        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
+        self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
             sender,

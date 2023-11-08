@@ -29,7 +29,7 @@ use p2p_types::{services::Services, socket_address::SocketAddress};
 
 use crate::{
     error::P2pError,
-    message::{PeerManagerMessage, SyncMessage},
+    message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     net::{
         self,
         types::{ConnectivityEvent, SyncingEvent},
@@ -46,10 +46,10 @@ pub struct ConnectivityHandle<S: NetworkingService> {
     local_addresses: Vec<SocketAddress>,
 
     /// Channel sender for sending commands to Backend
-    cmd_tx: mpsc::UnboundedSender<types::Command>,
+    cmd_sender: mpsc::UnboundedSender<types::Command>,
 
     /// Channel receiver for receiving connectivity events from Backend
-    conn_event_rx: mpsc::UnboundedReceiver<ConnectivityEvent>,
+    conn_event_receiver: mpsc::UnboundedReceiver<ConnectivityEvent>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -57,13 +57,13 @@ pub struct ConnectivityHandle<S: NetworkingService> {
 impl<S: NetworkingService> ConnectivityHandle<S> {
     pub fn new(
         local_addresses: Vec<SocketAddress>,
-        cmd_tx: mpsc::UnboundedSender<types::Command>,
-        conn_event_rx: mpsc::UnboundedReceiver<ConnectivityEvent>,
+        cmd_sender: mpsc::UnboundedSender<types::Command>,
+        conn_event_receiver: mpsc::UnboundedReceiver<ConnectivityEvent>,
     ) -> Self {
         Self {
             local_addresses,
-            cmd_tx,
-            conn_event_rx,
+            cmd_sender,
+            conn_event_receiver,
             _marker: PhantomData,
         }
     }
@@ -90,7 +90,7 @@ impl Clone for MessagingHandle {
 
 #[derive(Debug)]
 pub struct SyncingEventReceiver {
-    syncing_event_rx: mpsc::UnboundedReceiver<SyncingEvent>,
+    syncing_event_receiver: mpsc::UnboundedReceiver<SyncingEvent>,
 }
 
 #[async_trait]
@@ -108,7 +108,7 @@ where
             address
         );
 
-        Ok(self.cmd_tx.send(types::Command::Connect {
+        Ok(self.cmd_sender.send(types::Command::Connect {
             address,
             local_services_override,
         })?)
@@ -117,17 +117,17 @@ where
     fn accept(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("accept new peer, peer_id: {peer_id}");
 
-        Ok(self.cmd_tx.send(types::Command::Accept { peer_id })?)
+        Ok(self.cmd_sender.send(types::Command::Accept { peer_id })?)
     }
 
     fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, peer_id: {peer_id}");
 
-        Ok(self.cmd_tx.send(types::Command::Disconnect { peer_id })?)
+        Ok(self.cmd_sender.send(types::Command::Disconnect { peer_id })?)
     }
 
     fn send_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
-        Ok(self.cmd_tx.send(types::Command::SendMessage {
+        Ok(self.cmd_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),
         })?)
@@ -138,12 +138,27 @@ where
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent> {
-        self.conn_event_rx.recv().await.ok_or(P2pError::ChannelClosed)
+        self.conn_event_receiver.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 
 impl MessagingService for MessagingHandle {
-    fn send_message(&mut self, peer_id: PeerId, message: SyncMessage) -> crate::Result<()> {
+    fn send_block_sync_message(
+        &mut self,
+        peer_id: PeerId,
+        message: BlockSyncMessage,
+    ) -> crate::Result<()> {
+        Ok(self.command_sender.send(types::Command::SendMessage {
+            peer_id,
+            message: message.into(),
+        })?)
+    }
+
+    fn send_transaction_sync_message(
+        &mut self,
+        peer_id: PeerId,
+        message: TransactionSyncMessage,
+    ) -> crate::Result<()> {
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer_id,
             message: message.into(),
@@ -154,7 +169,7 @@ impl MessagingService for MessagingHandle {
 #[async_trait]
 impl net::SyncingEventReceiver for SyncingEventReceiver {
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
-        self.syncing_event_rx.recv().await.ok_or(P2pError::ChannelClosed)
+        self.syncing_event_receiver.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 

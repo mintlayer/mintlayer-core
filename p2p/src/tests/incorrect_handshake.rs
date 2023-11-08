@@ -54,7 +54,7 @@ where
     let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
     let address = listener.local_addresses().unwrap()[0];
-    let connect_result_rx = test_node.start_connecting(address);
+    let connect_result_receiver = test_node.start_connecting(address);
 
     let (stream, _) = listener.accept().await.unwrap();
 
@@ -68,7 +68,7 @@ where
     msg_stream.send(Message::HeaderList(HeaderList::new(Vec::new()))).await.unwrap();
 
     // connect_result should indicate a failed connection
-    let connect_result = connect_result_rx.await.unwrap();
+    let connect_result = connect_result_receiver.await.unwrap();
     assert!(connect_result.is_err());
 
     // The connection should be closed.

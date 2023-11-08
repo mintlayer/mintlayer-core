@@ -16,10 +16,6 @@
 use std::{panic, sync::Arc};
 
 use async_trait::async_trait;
-use crypto::random::Rng;
-use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
-use p2p_types::socket_address::SocketAddress;
-use test_utils::random::Seed;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -28,6 +24,11 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+
+use crypto::random::Rng;
+use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
+use p2p_types::socket_address::SocketAddress;
+use test_utils::random::Seed;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -53,10 +54,10 @@ use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
-    message::{HeaderList, SyncMessage},
+    message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     protocol::{choose_common_protocol_version, ProtocolVersion},
-    sync::{subscribe_to_new_tip, BlockSyncManager},
+    sync::{subscribe_to_new_tip, SyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
@@ -74,7 +75,8 @@ pub struct TestNode {
     p2p_config: Arc<P2pConfig>,
     peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
     syncing_event_sender: UnboundedSender<SyncingEvent>,
-    sync_msg_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
+    block_sync_msg_receiver: UnboundedReceiver<(PeerId, BlockSyncMessage)>,
+    transaction_sync_msg_receiver: UnboundedReceiver<(PeerId, TransactionSyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
@@ -109,14 +111,19 @@ impl TestNode {
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
 
-        let (sync_msg_sender, sync_msg_receiver) = mpsc::unbounded_channel();
+        let (block_sync_msg_sender, block_sync_msg_receiver) = mpsc::unbounded_channel();
+        let (transaction_sync_msg_sender, transaction_sync_msg_receiver) =
+            mpsc::unbounded_channel();
         let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
-        let messaging_handle = MessagingHandleMock { sync_msg_sender };
+        let messaging_handle = MessagingHandleMock {
+            block_sync_msg_sender,
+            transaction_sync_msg_sender,
+        };
         let syncing_event_receiver_mock = SyncingEventReceiverMock {
             events_receiver: syncing_event_receiver,
         };
 
-        let sync_manager = BlockSyncManager::<NetworkingServiceStub>::new(
+        let sync_manager = SyncManager::<NetworkingServiceStub>::new(
             chain_config,
             Arc::clone(&p2p_config),
             messaging_handle,
@@ -142,7 +149,8 @@ impl TestNode {
             p2p_config,
             peer_manager_event_receiver,
             syncing_event_sender,
-            sync_msg_receiver,
+            block_sync_msg_receiver,
+            transaction_sync_msg_receiver,
             error_receiver,
             sync_manager_handle,
             shutdown_trigger,
@@ -177,7 +185,8 @@ impl TestNode {
         peer_id: PeerId,
         protocol_version: ProtocolVersion,
     ) -> TestPeer {
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(20);
+        let (block_sync_msg_sender, block_sync_msg_receiver) = mpsc::channel(20);
+        let (transaction_sync_msg_sender, transaction_sync_msg_receiver) = mpsc::channel(20);
         let common_protocol_version =
             choose_common_protocol_version(self.protocol_version, protocol_version).unwrap();
         self.syncing_event_sender
@@ -185,10 +194,11 @@ impl TestNode {
                 peer_id,
                 common_services: (*self.p2p_config.node_type).into(),
                 protocol_version: common_protocol_version,
-                sync_msg_rx,
+                block_sync_msg_receiver,
+                transaction_sync_msg_receiver,
             })
             .unwrap();
-        TestPeer::new(peer_id, sync_msg_tx)
+        TestPeer::new(peer_id, block_sync_msg_sender, transaction_sync_msg_sender)
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -200,9 +210,9 @@ impl TestNode {
     ) -> TestPeer {
         let peer = self.try_connect_peer(peer_id, protocol_version);
 
-        let (sent_to, message) = self.get_sent_message().await;
+        let (sent_to, message) = self.get_sent_block_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
-        assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+        assert!(matches!(message, BlockSyncMessage::HeaderListRequest(_)));
         peer
     }
 
@@ -213,16 +223,20 @@ impl TestNode {
 
     /// Get a message that was sent from the node's sync manager by reading it from
     /// the channel
-    pub async fn get_sent_message(&mut self) -> (PeerId, SyncMessage) {
-        expect_recv!(self.sync_msg_receiver)
+    pub async fn get_sent_block_sync_message(&mut self) -> (PeerId, BlockSyncMessage) {
+        expect_recv!(self.block_sync_msg_receiver)
     }
 
-    pub fn try_get_sent_message(&mut self) -> Option<(PeerId, SyncMessage)> {
-        match self.sync_msg_receiver.try_recv() {
+    pub fn try_get_sent_block_sync_message(&mut self) -> Option<(PeerId, BlockSyncMessage)> {
+        match self.block_sync_msg_receiver.try_recv() {
             Ok(message) => Some(message),
             Err(mpsc::error::TryRecvError::Empty) => None,
             Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
         }
+    }
+
+    pub async fn get_sent_transaction_sync_message(&mut self) -> (PeerId, TransactionSyncMessage) {
+        expect_recv!(self.transaction_sync_msg_receiver)
     }
 
     /// Panics if the sync manager returns an error.
@@ -299,9 +313,16 @@ impl TestNode {
         .unwrap_err();
     }
 
-    /// Panics if the sync manager sends an event (message or announcement).
-    pub async fn assert_no_event(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.sync_msg_receiver.recv()).await.unwrap_err();
+    /// Panics if the sync manager sends a message.
+    pub async fn assert_no_sync_message(&mut self) {
+        let future = async {
+            tokio::select! {
+                _ = self.block_sync_msg_receiver.recv() => {},
+                _ = self.transaction_sync_msg_receiver.recv() => {},
+            }
+        };
+
+        time::timeout(SHORT_TIMEOUT, future).await.unwrap_err();
     }
 
     pub async fn assert_peer_score_adjustment(
@@ -332,7 +353,8 @@ impl TestNode {
         self.subsystem_manager_handle.join().await;
 
         // Finally, when all services are down, receivers could be closed too
-        drop(self.sync_msg_receiver);
+        drop(self.block_sync_msg_receiver);
+        drop(self.transaction_sync_msg_receiver);
         drop(self.error_receiver);
         drop(self.peer_manager_event_receiver);
     }
@@ -349,14 +371,20 @@ impl TestNode {
 // Represents a peer that can send messages to a node it is connected to
 pub struct TestPeer {
     peer_id: PeerId,
-    sync_msg_tx: Sender<SyncMessage>,
+    block_sync_msg_sender: Sender<BlockSyncMessage>,
+    transaction_sync_msg_sender: Sender<TransactionSyncMessage>,
 }
 
 impl TestPeer {
-    pub fn new(peer_id: PeerId, sync_msg_tx: Sender<SyncMessage>) -> Self {
+    pub fn new(
+        peer_id: PeerId,
+        block_sync_msg_sender: Sender<BlockSyncMessage>,
+        transaction_sync_msg_sender: Sender<TransactionSyncMessage>,
+    ) -> Self {
         Self {
             peer_id,
-            sync_msg_tx,
+            block_sync_msg_sender,
+            transaction_sync_msg_sender,
         }
     }
 
@@ -364,12 +392,17 @@ impl TestPeer {
         self.peer_id
     }
 
-    pub async fn send_message(&self, message: SyncMessage) {
-        self.sync_msg_tx.send(message).await.unwrap();
+    pub async fn send_block_sync_message(&self, message: BlockSyncMessage) {
+        self.block_sync_msg_sender.send(message).await.unwrap();
+    }
+
+    pub async fn send_transaction_sync_message(&self, message: TransactionSyncMessage) {
+        self.transaction_sync_msg_sender.send(message).await.unwrap();
     }
 
     pub async fn send_headers(&self, headers: Vec<SignedBlockHeader>) {
-        self.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        self.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
     }
 }
 
@@ -506,12 +539,22 @@ impl NetworkingService for NetworkingServiceStub {
 
 #[derive(Clone)]
 struct MessagingHandleMock {
-    sync_msg_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    block_sync_msg_sender: UnboundedSender<(PeerId, BlockSyncMessage)>,
+    transaction_sync_msg_sender: UnboundedSender<(PeerId, TransactionSyncMessage)>,
 }
 
 impl MessagingService for MessagingHandleMock {
-    fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
-        self.sync_msg_sender.send((peer, message)).unwrap();
+    fn send_block_sync_message(&mut self, peer: PeerId, message: BlockSyncMessage) -> Result<()> {
+        self.block_sync_msg_sender.send((peer, message)).unwrap();
+        Ok(())
+    }
+
+    fn send_transaction_sync_message(
+        &mut self,
+        peer: PeerId,
+        message: TransactionSyncMessage,
+    ) -> Result<()> {
+        self.transaction_sync_msg_sender.send((peer, message)).unwrap();
         Ok(())
     }
 }

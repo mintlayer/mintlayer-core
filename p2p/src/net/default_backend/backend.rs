@@ -63,13 +63,14 @@ use super::{
 /// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
 /// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
 /// requests, which may lead to memory exhaustion.
-/// Note: the values were chosen pretty much arbitrarily; the sync messages channel has a lower
-/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events,
-/// on the other hand, are small.
+/// Note: the values were chosen pretty much arbitrarily; the block sync messages channel has a lower
+/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events
+/// and transaction-related messages, on the other hand, are small.
 /// Also note that basic tests of initial block download time showed that there is no real
-/// difference between 20 and 10000 for both of the limits here. These results, of course, depend
+/// difference between 20 and 10000 for any of the limits here. These results, of course, depend
 /// on the hardware and internet connection, so we've chosen larger limits.
-const SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const BLOCK_SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const TRANSACTION_SYNC_MSG_CHAN_BUF_SIZE: usize = 1000;
 const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
@@ -77,7 +78,7 @@ struct PeerContext {
     handle: tokio::task::JoinHandle<()>,
 
     /// Channel sender for sending messages to the peer's event loop.
-    backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
+    backend_event_sender: mpsc::UnboundedSender<BackendEvent>,
 
     /// True if the peer was accepted by PeerManager and SyncManager was notified
     was_accepted: SetFlag,
@@ -106,7 +107,7 @@ struct PendingPeerContext {
 
     connection_info: ConnectionInfo,
 
-    backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
+    backend_event_sender: mpsc::UnboundedSender<BackendEvent>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -125,7 +126,7 @@ pub struct Backend<T: TransportSocket> {
     time_getter: TimeGetter,
 
     /// Channel receiver for receiving commands from the frontend
-    cmd_rx: mpsc::UnboundedReceiver<Command>,
+    cmd_receiver: mpsc::UnboundedReceiver<Command>,
 
     /// Active peers
     peers: HashMap<PeerId, PeerContext>,
@@ -137,10 +138,10 @@ pub struct Backend<T: TransportSocket> {
     peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
 
     /// Channel sender for sending connectivity events to the frontend
-    conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
+    conn_event_sender: mpsc::UnboundedSender<ConnectivityEvent>,
 
     /// Channel sender for sending syncing events
-    syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
+    syncing_event_sender: mpsc::UnboundedSender<SyncingEvent>,
 
     /// List of incoming commands to the backend; we put them in a queue
     /// to make sure receiving commands can run concurrently with other backend operations
@@ -169,9 +170,9 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         time_getter: TimeGetter,
-        cmd_rx: mpsc::UnboundedReceiver<Command>,
-        conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
-        syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
+        cmd_receiver: mpsc::UnboundedReceiver<Command>,
+        conn_event_sender: mpsc::UnboundedSender<ConnectivityEvent>,
+        syncing_event_sender: mpsc::UnboundedSender<SyncingEvent>,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
@@ -180,12 +181,12 @@ where
         Self {
             transport,
             socket,
-            cmd_rx,
-            conn_event_tx,
+            cmd_receiver,
+            conn_event_sender,
             chain_config,
             p2p_config,
             time_getter,
-            syncing_event_tx,
+            syncing_event_sender,
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_event_stream_map: StreamMap::new(),
@@ -223,10 +224,12 @@ where
                 // This happens often (for example, if the remote node is behind NAT), so use `info!` here
                 log::info!("Failed to establish connection to {address:?}: {err}");
 
-                Ok(self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
-                    address,
-                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                })?)
+                Ok(
+                    self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                    })?,
+                )
             }
         }
     }
@@ -238,19 +241,26 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
-        peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
+        let (block_sync_msg_sender, block_sync_msg_receiver) =
+            mpsc::channel(BLOCK_SYNC_MSG_CHAN_BUF_SIZE);
+        let (transaction_sync_msg_sender, transaction_sync_msg_receiver) =
+            mpsc::channel(TRANSACTION_SYNC_MSG_CHAN_BUF_SIZE);
+        peer.backend_event_sender.send(BackendEvent::Accepted {
+            block_sync_msg_sender,
+            transaction_sync_msg_sender,
+        })?;
 
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
 
         Self::send_syncing_event(
-            &self.syncing_event_tx,
+            &self.syncing_event_sender,
             SyncingEvent::Connected {
                 peer_id,
                 common_services: peer.common_services,
                 protocol_version: peer.protocol_version,
-                sync_msg_rx,
+                block_sync_msg_receiver,
+                transaction_sync_msg_receiver,
             },
             &self.shutdown,
         );
@@ -281,7 +291,7 @@ where
             .peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        Ok(peer.backend_event_tx.send(BackendEvent::SendMessage(Box::new(message)))?)
+        Ok(peer.backend_event_sender.send(BackendEvent::SendMessage(Box::new(message)))?)
     }
 
     /// Runs the backend events loop.
@@ -292,7 +302,7 @@ where
                 biased;
 
                 // Handle commands.
-                command = self.cmd_rx.recv() => {
+                command = self.cmd_receiver.recv() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
@@ -342,7 +352,7 @@ where
         connection_info: ConnectionInfo,
         address: SocketAddress,
     ) -> crate::Result<()> {
-        let (backend_event_tx, backend_event_rx) = mpsc::unbounded_channel();
+        let (backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
 
         log::debug!("Assigning peer id {remote_peer_id} to peer at address {address:?}");
 
@@ -353,8 +363,8 @@ where
             Some(address.as_peer_address())
         };
 
-        let (peer_event_tx, peer_event_rx) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
-        let peer_event_stream = ReceiverStream::new(peer_event_rx);
+        let (peer_event_sender, peer_event_receiver) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
+        let peer_event_stream = ReceiverStream::new(peer_event_receiver);
 
         self.peer_event_stream_map.insert(remote_peer_id, peer_event_stream);
 
@@ -365,8 +375,8 @@ where
             Arc::clone(&self.p2p_config),
             socket,
             receiver_address,
-            peer_event_tx,
-            backend_event_rx,
+            peer_event_sender,
+            backend_event_receiver,
             self.node_protocol_version,
         );
         let shutdown = Arc::clone(&self.shutdown);
@@ -385,7 +395,7 @@ where
                 handle,
                 address,
                 connection_info,
-                backend_event_tx,
+                backend_event_sender,
             },
         );
 
@@ -406,7 +416,7 @@ where
             handle,
             address,
             connection_info,
-            backend_event_tx,
+            backend_event_sender,
         } = match self.pending.remove(&peer_id) {
             Some(pending) => pending,
             // Could be removed if self-connection was detected earlier
@@ -431,14 +441,14 @@ where
                 handshake_nonce: _,
                 local_services_override: _,
             } => {
-                self.conn_event_tx.send(ConnectivityEvent::OutboundAccepted {
+                self.conn_event_sender.send(ConnectivityEvent::OutboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
                 })?;
             }
             ConnectionInfo::Inbound => {
-                self.conn_event_tx.send(ConnectivityEvent::InboundAccepted {
+                self.conn_event_sender.send(ConnectivityEvent::InboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
@@ -456,7 +466,7 @@ where
                 user_agent,
                 software_version,
                 common_services,
-                backend_event_tx,
+                backend_event_sender,
                 was_accepted: SetFlag::new(),
             },
         );
@@ -476,7 +486,7 @@ where
 
         if peer.was_accepted.test() {
             Self::send_syncing_event(
-                &self.syncing_event_tx,
+                &self.syncing_event_sender,
                 SyncingEvent::Disconnected { peer_id },
                 &self.shutdown,
             );
@@ -488,7 +498,7 @@ where
         // (for example, trying to send something big over a slow network connection)
         peer.handle.abort();
 
-        Ok(self.conn_event_tx.send(ConnectivityEvent::ConnectionClosed { peer_id })?)
+        Ok(self.conn_event_sender.send(ConnectivityEvent::ConnectionClosed { peer_id })?)
     }
 
     fn is_connection_from_self(
@@ -520,7 +530,7 @@ where
                 );
 
                 // Report outbound connection failure
-                self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
+                self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
                     address: outbound_pending.address,
                     error: P2pError::DialError(DialError::AttemptToDialSelf),
                 })?;
@@ -563,7 +573,7 @@ where
                 if let Some(pending_peer) = self.pending.get(&peer_id) {
                     log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
 
-                    self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
+                    self.conn_event_sender.send(ConnectivityEvent::HandshakeFailed {
                         address: pending_peer.address,
                         error,
                     })?;
@@ -587,7 +597,7 @@ where
                         } => {
                             log::warn!("outbound pending connection closed unexpectedly");
 
-                            self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
+                            self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
                                 address: pending_peer.address,
                                 error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                             })?;
@@ -605,7 +615,7 @@ where
             }
 
             PeerEvent::Misbehaved { error } => {
-                self.conn_event_tx.send(ConnectivityEvent::Misbehaved { peer_id, error })?;
+                self.conn_event_sender.send(ConnectivityEvent::Misbehaved { peer_id, error })?;
 
                 Ok(())
             }
@@ -624,7 +634,7 @@ where
             return Ok(());
         }
 
-        self.conn_event_tx.send(ConnectivityEvent::Message { peer_id, message })?;
+        self.conn_event_sender.send(ConnectivityEvent::Message { peer_id, message })?;
 
         Ok(())
     }
@@ -680,13 +690,12 @@ where
     }
 
     fn send_syncing_event(
-        event_tx: &mpsc::UnboundedSender<SyncingEvent>,
+        event_sender: &mpsc::UnboundedSender<SyncingEvent>,
         event: SyncingEvent,
         shutdown: &Arc<SeqCstAtomicBool>,
     ) {
-        // SyncManager should always be active and so sending to a closed `conn_tx` is not a backend's problem, just log the error.
-        // NOTE: `sync_tx` is not connected in some PeerManager tests.
-        match event_tx.send(event) {
+        // NOTE: `event_sender` is not connected in some PeerManager tests.
+        match event_sender.send(event) {
             Ok(()) => {}
             Err(_) if shutdown.load() => {}
             Err(_) => log::error!("sending syncing event from the backend failed unexpectedly"),

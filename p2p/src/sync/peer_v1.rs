@@ -42,8 +42,8 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{
-        BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
-        TransactionResponse,
+        BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest,
+        TransactionResponse, TransactionSyncMessage,
     },
     net::{
         types::services::{Service, Services},
@@ -68,17 +68,18 @@ use super::chainstate_handle::ChainstateHandle;
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
-pub struct Peer<T: NetworkingService> {
+pub struct PeerSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_msg_rx: Receiver<SyncMessage>,
-    local_event_rx: UnboundedReceiver<LocalEvent>,
+    block_sync_msg_receiver: Receiver<BlockSyncMessage>,
+    transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
+    local_event_receiver: UnboundedReceiver<LocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
@@ -123,7 +124,7 @@ struct OutgoingDataState {
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
-impl<T> Peer<T>
+impl<T> PeerSyncManager<T>
 where
     T: NetworkingService,
     T::MessagingHandle: MessagingService,
@@ -136,10 +137,11 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_msg_rx: Receiver<SyncMessage>,
+        peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
+        block_sync_msg_receiver: Receiver<BlockSyncMessage>,
+        transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_rx: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
@@ -151,10 +153,11 @@ where
             common_services,
             chainstate_handle,
             mempool_handle,
-            peer_manager_sender,
+            peer_mgr_event_sender,
             messaging_handle,
-            sync_msg_rx,
-            local_event_rx,
+            block_sync_msg_receiver,
+            transaction_sync_msg_receiver,
+            local_event_receiver,
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
@@ -201,9 +204,14 @@ where
 
         loop {
             tokio::select! {
-                message = self.sync_msg_rx.recv() => {
+                message = self.block_sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_message(message).await?;
+                    self.handle_block_sync_message(message).await?;
+                }
+
+                message = self.transaction_sync_msg_receiver.recv() => {
+                    let message = message.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_transaction_sync_message(message).await?;
                 }
 
                 block_to_send_to_peer = async {
@@ -212,7 +220,7 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                event = self.local_event_rx.recv() => {
+                event = self.local_event_receiver.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_local_event(event).await?;
                 }
@@ -225,15 +233,19 @@ where
         }
     }
 
-    fn send_message(&mut self, message: SyncMessage) -> Result<()> {
-        self.messaging_handle.send_message(self.id(), message)
+    fn send_block_sync_message(&mut self, message: BlockSyncMessage) -> Result<()> {
+        self.messaging_handle.send_block_sync_message(self.id(), message)
+    }
+
+    fn send_transaction_sync_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
+        self.messaging_handle.send_transaction_sync_message(self.id(), message)
     }
 
     fn send_headers(&mut self, headers: HeaderList) -> Result<()> {
         if let Some(last_header) = headers.headers().last() {
             self.outgoing.best_sent_block_header = Some(last_header.block_id().into());
         }
-        self.send_message(SyncMessage::HeaderList(headers))
+        self.send_block_sync_message(BlockSyncMessage::HeaderList(headers))
     }
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
@@ -340,7 +352,7 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_message(SyncMessage::NewTransaction(txid))
+                    self.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(txid))
                 } else {
                     Ok(())
                 }
@@ -360,7 +372,7 @@ where
         }
 
         log::debug!("[peer id = {}] Sending header list request", self.id());
-        self.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        self.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
             locator,
         )))?;
 
@@ -370,22 +382,51 @@ where
         Ok(())
     }
 
-    async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
+    async fn handle_block_sync_message(&mut self, message: BlockSyncMessage) -> Result<()> {
         log::trace!(
-            "[peer id = {}] Handling message from the peer: {message:?}",
+            "[peer id = {}] Handling block sync message from the peer: {message:?}",
             self.id()
         );
 
         let res = match message {
-            SyncMessage::HeaderListRequest(r) => self.handle_header_request(r.into_locator()).await,
-            SyncMessage::BlockListRequest(r) => self.handle_block_request(r.into_block_ids()).await,
-            SyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
-            SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
-            SyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
-            SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
-            SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
+            BlockSyncMessage::HeaderListRequest(r) => {
+                self.handle_header_request(r.into_locator()).await
+            }
+            BlockSyncMessage::BlockListRequest(r) => {
+                self.handle_block_request(r.into_block_ids()).await
+            }
+            BlockSyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
+            BlockSyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
+
+            #[cfg(test)]
+            BlockSyncMessage::TestSentinel(id) => {
+                self.send_block_sync_message(BlockSyncMessage::TestSentinel(id))
+            }
         };
-        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
+    }
+
+    async fn handle_transaction_sync_message(
+        &mut self,
+        message: TransactionSyncMessage,
+    ) -> Result<()> {
+        log::trace!(
+            "[peer id = {}] Handling tx sync message from the peer: {message:?}",
+            self.id()
+        );
+
+        let res = match message {
+            TransactionSyncMessage::NewTransaction(id) => {
+                self.handle_transaction_announcement(id).await
+            }
+            TransactionSyncMessage::TransactionRequest(id) => {
+                self.handle_transaction_request(id).await
+            }
+            TransactionSyncMessage::TransactionResponse(tx) => {
+                self.handle_transaction_response(tx).await
+            }
+        };
+        handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -784,7 +825,7 @@ where
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
-            self.peer_manager_sender.send(PeerManagerEvent::NewTipReceived {
+            self.peer_mgr_event_sender.send(PeerManagerEvent::NewTipReceived {
                 peer_id: self.id(),
                 block_id,
             })?;
@@ -831,7 +872,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.send_message(SyncMessage::TransactionResponse(res))?;
+        self.send_transaction_sync_message(TransactionSyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -857,7 +898,7 @@ where
                 .await??;
             match tx_status {
                 mempool::TxStatus::InMempool => {
-                    self.peer_manager_sender.send(
+                    self.peer_mgr_event_sender.send(
                         PeerManagerEvent::NewValidTransactionReceived {
                             peer_id: self.id(),
                             txid,
@@ -915,7 +956,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.send_message(SyncMessage::TransactionRequest(tx))?;
+            self.send_transaction_sync_message(TransactionSyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 
@@ -944,7 +985,7 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-        self.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+        self.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
             block_ids.clone(),
         )))?;
         // Even in the hypothetical situation where the "debug_assert!(requested_blocks.is_empty())"
@@ -993,7 +1034,7 @@ where
             self.id(),
             block.get_id()
         );
-        self.send_message(SyncMessage::BlockResponse(BlockResponse::new(block)))
+        self.send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
     async fn disconnect_if_stalling(&mut self) -> Result<()> {
@@ -1015,7 +1056,7 @@ where
         let (sender, receiver) = oneshot_nofail::channel();
         log::warn!("[peer id = {}] Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
             self.id(), headers_req_stalling, blocks_req_stalling);
-        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
+        self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
             sender,

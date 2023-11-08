@@ -84,19 +84,24 @@ where
     )
     .await
     .unwrap();
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, peer_mgr_event_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let peer_manager = PeerManager::<T, _>::new(
         chain_config,
         p2p_config,
         conn,
-        rx,
+        peer_mgr_event_receiver,
         time_getter,
         peerdb_inmemory_store(),
     )
     .unwrap();
 
-    (peer_manager, tx, shutdown_sender, subscribers_sender)
+    (
+        peer_manager,
+        peer_mgr_event_sender,
+        shutdown_sender,
+        subscribers_sender,
+    )
 }
 
 async fn make_peer_manager<T>(
@@ -113,14 +118,15 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let p2p_config = Arc::new(test_p2p_config());
-    let (peer_manager, _tx, shutdown_sender, subscribers_sender) = make_peer_manager_custom::<T>(
-        transport,
-        addr,
-        chain_config,
-        p2p_config,
-        Default::default(),
-    )
-    .await;
+    let (peer_manager, _peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
+        make_peer_manager_custom::<T>(
+            transport,
+            addr,
+            chain_config,
+            p2p_config,
+            Default::default(),
+        )
+        .await;
     (peer_manager, shutdown_sender, subscribers_sender)
 }
 
@@ -139,38 +145,40 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (peer_manager, tx, shutdown_sender, subscribers_sender) =
+    let (peer_manager, peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
-    (tx, shutdown_sender, subscribers_sender)
+    (peer_mgr_event_sender, shutdown_sender, subscribers_sender)
 }
 
-async fn get_connected_peers(tx: &UnboundedSender<PeerManagerEvent>) -> Vec<ConnectedPeer> {
-    let (rtx, rrx) = oneshot_nofail::channel();
-    tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-    timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
+async fn get_connected_peers(
+    event_sender: &UnboundedSender<PeerManagerEvent>,
+) -> Vec<ConnectedPeer> {
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    event_sender.send(PeerManagerEvent::GetConnectedPeers(response_sender)).unwrap();
+    timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap()
 }
 
 /// Send some message to PeerManager and ensure it's processed
 async fn send_and_sync(
     peer_id: PeerId,
     message: PeerManagerMessage,
-    conn_tx: &UnboundedSender<ConnectivityEvent>,
-    cmd_rx: &mut UnboundedReceiver<Command>,
+    conn_event_sender: &UnboundedSender<ConnectivityEvent>,
+    cmd_receiver: &mut UnboundedReceiver<Command>,
 ) {
-    conn_tx.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
+    conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 
     let sent_nonce = crypto::random::make_pseudo_rng().gen();
-    conn_tx
+    conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,
             message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }),
         })
         .unwrap();
 
-    let cmd = expect_recv!(cmd_rx);
+    let cmd = expect_recv!(cmd_receiver);
     let (peer_id_from_msg, peer_msg) = cmd_to_peer_man_msg(cmd);
     let nonce = assert_matches_return_val!(
         peer_msg,
@@ -178,7 +186,7 @@ async fn send_and_sync(
         nonce
     );
     assert_eq!(peer_id_from_msg, peer_id);
-    conn_tx
+    conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,
             message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
