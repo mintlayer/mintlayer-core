@@ -25,7 +25,7 @@ use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
-    message::{BlockSyncMessage, PeerManagerMessage, TxSyncMessage},
+    message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
@@ -185,7 +185,7 @@ pub enum SyncingEvent {
         common_services: Services,
         protocol_version: SupportedProtocolVersion,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
-        tx_sync_msg_receiver: Receiver<TxSyncMessage>,
+        transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
     },
 
     /// Peer disconnected

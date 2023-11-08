@@ -124,7 +124,7 @@ where
                 common_services: _,
                 protocol_version: _,
                 block_sync_msg_receiver,
-                tx_sync_msg_receiver: _,
+                transaction_sync_msg_receiver: _,
             } => (peer_id, block_sync_msg_receiver),
             e => panic!("Unexpected event type: {e:?}"),
         };

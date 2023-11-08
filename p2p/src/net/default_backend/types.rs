@@ -28,7 +28,7 @@ use crate::{
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
         BlockSyncMessage, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
-        PingResponse, TransactionResponse, TxSyncMessage,
+        PingResponse, TransactionResponse, TransactionSyncMessage,
     },
     net::types::services::Services,
     protocol::{ProtocolVersion, SupportedProtocolVersion},
@@ -114,7 +114,7 @@ pub enum PeerEvent {
 pub enum BackendEvent {
     Accepted {
         block_sync_msg_sender: Sender<BlockSyncMessage>,
-        tx_sync_msg_sender: Sender<TxSyncMessage>,
+        transaction_sync_msg_sender: Sender<TransactionSyncMessage>,
     },
     SendMessage(Box<Message>),
 }
@@ -215,12 +215,12 @@ impl From<BlockSyncMessage> for Message {
     }
 }
 
-impl From<TxSyncMessage> for Message {
-    fn from(message: TxSyncMessage) -> Self {
+impl From<TransactionSyncMessage> for Message {
+    fn from(message: TransactionSyncMessage) -> Self {
         match message {
-            TxSyncMessage::NewTransaction(id) => Message::NewTransaction(id),
-            TxSyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
-            TxSyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
+            TransactionSyncMessage::NewTransaction(id) => Message::NewTransaction(id),
+            TransactionSyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
+            TransactionSyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
         }
     }
 }
@@ -232,7 +232,7 @@ pub enum CategorizedMessage {
     Handshake(HandshakeMessage),
     PeerManagerMessage(PeerManagerMessage),
     BlockSyncMessage(BlockSyncMessage),
-    TxSyncMessage(TxSyncMessage),
+    TransactionSyncMessage(TransactionSyncMessage),
 }
 
 impl Message {
@@ -273,15 +273,15 @@ impl Message {
                 CategorizedMessage::BlockSyncMessage(BlockSyncMessage::TestSentinel(id))
             }
 
-            Message::NewTransaction(msg) => {
-                CategorizedMessage::TxSyncMessage(TxSyncMessage::NewTransaction(msg))
-            }
-            Message::TransactionRequest(msg) => {
-                CategorizedMessage::TxSyncMessage(TxSyncMessage::TransactionRequest(msg))
-            }
-            Message::TransactionResponse(msg) => {
-                CategorizedMessage::TxSyncMessage(TxSyncMessage::TransactionResponse(msg))
-            }
+            Message::NewTransaction(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::NewTransaction(msg),
+            ),
+            Message::TransactionRequest(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::TransactionRequest(msg),
+            ),
+            Message::TransactionResponse(msg) => CategorizedMessage::TransactionSyncMessage(
+                TransactionSyncMessage::TransactionResponse(msg),
+            ),
         }
     }
 }

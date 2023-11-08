@@ -102,7 +102,7 @@ where
             common_services: _,
             protocol_version: _,
             block_sync_msg_receiver,
-            tx_sync_msg_receiver: _,
+            transaction_sync_msg_receiver: _,
         } => block_sync_msg_receiver,
         event => panic!("Unexpected event: {event:?}"),
     };
@@ -139,7 +139,7 @@ where
             common_services: _,
             protocol_version: _,
             block_sync_msg_receiver,
-            tx_sync_msg_receiver: _,
+            transaction_sync_msg_receiver: _,
         } => block_sync_msg_receiver,
         event => panic!("Unexpected event: {event:?}"),
     };

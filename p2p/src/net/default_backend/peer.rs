@@ -24,7 +24,7 @@ use logging::log;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::{BlockSyncMessage, TxSyncMessage},
+    message::{BlockSyncMessage, TransactionSyncMessage},
     net::{
         default_backend::{
             transport::TransportSocket,
@@ -267,7 +267,7 @@ where
         msg: Message,
         peer_event_sender: &mut mpsc::Sender<PeerEvent>,
         block_sync_msg_sender: &mut mpsc::Sender<BlockSyncMessage>,
-        tx_sync_msg_sender: &mut mpsc::Sender<TxSyncMessage>,
+        transaction_sync_msg_sender: &mut mpsc::Sender<TransactionSyncMessage>,
     ) -> crate::Result<()> {
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
@@ -285,7 +285,9 @@ where
                 peer_event_sender.send(PeerEvent::MessageReceived { message: msg }).await?
             }
             CategorizedMessage::BlockSyncMessage(msg) => block_sync_msg_sender.send(msg).await?,
-            CategorizedMessage::TxSyncMessage(msg) => tx_sync_msg_sender.send(msg).await?,
+            CategorizedMessage::TransactionSyncMessage(msg) => {
+                transaction_sync_msg_sender.send(msg).await?
+            }
         }
 
         Ok(())
@@ -328,8 +330,8 @@ where
                 biased;
 
                 event = self.backend_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    BackendEvent::Accepted{ block_sync_msg_sender, tx_sync_msg_sender } => {
-                        sync_msg_senders_opt = Some((block_sync_msg_sender, tx_sync_msg_sender));
+                    BackendEvent::Accepted{ block_sync_msg_sender, transaction_sync_msg_sender } => {
+                        sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
                     BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },

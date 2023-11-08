@@ -70,7 +70,7 @@ use super::{
 /// difference between 20 and 10000 for any of the limits here. These results, of course, depend
 /// on the hardware and internet connection, so we've chosen larger limits.
 const BLOCK_SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
-const TX_SYNC_MSG_CHAN_BUF_SIZE: usize = 1000;
+const TRANSACTION_SYNC_MSG_CHAN_BUF_SIZE: usize = 1000;
 const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
@@ -243,10 +243,11 @@ where
 
         let (block_sync_msg_sender, block_sync_msg_receiver) =
             mpsc::channel(BLOCK_SYNC_MSG_CHAN_BUF_SIZE);
-        let (tx_sync_msg_sender, tx_sync_msg_receiver) = mpsc::channel(TX_SYNC_MSG_CHAN_BUF_SIZE);
+        let (transaction_sync_msg_sender, transaction_sync_msg_receiver) =
+            mpsc::channel(TRANSACTION_SYNC_MSG_CHAN_BUF_SIZE);
         peer.backend_event_sender.send(BackendEvent::Accepted {
             block_sync_msg_sender,
-            tx_sync_msg_sender,
+            transaction_sync_msg_sender,
         })?;
 
         let old_value = peer.was_accepted.test_and_set();
@@ -259,7 +260,7 @@ where
                 common_services: peer.common_services,
                 protocol_version: peer.protocol_version,
                 block_sync_msg_receiver,
-                tx_sync_msg_receiver,
+                transaction_sync_msg_receiver,
             },
             &self.shutdown,
         );

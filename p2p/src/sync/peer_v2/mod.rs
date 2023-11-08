@@ -13,5 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_mgr;
-pub mod tx_mgr;
+pub mod block_manager;
+pub mod transaction_manager;

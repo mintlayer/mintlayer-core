@@ -43,7 +43,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{
         BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest,
-        TransactionResponse, TxSyncMessage,
+        TransactionResponse, TransactionSyncMessage,
     },
     net::{
         types::services::{Service, Services},
@@ -78,7 +78,7 @@ pub struct PeerSyncManager<T: NetworkingService> {
     peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     block_sync_msg_receiver: Receiver<BlockSyncMessage>,
-    tx_sync_msg_receiver: Receiver<TxSyncMessage>,
+    transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
     local_event_receiver: UnboundedReceiver<LocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
@@ -139,7 +139,7 @@ where
         mempool_handle: MempoolHandle,
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
-        tx_sync_msg_receiver: Receiver<TxSyncMessage>,
+        transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_receiver: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
@@ -156,7 +156,7 @@ where
             peer_mgr_event_sender,
             messaging_handle,
             block_sync_msg_receiver,
-            tx_sync_msg_receiver,
+            transaction_sync_msg_receiver,
             local_event_receiver,
             time_getter,
             incoming: IncomingDataState {
@@ -209,9 +209,9 @@ where
                     self.handle_block_sync_message(message).await?;
                 }
 
-                message = self.tx_sync_msg_receiver.recv() => {
+                message = self.transaction_sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_tx_sync_message(message).await?;
+                    self.handle_transaction_sync_message(message).await?;
                 }
 
                 block_to_send_to_peer = async {
@@ -237,8 +237,8 @@ where
         self.messaging_handle.send_block_sync_message(self.id(), message)
     }
 
-    fn send_tx_sync_message(&mut self, message: TxSyncMessage) -> Result<()> {
-        self.messaging_handle.send_tx_sync_message(self.id(), message)
+    fn send_transaction_sync_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
+        self.messaging_handle.send_transaction_sync_message(self.id(), message)
     }
 
     fn send_headers(&mut self, headers: HeaderList) -> Result<()> {
@@ -352,7 +352,7 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_tx_sync_message(TxSyncMessage::NewTransaction(txid))
+                    self.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(txid))
                 } else {
                     Ok(())
                 }
@@ -406,16 +406,25 @@ where
         handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
-    async fn handle_tx_sync_message(&mut self, message: TxSyncMessage) -> Result<()> {
+    async fn handle_transaction_sync_message(
+        &mut self,
+        message: TransactionSyncMessage,
+    ) -> Result<()> {
         log::trace!(
             "[peer id = {}] Handling tx sync message from the peer: {message:?}",
             self.id()
         );
 
         let res = match message {
-            TxSyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
-            TxSyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
-            TxSyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
+            TransactionSyncMessage::NewTransaction(id) => {
+                self.handle_transaction_announcement(id).await
+            }
+            TransactionSyncMessage::TransactionRequest(id) => {
+                self.handle_transaction_request(id).await
+            }
+            TransactionSyncMessage::TransactionResponse(tx) => {
+                self.handle_transaction_response(tx).await
+            }
         };
         handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
@@ -863,7 +872,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.send_tx_sync_message(TxSyncMessage::TransactionResponse(res))?;
+        self.send_transaction_sync_message(TransactionSyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -947,7 +956,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.send_tx_sync_message(TxSyncMessage::TransactionRequest(tx))?;
+            self.send_transaction_sync_message(TransactionSyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 
