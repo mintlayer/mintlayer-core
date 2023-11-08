@@ -277,3 +277,11 @@ class WalletCliController:
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         return await self._write_command(f"getbalance {with_locked} {' '.join(utxo_states)}\n")
+
+    async def list_pending_transactions(self) -> List[str]:
+        output = await self._write_command(f"listpendingtransactions\n")
+        pattern = r'id: Id<Transaction>\{0x([^}]*)\}'
+        return re.findall(pattern, output)
+
+    async def abandon_transaction(self, tx_id: str) -> str:
+        return await self._write_command(f"abandontransaction {tx_id}\n")

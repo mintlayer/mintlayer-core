@@ -35,7 +35,6 @@ use mempool::tx_accumulator::PackingStrategy;
 use read::ReadOnlyController;
 use sync::InSync;
 use synced_controller::SyncedController;
-use utils::tap_error_log::LogError;
 
 use common::{
     address::AddressError,
@@ -625,17 +624,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
             tokio::time::sleep(NORMAL_DELAY).await;
 
-            self.rebroadcast_txs(&mut rebroadcast_txs_timer);
+            self.rebroadcast_txs(&mut rebroadcast_txs_timer).await;
         }
     }
 
     /// Rebroadcast not confirmed transactions
-    fn rebroadcast_txs(&mut self, rebroadcast_txs_again_at: &mut Time) {
+    async fn rebroadcast_txs(&mut self, rebroadcast_txs_again_at: &mut Time) {
         if get_time() >= *rebroadcast_txs_again_at {
-            let _ = self
-                .wallet
-                .get_transactions_to_be_broadcast()
-                .map(|txs| async {
+            let txs = self.wallet.get_transactions_to_be_broadcast();
+            match txs {
+                Err(error) => {
+                    log::error!("Fetching transactions for rebroadcasting failed: {error}");
+                }
+                Ok(txs) => {
                     for tx in txs {
                         let tx_id = tx.transaction().get_id();
                         let res = self.rpc_client.submit_transaction(tx).await;
@@ -643,8 +644,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                             log::warn!("Rebroadcasting for tx {tx_id} failed: {e}");
                         }
                     }
-                })
-                .log_err_pfx("Fetching transactions for rebroadcasting failed:");
+                }
+            }
 
             // Reset the timer with a new random interval between 2 and 5 minutes
             let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
