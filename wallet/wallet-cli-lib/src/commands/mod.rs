@@ -273,6 +273,9 @@ pub enum WalletCommand {
     /// List available Delegation Ids with their balances
     ListDelegationIds,
 
+    /// List the blocks created by this wallet through staking/mining/etc
+    ListCreatedBlocksIds,
+
     /// Generate a new unused address
     NewAddress,
 
@@ -1349,6 +1352,14 @@ impl CommandHandler {
                     })
                     .collect();
                 Ok(ConsoleCommand::Print(delegations.join("\n").to_string()))
+            }
+
+            WalletCommand::ListCreatedBlocksIds => {
+                let block_ids = self
+                    .get_readonly_controller()?
+                    .get_created_blocks()
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(format!("{block_ids:#?}")))
             }
 
             WalletCommand::NodeShutdown => {

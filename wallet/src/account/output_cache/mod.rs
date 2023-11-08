@@ -26,8 +26,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen, RPCIsTokenUnfreezable,
             RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId,
-        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
 };
@@ -1097,6 +1097,49 @@ impl OutputCache {
         match self.txs.get(&transaction_id.into()) {
             None | Some(WalletTx::Block(_)) => Err(WalletError::NoTransactionFound(transaction_id)),
             Some(WalletTx::Tx(tx)) => Ok(tx),
+        }
+    }
+
+    pub fn get_created_blocks<F: Fn(&Destination) -> bool>(&self, is_mine: F) -> Vec<Id<GenBlock>> {
+        self.txs
+            .values()
+            .filter_map(|wtx| match wtx {
+                WalletTx::Tx(_) => None,
+                WalletTx::Block(block) => block
+                    .kernel_inputs()
+                    .iter()
+                    .any(|inp| self.created_by_our_stake_pool(inp, &is_mine))
+                    .then_some(*block.block_id()),
+            })
+            .collect_vec()
+    }
+
+    fn created_by_our_stake_pool<F: Fn(&Destination) -> bool>(
+        &self,
+        inp: &TxInput,
+        is_mine: &F,
+    ) -> bool {
+        match inp {
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Utxo(outpoint) => self
+                .txs
+                .get(&outpoint.source_id())
+                .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
+                .map_or(false, |out| match out {
+                    TxOutput::IssueFungibleToken(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _) => false,
+                    TxOutput::ProduceBlockFromStake(_, pool_id)
+                    | TxOutput::CreateStakePool(pool_id, _) => self
+                        .pools
+                        .get(pool_id)
+                        .map_or(false, |pool_data| is_mine(&pool_data.decommission_key)),
+                }),
         }
     }
 }
