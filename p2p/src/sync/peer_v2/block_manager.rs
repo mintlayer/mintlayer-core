@@ -19,10 +19,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use tokio::{
-    sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
-    time::MissedTickBehavior,
-};
+use tokio::sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
@@ -165,11 +162,7 @@ where
     }
 
     async fn main_loop(&mut self) -> Result<()> {
-        let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
-        stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-        // The first tick completes immediately. Since we are dealing with a stalling check, we skip
-        // the first tick.
-        stalling_interval.tick().await;
+        let stalling_timeout = *self.p2p_config.sync_stalling_timeout;
 
         if self.common_services.has_service(Service::Blocks) {
             log::debug!("[peer id = {}] Asking for headers initially", self.id());
@@ -194,7 +187,8 @@ where
                     self.handle_local_event(event).await?;
                 }
 
-                _ = stalling_interval.tick(), if self.peer_activity.earliest_expected_activity_time().is_some() => {}
+                _ = tokio::time::sleep(stalling_timeout),
+                    if self.peer_activity.earliest_expected_activity_time().is_some() => {}
             }
 
             // Run on each loop iteration, so it's easier to test
