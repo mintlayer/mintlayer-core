@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
@@ -29,6 +29,7 @@ use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
 };
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
@@ -36,7 +37,10 @@ use crate::{
     error::ProtocolError,
     message::{TransactionResponse, TransactionSyncMessage},
     protocol::{ProtocolConfig, SupportedProtocolVersion},
-    sync::tests::helpers::TestNode,
+    sync::{
+        peer_v2::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
+        tests::helpers::{SyncManagerNotification, TestNode},
+    },
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -204,15 +208,17 @@ async fn too_many_announcements(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
+        let time_getter = P2pBasicTestTimeGetter::new();
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
+            .with_time_getter(time_getter.get_time_getter())
             .build();
         // Process a block to finish the initial block download.
         tf.make_block_builder().build_and_process().unwrap().unwrap();
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
-                max_peer_tx_announcements: 0.into(),
+                max_peer_tx_announcements: 1.into(),
 
                 msg_header_count_limit: Default::default(),
                 msg_max_locator_count: Default::default(),
@@ -243,18 +249,32 @@ async fn too_many_announcements(#[case] seed: Seed) {
             .with_chain_config(Arc::clone(&chain_config))
             .with_p2p_config(Arc::clone(&p2p_config))
             .with_chainstate(tf.into_chainstate())
+            .with_time_getter(time_getter.get_time_getter())
             .build()
             .await;
 
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        let tx = transaction(chain_config.genesis_block_id());
-        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(
-            tx.transaction().get_id(),
-        ))
-        .await;
+        // Respond to node's initial header request (made inside connect_peer)
+        peer.send_headers(vec![]).await;
+
+        let tx1 = transaction_with_amount(chain_config.genesis_block_id(), 1);
+        let tx1_id = tx1.transaction().get_id();
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx1_id))
+            .await;
+
+        let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+        assert_eq!(sent_to, peer.get_id());
+        assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx1_id));
+
+        // Do not respond to the tx request, make another announcement
+        let tx2 = transaction_with_amount(chain_config.genesis_block_id(), 2);
+        let tx2_id = tx2.transaction().get_id();
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
+            .await;
 
         if protocol_version == SupportedProtocolVersion::V1.into() {
+            // In V1 the peer is punished for this.
             let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
             assert_eq!(peer.get_id(), adjusted_peer);
             assert_eq!(
@@ -264,10 +284,35 @@ async fn too_many_announcements(#[case] seed: Seed) {
             );
             node.assert_no_sync_message().await;
         } else {
-            // In V2 the peer is not punished for sending too many announcements.
+            // In V2 the peer is not punished.
             node.assert_no_peer_manager_event().await;
             // Still, the node shouldn't react to this announcement.
             node.assert_no_sync_message().await;
+
+            // Advance time to make the previously ignored tx request expire.
+            logging::log::debug!("Advancing current time");
+            time_getter.advance_time(REQUESTED_TX_EXPIRY_PERIOD + Duration::from_secs(1));
+
+            // Make sure that the Peer task has an opportunity to handle expired requests.
+            node.clear_notifications().await;
+            node.wait_for_notification(
+                SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
+                    peer_id: peer.get_id(),
+                },
+            )
+            .await;
+
+            // Announce the same tx
+            peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
+                .await;
+
+            // Still no punishment
+            node.assert_no_peer_manager_event().await;
+
+            // Now the request is sent.
+            let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+            assert_eq!(sent_to, peer.get_id());
+            assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx2_id));
         }
 
         node.join_subsystem_manager().await;
@@ -319,16 +364,23 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         ))
         .await;
 
-        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
-        assert_eq!(peer.get_id(), adjusted_peer);
-        assert_eq!(
-            score,
-            P2pError::ProtocolError(ProtocolError::DuplicatedTransactionAnnouncement(
-                tx.transaction().get_id()
-            ))
-            .ban_score()
-        );
-        node.assert_no_sync_message().await;
+        if protocol_version == SupportedProtocolVersion::V1.into() {
+            let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+            assert_eq!(peer.get_id(), adjusted_peer);
+            assert_eq!(
+                score,
+                P2pError::ProtocolError(ProtocolError::DuplicatedTransactionAnnouncement(
+                    tx.transaction().get_id()
+                ))
+                .ban_score()
+            );
+            node.assert_no_sync_message().await;
+        } else {
+            // In V2 the peer is not punished for sending duplicate announcements.
+            node.assert_no_peer_manager_event().await;
+            // Still, the node shouldn't react to this announcement.
+            node.assert_no_sync_message().await;
+        }
 
         node.join_subsystem_manager().await;
     })
@@ -482,12 +534,16 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 }
 
 /// Creates a simple transaction.
-fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
+fn transaction_with_amount(out_point: Id<GenBlock>, amount_atoms: u128) -> SignedTransaction {
     let tx = Transaction::new(
         0x00,
         vec![TxInput::from_utxo(OutPointSourceId::from(out_point), 0)],
-        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
+        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(amount_atoms)))],
     )
     .unwrap();
     SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+}
+
+fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
+    transaction_with_amount(out_point, 1)
 }

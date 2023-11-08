@@ -25,6 +25,7 @@ utils = { path = "../utils/" }
 async-trait.workspace = true
 bytes.workspace = true
 enum-iterator.workspace = true
+dyn-clone.workspace = true
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true

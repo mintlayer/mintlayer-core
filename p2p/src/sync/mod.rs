@@ -24,6 +24,7 @@ mod types;
 
 use std::collections::HashMap;
 
+use dyn_clone::DynClone;
 use futures::never::Never;
 use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
@@ -88,6 +89,9 @@ pub struct SyncManager<T: NetworkingService> {
     peers: HashMap<PeerId, PeerContext>,
 
     time_getter: TimeGetter,
+
+    /// SyncManager's observer for use by tests.
+    observer: Option<BoxedObserver>,
 }
 
 /// Syncing manager
@@ -109,6 +113,31 @@ where
         peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
         time_getter: TimeGetter,
     ) -> Self {
+        Self::new_generic(
+            chain_config,
+            p2p_config,
+            messaging_handle,
+            syncing_event_receiver,
+            chainstate_handle,
+            mempool_handle,
+            peer_mgr_event_sender,
+            time_getter,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_generic(
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
+        messaging_handle: T::MessagingHandle,
+        syncing_event_receiver: T::SyncingEventReceiver,
+        chainstate_handle: chainstate::ChainstateHandle,
+        mempool_handle: MempoolHandle,
+        peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
+        time_getter: TimeGetter,
+        observer: Option<BoxedObserver>,
+    ) -> Self {
         Self {
             chain_config,
             p2p_config,
@@ -119,6 +148,7 @@ where
             mempool_handle,
             peers: Default::default(),
             time_getter,
+            observer,
         }
     }
 
@@ -220,7 +250,6 @@ where
                 let mut mgr = peer_v2::transaction_manager::PeerTransactionSyncManager::<T>::new(
                     peer_id,
                     common_services,
-                    Arc::clone(&self.chain_config),
                     Arc::clone(&self.p2p_config),
                     self.chainstate_handle.clone(),
                     self.mempool_handle.clone(),
@@ -229,6 +258,7 @@ where
                     self.messaging_handle.clone(),
                     local_event_receiver,
                     self.time_getter.clone(),
+                    self.observer.clone(),
                 );
 
                 peer_tasks.spawn(
@@ -404,6 +434,17 @@ pub async fn subscribe_to_tx_processed(
 
     Ok(receiver)
 }
+
+pub trait Observer: DynClone {
+    /// This will be called on each iteration of PeerTransactionSyncManager's main loop
+    /// (currently only used by Peer V2).
+    fn on_new_transaction_sync_mgr_main_loop_iteration(&mut self, peer_id: PeerId);
+}
+
+pub type BoxedObserver = Box<dyn Observer + Send + Sync>;
+
+// Note: this makes Box<dyn Observer> clonable.
+dyn_clone::clone_trait_object!(Observer);
 
 #[cfg(test)]
 mod tests;
