@@ -30,7 +30,7 @@ use utils::sync::Arc;
 use crate::{
     config::P2pConfig,
     error::{P2pError, ProtocolError},
-    message::{TransactionResponse, TxnSyncMessage},
+    message::{TransactionResponse, TxSyncMessage},
     net::{
         types::services::{Service, Services},
         NetworkingService,
@@ -48,17 +48,17 @@ use crate::{
 /// Transaction sync manager.
 ///
 /// Syncing logic runs in a separate task for each peer.
-pub struct PeerTxnSyncManager<T: NetworkingService> {
+pub struct PeerTxSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     _chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_msg_rx: Receiver<TxnSyncMessage>,
-    local_event_rx: UnboundedReceiver<LocalEvent>,
+    sync_msg_receiver: Receiver<TxSyncMessage>,
+    local_event_receiver: UnboundedReceiver<LocalEvent>,
     _time_getter: TimeGetter,
     /// A rolling filter of all known transactions (sent to us or sent by us)
     known_transactions: KnownTransactions,
@@ -67,7 +67,7 @@ pub struct PeerTxnSyncManager<T: NetworkingService> {
     announced_transactions: BTreeSet<Id<Transaction>>,
 }
 
-impl<T> PeerTxnSyncManager<T>
+impl<T> PeerTxSyncManager<T>
 where
     T: NetworkingService,
     T::MessagingHandle: MessagingService,
@@ -80,10 +80,10 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_msg_rx: Receiver<TxnSyncMessage>,
+        peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
+        sync_msg_receiver: Receiver<TxSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_rx: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
@@ -95,10 +95,10 @@ where
             common_services,
             chainstate_handle,
             mempool_handle,
-            peer_manager_sender,
+            peer_mgr_event_sender,
             messaging_handle,
-            sync_msg_rx,
-            local_event_rx,
+            sync_msg_receiver,
+            local_event_receiver,
             _time_getter: time_getter,
             known_transactions,
             announced_transactions: BTreeSet::new(),
@@ -121,12 +121,12 @@ where
     async fn main_loop(&mut self) -> Result<()> {
         loop {
             tokio::select! {
-                message = self.sync_msg_rx.recv() => {
+                message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
 
-                event = self.local_event_rx.recv() => {
+                event = self.local_event_receiver.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_local_event(event)?;
                 }
@@ -134,8 +134,8 @@ where
         }
     }
 
-    fn send_message(&mut self, message: TxnSyncMessage) -> Result<()> {
-        self.messaging_handle.send_txn_sync_message(self.id(), message)
+    fn send_message(&mut self, message: TxSyncMessage) -> Result<()> {
+        self.messaging_handle.send_tx_sync_message(self.id(), message)
     }
 
     fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
@@ -151,7 +151,7 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_message(TxnSyncMessage::NewTransaction(txid))
+                    self.send_message(TxSyncMessage::NewTransaction(txid))
                 } else {
                     Ok(())
                 }
@@ -159,18 +159,18 @@ where
         }
     }
 
-    async fn handle_message(&mut self, message: TxnSyncMessage) -> Result<()> {
+    async fn handle_message(&mut self, message: TxSyncMessage) -> Result<()> {
         log::trace!(
-            "[peer id = {}] Handling txn sync message from the peer: {message:?}",
+            "[peer id = {}] Handling tx sync message from the peer: {message:?}",
             self.id()
         );
 
         let res = match message {
-            TxnSyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
-            TxnSyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
-            TxnSyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
+            TxSyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
+            TxSyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
+            TxSyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
@@ -193,7 +193,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.send_message(TxnSyncMessage::TransactionResponse(res))?;
+        self.send_message(TxSyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -219,7 +219,7 @@ where
                 .await??;
             match tx_status {
                 mempool::TxStatus::InMempool => {
-                    self.peer_manager_sender.send(
+                    self.peer_mgr_event_sender.send(
                         PeerManagerEvent::NewValidTransactionReceived {
                             peer_id: self.id(),
                             txid,
@@ -325,7 +325,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.send_message(TxnSyncMessage::TransactionRequest(tx))?;
+            self.send_message(TxSyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 

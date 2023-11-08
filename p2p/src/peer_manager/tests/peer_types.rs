@@ -65,18 +65,22 @@ fn validate_services() {
             protocol_config: Default::default(),
         });
 
-        let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+        let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
         let time_getter = P2pBasicTestTimeGetter::new();
-        let connectivity_handle =
-            ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
+        let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
+            vec![],
+            cmd_sender,
+            conn_event_receiver,
+        );
 
         let mut pm = PeerManager::<TestNetworkingService, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             connectivity_handle,
-            peer_rx,
+            peer_mgr_event_receiver,
             time_getter.get_time_getter(),
             peerdb_inmemory_store(),
         )

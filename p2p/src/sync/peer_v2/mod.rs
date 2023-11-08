@@ -14,4 +14,4 @@
 // limitations under the License.
 
 pub mod block_mgr;
-pub mod txn_mgr;
+pub mod tx_mgr;

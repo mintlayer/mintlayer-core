@@ -168,7 +168,7 @@ struct PendingConnect {
 
 struct PendingDisconnect {
     peerdb_action: PeerDisconnectionDbAction,
-    response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
+    response_sender: Option<oneshot_nofail::Sender<crate::Result<()>>>,
 }
 
 pub struct PeerManager<T, S>
@@ -187,7 +187,7 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// Channel receiver for receiving control events
-    peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
+    peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
 
     /// Hashmap of pending outbound connections
     pending_outbound_connects: HashMap<SocketAddress, PendingConnect>,
@@ -235,7 +235,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
+        peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
@@ -243,7 +243,7 @@ where
             chain_config.clone(),
             p2p_config.clone(),
             handle,
-            peer_mgr_event_rx,
+            peer_mgr_event_receiver,
             time_getter,
             peerdb_storage,
             None,
@@ -256,7 +256,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
+        peer_mgr_event_receiver: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
         observer: Option<Box<dyn Observer + Send>>,
@@ -283,7 +283,7 @@ where
             p2p_config,
             time_getter,
             peer_connectivity_handle: handle,
-            peer_mgr_event_rx,
+            peer_mgr_event_receiver,
             pending_outbound_connects: HashMap::new(),
             pending_disconnects: HashMap::new(),
             peers: BTreeMap::new(),
@@ -610,7 +610,7 @@ where
         &mut self,
         peer_id: PeerId,
         peerdb_action: PeerDisconnectionDbAction,
-        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
+        response_sender: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
         log::debug!("disconnect peer {peer_id}");
         let res = self.try_disconnect(peer_id);
@@ -621,15 +621,15 @@ where
                     peer_id,
                     PendingDisconnect {
                         peerdb_action,
-                        response,
+                        response_sender,
                     },
                 );
                 assert!(old_value.is_none());
             }
             Err(e) => {
                 log::debug!("disconnecting new peer {peer_id} failed: {e}");
-                if let Some(response) = response {
-                    response.send(Err(e));
+                if let Some(response_sender) = response_sender {
+                    response_sender.send(Err(e));
                 }
             }
         }
@@ -1003,7 +1003,7 @@ where
 
             if let Some(PendingDisconnect {
                 peerdb_action,
-                response,
+                response_sender,
             }) = self.pending_disconnects.remove(&peer_id)
             {
                 match peerdb_action {
@@ -1018,8 +1018,8 @@ where
                     },
                 }
 
-                if let Some(response) = response {
-                    response.send(Ok(()));
+                if let Some(response_sender) = response_sender {
+                    response_sender.send(Ok(()));
                 }
             }
 
@@ -1272,13 +1272,13 @@ where
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.connect(address, OutboundConnectType::Manual { response_sender });
             }
-            PeerManagerEvent::Disconnect(peer_id, peerdb_action, response) => {
-                self.disconnect(peer_id, peerdb_action, Some(response));
+            PeerManagerEvent::Disconnect(peer_id, peerdb_action, response_sender) => {
+                self.disconnect(peer_id, peerdb_action, Some(response_sender));
             }
-            PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
+            PeerManagerEvent::AdjustPeerScore(peer_id, score, response_sender) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
                 self.adjust_peer_score(peer_id, score);
-                response.send(Ok(()));
+                response_sender.send(Ok(()));
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
@@ -1296,39 +1296,39 @@ where
                     peer.last_tx_time = Some(self.time_getter.get_time());
                 }
             }
-            PeerManagerEvent::GetPeerCount(response) => {
-                response.send(self.active_peer_count());
+            PeerManagerEvent::GetPeerCount(response_sender) => {
+                response_sender.send(self.active_peer_count());
             }
-            PeerManagerEvent::GetBindAddresses(response) => {
+            PeerManagerEvent::GetBindAddresses(response_sender) => {
                 let addr = self.peer_connectivity_handle.local_addresses().to_vec();
-                response.send(addr);
+                response_sender.send(addr);
             }
-            PeerManagerEvent::GetConnectedPeers(response) => {
+            PeerManagerEvent::GetConnectedPeers(response_sender) => {
                 let peers = self.get_connected_peers();
-                response.send(peers);
+                response_sender.send(peers);
             }
-            PeerManagerEvent::AddReserved(address, response) => {
+            PeerManagerEvent::AddReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.peerdb.add_reserved_node(address);
                 // Initiate new outbound connection without waiting for `heartbeat`
                 self.connect(address, OutboundConnectType::Reserved);
-                response.send(Ok(()));
+                response_sender.send(Ok(()));
             }
-            PeerManagerEvent::RemoveReserved(address, response) => {
+            PeerManagerEvent::RemoveReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.peerdb.remove_reserved_node(address);
-                response.send(Ok(()));
+                response_sender.send(Ok(()));
             }
-            PeerManagerEvent::ListBanned(response) => {
-                response.send(self.peerdb.list_banned().cloned().collect())
+            PeerManagerEvent::ListBanned(response_sender) => {
+                response_sender.send(self.peerdb.list_banned().cloned().collect())
             }
-            PeerManagerEvent::Ban(address, response) => {
+            PeerManagerEvent::Ban(address, response_sender) => {
                 self.ban(address);
-                response.send(Ok(()));
+                response_sender.send(Ok(()));
             }
-            PeerManagerEvent::Unban(address, response) => {
+            PeerManagerEvent::Unban(address, response_sender) => {
                 self.peerdb.unban(&address);
-                response.send(Ok(()));
+                response_sender.send(Ok(()));
             }
             PeerManagerEvent::GenericQuery(query_func) => {
                 query_func(self);
@@ -1495,10 +1495,10 @@ where
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     ///
-    /// `loop_started_tx` is a helper channel for unit testing (it notifies when it's safe to change the time with `time_getter`).
+    /// `loop_started_sender` is a helper channel for unit testing (it notifies when it's safe to change the time with `time_getter`).
     async fn run_internal(
         &mut self,
-        loop_started_tx: Option<oneshot_nofail::Sender<()>>,
+        loop_started_sender: Option<oneshot_nofail::Sender<()>>,
     ) -> crate::Result<Never> {
         let anchor_peers = self.peerdb.anchors().clone();
         if anchor_peers.is_empty() {
@@ -1531,13 +1531,13 @@ where
         // "block spacing" is 10 min instead of out 2. TODO: should we use bigger time diff?
         let stale_tip_time_diff = *self.chain_config.target_block_spacing() * 3;
 
-        if let Some(chan) = loop_started_tx {
+        if let Some(chan) = loop_started_sender {
             chan.send(());
         }
 
         loop {
             tokio::select! {
-                event_res = self.peer_mgr_event_rx.recv() => {
+                event_res = self.peer_mgr_event_receiver.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
                     heartbeat_call_needed = true;
                 }

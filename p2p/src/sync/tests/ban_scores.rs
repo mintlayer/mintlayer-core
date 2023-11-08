@@ -53,9 +53,9 @@ fn ban_scores() {
 #[tracing::instrument]
 #[tokio::test]
 async fn peer_handle_result() {
-    let (peer_manager_sender, mut peer_manager_receiver) = unbounded_channel();
+    let (peer_mgr_event_sender, mut peer_mgr_event_receiver) = unbounded_channel();
     logging::spawn_in_current_span(async move {
-        while let Some(event) = peer_manager_receiver.recv().await {
+        while let Some(event) = peer_mgr_event_receiver.recv().await {
             match event {
                 crate::PeerManagerEvent::AdjustPeerScore(_, _, score) => {
                     score.send(Ok(()));
@@ -78,7 +78,7 @@ async fn peer_handle_result() {
         P2pError::MempoolError(mempool::error::Error::Validity(TxValidationError::TipMoved)),
     ] {
         let handle_res = peer_common::handle_message_processing_result(
-            &peer_manager_sender,
+            &peer_mgr_event_sender,
             PeerId::new(),
             Err(err),
         )

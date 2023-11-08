@@ -41,7 +41,7 @@ pub enum BlockSyncMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TxnSyncMessage {
+pub enum TxSyncMessage {
     NewTransaction(Id<Transaction>),
     TransactionRequest(Id<Transaction>),
     TransactionResponse(TransactionResponse),

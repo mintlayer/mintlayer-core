@@ -55,14 +55,15 @@ where
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
-    let (mut pm, _tx, _shutdown_sender, _subscribers_sender) = make_peer_manager_custom::<T>(
-        A::make_transport(),
-        addr,
-        Arc::clone(&config),
-        p2p_config,
-        time_getter.get_time_getter(),
-    )
-    .await;
+    let (mut pm, _peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager_custom::<T>(
+            A::make_transport(),
+            addr,
+            Arc::clone(&config),
+            p2p_config,
+            time_getter.get_time_getter(),
+        )
+        .await;
 
     let address = TestAddressMaker::new_random_address();
     let peer_id = PeerId::new();
@@ -125,18 +126,19 @@ fn test_addr_list_handling_inbound() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle =
-        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
-        peer_rx,
+        peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -160,26 +162,26 @@ fn test_addr_list_handling_inbound() {
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected result: {v:?}"),
     }
 
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected result: {v:?}"),
     }
 
     // Peer manager sends response normally to first address list request
     pm.handle_addr_list_request(peer_id_1);
-    let cmd = cmd_rx.try_recv().unwrap();
+    let cmd = cmd_receiver.try_recv().unwrap();
     let (peer_id, peer_msg) = cmd_to_peer_man_msg(cmd);
     assert_eq!(peer_id, peer_id_1);
     assert_matches!(peer_msg, PeerManagerMessage::AddrListResponse(_));
 
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected result: {v:?}"),
     }
@@ -187,7 +189,7 @@ fn test_addr_list_handling_inbound() {
     // Other requests are ignored but the peer is not scored
     pm.handle_addr_list_request(peer_id_1);
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected result: {v:?}"),
     }
@@ -228,18 +230,19 @@ fn test_addr_list_handling_outbound() {
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle =
-        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
-        peer_rx,
+        peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -258,7 +261,7 @@ fn test_addr_list_handling_outbound() {
     pm.connect(peer_address, OutboundConnectType::Automatic);
 
     // New peer connection is requested
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Ok(Command::Connect {
             address,
             local_services_override: _,
@@ -270,19 +273,19 @@ fn test_addr_list_handling_outbound() {
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected result: {v:?}"),
     }
 
     // Address list is requested from the connected peer
-    let cmd = cmd_rx.try_recv().unwrap();
+    let cmd = cmd_receiver.try_recv().unwrap();
     let (peer_id, peer_msg) = cmd_to_peer_man_msg(cmd);
     assert_eq!(peer_id, peer_id_1);
     assert_matches!(peer_msg, PeerManagerMessage::AddrListRequest(_));
 
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected result: {v:?}"),
     }
@@ -295,7 +298,7 @@ fn test_addr_list_handling_outbound() {
     assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 
     // No more messages
-    match cmd_rx.try_recv() {
+    match cmd_receiver.try_recv() {
         Err(_) => {}
         v => panic!("unexpected result: {v:?}"),
     }
@@ -324,21 +327,22 @@ async fn resend_own_addresses() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
         listening_addresses.clone(),
-        cmd_tx,
-        conn_rx,
+        cmd_sender,
+        conn_event_receiver,
     );
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
-        peer_rx,
+        peer_mgr_event_receiver,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -360,7 +364,7 @@ async fn resend_own_addresses() {
 
         // New peer connection is requested
         while !matches!(
-            cmd_rx.try_recv().unwrap(),
+            cmd_receiver.try_recv().unwrap(),
             Command::Connect {
                 address: _,
                 local_services_override: _
@@ -377,12 +381,12 @@ async fn resend_own_addresses() {
     }
     assert_eq!(pm.peers.len(), peer_count);
 
-    let (started_tx, started_rx) = oneshot_nofail::channel();
-    logging::spawn_in_current_span(async move { pm.run_internal(Some(started_tx)).await });
-    started_rx.await.unwrap();
+    let (started_sender, started_receiver) = oneshot_nofail::channel();
+    logging::spawn_in_current_span(async move { pm.run_internal(Some(started_sender)).await });
+    started_receiver.await.unwrap();
 
     // Flush all pending messages
-    while cmd_rx.try_recv().is_ok() {}
+    while cmd_receiver.try_recv().is_ok() {}
 
     // Advance the current time by 5 days (resends are not deterministic, but this should be more than enough)
     time_getter.advance_time(Duration::from_secs(5 * 24 * 60 * 60));
@@ -390,7 +394,7 @@ async fn resend_own_addresses() {
     // PeerManager should resend own addresses
     let mut listening_addresses = listening_addresses.into_iter().collect::<BTreeSet<_>>();
     while !listening_addresses.is_empty() {
-        let cmd = tokio::time::timeout(Duration::from_secs(60), cmd_rx.recv())
+        let cmd = tokio::time::timeout(Duration::from_secs(60), cmd_receiver.recv())
             .await
             .unwrap()
             .unwrap();

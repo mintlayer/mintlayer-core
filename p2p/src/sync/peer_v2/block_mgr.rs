@@ -67,10 +67,10 @@ pub struct PeerBlockSyncManager<T: NetworkingService> {
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_msg_rx: Receiver<BlockSyncMessage>,
-    local_event_rx: UnboundedReceiver<LocalEvent>,
+    sync_msg_receiver: Receiver<BlockSyncMessage>,
+    local_event_receiver: UnboundedReceiver<LocalEvent>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
@@ -119,10 +119,10 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: ChainstateHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_msg_rx: Receiver<BlockSyncMessage>,
+        peer_mgr_event_sender: UnboundedSender<PeerManagerEvent>,
+        sync_msg_receiver: Receiver<BlockSyncMessage>,
         messaging_handle: T::MessagingHandle,
-        local_event_rx: UnboundedReceiver<LocalEvent>,
+        local_event_receiver: UnboundedReceiver<LocalEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         Self {
@@ -131,10 +131,10 @@ where
             p2p_config,
             common_services,
             chainstate_handle,
-            peer_manager_sender,
+            peer_mgr_event_sender,
             messaging_handle,
-            sync_msg_rx,
-            local_event_rx,
+            sync_msg_receiver,
+            local_event_receiver,
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
@@ -178,7 +178,7 @@ where
 
         loop {
             tokio::select! {
-                message = self.sync_msg_rx.recv() => {
+                message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
@@ -189,7 +189,7 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                event = self.local_event_rx.recv() => {
+                event = self.local_event_receiver.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_local_event(event).await?;
                 }
@@ -359,7 +359,7 @@ where
                 self.send_message(BlockSyncMessage::TestSentinel(id))
             }
         };
-        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_mgr_event_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -746,7 +746,7 @@ where
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
-            self.peer_manager_sender.send(PeerManagerEvent::NewTipReceived {
+            self.peer_mgr_event_sender.send(PeerManagerEvent::NewTipReceived {
                 peer_id: self.id(),
                 block_id,
             })?;
@@ -875,7 +875,7 @@ where
         let (sender, receiver) = oneshot_nofail::channel();
         log::warn!("[peer id = {}] Disconnecting the peer for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
             self.id(), headers_req_stalling, blocks_req_stalling);
-        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
+        self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
             sender,

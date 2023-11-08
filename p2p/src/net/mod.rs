@@ -33,7 +33,7 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config,
-    message::{BlockSyncMessage, PeerManagerMessage, TxnSyncMessage},
+    message::{BlockSyncMessage, PeerManagerMessage, TxSyncMessage},
     types::peer_id::PeerId,
     P2pEventHandler,
 };
@@ -131,8 +131,7 @@ pub trait MessagingService: Clone {
     ) -> crate::Result<()>;
 
     /// Sends a transaction sync message to the peer.
-    fn send_txn_sync_message(&mut self, peer: PeerId, message: TxnSyncMessage)
-        -> crate::Result<()>;
+    fn send_tx_sync_message(&mut self, peer: PeerId, message: TxSyncMessage) -> crate::Result<()>;
 }
 
 #[async_trait]

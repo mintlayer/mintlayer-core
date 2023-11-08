@@ -51,7 +51,7 @@ where
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
 {
-    let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, mut peer_mgr_event_receiver) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
@@ -82,7 +82,7 @@ where
         sync_event_receiver,
         chainstate,
         mempool,
-        tx_peer_manager,
+        peer_mgr_event_sender,
         time_getter.clone(),
     );
 
@@ -118,17 +118,17 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     logging::spawn_in_current_span(async move {
-        let (peer, mut block_sync_msg_rx) = match sync2.poll_next().await.unwrap() {
+        let (peer, mut block_sync_msg_receiver) = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,
                 common_services: _,
                 protocol_version: _,
-                block_sync_msg_rx,
-                txn_sync_msg_rx: _,
-            } => (peer_id, block_sync_msg_rx),
+                block_sync_msg_receiver,
+                tx_sync_msg_receiver: _,
+            } => (peer_id, block_sync_msg_receiver),
             e => panic!("Unexpected event type: {e:?}"),
         };
-        match block_sync_msg_rx.recv().await.unwrap() {
+        match block_sync_msg_receiver.recv().await.unwrap() {
             BlockSyncMessage::HeaderListRequest(_) => {}
             e => panic!("Unexpected event type: {e:?}"),
         };
@@ -146,7 +146,7 @@ where
             .unwrap();
     });
 
-    match rx_peer_manager.recv().await {
+    match peer_mgr_event_receiver.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
             assert_eq!(peer_id, peer_info2.peer_id);
             assert_eq!(

@@ -71,9 +71,9 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         <Self as NetworkingService>::SyncingEventReceiver,
         JoinHandle<()>,
     )> {
-        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (conn_event_tx, conn_event_rx) = mpsc::unbounded_channel();
-        let (syncing_event_tx, syncing_event_rx) = mpsc::unbounded_channel();
+        let (cmd_sender, cmd_receiver) = mpsc::unbounded_channel();
+        let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
+        let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
@@ -83,9 +83,9 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             chain_config,
             Arc::clone(&p2p_config),
             time_getter.clone(),
-            cmd_rx,
-            conn_event_tx,
-            syncing_event_tx,
+            cmd_receiver,
+            conn_event_sender,
+            syncing_event_sender,
             Arc::clone(&shutdown),
             shutdown_receiver,
             subscribers_receiver,
@@ -105,9 +105,11 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         });
 
         Ok((
-            ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_event_rx),
-            MessagingHandle::new(cmd_tx),
-            SyncingEventReceiver { syncing_event_rx },
+            ConnectivityHandle::new(local_addresses, cmd_sender.clone(), conn_event_receiver),
+            MessagingHandle::new(cmd_sender),
+            SyncingEventReceiver {
+                syncing_event_receiver,
+            },
             backend_task,
         ))
     }

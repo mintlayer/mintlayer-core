@@ -54,7 +54,7 @@ use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
-    message::{BlockSyncMessage, HeaderList, TxnSyncMessage},
+    message::{BlockSyncMessage, HeaderList, TxSyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     protocol::{choose_common_protocol_version, ProtocolVersion},
     sync::{subscribe_to_new_tip, SyncManager},
@@ -76,7 +76,7 @@ pub struct TestNode {
     peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
     syncing_event_sender: UnboundedSender<SyncingEvent>,
     block_sync_msg_receiver: UnboundedReceiver<(PeerId, BlockSyncMessage)>,
-    txn_sync_msg_receiver: UnboundedReceiver<(PeerId, TxnSyncMessage)>,
+    tx_sync_msg_receiver: UnboundedReceiver<(PeerId, TxSyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
@@ -112,11 +112,11 @@ impl TestNode {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
 
         let (block_sync_msg_sender, block_sync_msg_receiver) = mpsc::unbounded_channel();
-        let (txn_sync_msg_sender, txn_sync_msg_receiver) = mpsc::unbounded_channel();
+        let (tx_sync_msg_sender, tx_sync_msg_receiver) = mpsc::unbounded_channel();
         let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock {
             block_sync_msg_sender,
-            txn_sync_msg_sender,
+            tx_sync_msg_sender,
         };
         let syncing_event_receiver_mock = SyncingEventReceiverMock {
             events_receiver: syncing_event_receiver,
@@ -149,7 +149,7 @@ impl TestNode {
             peer_manager_event_receiver,
             syncing_event_sender,
             block_sync_msg_receiver,
-            txn_sync_msg_receiver,
+            tx_sync_msg_receiver,
             error_receiver,
             sync_manager_handle,
             shutdown_trigger,
@@ -184,8 +184,8 @@ impl TestNode {
         peer_id: PeerId,
         protocol_version: ProtocolVersion,
     ) -> TestPeer {
-        let (block_sync_msg_tx, block_sync_msg_rx) = mpsc::channel(20);
-        let (txn_sync_msg_tx, txn_sync_msg_rx) = mpsc::channel(20);
+        let (block_sync_msg_sender, block_sync_msg_receiver) = mpsc::channel(20);
+        let (tx_sync_msg_sender, tx_sync_msg_receiver) = mpsc::channel(20);
         let common_protocol_version =
             choose_common_protocol_version(self.protocol_version, protocol_version).unwrap();
         self.syncing_event_sender
@@ -193,11 +193,11 @@ impl TestNode {
                 peer_id,
                 common_services: (*self.p2p_config.node_type).into(),
                 protocol_version: common_protocol_version,
-                block_sync_msg_rx,
-                txn_sync_msg_rx,
+                block_sync_msg_receiver,
+                tx_sync_msg_receiver,
             })
             .unwrap();
-        TestPeer::new(peer_id, block_sync_msg_tx, txn_sync_msg_tx)
+        TestPeer::new(peer_id, block_sync_msg_sender, tx_sync_msg_sender)
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -234,8 +234,8 @@ impl TestNode {
         }
     }
 
-    pub async fn get_sent_txn_sync_message(&mut self) -> (PeerId, TxnSyncMessage) {
-        expect_recv!(self.txn_sync_msg_receiver)
+    pub async fn get_sent_tx_sync_message(&mut self) -> (PeerId, TxSyncMessage) {
+        expect_recv!(self.tx_sync_msg_receiver)
     }
 
     /// Panics if the sync manager returns an error.
@@ -317,7 +317,7 @@ impl TestNode {
         let future = async {
             tokio::select! {
                 _ = self.block_sync_msg_receiver.recv() => {},
-                _ = self.txn_sync_msg_receiver.recv() => {},
+                _ = self.tx_sync_msg_receiver.recv() => {},
             }
         };
 
@@ -353,7 +353,7 @@ impl TestNode {
 
         // Finally, when all services are down, receivers could be closed too
         drop(self.block_sync_msg_receiver);
-        drop(self.txn_sync_msg_receiver);
+        drop(self.tx_sync_msg_receiver);
         drop(self.error_receiver);
         drop(self.peer_manager_event_receiver);
     }
@@ -370,20 +370,20 @@ impl TestNode {
 // Represents a peer that can send messages to a node it is connected to
 pub struct TestPeer {
     peer_id: PeerId,
-    block_sync_msg_tx: Sender<BlockSyncMessage>,
-    txn_sync_msg_tx: Sender<TxnSyncMessage>,
+    block_sync_msg_sender: Sender<BlockSyncMessage>,
+    tx_sync_msg_sender: Sender<TxSyncMessage>,
 }
 
 impl TestPeer {
     pub fn new(
         peer_id: PeerId,
-        block_sync_msg_tx: Sender<BlockSyncMessage>,
-        txn_sync_msg_tx: Sender<TxnSyncMessage>,
+        block_sync_msg_sender: Sender<BlockSyncMessage>,
+        tx_sync_msg_sender: Sender<TxSyncMessage>,
     ) -> Self {
         Self {
             peer_id,
-            block_sync_msg_tx,
-            txn_sync_msg_tx,
+            block_sync_msg_sender,
+            tx_sync_msg_sender,
         }
     }
 
@@ -392,11 +392,11 @@ impl TestPeer {
     }
 
     pub async fn send_block_sync_message(&self, message: BlockSyncMessage) {
-        self.block_sync_msg_tx.send(message).await.unwrap();
+        self.block_sync_msg_sender.send(message).await.unwrap();
     }
 
-    pub async fn send_txn_sync_message(&self, message: TxnSyncMessage) {
-        self.txn_sync_msg_tx.send(message).await.unwrap();
+    pub async fn send_tx_sync_message(&self, message: TxSyncMessage) {
+        self.tx_sync_msg_sender.send(message).await.unwrap();
     }
 
     pub async fn send_headers(&self, headers: Vec<SignedBlockHeader>) {
@@ -539,7 +539,7 @@ impl NetworkingService for NetworkingServiceStub {
 #[derive(Clone)]
 struct MessagingHandleMock {
     block_sync_msg_sender: UnboundedSender<(PeerId, BlockSyncMessage)>,
-    txn_sync_msg_sender: UnboundedSender<(PeerId, TxnSyncMessage)>,
+    tx_sync_msg_sender: UnboundedSender<(PeerId, TxSyncMessage)>,
 }
 
 impl MessagingService for MessagingHandleMock {
@@ -548,8 +548,8 @@ impl MessagingService for MessagingHandleMock {
         Ok(())
     }
 
-    fn send_txn_sync_message(&mut self, peer: PeerId, message: TxnSyncMessage) -> Result<()> {
-        self.txn_sync_msg_sender.send((peer, message)).unwrap();
+    fn send_tx_sync_message(&mut self, peer: PeerId, message: TxSyncMessage) -> Result<()> {
+        self.tx_sync_msg_sender.send((peer, message)).unwrap();
         Ok(())
     }
 }

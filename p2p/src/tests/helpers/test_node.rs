@@ -60,7 +60,7 @@ pub struct TestNode<Transport>
 where
     Transport: TransportSocket,
 {
-    peer_mgr_event_tx: mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: mpsc::UnboundedSender<PeerManagerEvent>,
     local_address: SocketAddress,
     shutdown: Arc<SeqCstAtomicBool>,
     backend_shutdown_sender: oneshot::Sender<()>,
@@ -70,7 +70,7 @@ where
     sync_mgr_join_handle: JoinHandle<P2pError>,
     shutdown_trigger: ShutdownTrigger,
     subsystem_mgr_join_handle: subsystem::ManagerJoinHandle,
-    peer_mgr_notification_rx: mpsc::UnboundedReceiver<PeerManagerNotification>,
+    peer_mgr_notification_receiver: mpsc::UnboundedReceiver<PeerManagerNotification>,
     chainstate: ChainstateHandle,
     dns_seed_addresses: Arc<Mutex<Vec<SocketAddress>>>,
 }
@@ -115,12 +115,12 @@ where
                 time_getter.clone(),
             );
 
-        let (peer_mgr_event_tx, peer_mgr_event_rx) = mpsc::unbounded_channel();
+        let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
         let shutdown = Arc::new(SeqCstAtomicBool::new(false));
         let (backend_shutdown_sender, backend_shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn_handle, messaging_handle, syncing_event_rx, backend_join_handle) =
+        let (conn_handle, messaging_handle, syncing_event_receiver, backend_join_handle) =
             DefaultNetworkingService::<Transport>::start_with_version(
                 transport,
                 vec![bind_address],
@@ -137,15 +137,16 @@ where
 
         let local_address = conn_handle.local_addresses()[0];
 
-        let (peer_mgr_notification_tx, peer_mgr_notification_rx) = mpsc::unbounded_channel();
-        let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_tx));
+        let (peer_mgr_notification_sender, peer_mgr_notification_receiver) =
+            mpsc::unbounded_channel();
+        let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_sender));
         let dns_seed_addresses = Arc::new(Mutex::new(Vec::new()));
 
         let peer_mgr = PeerMgr::<Transport>::new_generic(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn_handle,
-            peer_mgr_event_rx,
+            peer_mgr_event_receiver,
             time_getter.clone(),
             peerdb_inmemory_store(),
             Some(peer_mgr_observer),
@@ -166,10 +167,10 @@ where
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             messaging_handle,
-            syncing_event_rx,
+            syncing_event_receiver,
             chainstate.clone(),
             mempool,
-            peer_mgr_event_tx.clone(),
+            peer_mgr_event_sender.clone(),
             time_getter.clone(),
         );
         let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
@@ -180,7 +181,7 @@ where
         });
 
         TestNode {
-            peer_mgr_event_tx,
+            peer_mgr_event_sender,
             local_address,
             shutdown,
             backend_shutdown_sender,
@@ -190,7 +191,7 @@ where
             sync_mgr_join_handle,
             shutdown_trigger,
             subsystem_mgr_join_handle,
-            peer_mgr_notification_rx,
+            peer_mgr_notification_receiver,
             chainstate,
             dns_seed_addresses,
         }
@@ -209,21 +210,21 @@ where
         &self,
         address: SocketAddress,
     ) -> oneshot_nofail::Receiver<Result<(), P2pError>> {
-        let (connect_result_tx, connect_result_rx) = oneshot_nofail::channel();
-        self.peer_mgr_event_tx
+        let (result_sender, result_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
             .send(PeerManagerEvent::Connect(
                 IpOrSocketAddress::Socket(address.socket_addr()),
-                connect_result_tx,
+                result_sender,
             ))
             .unwrap();
 
-        connect_result_rx
+        result_receiver
     }
 
     pub async fn expect_no_banning(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
-                match self.peer_mgr_notification_rx.recv().await.unwrap() {
+                match self.peer_mgr_notification_receiver.recv().await.unwrap() {
                     PeerManagerNotification::BanScoreAdjustment {
                         address: _,
                         new_score: _,
@@ -242,7 +243,7 @@ where
     pub async fn wait_for_ban_score_adjustment(&mut self) -> (SocketAddress, u32) {
         loop {
             if let PeerManagerNotification::BanScoreAdjustment { address, new_score } =
-                self.peer_mgr_notification_rx.recv().await.unwrap()
+                self.peer_mgr_notification_receiver.recv().await.unwrap()
             {
                 return (address, new_score);
             }
@@ -250,17 +251,19 @@ where
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
 
-        self.peer_mgr_event_tx
+        self.peer_mgr_event_sender
             .send(PeerManagerEvent::GenericQuery(Box::new(
                 move |mgr: &dyn PeerManagerQueryInterface| {
-                    tx.send(TestPeersInfo::from_peer_mgr_peer_contexts(mgr.peers())).unwrap();
+                    response_sender
+                        .send(TestPeersInfo::from_peer_mgr_peer_contexts(mgr.peers()))
+                        .unwrap();
                 },
             )))
             .unwrap();
 
-        rx.recv().await.unwrap()
+        response_receiver.recv().await.unwrap()
     }
 
     pub fn set_dns_seed_addresses(&self, addresses: Vec<SocketAddress>) {

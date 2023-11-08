@@ -681,13 +681,13 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .await
     .unwrap();
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, peer_mgr_event_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
-        rx,
+        peer_mgr_event_receiver,
         time_getter,
         peerdb_inmemory_store(),
     )
@@ -697,14 +697,15 @@ async fn connection_timeout_rpc_notified<T>(
         peer_manager.run().await.unwrap();
     });
 
-    let (rtx, rrx) = oneshot_nofail::channel();
-    tx.send(PeerManagerEvent::Connect(
-        addr2.to_string().parse().unwrap(),
-        rtx,
-    ))
-    .unwrap();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::Connect(
+            addr2.to_string().parse().unwrap(),
+            response_sender,
+        ))
+        .unwrap();
 
-    match timeout(Duration::from_secs(60), rrx).await.unwrap() {
+    match timeout(Duration::from_secs(60), response_receiver).await.unwrap() {
         Ok(Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))) => {}
         event => panic!("unexpected event: {event:?}"),
     }
@@ -787,9 +788,10 @@ where
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot_nofail::channel();
-    tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
-    let bind_addresses = timeout(Duration::from_secs(20), rrx).await.unwrap().unwrap();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    tx1.send(PeerManagerEvent::GetBindAddresses(response_sender)).unwrap();
+    let bind_addresses =
+        timeout(Duration::from_secs(20), response_receiver).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
     let reserved_nodes = bind_addresses
         .iter()
@@ -832,9 +834,10 @@ where
     loop {
         tokio::time::sleep(Duration::from_millis(10)).await;
         time_getter.advance_time(Duration::from_secs(1));
-        let (rtx, rrx) = oneshot_nofail::channel();
-        tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-        let connected_peers = timeout(Duration::from_secs(10), rrx).await.unwrap().unwrap();
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        tx1.send(PeerManagerEvent::GetConnectedPeers(response_sender)).unwrap();
+        let connected_peers =
+            timeout(Duration::from_secs(10), response_receiver).await.unwrap().unwrap();
         if connected_peers.len() == 1 {
             break;
         }
@@ -911,10 +914,10 @@ where
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot_nofail::channel();
-    tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    tx1.send(PeerManagerEvent::GetBindAddresses(response_sender)).unwrap();
 
-    let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+    let bind_addresses = timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
     let reserved_nodes = bind_addresses
         .iter()

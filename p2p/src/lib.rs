@@ -79,7 +79,7 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_mgr_event_sender: mpsc::UnboundedSender<PeerManagerEvent>,
     mempool_handle: MempoolHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
@@ -142,13 +142,13 @@ where
         //
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
-        let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
+        let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
 
         let peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
-            rx_peer_manager,
+            peer_mgr_event_receiver,
             time_getter.clone(),
             peerdb_storage,
         )?;
@@ -174,7 +174,7 @@ where
             syncing_event_receiver,
             chainstate_handle,
             mempool_handle.clone(),
-            tx_peer_manager.clone(),
+            peer_mgr_event_sender.clone(),
             time_getter,
         );
         let shutdown_ = Arc::clone(&shutdown);
@@ -193,7 +193,7 @@ where
         });
 
         Ok(Self {
-            tx_peer_manager,
+            peer_mgr_event_sender,
             mempool_handle,
             shutdown,
             backend_shutdown_sender,

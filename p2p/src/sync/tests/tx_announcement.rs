@@ -34,7 +34,7 @@ use test_utils::random::Seed;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{TransactionResponse, TxnSyncMessage},
+    message::{TransactionResponse, TxSyncMessage},
     protocol::{ProtocolConfig, SupportedProtocolVersion},
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
@@ -70,17 +70,17 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
         let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
         let tx = SignedTransaction::new(tx, vec![]).unwrap();
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
-        let (sent_to, message) = node.get_sent_txn_sync_message().await;
+        let (sent_to, message) = node.get_sent_tx_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            TxnSyncMessage::TransactionRequest(tx.transaction().get_id())
+            TxSyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        peer.send_txn_sync_message(TxnSyncMessage::TransactionResponse(
+        peer.send_tx_sync_message(TxSyncMessage::TransactionResponse(
             TransactionResponse::Found(tx),
         ))
         .await;
@@ -113,7 +113,7 @@ async fn initial_block_download() {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
         node.assert_no_sync_message().await;
@@ -172,7 +172,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
@@ -243,7 +243,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
         if protocol_version == SupportedProtocolVersion::V1.into() {
@@ -294,17 +294,17 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
-        let (sent_to, message) = node.get_sent_txn_sync_message().await;
+        let (sent_to, message) = node.get_sent_tx_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            TxnSyncMessage::TransactionRequest(tx.transaction().get_id())
+            TxSyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
         let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
@@ -350,17 +350,17 @@ async fn valid_transaction(#[case] seed: Seed) {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        peer.send_txn_sync_message(TxnSyncMessage::NewTransaction(tx.transaction().get_id()))
+        peer.send_tx_sync_message(TxSyncMessage::NewTransaction(tx.transaction().get_id()))
             .await;
 
-        let (sent_to, message) = node.get_sent_txn_sync_message().await;
+        let (sent_to, message) = node.get_sent_tx_sync_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
-            TxnSyncMessage::TransactionRequest(tx.transaction().get_id())
+            TxSyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        peer.send_txn_sync_message(TxnSyncMessage::TransactionResponse(
+        peer.send_tx_sync_message(TxSyncMessage::TransactionResponse(
             TransactionResponse::Found(tx.clone()),
         ))
         .await;
@@ -449,10 +449,10 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // Now the orphan has been resolved, both transactions should be announced.
         for _ in 0..2 {
-            let (_peer, msg) = node.get_sent_txn_sync_message().await;
+            let (_peer, msg) = node.get_sent_tx_sync_message().await;
             logging::log::error!("Msg new: {msg:?}");
             let tx_id = match msg {
-                TxnSyncMessage::NewTransaction(tx_id) => tx_id,
+                TxSyncMessage::NewTransaction(tx_id) => tx_id,
                 msg => panic!("Unexpected message {msg:?}"),
             };
 
