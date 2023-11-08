@@ -145,17 +145,19 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (peer_manager, tx, shutdown_sender, subscribers_sender) =
+    let (peer_manager, peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
-    (tx, shutdown_sender, subscribers_sender)
+    (peer_mgr_event_sender, shutdown_sender, subscribers_sender)
 }
 
-async fn get_connected_peers(tx: &UnboundedSender<PeerManagerEvent>) -> Vec<ConnectedPeer> {
+async fn get_connected_peers(
+    event_sender: &UnboundedSender<PeerManagerEvent>,
+) -> Vec<ConnectedPeer> {
     let (response_sender, response_receiver) = oneshot_nofail::channel();
-    tx.send(PeerManagerEvent::GetConnectedPeers(response_sender)).unwrap();
+    event_sender.send(PeerManagerEvent::GetConnectedPeers(response_sender)).unwrap();
     timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap()
 }
 

@@ -264,8 +264,8 @@ where
 
     fn send_local_event(&mut self, event: &LocalEvent) {
         for peer_ctx in self.peers.values_mut() {
-            for tx in &peer_ctx.local_event_senders {
-                let _ = tx.send(event.clone());
+            for sender in &peer_ctx.local_event_senders {
+                let _ = sender.send(event.clone());
             }
         }
     }

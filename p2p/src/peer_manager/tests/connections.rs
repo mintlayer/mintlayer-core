@@ -778,7 +778,7 @@ where
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
+    let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -789,7 +789,9 @@ where
 
     // Get the first peer manager's bind address
     let (response_sender, response_receiver) = oneshot_nofail::channel();
-    tx1.send(PeerManagerEvent::GetBindAddresses(response_sender)).unwrap();
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::GetBindAddresses(response_sender))
+        .unwrap();
     let bind_addresses =
         timeout(Duration::from_secs(20), response_receiver).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
@@ -820,7 +822,7 @@ where
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
+    let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -835,7 +837,9 @@ where
         tokio::time::sleep(Duration::from_millis(10)).await;
         time_getter.advance_time(Duration::from_secs(1));
         let (response_sender, response_receiver) = oneshot_nofail::channel();
-        tx1.send(PeerManagerEvent::GetConnectedPeers(response_sender)).unwrap();
+        peer_mgr_event_sender
+            .send(PeerManagerEvent::GetConnectedPeers(response_sender))
+            .unwrap();
         let connected_peers =
             timeout(Duration::from_secs(10), response_receiver).await.unwrap().unwrap();
         if connected_peers.len() == 1 {
@@ -904,7 +908,7 @@ where
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
+    let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -915,7 +919,9 @@ where
 
     // Get the first peer manager's bind address
     let (response_sender, response_receiver) = oneshot_nofail::channel();
-    tx1.send(PeerManagerEvent::GetBindAddresses(response_sender)).unwrap();
+    peer_mgr_event_sender1
+        .send(PeerManagerEvent::GetBindAddresses(response_sender))
+        .unwrap();
 
     let bind_addresses = timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
@@ -946,7 +952,7 @@ where
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
+    let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -982,7 +988,7 @@ where
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
-    let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
+    let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -996,9 +1002,9 @@ where
     // All peers should discover each other
     loop {
         let connected_peers = tokio::join!(
-            get_connected_peers(&tx1),
-            get_connected_peers(&tx2),
-            get_connected_peers(&tx3)
+            get_connected_peers(&peer_mgr_event_sender1),
+            get_connected_peers(&peer_mgr_event_sender2),
+            get_connected_peers(&peer_mgr_event_sender3)
         );
         let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
 
