@@ -309,6 +309,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
+
             self.setup_pool_and_transfer([encoded_tx])
 
             # sync the wallet
@@ -367,9 +368,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_equal(delegations[0].balance, 10)
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            created_block_ids = await wallet.list_created_blocks_ids()
+            # no created block by us yet
+            assert_equal(0, len(created_block_ids))
             assert_in("Staking started successfully", await wallet.start_staking())
             assert_in("Success", await wallet.select_account(1))
 
+            block_ids = []
             last_delegation_balance = delegations[0].balance
             for _ in range(4, 10):
                 tip_id = node.chainstate_best_block_id()
@@ -382,12 +387,15 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert_equal(len(delegations), 1)
                 assert_greater_than(delegations[0].balance, last_delegation_balance)
                 last_delegation_balance = delegations[0].balance
+                block_ids.append(node.chainstate_best_block_id())
+
 
             # stake to acc1 delegation from acc 0
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("Success", await wallet.stake_delegation(10, delegation_id))
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
             assert_in("Success", await wallet.sync())
+            block_ids.append(node.chainstate_best_block_id())
 
             # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
@@ -398,6 +406,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             tip_id = node.chainstate_best_block_id()
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
             assert_in("Success", await wallet.sync())
+            block_ids.append(node.chainstate_best_block_id())
 
             # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
@@ -427,6 +436,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             g = result.group(1)
             self.log.info(f"extracted group {g}")
             assert_greater_than(int(g), 40000)
+
+            created_block_ids = await wallet.list_created_blocks_ids()
+
+            for block_id in block_ids:
+                assert_in(block_id, created_block_ids)
 
 
 if __name__ == '__main__':

@@ -242,6 +242,11 @@ class WalletCliController:
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, int(balance)) for pool_id, balance in matches]
 
+    async def list_created_blocks_ids(self) -> List[str]:
+        output =  await self._write_command("listcreatedblocksids\n")
+        pattern = r'Id<GenBlock>\{0x([^}]*)\}'
+        return re.findall(pattern, output)
+
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
         output = await self._write_command(f"createdelegation {address} {pool_id}\n")
         pattern = r'Delegation id: ([a-zA-Z0-9]+)'

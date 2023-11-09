@@ -19,7 +19,10 @@ use std::collections::BTreeMap;
 
 use common::{
     address::Address,
-    chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
+        UtxoOutPoint,
+    },
     primitives::{id::WithId, Amount, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -200,6 +203,12 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .collect();
 
         tasks.try_collect().await
+    }
+
+    pub fn get_created_blocks(&self) -> Result<Vec<Id<GenBlock>>, ControllerError<T>> {
+        self.wallet
+            .get_created_blocks(self.account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     async fn get_delegation_share(

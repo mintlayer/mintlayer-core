@@ -1508,6 +1508,11 @@ impl Account {
         db_tx.set_account(&self.get_account_id(), &self.account_info)?;
         Ok(())
     }
+
+    pub fn get_created_blocks(&self) -> Vec<Id<GenBlock>> {
+        self.output_cache
+            .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
+    }
 }
 
 /// There are some preselected inputs like the Token account inputs with a nonce
