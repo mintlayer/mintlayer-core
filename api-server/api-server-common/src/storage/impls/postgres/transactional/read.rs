@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use pos_accounting::PoolData;
+
 use crate::storage::{
-    impls::postgres::queries::QueryFromConnection, storage_api::ApiServerStorageRead,
+    impls::postgres::queries::QueryFromConnection,
+    storage_api::{ApiServerStorageRead, Delegation},
 };
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
@@ -104,6 +107,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_delegation(
+        &self,
+        delegation_id: common::chain::DelegationId,
+    ) -> Result<Option<Delegation>, crate::storage::storage_api::ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_delegation(delegation_id).await?;
+
+        Ok(res)
+    }
+
     async fn get_main_chain_block_id(
         &self,
         block_height: common::primitives::BlockHeight,
@@ -113,6 +126,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_main_chain_block_id(block_height).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_data(
+        &self,
+        pool_id: common::chain::PoolId,
+    ) -> Result<Option<PoolData>, crate::storage::storage_api::ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_data(pool_id).await?;
 
         Ok(res)
     }

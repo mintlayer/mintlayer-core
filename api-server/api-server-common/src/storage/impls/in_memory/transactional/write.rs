@@ -16,13 +16,14 @@
 use std::collections::BTreeSet;
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite,
+    ApiServerStorageWrite, Delegation,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -77,6 +78,16 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.set_block(block_id, block)
     }
 
+    async fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction
+            .set_delegation_at_height(delegation_id, delegation, block_height)
+    }
+
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -115,6 +126,15 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_main_chain_block_id(block_height)
+    }
+
+    async fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_pool_data_at_height(pool_id, pool_data, block_height)
     }
 }
 
@@ -157,11 +177,25 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_block_aux_data(block_id)
     }
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.transaction.get_delegation(delegation_id)
+    }
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)
+    }
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        self.transaction.get_pool_data(pool_id)
     }
 
     async fn get_transaction(

@@ -10,7 +10,8 @@ license.workspace = true
 [dependencies]
 common = { path = '../../common' }
 crypto = { path = '../../crypto/' }
-logging = {path = '../../logging'}
+logging = { path = '../../logging'}
+pos_accounting = { path = '../../pos_accounting' }
 serialization = { path = "../../serialization" }
 
 async-trait.workspace = true
