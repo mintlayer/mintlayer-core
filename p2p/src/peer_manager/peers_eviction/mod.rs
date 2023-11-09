@@ -203,7 +203,7 @@ pub fn select_for_eviction_block_relay(
 
     // Give peers some time to have a chance to send blocks
     let mut candidates = filter_old_peers(candidates, Duration::from_secs(120));
-    if candidates.len() < *limits.outbound_block_relay_count {
+    if candidates.len() <= *limits.outbound_block_relay_count {
         return None;
     }
 

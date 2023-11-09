@@ -97,11 +97,11 @@ pub struct ConnectionCountLimits {
     /// The number of inbound peers to preserve based on the last time they sent us new transactions.
     pub preserved_inbound_count_new_transactions: PreservedInboundCountNewTransactions,
 
-    /// The desired number of full relay outbound connections.
+    /// The desired maximum number of full relay outbound connections.
+    /// Note that this limit may be exceeded temporarily.
     pub outbound_full_relay_count: OutboundFullRelayCount,
-    /// The desired number of block relay outbound connections.
-    /// This is supposed to always include one temporary connection, so the value must
-    /// always be greater than zero.
+    /// The desired maximum number of block relay outbound connections.
+    /// Note that this limit may be exceeded temporarily.
     pub outbound_block_relay_count: OutboundBlockRelayCount,
 }
 
@@ -113,7 +113,7 @@ impl ConnectionCountLimits {
             + *self.preserved_inbound_count_new_transactions
     }
 
-    /// Desired number of automatic outbound connections
+    /// The desired maximum number of automatic outbound connections.
     pub fn outbound_full_and_block_relay_count(&self) -> usize {
         *self.outbound_full_relay_count + *self.outbound_block_relay_count
     }
@@ -121,7 +121,7 @@ impl ConnectionCountLimits {
 
 make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(OutboundFullRelayCount, usize, 8);
-make_config_setting!(OutboundBlockRelayCount, usize, 3);
+make_config_setting!(OutboundBlockRelayCount, usize, 2);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -147,6 +147,9 @@ pub const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
+
+/// The number of extra block relay connections that we will establish and evict regularly.
+pub const EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT: usize = 1;
 
 // Use the same parameters as Bitcoin Core (last 5000 addresses)
 const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
@@ -262,12 +265,6 @@ where
         observer: Option<Box<dyn Observer + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
     ) -> crate::Result<Self> {
-        // This value is the number of "permanent" block relay connections plus one, where
-        // the latter represents a temporary connection, which is dropped and re-established
-        // regularly. TODO: don't include the temporary connection into this value, introduce
-        // a separate setting for it instead.
-        assert!(*p2p_config.connection_count_limits.outbound_block_relay_count > 0);
-
         let mut rng = make_pseudo_rng();
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
@@ -537,13 +534,19 @@ where
         Ok(())
     }
 
-    /// Initiate a new outbound connection or send error to `response` if it's not possible
+    /// Initiate a new outbound connection or send an error via `response_sender` if it's not possible
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
+        // TODO: why do we prioritize block relay connections here?
+        // Note: in bitcoin they first create block relay connections to anchor addresses
+        // (which we handle separately, before the first heartbeat), then they create full
+        // relay connections until they hit the limit, and only after that they start creating
+        // ordinary block relay connections.
         let block_relay_only = match &outbound_connect_type {
             OutboundConnectType::Automatic => {
                 *self.p2p_config.enable_block_relay_peers
                     && self.block_relay_peer_count()
                         < *self.p2p_config.connection_count_limits.outbound_block_relay_count
+                            + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT
             }
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
                 false
@@ -867,8 +870,10 @@ where
                     }
                     PeerRole::OutboundBlockRelay => Some(peer.address),
                 })
-                // Skip the last block relay peer because it's a temporary connection
-                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count - 1)
+                // Note: there may be more than outbound_block_relay_count block relay connections
+                // at a given moment, but the extra ones will soon be evicted. Since the latest
+                // connections are most likely to be evicted, we skip them here.
+                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count)
                 .collect();
             self.peerdb.set_anchors(anchor_addresses);
         }
@@ -1049,7 +1054,7 @@ where
         }
     }
 
-    fn automatic_outbound_peers(&self) -> BTreeSet<SocketAddress> {
+    fn automatic_outbound_peer_addresses(&self) -> BTreeSet<SocketAddress> {
         let pending_automatic_outbound =
             self.pending_outbound_connects.iter().filter_map(|(addr, peer)| {
                 match peer.outbound_connect_type {
@@ -1090,17 +1095,23 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let automatic_outbound = self.automatic_outbound_peers();
-        let count = self
-            .p2p_config
-            .connection_count_limits
-            .outbound_full_and_block_relay_count()
-            .saturating_sub(automatic_outbound.len());
-        let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound, count);
+        let cur_auto_outbound_peer_addresses = self.automatic_outbound_peer_addresses();
+        let count = (self.p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
+            + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
+            .saturating_sub(cur_auto_outbound_peer_addresses.len());
+        let new_automatic = self
+            .peerdb
+            .select_new_outbound_addresses(&cur_auto_outbound_peer_addresses, count);
 
-        let pending_outbound =
+        // TODO: in bitcoin they also try to create an extra outbound full relay connection
+        // to an address in a reachable network in which we have no outbound full relay or
+        // manual connections. See CConnman::MaybePickPreferredNetwork for reference.
+
+        let cur_pending_outbound_peer_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
-        let new_reserved = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
+        let new_reserved = self
+            .peerdb
+            .select_reserved_outbound_addresses(&cur_pending_outbound_peer_addresses);
 
         for address in new_automatic.into_iter() {
             self.connect(address, OutboundConnectType::Automatic);

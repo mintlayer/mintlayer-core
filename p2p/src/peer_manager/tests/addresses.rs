@@ -34,7 +34,7 @@ use crate::{
     },
     peer_manager::{
         tests::{make_peer_manager_custom, utils::cmd_to_peer_man_msg},
-        OutboundConnectType, PeerManager,
+        OutboundConnectType, PeerManager, EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT,
     },
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
@@ -349,7 +349,9 @@ async fn resend_own_addresses() {
     )
     .unwrap();
 
-    let peer_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count();
+    // FIXME: is this EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT needed here?
+    let peer_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
+        + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT;
     for peer_index in 0..peer_count {
         let new_peer_id = PeerId::new();
         let peer_address = TestAddressMaker::new_random_address();

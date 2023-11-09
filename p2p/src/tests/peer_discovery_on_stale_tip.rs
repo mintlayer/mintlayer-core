@@ -29,7 +29,8 @@ use crate::{
     config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, ConnectionCountLimits, PEER_MGR_DNS_RELOAD_INTERVAL,
+        self, address_groups::AddressGroup, ConnectionCountLimits,
+        EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT, PEER_MGR_DNS_RELOAD_INTERVAL,
         PEER_MGR_HEARTBEAT_INTERVAL_MAX,
     },
     sync::test_helpers::make_new_block,
@@ -69,7 +70,9 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(make_p2p_config());
 
-    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count() + 1;
+    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
+        + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT
+        + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     let initial_block = make_new_block(
@@ -184,7 +187,9 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(make_p2p_config());
 
-    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count() + 1;
+    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
+        + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT
+        + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     for i in 0..nodes_count {
@@ -286,10 +291,11 @@ fn make_p2p_config() -> P2pConfig {
         sync_stalling_timeout: two_hours.into(),
 
         connection_count_limits: ConnectionCountLimits {
-            // The sum of these values plus one is the number of nodes that the tests will create.
+            // The sum of these values plus EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT is the number
+            // of nodes that the tests will create.
             // We reduce the numbers to make the tests less "heavy".
             outbound_full_relay_count: 2.into(),
-            outbound_block_relay_count: 1.into(),
+            outbound_block_relay_count: 0.into(),
 
             // These values will only matter if max_inbound_connections is low enough.
             // Also, we don't really want to make inbound peer eviction more aggressive,
@@ -357,10 +363,10 @@ async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>
     for node in node_group.nodes() {
         let mut outbound_full_relay_peers_count = 0;
         let mut outbound_block_relay_peers_count = 0;
-        while outbound_full_relay_peers_count < *node_group.p2p_config().connection_count_limits.outbound_full_relay_count
-            // Note: "-1" is used because one of the block relay connections is not permanent,
-            // it's dropped and re-established regularly.
-            || outbound_block_relay_peers_count < *node_group.p2p_config().connection_count_limits.outbound_block_relay_count - 1
+        while outbound_full_relay_peers_count
+            < *node_group.p2p_config().connection_count_limits.outbound_full_relay_count
+            || outbound_block_relay_peers_count
+                < *node_group.p2p_config().connection_count_limits.outbound_block_relay_count
         {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let peers_info = node.get_peers_info().await;
@@ -388,7 +394,7 @@ async fn assert_max_outbound_connections(node_group: &TestNodeGroup<Transport>) 
         );
         assert!(
             outbound_block_relay_peers_count
-                >= *node_group.p2p_config().connection_count_limits.outbound_block_relay_count - 1
+                >= *node_group.p2p_config().connection_count_limits.outbound_block_relay_count
         );
     }
 }
