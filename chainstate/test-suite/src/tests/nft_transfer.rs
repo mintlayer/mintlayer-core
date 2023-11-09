@@ -15,7 +15,7 @@
 
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, TokensError,
+    ConnectTransactionError, IOPolicyError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::primitives::Idable;
@@ -40,6 +40,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -48,7 +49,6 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -99,30 +99,31 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .contains_key(&issuance_outpoint_id));
 
         // Try to transfer NFT with wrong ID
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id: TokenId::random_using(&mut rng),
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let random_token_id = TokenId::random_using(&mut rng);
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id, 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id: random_token_id,
+                    amount: Amount::from_atoms(1),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, Amount::from_atoms(1))
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(random_token_id)),
+                    tx_id.into()
+                )
             ))
         );
     })
@@ -135,7 +136,6 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -215,32 +215,32 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         ));
 
         // Try to transfer more NFT than we have in input
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(rng.gen_range(2..123)),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id, 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(rng.gen_range(2..123)),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
     })
 }
 
@@ -251,7 +251,6 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let mut rng = make_seedable_rng(seed);
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -340,7 +339,6 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_issuance_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let second_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
@@ -356,44 +354,44 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         // Try to spend 2 NFTs but use one ID
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id, 2),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id: first_token_id,
-                            amount: Amount::from_atoms(2),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id, 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id: first_token_id,
+                    amount: Amount::from_atoms(2),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(first_token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
     })
 }
 
@@ -404,7 +402,6 @@ fn nft_valid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -509,7 +506,6 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let token_id =
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
@@ -535,27 +531,25 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         // Try print Nfts on transfer
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    Amount::from_atoms(1),
-                    Amount::from_atoms(2)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
                 )
             ))
         );

@@ -45,7 +45,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 }
             })?;
 
-            let inputs_utxos = super::get_inputs_utxos(&utxo_view, inputs)?;
+            let inputs_utxos = super::collect_inputs_utxos(&utxo_view, inputs)?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`

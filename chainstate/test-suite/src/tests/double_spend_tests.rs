@@ -14,24 +14,22 @@
 // limitations under the License.
 
 use super::*;
-use chainstate::BlockError;
-use chainstate::BlockSource;
-use chainstate::ChainstateError;
-use chainstate::CheckBlockError;
-use chainstate::CheckBlockTransactionsError;
-use chainstate::ConnectTransactionError;
-use chainstate_test_framework::anyonecanspend_address;
-use chainstate_test_framework::empty_witness;
-use chainstate_test_framework::TestFramework;
-use chainstate_test_framework::TransactionBuilder;
-use common::chain::signed_transaction::SignedTransaction;
-use common::chain::UtxoOutPoint;
-use common::primitives::Idable;
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, IOPolicyError,
+};
+use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+};
 use common::{
-    chain::{output_value::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
-    primitives::{Amount, Id},
+    chain::{
+        output_value::OutputValue, signed_transaction::SignedTransaction, OutPointSourceId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::{Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -225,6 +223,7 @@ fn overspend_single_output(#[case] seed: Seed) {
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, tx2_output_value);
+        let second_tx_id = second_tx.transaction().get_id();
 
         assert_eq!(
             tf.make_block_builder()
@@ -232,9 +231,11 @@ fn overspend_single_output(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    Amount::from_atoms(tx1_output_value),
-                    Amount::from_atoms(tx2_output_value)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
+                    second_tx_id.into()
                 )
             ))
         );
@@ -267,6 +268,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
             )
             .with_outputs(vec![tx2_output.clone(), tx2_output])
             .build();
+        let tx2_id = tx2.transaction().get_id();
 
         assert_eq!(
             tf.make_block_builder()
@@ -274,9 +276,11 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    Amount::from_atoms(tx1_output_value),
-                    Amount::from_atoms(tx2_output_value * 2)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
+                    tx2_id.into()
                 )
             ))
         );

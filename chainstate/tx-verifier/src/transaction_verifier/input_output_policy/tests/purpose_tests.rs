@@ -59,7 +59,7 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
     let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
     assert_eq!(result, IOPolicyError::MultiplePoolCreated);
 }
@@ -93,7 +93,7 @@ fn tx_create_multiple_delegations(#[case] seed: Seed) {
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
     let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
     assert_eq!(result, IOPolicyError::MultipleDelegationCreated);
 }
@@ -126,7 +126,7 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         number_of_outputs,
         None,
     );
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
     check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap();
 }
 
@@ -159,7 +159,7 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
 
     let outputs = get_random_outputs_combination(&mut rng, &valid_outputs, number_of_outputs);
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
 
     assert_eq!(
         check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err(),
@@ -196,7 +196,7 @@ fn produce_block_in_tx_output(#[case] seed: Seed) {
     };
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
 
     assert_eq!(
         check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err(),
@@ -216,7 +216,7 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
     let input_utxos = get_random_outputs_combination(&mut rng, &source_inputs, number_of_inputs);
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs.to_vec());
-    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
     assert_eq!(check_tx_inputs_outputs_purposes(&tx, &inputs_utxos), Ok(()));
 }
 

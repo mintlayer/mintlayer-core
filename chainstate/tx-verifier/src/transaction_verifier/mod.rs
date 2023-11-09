@@ -57,9 +57,7 @@ use self::{
     tokens_accounting_undo_cache::{
         TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
     },
-    transferred_amount_check::{
-        check_transferred_amount_in_reward, check_transferred_amounts_and_get_fee,
-    },
+    transferred_amount_check::check_transferred_amount_in_reward,
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
@@ -915,9 +913,9 @@ where
         })?;
 
         let issuance_token_id_getter =
-            |tx_id: &Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
+            |tx_id: Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
                 // issuance transactions are unique, so we use them to get the token id
-                self.get_token_id_from_issuance_tx(*tx_id)
+                self.get_token_id_from_issuance_tx(tx_id)
                     .map_err(|_| ConnectTransactionError::TxVerifierStorage)
             };
 

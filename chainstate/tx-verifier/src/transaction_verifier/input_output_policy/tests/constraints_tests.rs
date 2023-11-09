@@ -156,7 +156,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        let issuance_token_id_getter = |_: &_| unreachable!();
+        let issuance_token_id_getter = |_| unreachable!();
 
         let err = check_tx_inputs_outputs_policy(
             &tx,
@@ -210,7 +210,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        let issuance_token_id_getter = |_: &_| unreachable!();
+        let issuance_token_id_getter = |_| unreachable!();
 
         check_tx_inputs_outputs_policy(
             &tx,
@@ -293,7 +293,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let issuance_token_id_getter = |_: &_| unreachable!();
+        let issuance_token_id_getter = |_| unreachable!();
 
         let res = check_tx_inputs_outputs_policy(
             &tx,
@@ -352,7 +352,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let issuance_token_id_getter = |_: &_| unreachable!();
+        let issuance_token_id_getter = |_| unreachable!();
 
         check_tx_inputs_outputs_policy(
             &tx,
@@ -365,6 +365,3 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .unwrap();
     }
 }
-
-// FIXME: more tests with timelock constraints
-// FIXME: move transfer check tests here?

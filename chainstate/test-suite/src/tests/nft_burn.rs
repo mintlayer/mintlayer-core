@@ -15,7 +15,7 @@
 
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, TokensError,
+    ConnectTransactionError, IOPolicyError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
@@ -32,6 +32,7 @@ use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
 };
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -69,31 +70,31 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Burn more NFT than we have
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(rng.gen_range(2..123)),
-                        }
-                        .into(),
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Burn(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(rng.gen_range(2..123)),
+                }
+                .into(),
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
 
         // Burn zero NFT
         let result = tf
@@ -133,7 +134,6 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();

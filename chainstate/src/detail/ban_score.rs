@@ -495,6 +495,7 @@ impl BanScore for IOPolicyError {
             IOPolicyError::TokenIdQueryFailed => 0,
             IOPolicyError::TokenIdNotFound => 0,
             IOPolicyError::DelegationBalanceNotFound(_) => 0,
+            IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }

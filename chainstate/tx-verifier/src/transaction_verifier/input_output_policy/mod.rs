@@ -73,6 +73,8 @@ pub enum IOPolicyError {
     TokenIdQueryFailed,
     #[error("Token id not found for tx")]
     TokenIdNotFound,
+    #[error("Token issuance must come from transaction utxo")]
+    TokenIssuanceInputMustBeTransactionUtxo,
     #[error("Balance not found for delegation `{0}`")]
     DelegationBalanceNotFound(DelegationId),
 }
@@ -95,14 +97,12 @@ pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
 ) -> Result<Fee, ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
-        Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
+        Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
-    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
+    let inputs_utxos = collect_inputs_utxos(&utxo_view, tx.inputs())?;
 
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
-
-    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
 
     let inputs_utxos = tx
         .inputs()
@@ -132,7 +132,9 @@ where
     };
 
     let issuance_token_id_getter =
-        || issuance_token_id_getter(&tx.get_id()).map_err(|_| IOPolicyError::TokenIdQueryFailed);
+        |tx_id| issuance_token_id_getter(tx_id).map_err(|_| IOPolicyError::TokenIdQueryFailed);
+
+    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
 
     constraints_accumulator
         .process_inputs(
@@ -151,12 +153,12 @@ where
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     constraints_accumulator
-        .consume()
+        .consume(chain_config, block_height)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))
 }
 
 // TODO: use FallibleIterator to avoid manually collecting to a Result
-fn get_inputs_utxos(
+fn collect_inputs_utxos(
     utxo_view: &impl utxo::UtxosView,
     inputs: &[TxInput],
 ) -> Result<Vec<TxOutput>, ConnectTransactionError> {

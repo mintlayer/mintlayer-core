@@ -21,14 +21,10 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
-        tokens::{
-            get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenData,
-            TokenId, TokenIssuanceVersion,
-        },
-        AccountCommand, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction,
-        TxInput, TxOutput,
+        tokens::{get_tokens_issuance_count, make_token_id, TokenData, TokenId},
+        AccountCommand, AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, Id, Idable},
 };
 use fallible_iterator::FallibleIterator;
 use pos_accounting::PoSAccountingView;
@@ -41,106 +37,6 @@ use super::{
     Fee, IOPolicyError, Subsidy,
 };
 
-fn get_total_fee(
-    inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-    outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-) -> Result<Fee, ConnectTransactionError> {
-    // TODO: fees should support tokens as well in the future
-    let outputs_total = *outputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::ZERO);
-    let inputs_total = *inputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::ZERO);
-    (inputs_total - outputs_total)
-        .map(Fee)
-        .ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
-            inputs_total,
-            outputs_total,
-        ))
-}
-
-fn check_transferred_amount(
-    inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-    outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-) -> Result<(), ConnectTransactionError> {
-    for (coin_or_token_id, outputs_total) in outputs_total_map {
-        // Does coin or token exist in inputs?
-        let inputs_total = inputs_total_map.get(coin_or_token_id).unwrap_or(&Amount::ZERO);
-
-        // Do the outputs exceed inputs?
-        if outputs_total > inputs_total {
-            return Err(ConnectTransactionError::AttemptToPrintMoney(
-                *inputs_total,
-                *outputs_total,
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub fn check_transferred_amounts_and_get_fee<U, P, IssuanceTokenIdGetterFunc>(
-    chain_config: &ChainConfig,
-    utxo_view: &U,
-    pos_accounting_view: &P,
-    tx: &Transaction,
-    current_height: BlockHeight,
-    issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<Fee, ConnectTransactionError>
-where
-    U: UtxosView,
-    P: PoSAccountingView,
-    IssuanceTokenIdGetterFunc:
-        Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
-{
-    let mut inputs_total_map = calculate_total_inputs(
-        utxo_view,
-        pos_accounting_view,
-        tx.inputs(),
-        tx.get_id().into(),
-        issuance_token_id_getter,
-    )?;
-
-    let latest_token_version = chain_config
-        .chainstate_upgrades()
-        .version_at_height(current_height)
-        .1
-        .token_issuance_version();
-
-    match latest_token_version {
-        TokenIssuanceVersion::V0 => {
-            check_issuance_fee_burn_v0(chain_config, tx)?;
-        }
-        TokenIssuanceVersion::V1 => {
-            // For V1 all operations that require coins to be burned (token issuance, token supply change, data deposit)
-            // create an accumulated fee that is deducted from the input coins.
-            let total_required_burn = calculate_required_fee_burn(chain_config, tx)?;
-            match inputs_total_map.get_mut(&CoinOrTokenId::Coin) {
-                Some(total_input_coins) => {
-                    *total_input_coins = (*total_input_coins - total_required_burn).ok_or(
-                        ConnectTransactionError::InsufficientCoinsFee(
-                            *total_input_coins,
-                            total_required_burn,
-                        ),
-                    )?;
-                }
-                None => {
-                    ensure!(
-                        total_required_burn == Amount::ZERO,
-                        ConnectTransactionError::InsufficientCoinsFee(
-                            Amount::ZERO,
-                            total_required_burn
-                        )
-                    );
-                }
-            };
-        }
-    }
-
-    let outputs_total_map = calculate_total_outputs(pos_accounting_view, tx.outputs(), None)?;
-
-    check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
-    let total_fee = get_total_fee(&inputs_total_map, &outputs_total_map)?;
-
-    Ok(total_fee)
-}
-
 fn calculate_total_inputs<U, P, IssuanceTokenIdGetterFunc>(
     utxo_view: &U,
     pos_accounting_view: &P,
@@ -152,7 +48,7 @@ where
     U: UtxosView,
     P: PoSAccountingView,
     IssuanceTokenIdGetterFunc:
-        Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
+        Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
     let iter = inputs.iter().map(|input| match input {
         TxInput::Utxo(outpoint) => {
@@ -335,13 +231,13 @@ fn amount_from_outpoint<IssuanceTokenIdGetterFunc>(
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
-        Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
+        Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
     match tx_id {
         OutPointSourceId::Transaction(tx_id) => {
             let issuance_token_id_getter =
                 || -> Result<Option<TokenId>, ConnectTransactionError> {
-                    issuance_token_id_getter(&tx_id)
+                    issuance_token_id_getter(tx_id)
                 };
             get_input_token_id_and_amount(output_value, issuance_token_id_getter)
         }
@@ -438,107 +334,6 @@ pub fn calculate_tokens_burned_in_outputs(
         .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
 }
 
-fn calculate_required_fee_burn(
-    chain_config: &ChainConfig,
-    tx: &Transaction,
-) -> Result<Amount, ConnectTransactionError> {
-    // Check if the fee is enough for issuance and all supply change
-    let issuance_count = get_tokens_issuance_count(tx.outputs()) as u128;
-    let supply_change_count = get_token_supply_change_count(tx.inputs()) as u128;
-    let data_deposit_count = tx
-        .outputs()
-        .iter()
-        .filter(|&output| match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_, _)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => false,
-            TxOutput::DataDeposit(_) => true,
-        })
-        .count() as u128;
-
-    let token_freeze_count = tx
-        .inputs()
-        .iter()
-        .filter(|&input| match input {
-            TxInput::Utxo(_) | TxInput::Account(_) => false,
-            TxInput::AccountCommand(_, account_op) => match account_op {
-                AccountCommand::MintTokens(_, _)
-                | AccountCommand::UnmintTokens(_)
-                | AccountCommand::LockTokenSupply(_)
-                | AccountCommand::ChangeTokenAuthority(_, _) => false,
-                AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => true,
-            },
-        })
-        .count() as u128;
-
-    let token_change_authority_count = tx
-        .inputs()
-        .iter()
-        .filter(|&input| match input {
-            TxInput::Utxo(_) | TxInput::Account(_) => false,
-            TxInput::AccountCommand(_, account_op) => match account_op {
-                AccountCommand::MintTokens(_, _)
-                | AccountCommand::UnmintTokens(_)
-                | AccountCommand::LockTokenSupply(_)
-                | AccountCommand::FreezeToken(_, _)
-                | AccountCommand::UnfreezeToken(_) => false,
-                AccountCommand::ChangeTokenAuthority(_, _) => true,
-            },
-        })
-        .count() as u128;
-
-    let required_fee = (chain_config.token_min_supply_change_fee() * supply_change_count)
-        .and_then(|fee| fee + (chain_config.token_min_issuance_fee() * issuance_count)?)
-        .and_then(|fee| fee + (chain_config.token_min_freeze_fee() * token_freeze_count)?)
-        .and_then(|fee| {
-            fee + (chain_config.token_min_change_authority_fee() * token_change_authority_count)?
-        })
-        .and_then(|fee| fee + (chain_config.data_deposit_min_fee() * data_deposit_count)?)
-        .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
-
-    Ok(required_fee)
-}
-
-fn check_issuance_fee_burn_v0(
-    chain_config: &ChainConfig,
-    tx: &Transaction,
-) -> Result<(), ConnectTransactionError> {
-    // Check if the fee is enough for issuance
-    let issuance_count = get_tokens_issuance_count(tx.outputs());
-    if issuance_count > 0 {
-        let total_burned = tx
-            .outputs()
-            .iter()
-            .filter_map(|output| match output {
-                TxOutput::Burn(v) => v.coin_amount(),
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateStakePool(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _) => None,
-            })
-            .sum::<Option<Amount>>()
-            .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
-
-        if total_burned < chain_config.token_min_issuance_fee() {
-            return Err(ConnectTransactionError::TokensError(
-                TokensError::InsufficientTokenFees(tx.get_id()),
-            ));
-        }
-    }
-
-    Ok(())
-}
 // TODO: add more tests
 
 #[cfg(test)]
@@ -547,11 +342,9 @@ mod tests {
     use common::{
         chain::{
             block::consensus_data::{PoSData, PoWData},
-            config::ChainType,
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, PoolId,
-            UtxoOutPoint,
+            Destination, GenBlock, PoolId, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -780,107 +573,5 @@ mod tests {
                 pledge_amount_2
             )
         )
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn check_tx_spend_from_delegation(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet).build();
-
-        let utxo_db =
-            utxo::UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
-
-        let delegation_id = DelegationId::new(H256::zero());
-        let delegated_amount = Amount::from_atoms(rng.gen_range(1..100_000));
-        let overspend_amount = Amount::from_atoms(delegated_amount.into_atoms() + 1);
-        let withdraw_amount = Amount::from_atoms(rng.gen_range(1..=delegated_amount.into_atoms()));
-
-        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::from([(delegation_id, delegated_amount)]),
-            BTreeMap::new(),
-        );
-        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
-
-        // try overspend balance
-        {
-            let input = TxInput::Account(AccountOutPoint::new(
-                AccountNonce::new(0),
-                AccountSpending::DelegationBalance(delegation_id, overspend_amount),
-            ));
-
-            let output = TxOutput::Transfer(
-                OutputValue::Coin(overspend_amount),
-                Destination::AnyoneCanSpend,
-            );
-            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
-
-            let res = check_transferred_amounts_and_get_fee(
-                &chain_config,
-                &utxo_db,
-                &pos_accounting_db,
-                &tx,
-                BlockHeight::new(0),
-                |_id| Ok(None),
-            )
-            .unwrap_err();
-            assert_eq!(
-                res,
-                ConnectTransactionError::AttemptToPrintMoney(delegated_amount, overspend_amount)
-            );
-        }
-
-        // try overspend input
-        {
-            let input = TxInput::Account(AccountOutPoint::new(
-                AccountNonce::new(0),
-                AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
-            ));
-
-            let output = TxOutput::Transfer(
-                OutputValue::Coin(overspend_amount),
-                Destination::AnyoneCanSpend,
-            );
-            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
-
-            let res = check_transferred_amounts_and_get_fee(
-                &chain_config,
-                &utxo_db,
-                &pos_accounting_db,
-                &tx,
-                BlockHeight::new(0),
-                |_id| Ok(None),
-            )
-            .unwrap_err();
-            assert_eq!(
-                res,
-                ConnectTransactionError::AttemptToPrintMoney(withdraw_amount, overspend_amount)
-            );
-        }
-
-        let input = TxInput::Account(AccountOutPoint::new(
-            AccountNonce::new(0),
-            AccountSpending::DelegationBalance(delegation_id, withdraw_amount),
-        ));
-        let output = TxOutput::Transfer(
-            OutputValue::Coin(withdraw_amount),
-            Destination::AnyoneCanSpend,
-        );
-        let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
-
-        check_transferred_amounts_and_get_fee(
-            &chain_config,
-            &utxo_db,
-            &pos_accounting_db,
-            &tx,
-            BlockHeight::new(0),
-            |_id| Ok(None),
-        )
-        .unwrap();
     }
 }

@@ -474,10 +474,9 @@ fn token_transfer_test(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
-                    genesis_outpoint_id,
-                    0
-                ))
+                ConnectTransactionError::TokensError(
+                    TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id)
+                )
             ))
         );
 
@@ -505,35 +504,39 @@ fn token_transfer_test(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(_),
+                    _
+                ))
             ))
         ));
 
         // Try to transfer token with wrong id
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id: TokenId::random_using(&mut rng),
-                            amount: total_funds,
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let random_token_id = TokenId::random_using(&mut rng);
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id: random_token_id,
+                    amount: total_funds,
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, total_funds)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(random_token_id)),
+                    tx_id.into()
+                )
             ))
         );
 
@@ -910,31 +913,31 @@ fn burn_tokens(#[case] seed: Seed) {
         let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try burn more than we have in input
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        }
-                        .into(),
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Burn(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(total_funds.into_atoms() + 1),
+                }
+                .into(),
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
 
         // Valid case: Burn 25% with burn data, and burn 25% by not specifying an output, and transfer the remaining 50%
         let block_index = tf
@@ -1407,32 +1410,32 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
         let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: (total_funds + Amount::from_atoms(1)).unwrap(),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: (total_funds + Amount::from_atoms(1)).unwrap(),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
 
         // Valid case - try to transfer correct amount of tokens
         let _ = tf
@@ -1505,40 +1508,40 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
         let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: total_funds,
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: total_funds,
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
 
         // Valid case - try to transfer correct amount of tokens
         let _ = tf
@@ -1649,7 +1652,6 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         OutputValue::Coin(token_min_issuance_fee),
                         Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -1664,44 +1666,44 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         // Try to spend sum of input tokens
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(second_issuance_outpoint_id, 2),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id: first_token_id,
-                            amount: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process();
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(second_issuance_outpoint_id, 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id: first_token_id,
+                    amount: Amount::from_atoms(total_funds.into_atoms() + 1),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(first_token_id)),
+                    tx_id.into()
+                ))
             ))
-        ));
+        );
     })
 }
 

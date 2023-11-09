@@ -525,6 +525,7 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
