@@ -27,6 +27,7 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
+use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -1302,6 +1303,8 @@ impl Account {
                         let tx_state =
                             TxState::Confirmed(block_height, block.timestamp(), idx as u64);
                         let wallet_tx = WalletTx::Tx(TxData::new(signed_tx.clone(), tx_state));
+                        self.update_conflicting_txs(&wallet_tx, block, db_tx)?;
+
                         new_tx_was_added |= self
                             .add_wallet_tx_if_relevant_and_remove_from_user_txs(
                                 db_tx,
@@ -1323,6 +1326,23 @@ impl Account {
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
         Ok(new_tx_was_added)
+    }
+
+    /// Check for any conflicting txs and update the new state in the DB
+    fn update_conflicting_txs<B: storage::Backend>(
+        &mut self,
+        wallet_tx: &WalletTx,
+        block: &Block,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> WalletResult<()> {
+        let acc_id = self.get_account_id();
+        let conflicting_tx = self.output_cache.check_conflicting(wallet_tx, block.get_id().into());
+        for tx in conflicting_tx {
+            let id = AccountWalletTxId::new(acc_id.clone(), tx.id());
+            db_tx.set_transaction(&id, tx)?;
+        }
+
+        Ok(())
     }
 
     /// Add a new wallet tx if relevant for this account and remove it from the user transactions
@@ -1391,9 +1411,10 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
+        let account_id = self.get_account_id();
         let mut not_added = vec![];
         let mut counter = db_tx
-            .get_account_unconfirmed_tx_counter(&self.get_account_id())?
+            .get_account_unconfirmed_tx_counter(&account_id)?
             .ok_or(WalletError::WalletNotInitialized)?;
 
         for signed_tx in transactions {
@@ -1403,6 +1424,10 @@ impl Account {
 
             if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                 not_added.push((signed_tx, tx_state));
+            } else {
+                let id =
+                    AccountPrefixedId::new(account_id.clone(), signed_tx.transaction().get_id());
+                db_tx.set_user_transaction(&id, signed_tx)?;
             }
         }
 
@@ -1416,6 +1441,12 @@ impl Account {
 
                 if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                     not_added_next.push((signed_tx, tx_state));
+                } else {
+                    let id = AccountPrefixedId::new(
+                        account_id.clone(),
+                        signed_tx.transaction().get_id(),
+                    );
+                    db_tx.set_user_transaction(&id, signed_tx)?;
                 }
             }
 

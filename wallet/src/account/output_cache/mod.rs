@@ -26,8 +26,8 @@ use common::{
             RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen, RPCIsTokenUnfreezable,
             RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId,
-        PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id},
 };
@@ -584,6 +584,94 @@ impl OutputCache {
         ))
     }
 
+    pub fn check_conflicting(&mut self, tx: &WalletTx, block_id: Id<GenBlock>) -> Vec<&WalletTx> {
+        let is_unconfirmed = match tx.state() {
+            TxState::Inactive(_)
+            | TxState::InMempool(_)
+            | TxState::Conflicted(_)
+            | TxState::Abandoned => true,
+            TxState::Confirmed(_, _, _) => false,
+        };
+
+        if is_unconfirmed {
+            return vec![];
+        }
+
+        let frozen_token_id = tx.inputs().iter().find_map(|inp| match inp {
+            TxInput::Utxo(_) | TxInput::Account(_) => None,
+            TxInput::AccountCommand(_, cmd) => match cmd {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::UnfreezeToken(_) => None,
+                AccountCommand::FreezeToken(frozen_token_id, _) => Some(frozen_token_id),
+            },
+        });
+
+        let mut conflicting_txs = vec![];
+        if let Some(frozen_token_id) = frozen_token_id {
+            for unconfirmed in self.unconfirmed_descendants.keys() {
+                let unconfirmed_tx = self.txs.get(unconfirmed).expect("must be present");
+                if self.uses_token(unconfirmed_tx, frozen_token_id) {
+                    let unconfirmed_tx = self.txs.get_mut(unconfirmed).expect("must be present");
+                    match unconfirmed_tx {
+                        WalletTx::Tx(ref mut tx) => {
+                            tx.set_state(TxState::Conflicted(block_id));
+                        }
+                        WalletTx::Block(_) => {}
+                    };
+
+                    conflicting_txs.push(unconfirmed);
+                }
+            }
+        }
+
+        conflicting_txs
+            .into_iter()
+            .map(|tx_id| self.txs.get(tx_id).expect("must be present"))
+            .collect_vec()
+    }
+
+    fn uses_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
+        unconfirmed_tx.inputs().iter().any(|inp| match inp {
+            TxInput::Utxo(outpoint) => {
+                let output = self
+                    .txs
+                    .get(&outpoint.source_id())
+                    .expect("must be present")
+                    .outputs()
+                    .get(outpoint.output_index() as usize)
+                    .expect("must be present");
+
+                match output {
+                    TxOutput::Transfer(v, _)
+                    | TxOutput::LockThenTransfer(v, _, _)
+                    | TxOutput::Burn(v) => match v {
+                        OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                        OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+                    },
+                    TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::ProduceBlockFromStake(_, _) => false,
+                }
+            }
+            TxInput::AccountCommand(_, cmd) => match cmd {
+                AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::MintTokens(token_id, _)
+                | AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenAuthority(token_id, _)
+                | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
+            },
+            TxInput::Account(_) => false,
+        })
+    }
+
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let already_present = self.txs.get(&tx_id).map_or(false, |tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
@@ -1008,11 +1096,12 @@ impl OutputCache {
             .filter_map(|tx| match tx {
                 WalletTx::Block(_) => None,
                 WalletTx::Tx(tx) => match tx.state() {
-                    TxState::Inactive(_) => Some(tx.get_transaction_with_id()),
-                    TxState::Confirmed(_, _, _)
-                    | TxState::Conflicted(_)
-                    | TxState::InMempool(_)
-                    | TxState::Abandoned => None,
+                    TxState::Inactive(_) | TxState::Conflicted(_) => {
+                        Some(tx.get_transaction_with_id())
+                    }
+                    TxState::Confirmed(_, _, _) | TxState::InMempool(_) | TxState::Abandoned => {
+                        None
+                    }
                 },
             })
             .collect()
@@ -1040,7 +1129,7 @@ impl OutputCache {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
                     WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
                     WalletTx::Tx(tx) => match tx.state() {
-                        TxState::Inactive(_) => {
+                        TxState::Inactive(_) | TxState::Conflicted(_) => {
                             tx.set_state(TxState::Abandoned);
                             for input in tx.get_transaction().inputs() {
                                 match input {

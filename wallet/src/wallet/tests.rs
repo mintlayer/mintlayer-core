@@ -2056,6 +2056,23 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let unconfirmed_token_info =
         wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
+    let amount_to_mint = Amount::from_atoms(rng.gen_range(1..fixed_max_amount.into_atoms()));
+    let mint_tx = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            amount_to_mint,
+            address2,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![mint_tx], block2_amount, 2);
+
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
     let freeze_tx = wallet
         .freeze_token(
             DEFAULT_ACCOUNT_INDEX,
@@ -2079,7 +2096,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
-        AccountNonce::new(1)
+        AccountNonce::new(2)
     );
 
     // unfreeze the token
@@ -2106,7 +2123,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
-        AccountNonce::new(2)
+        AccountNonce::new(3)
     );
 
     // test abandoning a transaction
@@ -2125,7 +2142,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
-        AccountNonce::new(0)
+        AccountNonce::new(1)
     );
 
     let _ = create_block(
@@ -2133,7 +2150,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         &mut wallet,
         vec![freeze_tx, unfreeze_tx],
         block2_amount,
-        2,
+        3,
     );
 
     let unconfirmed_token_info =
@@ -2141,7 +2158,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
-        AccountNonce::new(2)
+        AccountNonce::new(3)
     );
 
     unconfirmed_token_info.check_can_freeze().unwrap();
@@ -2161,6 +2178,26 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         )
         .unwrap();
 
+    let tokens_to_transfer = Amount::from_atoms(rng.gen_range(1..=amount_to_mint.into_atoms()));
+    let some_other_address = PublicKeyHash::from_low_u64_be(1);
+    let new_output = TxOutput::Transfer(
+        OutputValue::TokenV1(issued_token_id, tokens_to_transfer),
+        Destination::Address(some_other_address),
+    );
+
+    let transfer_tokens_transaction = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [new_output],
+            vec![],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_unconfirmed_tx(transfer_tokens_transaction.clone(), &WalletEventsNoOp)
+        .unwrap();
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
     let unconfirmed_token_info =
@@ -2177,7 +2214,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
-        AccountNonce::new(3)
+        AccountNonce::new(4)
     );
 
     // cannot freeze again
@@ -2202,6 +2239,38 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotUnfreezeToken);
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        // confirm the freeze tx but not the transfer
+        vec![freeze_tx],
+        block2_amount,
+        4,
+    );
+
+    // now the transfer tx should be conflicting
+    let pending_txs = wallet.pending_transactions(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(1, pending_txs.len());
+    let pending_tx = pending_txs.first().unwrap();
+    assert_eq!(
+        transfer_tokens_transaction.transaction().get_id(),
+        pending_tx.get_id()
+    );
+    let conflicted_token_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Conflicted.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .remove(&Currency::Token(issued_token_id))
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(
+        conflicted_token_balance,
+        (amount_to_mint - tokens_to_transfer).unwrap()
+    );
 }
 
 #[rstest]
