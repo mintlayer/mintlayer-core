@@ -16,15 +16,16 @@
 use std::collections::BTreeSet;
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite,
+        ApiServerStorageWrite, Delegation,
     },
 };
 
@@ -99,6 +100,18 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         Ok(())
     }
 
+    async fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_delegation_at_height(delegation_id, delegation, block_height).await?;
+
+        Ok(())
+    }
+
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -128,6 +141,18 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.del_main_chain_blocks_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_pool_data_at_height(pool_id, pool_data, block_height).await?;
 
         Ok(())
     }
@@ -193,6 +218,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_delegation(delegation_id).await?;
+
+        Ok(res)
+    }
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
@@ -209,6 +244,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction_with_block(transaction_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_data(pool_id).await?;
 
         Ok(res)
     }

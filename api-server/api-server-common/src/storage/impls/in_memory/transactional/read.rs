@@ -14,12 +14,13 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -55,6 +56,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_transaction_with_block(transaction_id)
     }
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.transaction.get_delegation(delegation_id)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
@@ -82,5 +90,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)
+    }
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        self.transaction.get_pool_data(pool_id)
     }
 }

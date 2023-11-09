@@ -13,6 +13,7 @@ chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
 node-comm = { path = "../../wallet/wallet-node-client" }
+pos_accounting = { path = "../../pos_accounting" }
 utils = { path = "../../utils" }
 
 async-trait.workspace = true

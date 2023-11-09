@@ -16,9 +16,14 @@
 use std::collections::BTreeSet;
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
+use serialization::{Decode, Encode};
 
 use self::block_aux_data::BlockAuxData;
 
@@ -47,6 +52,35 @@ pub enum ApiServerStorageError {
     TxRwRollbackFailed(String),
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct Delegation {
+    spend_destination: Destination,
+    pool_id: PoolId,
+    pledge_amount: Amount,
+}
+
+impl Delegation {
+    pub fn new(spend_destination: Destination, pool_id: PoolId, pledge_amount: Amount) -> Self {
+        Self {
+            spend_destination,
+            pool_id,
+            pledge_amount,
+        }
+    }
+
+    pub fn spend_destination(&self) -> &Destination {
+        &self.spend_destination
+    }
+
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+
+    pub fn pledge_amount(&self) -> Amount {
+        self.pledge_amount
+    }
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -72,10 +106,20 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError>;
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
     async fn get_transaction_with_block(
@@ -128,6 +172,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block: &Block,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -143,6 +194,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
 
     async fn del_main_chain_blocks_above_height(
         &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 }

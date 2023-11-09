@@ -18,9 +18,10 @@ pub mod write;
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{
@@ -107,6 +108,16 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Option<Block>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
+
+        Ok(res)
+    }
+
+    pub async fn get_pool_data(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_data(pool_id).await?;
 
         Ok(res)
     }

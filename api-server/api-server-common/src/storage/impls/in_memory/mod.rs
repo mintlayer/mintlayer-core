@@ -15,11 +15,14 @@
 
 pub mod transactional;
 
-use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
+use crate::storage::storage_api::{
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation,
+};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Unbounded},
@@ -33,7 +36,9 @@ struct ApiServerInMemoryStorage {
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
+    delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
+    pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
@@ -46,7 +51,9 @@ impl ApiServerInMemoryStorage {
             block_aux_data_table: BTreeMap::new(),
             address_balance_table: BTreeMap::new(),
             address_transactions_table: BTreeMap::new(),
+            delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
+            pool_data_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
@@ -140,6 +147,18 @@ impl ApiServerInMemoryStorage {
         Ok(Some(block_aux_data.clone()))
     }
 
+    fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let delegation_result = self.delegation_table.get(&delegation_id);
+        let delegation = match delegation_result {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+        Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
+    }
+
     fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
@@ -150,6 +169,14 @@ impl ApiServerInMemoryStorage {
             None => return Ok(None),
         };
         Ok(Some(*block_id))
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ApiServerStorageError> {
+        let pool_data_result = self.pool_data_table.get(&pool_id);
+        match pool_data_result {
+            Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
+            None => Ok(None),
+        }
     }
 }
 
@@ -244,6 +271,19 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.delegation_table
+            .entry(delegation_id)
+            .or_default()
+            .insert(block_height, delegation.clone());
+        Ok(())
+    }
+
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -269,6 +309,19 @@ impl ApiServerInMemoryStorage {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.main_chain_blocks_table.retain(|k, _| k <= &block_height);
+        Ok(())
+    }
+
+    fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.pool_data_table
+            .entry(pool_id)
+            .or_default()
+            .insert(block_height, pool_data.clone());
         Ok(())
     }
 }

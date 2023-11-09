@@ -16,17 +16,18 @@
 use std::collections::BTreeSet;
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
+use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
 use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
-    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError},
+    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, Delegation},
 };
 
 const VERSION_STR: &str = "version";
@@ -523,6 +524,137 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ON CONFLICT (block_id) DO UPDATE
                     SET block_data = $3, block_height = $2;",
                 &[&block_id.encode(), &height, &block.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_delegation(
+        &mut self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT delegation_data FROM ml_delegations WHERE delegation_id = $1;",
+                &[&delegation_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let data = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let data: Vec<u8> = data.get(0);
+
+        let delegation = Delegation::decode_all(&mut data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id, e
+            ))
+        })?;
+
+        Ok(Some(delegation))
+    }
+
+    pub async fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml_delegations (delegation_id, block_height, delegation_data)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (delegation_id, block_height)
+                    DO UPDATE
+                    SET ... = $3;
+                "#,
+                &[&delegation_id.encode(), &height, &delegation.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_pool_data(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        // TODO add more fields
+        self.tx
+            .query_opt(
+                r#"
+                SELECT address
+                FROM ml_pool_data
+                WHERE pool_id = $1
+                ORDER BY block_height DESC
+                LIMIT 1;
+            "#,
+                &[&pool_id.to_string()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .map_or_else(
+                || Ok(None),
+                |row| {
+                    let pool_data: Vec<u8> = row.get(0);
+                    let pool_data =
+                        PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                            ApiServerStorageError::DeserializationError(format!(
+                                "Pool data deserialization failed: {}",
+                                e
+                            ))
+                        })?;
+
+                    Ok(Some(pool_data))
+                },
+            )
+    }
+
+    // pub async fn del_pool_data_above_height(
+    //     &mut self,
+    //     block_height: BlockHeight,
+    // ) -> Result<(), ApiServerStorageError> {
+    //     let height = Self::block_height_to_postgres_friendly(block_height);
+
+    //     self.tx
+    //         .execute(
+    //             "DELETE FROM ml_pool_data WHERE block_height > $1;",
+    //             &[&height],
+    //         )
+    //         .await
+    //         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+    //     Ok(())
+    // }
+
+    pub async fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        _pool_data: &PoolData,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml_pool_data (pool_id, block_height, ...)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (pool_id, block_height)
+                    DO UPDATE SET ...= $3;
+                "#,
+                &[&pool_id.to_string(), &height, &"TODO"],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
