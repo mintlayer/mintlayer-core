@@ -17,14 +17,20 @@ use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
     ApiServerStorageWrite, ApiServerTransactionRw, Delegation,
 };
+use chainstate::{
+    constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
+    tx_verifier::transaction_verifier::{
+        calculate_pool_owner_reward, calculate_rewards_per_delegation,
+    },
+};
 use common::{
     address::Address,
     chain::{
         block::ConsensusData, config::ChainConfig, output_value::OutputValue,
-        transaction::OutPointSourceId, AccountSpending, Block, Destination, GenBlock,
-        SignedTransaction, Transaction, TxInput, TxOutput,
+        transaction::OutPointSourceId, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{make_delegation_id, PoolData};
 use std::{
@@ -230,6 +236,103 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     Ok(())
 }
 
+async fn calculate_fees<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block: &Block,
+    block_height: BlockHeight,
+) -> Result<Fee, ApiServerStorageError> {
+    let mut total_fees = AccumulatedFee::new();
+    for tx in block.transactions() {
+        let fee = tx_fees(&chain_config, block_height, tx, db_tx).await?;
+        total_fees = total_fees.combine(fee).expect("no overflow");
+    }
+
+    Ok(total_fees
+        .map_into_block_fees(&chain_config, block_height)
+        .expect("no overflow"))
+}
+
+async fn tx_fees<T: ApiServerStorageWrite>(
+    chain_config: &Arc<ChainConfig>,
+    block_height: BlockHeight,
+    tx: &SignedTransaction,
+    db_tx: &mut T,
+) -> Result<AccumulatedFee, ApiServerStorageError> {
+    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
+
+    let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
+
+    let pledge_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
+    // only used for checks for attempted to print money but we don't need to check that here
+    let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        chain_config,
+        block_height,
+        pledge_getter,
+        delegation_balance_getter,
+        tx.inputs(),
+        &inputs_utxos,
+    )
+    .expect("valid block");
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs()).expect("valid block");
+    let consumed_accumulator =
+        inputs_accumulator.satisfy_with(outputs_accumulator).expect("valid block");
+    Ok(consumed_accumulator)
+}
+
+async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
+    inputs_utxos: &Vec<Option<TxOutput>>,
+    db_tx: &mut T,
+) -> Result<BTreeMap<PoolId, Amount>, ApiServerStorageError> {
+    let mut pools = BTreeMap::new();
+    for output in inputs_utxos {
+        match output {
+            Some(
+                TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
+            ) => {
+                let amount =
+                    db_tx.get_pool_data(*pool_id).await?.expect("should exist").pledge_amount();
+                pools.insert(*pool_id, amount);
+            }
+            Some(
+                TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _),
+            ) => {}
+            Some(TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_)) => {
+                //TODO: add when we support tokens
+            }
+            None => {}
+        }
+    }
+    Ok(pools)
+}
+
+async fn collect_inputs_utxos<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    inputs: &[TxInput],
+) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
+    let mut outputs = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let output = match input {
+            TxInput::Utxo(outpoint) => {
+                db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output())
+            }
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+        };
+
+        outputs.push(output);
+    }
+
+    Ok(outputs)
+}
+
 async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
@@ -241,55 +344,75 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
         ConsensusData::PoS(pos_data) => {
             let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
 
-            // TODO: calculate fees like in connect_block_reward()
-            let total_fees = Amount::ZERO;
+            let total_fees = calculate_fees(chain_config, db_tx, block, block_height).await?;
 
             let total_reward =
-                (block_subsidy + total_fees).expect("Block subsidy and fees should not overflow");
+                (block_subsidy + total_fees.0).expect("Block subsidy and fees should not overflow");
 
+            let pool_id = *pos_data.stake_pool_id();
             let pool_data = db_tx
-                .get_pool_data(*pos_data.stake_pool_id())
+                .get_pool_data(pool_id)
                 .await
                 .expect("Unable to get pool data")
                 .expect("Pool should exist");
 
-            let pool_owner_reward = match total_reward - pool_data.cost_per_block() {
-                Some(reward) => (reward * pool_data.margin_ratio_per_thousand().value().into())
-                    .and_then(|v| v / 1000)
-                    .and_then(|v| v + pool_data.cost_per_block())
-                    .expect("Pool owner reward should not overflow"),
-                None => total_reward,
-            };
+            let pool_owner_reward = calculate_pool_owner_reward(
+                total_reward,
+                pool_data.cost_per_block(),
+                pool_data.margin_ratio_per_thousand(),
+            )
+            .expect("Pool owner reward should not overflow");
 
-            let _total_delgations_reward =
+            let total_delegations_reward =
                 (total_reward - pool_owner_reward).expect("Total reward should not underflow");
 
-            // TODO: distribute reward to delegators
-            // <-- distribute_pos_reward()
+            let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
+            let total_delegation_balance: Amount = delegation_shares
+                .values()
+                .map(|delegation| *delegation.balance())
+                .sum::<Option<Amount>>()
+                .expect("no overflow");
 
-            // let delegation_shares = pool_delegations_shares(pool_id)
-            // let total_delegations_balance = delegation_shares.sum()
-            // if total_delegation_balance > 0 {
-            //   let rewards_per_delegation = calculate_rewards_per_delegation(
-            //     delegation_shares,
-            //     pool_id,
-            //     total_delegation_balance,
-            //     total_delegation_reward,
-            //   );
-            //
-            //   rewards_per_delegation.iter().for_each(|(delegation_id, reward)| {
-            //     delegate_staking(delegation_id, reward)
-            //   }
-            //
-            //   total_delegation_reward_distributed = rewards_per_delegation.sum()
-            //
-            //   unallocated_reward = total_delegations_reward - total_delegation_reward_distributed
-            // } else {
-            //   unallocated_reward = total_delegations_reward
-            // }
-            //
-            // total_owner_reward = (pool_owner_reward + unallocated_reward)
-            // increase_pool_pledge(pool_id, total_owner_reward)
+            let unallocated_reward = if total_delegation_balance > Amount::ZERO {
+                let rewards_per_delegation = calculate_rewards_per_delegation(
+                    delegation_shares
+                        .iter()
+                        .map(|(delegation_id, delegation)| (delegation_id, delegation.balance())),
+                    pool_id,
+                    total_delegation_balance,
+                    total_delegations_reward,
+                )
+                .expect("no overflow");
+
+                let total_delegation_reward_distributed = rewards_per_delegation
+                    .iter()
+                    .map(|(_, rewards)| *rewards)
+                    .sum::<Option<Amount>>()
+                    .expect("no overflow");
+
+                for (delegation_id, rewards) in rewards_per_delegation {
+                    let delegation = delegation_shares.get(&delegation_id).expect("must exist");
+                    let delegation = delegation.add_pledge(rewards);
+                    db_tx
+                        .set_delegation_at_height(delegation_id, &delegation, block_height)
+                        .await?;
+                }
+
+                (total_delegations_reward - total_delegation_reward_distributed)
+                    .expect("no underflow")
+            } else {
+                total_delegations_reward
+            };
+
+            let total_owner_reward = (pool_owner_reward + unallocated_reward).expect("no overflow");
+            let pool_data = PoolData::new(
+                pool_data.decommission_destination().clone(),
+                (pool_data.pledge_amount() + total_owner_reward).expect("no overflow"),
+                pool_data.vrf_public_key().clone(),
+                pool_data.margin_ratio_per_thousand(),
+                pool_data.cost_per_block(),
+            );
+            db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
         }
     }
 
@@ -338,65 +461,26 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 
     for input in inputs {
         match input {
+            // TODO: update token states
             | TxInput::AccountCommand(_, _) => {}
             TxInput::Account(outpoint) => {
                 match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, amount) => {
                         // Update delegation pledge
 
+                        //TODO: optimize into a single query when amount is a number in the DB
                         let delegation = db_tx
                             .get_delegation(*delegation_id)
                             .await
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
 
-                        let new_pledge_amount = delegation
-                            .pledge_amount()
-                            .sub(*amount)
-                            .expect("Delegation pledge should not underflow");
+                        let new_delegation = delegation.sub_pledge(*amount);
 
                         db_tx
-                            .set_delegation_at_height(
-                                *delegation_id,
-                                &Delegation::new(
-                                    delegation.spend_destination().clone(),
-                                    *delegation.pool_id(),
-                                    new_pledge_amount,
-                                ),
-                                block_height,
-                            )
+                            .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
                             .await
                             .expect("Unable to update delegation");
-
-                        // Update pool pledge
-
-                        let pool_id = delegation.pool_id();
-
-                        let current_pool_data = db_tx
-                            .get_pool_data(*pool_id)
-                            .await
-                            .expect("Unable to get pool data")
-                            .filter(|c| c.pledge_amount() > Amount::ZERO);
-
-                        if let Some(current_pool_data) = current_pool_data {
-                            let new_pool_pledge = current_pool_data
-                                .pledge_amount()
-                                .sub(*amount)
-                                .expect("Pool pledge should not underflow");
-
-                            let new_pool_data = PoolData::new(
-                                current_pool_data.decommission_destination().clone(),
-                                new_pool_pledge,
-                                current_pool_data.vrf_public_key().clone(),
-                                current_pool_data.margin_ratio_per_thousand(),
-                                current_pool_data.cost_per_block(),
-                            );
-
-                            db_tx
-                                .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)
-                                .await
-                                .expect("Unable to update pool data")
-                        }
                     }
                 }
             }
@@ -410,20 +494,16 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         let input_transaction = db_tx
                             .get_transaction(transaction_id)
                             .await?
-                            .expect("Transaction should exist");
+                            .expect("Transaction should exist")
+                            .1;
 
-                        assert!(
-                            input_transaction.1.transaction().outputs().len()
-                                > outpoint.output_index() as usize
-                        );
-
-                        match &input_transaction.1.transaction().outputs()
+                        match &input_transaction.transaction().outputs()
                             [outpoint.output_index() as usize]
                         {
-                            TxOutput::Burn(_)
-                            | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DataDeposit(_)
+                            TxOutput::CreateDelegationId(_, _)
                             | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::DataDeposit(_)
                             | TxOutput::IssueFungibleToken(_)
                             | TxOutput::IssueNft(_, _, _) => {}
                             TxOutput::CreateStakePool(pool_id, _)
@@ -569,8 +649,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .unwrap_or(Amount::ZERO);
 
                 let new_address_balance = current_address_balance
-                    .sub(stake_pool_data.value())
-                    .expect("Address balance should not underflow");
+                    .add(stake_pool_data.value())
+                    .expect("Address balance should not overflow");
 
                 db_tx
                     .set_address_balance_at_height(
@@ -583,26 +663,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 // Create pool pledge
 
-                let current_pool_data = db_tx
-                    .get_pool_data(*pool_id)
-                    .await
-                    .expect("Unable to get pool data")
-                    .unwrap_or(PoolData::new(
-                        stake_pool_data.decommission_key().clone(),
-                        stake_pool_data.value(),
-                        stake_pool_data.vrf_public_key().clone(),
-                        stake_pool_data.margin_ratio_per_thousand(),
-                        stake_pool_data.cost_per_block(),
-                    ));
-
-                let new_pool_pledge = current_pool_data
-                    .pledge_amount()
-                    .add(stake_pool_data.value())
-                    .expect("Pool balance should not overflow");
-
                 let new_pool_data = PoolData::new(
                     stake_pool_data.decommission_key().clone(),
-                    new_pool_pledge,
+                    stake_pool_data.value(),
                     stake_pool_data.vrf_public_key().clone(),
                     stake_pool_data.margin_ratio_per_thousand(),
                     stake_pool_data.cost_per_block(),
@@ -622,53 +685,19 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to get delegation")
                     .expect("Delegation should exist");
 
-                let new_pledge_amount = delegation
-                    .pledge_amount()
-                    .add(*amount)
-                    .expect("Delegation pledge should not overflow");
+                let new_delegation = delegation.add_pledge(*amount);
 
                 db_tx
-                    .set_delegation_at_height(
-                        *delegation_id,
-                        &Delegation::new(
-                            delegation.spend_destination().clone(),
-                            *delegation.pool_id(),
-                            new_pledge_amount,
-                        ),
-                        block_height,
-                    )
+                    .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
                     .await
                     .expect("Unable to update delegation");
 
-                // Update pool pledge
+                let address =
+                    Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
+                        .expect("Unable to encode address");
+                address_transactions.entry(address).or_default().insert(transaction_id);
 
-                let pool_id = delegation.pool_id();
-
-                let current_pool_data = db_tx
-                    .get_pool_data(*pool_id)
-                    .await
-                    .expect("Unable to get pool data")
-                    .expect("Pool should exist");
-
-                let new_pool_pledge = current_pool_data
-                    .pledge_amount()
-                    .add(*amount)
-                    .expect("Pool pledge should not overflow");
-
-                let new_pool_data = PoolData::new(
-                    current_pool_data.decommission_destination().clone(),
-                    new_pool_pledge,
-                    current_pool_data.vrf_public_key().clone(),
-                    current_pool_data.margin_ratio_per_thousand(),
-                    current_pool_data.cost_per_block(),
-                );
-
-                db_tx
-                    .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)
-                    .await
-                    .expect("Unable to update pool data");
-
-                // TODO: address transaction history
+                // TODO: update address amount?
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {

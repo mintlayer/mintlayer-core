@@ -31,10 +31,9 @@ use axum::{
 };
 use common::{
     address::Address,
-    chain::{Block, Destination, SignedTransaction, Transaction},
+    chain::{Block, DelegationId, Destination, PoolId, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
-use crypto::random::{make_true_rng, Rng};
 use hex::ToHex;
 use serde_json::json;
 use std::{ops::Sub, str::FromStr, sync::Arc};
@@ -66,7 +65,11 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
 
     let router = router.route("/address/:address", get(address));
 
-    router.route("/pool/:id", get(pool))
+    let router = router
+        .route("/pool/:id", get(pool))
+        .route("/pool/:id/delegations", get(pool_delegations));
+
+    router.route("/delegation/:id", get(delegation))
 }
 
 //
@@ -448,26 +451,115 @@ pub async fn address<T: ApiServerStorage>(
 // pool/
 //
 
-#[allow(clippy::unused_async)]
-pub async fn pool(
-    Path(_pool_id): Path<String>,
+pub async fn pool<T: ApiServerStorage>(
+    Path(pool_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    // TODO replace mock with database calls
+    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?;
 
-    let mut rng = make_true_rng();
+    let pool_data = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_pool_data(pool_id)
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::PoolNotFound,
+        ))?;
+
+    let decommission_destination =
+        Address::new(&state.chain_config, pool_data.decommission_destination())
+            .expect("no error in encoding");
+    Ok(Json(json!({
+        "decommission_destination": decommission_destination.get(),
+        "balance": pool_data.pledge_amount(),
+        "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
+        "cost_per_block": pool_data.cost_per_block(),
+        "vrf_public_key": pool_data.vrf_public_key(),
+    })))
+}
+
+pub async fn pool_delegations<T: ApiServerStorage>(
+    Path(pool_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let pool_id: PoolId = H256::from_str(&pool_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?
+        .into();
+
+    let delegations = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_pool_delegations(pool_id)
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        delegations.into_iter().map(|(delegation_id, delegation)|
+            json!({
+            "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
+                "no error in encoding"
+            ).get(),
+            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+                "no error in encoding"
+            ).get(),
+            "balance": delegation.balance(),
+        })
+        ).collect::<Vec<_>>(),
+    ))
+}
+
+pub async fn delegation<T: ApiServerStorage>(
+    Path(delegation_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let delegation_id: DelegationId = H256::from_str(&delegation_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?
+        .into();
+
+    let delegation = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_delegation(delegation_id)
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::DelegationNotFound,
+        ))?;
 
     Ok(Json(json!({
-        "decommission_destination": H256::random_using(&mut rng),
-        "pledged": rng.gen_range(1..100_000_000),
-        "balance": rng.gen_range(1..100_000_000),
-        "delegates": [
-            (0..rng.gen_range(1..20)).map(|_| { json!({
-                "destination": H256::random_using(&mut rng),
-                "pledged": rng.gen_range(1..100_000_000),
-            })}).collect::<Vec<_>>(),
-        ],
-        "history": (0..rng.gen_range(1..20)).map(|_| {
-            H256::random_using(&mut rng)
-        }).collect::<Vec<_>>(),
+        "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+            "no error in encoding"
+        ).get(),
+        "balance": delegation.balance(),
+        "pool_id": Address::new(&state.chain_config, &delegation.pool_id()).expect(
+            "no error in encoding"
+        ).get(),
     })))
 }

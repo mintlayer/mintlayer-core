@@ -16,10 +16,13 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation,
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo,
 };
 use common::{
-    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{
+        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        UtxoOutPoint,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::PoolData;
@@ -39,7 +42,9 @@ struct ApiServerInMemoryStorage {
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
+    pool_delegation_shares_table: BTreeMap<PoolId, BTreeMap<BlockHeight, BTreeSet<DelegationId>>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
+    utxo_table: BTreeMap<UtxoOutPoint, Utxo>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -54,7 +59,9 @@ impl ApiServerInMemoryStorage {
             delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             pool_data_table: BTreeMap::new(),
+            pool_delegation_shares_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
+            utxo_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
@@ -159,6 +166,32 @@ impl ApiServerInMemoryStorage {
         Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
     }
 
+    fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        Ok(self
+            .pool_delegation_shares_table
+            .get(&pool_id)
+            .and_then(|height_map| {
+                height_map.values().last().map(|delegations| {
+                    delegations
+                        .iter()
+                        .map(|id| {
+                            self.delegation_table
+                                .get(id)
+                                .expect("must be present")
+                                .values()
+                                .last()
+                                .map(|delegation| (*id, delegation.clone()))
+                                .expect("must be present")
+                        })
+                        .collect()
+                })
+            })
+            .unwrap_or_default())
+    }
+
     fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
@@ -177,6 +210,10 @@ impl ApiServerInMemoryStorage {
             Some(data) => Ok(data.last_key_value().map(|(_, v)| v.clone())),
             None => Ok(None),
         }
+    }
+
+    fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<Utxo>, ApiServerStorageError> {
+        Ok(self.utxo_table.get(&outpoint).cloned())
     }
 }
 
@@ -281,6 +318,13 @@ impl ApiServerInMemoryStorage {
             .entry(delegation_id)
             .or_default()
             .insert(block_height, delegation.clone());
+
+        self.pool_delegation_shares_table
+            .entry(delegation.pool_id())
+            .or_default()
+            .entry(block_height)
+            .or_default()
+            .insert(delegation_id);
         Ok(())
     }
 

@@ -13,14 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
-    chain::{Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, UtxoOutPoint},
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -63,6 +65,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_delegation(delegation_id)
     }
 
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.transaction.get_pool_delegations(pool_id)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
@@ -97,5 +106,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
         self.transaction.get_pool_data(pool_id)
+    }
+
+    async fn get_utxo(
+        &self,
+        outpoint: UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_utxo(outpoint)
     }
 }

@@ -13,21 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
-    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, UtxoOutPoint,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
-    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, Delegation},
+    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo},
 };
 
 const VERSION_STR: &str = "version";
@@ -538,7 +541,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT delegation_data FROM ml_delegations WHERE delegation_id = $1;",
+                r#"SELECT pool_id, balance, spend_destination
+                FROM ml_delegations
+                WHERE delegation_id = $1
+                AND block_height = (SELECT MAX(block_height) FROM ml_delegations WHERE delegation_id = $1);
+                "#,
                 &[&delegation_id.encode()],
             )
             .await
@@ -549,15 +556,33 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => return Ok(None),
         };
 
-        let data: Vec<u8> = data.get(0);
+        let pool_id: Vec<u8> = data.get(0);
+        let balance: Vec<u8> = data.get(1);
+        let spend_destination: Vec<u8> = data.get(2);
 
-        let delegation = Delegation::decode_all(&mut data.as_slice()).map_err(|e| {
+        let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
                 "Delegation {} deserialization failed: {}",
                 delegation_id, e
             ))
         })?;
 
+        let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id, e
+            ))
+        })?;
+
+        let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Delegation {} deserialization failed: {}",
+                    delegation_id, e
+                ))
+            })?;
+
+        let delegation = Delegation::new(spend_destination, pool_id, balance);
         Ok(Some(delegation))
     }
 
@@ -572,18 +597,74 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_delegations (delegation_id, block_height, delegation_data)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (delegation_id, block_height)
-                    DO UPDATE
-                    SET ... = $3;
+                    INSERT INTO ml_delegations (delegation_id, block_height, pool_id, balance, spend_destination)
+                    VALUES($1, $2, $3, $4, $5)
                 "#,
-                &[&delegation_id.encode(), &height, &delegation.encode()],
+                &[
+                    &delegation_id.encode(),
+                    &height,
+                    &delegation.pool_id().encode(),
+                    &delegation.balance().encode(),
+                    &delegation.spend_destination().encode(),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
+    }
+
+    pub async fn get_pool_delegation_shares(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.tx
+            .query(
+                r#"SELECT delegation_id, balance, spend_destination
+                    FROM ml_delegations
+                    WHERE pool_id = $1
+                    AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
+                                                            FROM ml_delegations
+                                                            WHERE pool_id = $1
+                                                            GROUP BY delegation_id)
+                "#,
+                &[&pool_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| {
+                let delegation_id: Vec<u8> = row.get(0);
+                let balance: Vec<u8> = row.get(1);
+                let spend_destination: Vec<u8> = row.get(2);
+
+                let delegation_id = DelegationId::decode_all(&mut delegation_id.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "DelegationId for PoolId {} deserialization failed: {}",
+                            pool_id, e
+                        ))
+                    })?;
+                let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Amount for PoolId {} deserialization failed: {}",
+                        pool_id, e
+                    ))
+                })?;
+                let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Amount for PoolId {} deserialization failed: {}",
+                            pool_id, e
+                        ))
+                    })?;
+
+                Ok((
+                    delegation_id,
+                    Delegation::new(spend_destination, pool_id, balance),
+                ))
+            })
+            .collect()
     }
 
     pub async fn get_pool_data(
@@ -776,6 +857,36 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
+    }
+
+    pub async fn get_utxo(
+        &mut self,
+        outpoint: UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT utxo FROM ml_utxo WHERE outpoint = $1;",
+                &[&outpoint.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let utxo = Utxo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Utxo for outpoint {:?} deserialization failed: {}",
+                outpoint, e
+            ))
+        })?;
+
+        Ok(Some(utxo))
     }
 
     pub async fn get_block_aux_data(

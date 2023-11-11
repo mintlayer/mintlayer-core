@@ -57,6 +57,7 @@ use self::{
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
+pub use reward_distribution::{calculate_pool_owner_reward, calculate_rewards_per_delegation};
 
 use chainstate_types::BlockIndex;
 use common::{

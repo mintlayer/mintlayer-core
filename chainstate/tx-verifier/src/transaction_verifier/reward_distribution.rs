@@ -106,7 +106,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
     Ok(AccountingBlockRewardUndo::new(undos))
 }
 
-fn calculate_pool_owner_reward(
+pub fn calculate_pool_owner_reward(
     total_reward: Amount,
     cost_per_block: Amount,
     mpt: PerThousand,
@@ -133,7 +133,7 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     total_delegations_reward: Amount,
 ) -> Result<(Vec<PoSAccountingUndo>, Amount), ConnectTransactionError> {
     let rewards_per_delegation = calculate_rewards_per_delegation(
-        delegation_shares,
+        delegation_shares.iter(),
         pool_id,
         total_delegations_balance,
         total_delegations_reward,
@@ -169,8 +169,8 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     Ok((delegation_undos, delegations_reward_remainder))
 }
 
-fn calculate_rewards_per_delegation(
-    delegation_shares: &BTreeMap<DelegationId, Amount>,
+pub fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'a Amount)>>(
+    delegation_shares: I,
     pool_id: PoolId,
     total_delegations_amount: Amount,
     total_delegations_reward_amount: Amount,
@@ -187,7 +187,7 @@ fn calculate_rewards_per_delegation(
     let total_delegations_balance = Uint256::from_amount(total_delegations_amount);
     let total_delegations_reward = Uint256::from_amount(total_delegations_reward_amount);
     delegation_shares
-        .iter()
+        .into_iter()
         .map(
             |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
                 let balance = Uint256::from_amount(*balance_amount);

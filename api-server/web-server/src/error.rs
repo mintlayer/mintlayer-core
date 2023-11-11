@@ -44,6 +44,10 @@ pub enum ApiServerWebServerNotFoundError {
     TransactionNotFound,
     #[error("Transaction not part of any block")]
     TransactionNotPartOfBlock,
+    #[error("Pool not found")]
+    PoolNotFound,
+    #[error("Delegation not found")]
+    DelegationNotFound,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -58,6 +62,8 @@ pub enum ApiServerWebServerClientError {
     InvalidAddress,
     #[error("Invalid transaction Id")]
     InvalidTransactionId,
+    #[error("Invalid pool Id")]
+    InvalidPoolId,
 }
 
 #[allow(dead_code)]

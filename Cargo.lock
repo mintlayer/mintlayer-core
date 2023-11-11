@@ -239,6 +239,7 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
+ "constraints-value-accumulator",
  "crypto",
  "logging",
  "node-comm",
@@ -247,6 +248,7 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
+ "tx-verifier",
  "utils",
 ]
 

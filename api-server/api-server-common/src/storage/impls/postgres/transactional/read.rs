@@ -21,9 +21,12 @@ use common::{
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
     },
 };
+use std::collections::BTreeMap;
+
+use common::chain::{DelegationId, PoolId, UtxoOutPoint};
 use pos_accounting::PoolData;
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
@@ -96,10 +99,20 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_delegation(
         &self,
-        delegation_id: common::chain::DelegationId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, crate::storage::storage_api::ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_delegation(delegation_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_delegation_shares(pool_id).await?;
 
         Ok(res)
     }
@@ -149,6 +162,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_utxo(
+        &self,
+        outpoint: UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_utxo(outpoint).await?;
 
         Ok(res)
     }

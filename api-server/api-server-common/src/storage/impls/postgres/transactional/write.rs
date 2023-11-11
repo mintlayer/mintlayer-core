@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
-    chain::{Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{
+        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        UtxoOutPoint,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::PoolData;
@@ -25,7 +28,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, Delegation,
+        ApiServerStorageWrite, Delegation, Utxo,
     },
 };
 
@@ -258,12 +261,32 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_delegation_shares(pool_id).await?;
+
+        Ok(res)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_utxo(
+        &self,
+        outpoint: UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_utxo(outpoint).await?;
 
         Ok(res)
     }

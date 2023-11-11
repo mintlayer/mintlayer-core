@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -50,21 +50,23 @@ pub enum ApiServerStorageError {
     TxCommitFailed(String),
     #[error("Transaction rw rollback failed: {0}")]
     TxRwRollbackFailed(String),
+    #[error("Invalid block received: {0}")]
+    InvalidBlock(String),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct Delegation {
     spend_destination: Destination,
     pool_id: PoolId,
-    pledge_amount: Amount,
+    balance: Amount,
 }
 
 impl Delegation {
-    pub fn new(spend_destination: Destination, pool_id: PoolId, pledge_amount: Amount) -> Self {
+    pub fn new(spend_destination: Destination, pool_id: PoolId, balance: Amount) -> Self {
         Self {
             spend_destination,
             pool_id,
-            pledge_amount,
+            balance,
         }
     }
 
@@ -72,12 +74,43 @@ impl Delegation {
         &self.spend_destination
     }
 
-    pub fn pool_id(&self) -> &PoolId {
-        &self.pool_id
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id
     }
 
-    pub fn pledge_amount(&self) -> Amount {
-        self.pledge_amount
+    pub fn balance(&self) -> &Amount {
+        &self.balance
+    }
+
+    pub fn add_pledge(&self, rewards: Amount) -> Self {
+        Self {
+            spend_destination: self.spend_destination.clone(),
+            pool_id: self.pool_id,
+            balance: (self.balance + rewards).expect("no overflow"),
+        }
+    }
+
+    pub fn sub_pledge(&self, amount: Amount) -> Self {
+        Self {
+            spend_destination: self.spend_destination.clone(),
+            pool_id: self.pool_id,
+            balance: (self.balance - amount).expect("not underflow"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct Utxo {
+    output: TxOutput,
+}
+
+impl Utxo {
+    pub fn output(&self) -> &TxOutput {
+        &self.output
+    }
+
+    pub fn into_output(self) -> TxOutput {
+        self.output
     }
 }
 
@@ -111,6 +144,11 @@ pub trait ApiServerStorageRead: Sync {
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, ApiServerStorageError>;
 
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError>;
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
@@ -132,6 +170,9 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
+
+    async fn get_utxo(&self, outpoint: UtxoOutPoint)
+        -> Result<Option<Utxo>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
