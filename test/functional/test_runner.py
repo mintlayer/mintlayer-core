@@ -29,6 +29,7 @@ from collections import deque
 import configparser
 import datetime
 import locale
+import multiprocessing
 import os
 import random
 import time
@@ -180,7 +181,7 @@ def main():
     parser.add_argument('--exclude', '-x', help='specify a comma-separated-list of scripts to exclude.')
     parser.add_argument('--extended', action='store_true', help='run the extended test suite in addition to the basic tests')
     parser.add_argument('--help', '-h', '-?', action='store_true', help='print help text and exit')
-    parser.add_argument('--jobs', '-j', type=int, default=4, help='how many test scripts to run in parallel. Default=4.')
+    parser.add_argument('--jobs', '-j', type=int, default=None, help='how many test scripts to run in parallel. Default=total cpu cores.')
     parser.add_argument('--keepcache', '-k', action='store_true', help='the default behavior is to flush the cache directory on startup. --keepcache retains the cache from the previous testrun.')
     parser.add_argument('--quiet', '-q', action='store_true', help='only print dots, results summary and failure logs')
     parser.add_argument('--tmpdirprefix', '-t', default=tempfile.gettempdir(), help="Root directory for datadirs")
@@ -298,7 +299,7 @@ def main():
         use_term_control=args.ansi,
     )
 
-def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, use_term_control):
+def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=None, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, use_term_control):
     args = args or []
 
     # Warn if bitcoind is already running
@@ -336,6 +337,11 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
     else:
         coverage = None
 
+    if jobs is None:
+        jobs = multiprocessing.cpu_count()
+    if jobs <= 0:
+        jobs = multiprocessing.cpu_count()
+
     if len(test_list) > 1 and jobs > 1:
         # Populate cache
         try:
@@ -359,6 +365,8 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
     max_len_name = len(max(test_list, key=len))
     test_count = len(test_list)
     i = 0
+
+    print(f"Running tests with {jobs} jobs")
     while i < test_count:
         for test_result, testdir, stdout, stderr in job_queue.get_next():
             test_results.append(test_result)
