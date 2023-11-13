@@ -20,6 +20,7 @@ mod block_reward;
 mod block_transaction_ids;
 mod chain_at_height;
 mod chain_tip;
+mod pool;
 mod transaction;
 mod transaction_merkle_path;
 

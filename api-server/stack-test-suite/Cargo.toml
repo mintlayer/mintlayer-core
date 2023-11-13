@@ -15,6 +15,7 @@ common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
+pos_accounting = {path = '../../pos_accounting'}
 
 async-trait.workspace = true
 axum.workspace = true

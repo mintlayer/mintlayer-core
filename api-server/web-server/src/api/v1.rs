@@ -31,7 +31,7 @@ use axum::{
 };
 use common::{
     address::Address,
-    chain::{Block, DelegationId, Destination, PoolId, SignedTransaction, Transaction},
+    chain::{Block, Destination, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use hex::ToHex;
@@ -493,11 +493,11 @@ pub async fn pool_delegations<T: ApiServerStorage>(
     Path(pool_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let pool_id: PoolId = H256::from_str(&pool_id)
+    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?
-        .into();
+        })?;
 
     let delegations = state
         .db
@@ -531,11 +531,11 @@ pub async fn delegation<T: ApiServerStorage>(
     Path(delegation_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let delegation_id: DelegationId = H256::from_str(&delegation_id)
+    let delegation_id = Address::from_str(&state.chain_config, &delegation_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?
-        .into();
+        })?;
 
     let delegation = state
         .db

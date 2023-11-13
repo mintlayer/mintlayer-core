@@ -309,6 +309,7 @@ dependencies = [
  "crypto",
  "hex",
  "libtest-mimic",
+ "pos_accounting",
  "reqwest",
  "rstest",
  "serde",

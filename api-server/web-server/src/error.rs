@@ -44,7 +44,7 @@ pub enum ApiServerWebServerNotFoundError {
     TransactionNotFound,
     #[error("Transaction not part of any block")]
     TransactionNotPartOfBlock,
-    #[error("Pool not found")]
+    #[error("Stake pool not found")]
     PoolNotFound,
     #[error("Delegation not found")]
     DelegationNotFound,

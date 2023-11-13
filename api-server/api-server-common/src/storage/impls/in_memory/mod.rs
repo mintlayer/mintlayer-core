@@ -42,7 +42,6 @@ struct ApiServerInMemoryStorage {
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
-    pool_delegation_shares_table: BTreeMap<PoolId, BTreeMap<BlockHeight, BTreeSet<DelegationId>>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     utxo_table: BTreeMap<UtxoOutPoint, Utxo>,
     best_block: (BlockHeight, Id<GenBlock>),
@@ -59,7 +58,6 @@ impl ApiServerInMemoryStorage {
             delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             pool_data_table: BTreeMap::new(),
-            pool_delegation_shares_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
@@ -171,25 +169,13 @@ impl ApiServerInMemoryStorage {
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         Ok(self
-            .pool_delegation_shares_table
-            .get(&pool_id)
-            .and_then(|height_map| {
-                height_map.values().last().map(|delegations| {
-                    delegations
-                        .iter()
-                        .map(|id| {
-                            self.delegation_table
-                                .get(id)
-                                .expect("must be present")
-                                .values()
-                                .last()
-                                .map(|delegation| (*id, delegation.clone()))
-                                .expect("must be present")
-                        })
-                        .collect()
-                })
+            .delegation_table
+            .iter()
+            .filter_map(|(delegation_id, delegation)| {
+                let delegation = delegation.values().last().expect("must be present");
+                (delegation.pool_id() == pool_id).then_some((*delegation_id, delegation.clone()))
             })
-            .unwrap_or_default())
+            .collect())
     }
 
     fn get_main_chain_block_id(
@@ -318,13 +304,6 @@ impl ApiServerInMemoryStorage {
             .entry(delegation_id)
             .or_default()
             .insert(block_height, delegation.clone());
-
-        self.pool_delegation_shares_table
-            .entry(delegation.pool_id())
-            .or_default()
-            .entry(block_height)
-            .or_default()
-            .insert(delegation_id);
         Ok(())
     }
 
