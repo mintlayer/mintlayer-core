@@ -570,11 +570,87 @@ fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
     crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
 }
 
-// Check that a peer is banned on CrawlerEvent::ConnectionError.
+// Check that a peer is banned on CrawlerEvent::HandshakeFailed.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn ban_on_connection_error(#[case] seed: Seed) {
+fn ban_on_handshake_failure(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
+    let peer1 = PeerId::new();
+    let node2: SocketAddress = "2.3.4.5:2345".parse().unwrap();
+
+    let test_error = P2pError::ProtocolError(ProtocolError::HandshakeExpected);
+    let test_error_ban_score = test_error.ban_score();
+    assert!(test_error_ban_score > 0);
+    let ban_threshold = test_error_ban_score;
+
+    let chain_config = common::chain::config::create_mainnet();
+    let mut crawler = test_crawler(
+        CrawlerConfig {
+            ban_duration: BanDuration::new(BAN_DURATION),
+            ban_threshold: BanThreshold::new(ban_threshold),
+        },
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1, node2].into_iter().collect(),
+    );
+
+    let times_step = Duration::from_secs(100);
+
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[node1, node2]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node1,
+            peer_info: make_peer_info(peer1, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.step(
+        CrawlerEvent::HandshakeFailed {
+            address: node2,
+            error: test_error.clone(),
+        },
+        &mut rng,
+    );
+
+    // Note: ConnectionError is still expected and is needed for the peer to become disconnected.
+    // Moreover, we want to check that sending both HandshakeFailed and ConnectionError won't
+    // cause any problems (e.g. won't lead to a crash).
+    crawler.step(
+        CrawlerEvent::ConnectionError {
+            address: node2,
+            error: test_error,
+        },
+        &mut rng,
+    );
+
+    let ban_start_time = crawler.now();
+    let ban_end_time = (ban_start_time + BAN_DURATION).unwrap();
+
+    // The ban score is not recorded, but the peer is banned.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer1]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[(node2.as_bannable(), ban_end_time)]);
+}
+
+// Check that a peer is not banned on CrawlerEvent::ConnectionError if it's not accompanied
+// by CrawlerEvent::HandshakeFailed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn no_ban_on_connection_error(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
@@ -623,15 +699,12 @@ fn ban_on_connection_error(#[case] seed: Seed) {
         &mut rng,
     );
 
-    let ban_start_time = crawler.now();
-    let ban_end_time = (ban_start_time + BAN_DURATION).unwrap();
-
-    // The ban score is not recorded, but the peer is banned.
+    // The peer is not banned.
     crawler.assert_pending_connects(&[]);
     crawler.assert_pending_disconnects(&[]);
     crawler.assert_connected_peers(&[peer1]);
     crawler.assert_ban_scores(&[]);
-    crawler.assert_banned_addresses(&[(node2.as_bannable(), ban_end_time)]);
+    crawler.assert_banned_addresses(&[]);
 }
 
 const BAN_DURATION: Duration = Duration::from_secs(1000);
