@@ -124,6 +124,20 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_pool_data_at_height(pool_id, pool_data, block_height)
     }
+
+    async fn del_delegations_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_delegations_above_height(block_height)
+    }
+
+    async fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_pools_above_height(block_height)
+    }
 }
 
 #[async_trait::async_trait]

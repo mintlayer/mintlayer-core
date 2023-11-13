@@ -158,8 +158,15 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
         .await
         .expect("Unable to disconnect address transactions");
 
-    // TODO: cleanup pool data
-    // TODO: cleanup delegations
+    db_tx
+        .del_delegations_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address transactions");
+
+    db_tx
+        .del_pools_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address transactions");
 
     Ok(())
 }
@@ -631,36 +638,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 }
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
-                // Subtract from staker's address balance
-
-                let staker_address =
-                    Address::<Destination>::new(&chain_config, stake_pool_data.staker())
-                        .expect("Unable to encode staker");
-
-                address_transactions
-                    .entry(staker_address.clone())
-                    .or_default()
-                    .insert(transaction_id);
-
-                let current_address_balance = db_tx
-                    .get_address_balance(staker_address.get())
-                    .await
-                    .expect("Unable to get address balance")
-                    .unwrap_or(Amount::ZERO);
-
-                let new_address_balance = current_address_balance
-                    .add(stake_pool_data.value())
-                    .expect("Address balance should not overflow");
-
-                db_tx
-                    .set_address_balance_at_height(
-                        staker_address.get(),
-                        new_address_balance,
-                        block_height,
-                    )
-                    .await
-                    .expect("Unable to update address balance");
-
                 // Create pool pledge
 
                 let new_pool_data = PoolData::new(

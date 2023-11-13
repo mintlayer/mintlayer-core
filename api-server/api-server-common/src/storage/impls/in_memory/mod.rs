@@ -347,4 +347,28 @@ impl ApiServerInMemoryStorage {
             .insert(block_height, pool_data.clone());
         Ok(())
     }
+
+    fn del_delegations_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.delegation_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.pool_data_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
 }

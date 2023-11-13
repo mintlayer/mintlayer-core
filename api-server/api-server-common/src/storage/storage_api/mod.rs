@@ -244,6 +244,16 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         pool_data: &PoolData,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_delegations_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

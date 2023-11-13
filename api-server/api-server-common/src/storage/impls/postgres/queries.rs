@@ -50,9 +50,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             table_name
         )
     }
-}
 
-impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub fn new(tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
         Self { tx }
     }
@@ -396,6 +394,28 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        self.just_execute(
+            "CREATE TABLE ml_pool_data (
+                    pool_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    data bytea NOT NULL,
+                    PRIMARY KEY (pool_id, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_delegations (
+                    delegation_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    pool_id bytea NOT NULL,
+                    balance bytea NOT NULL,
+                    spend_destination bytea NOT NULL,
+                    PRIMARY KEY (delegation_id, block_height)
+                );",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -614,6 +634,40 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn del_delegations_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_delegations WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_pool_data WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn get_pool_delegation_shares(
         &mut self,
         pool_id: PoolId,
@@ -671,17 +725,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
-        // TODO add more fields
         self.tx
             .query_opt(
                 r#"
-                SELECT address
+                SELECT data
                 FROM ml_pool_data
                 WHERE pool_id = $1
                 ORDER BY block_height DESC
                 LIMIT 1;
             "#,
-                &[&pool_id.to_string()],
+                &[&pool_id.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -702,27 +755,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
     }
 
-    // pub async fn del_pool_data_above_height(
-    //     &mut self,
-    //     block_height: BlockHeight,
-    // ) -> Result<(), ApiServerStorageError> {
-    //     let height = Self::block_height_to_postgres_friendly(block_height);
-
-    //     self.tx
-    //         .execute(
-    //             "DELETE FROM ml_pool_data WHERE block_height > $1;",
-    //             &[&height],
-    //         )
-    //         .await
-    //         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-    //     Ok(())
-    // }
-
     pub async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
-        _pool_data: &PoolData,
+        pool_data: &PoolData,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
@@ -730,12 +766,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_pool_data (pool_id, block_height, ...)
+                    INSERT INTO ml_pool_data (pool_id, block_height, data)
                     VALUES ($1, $2, $3)
-                    ON CONFLICT (pool_id, block_height)
-                    DO UPDATE SET ...= $3;
                 "#,
-                &[&pool_id.to_string(), &height, &"TODO"],
+                &[&pool_id.encode(), &height, &pool_data.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -748,9 +782,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
-        let row = self.tx.query_opt(
-                "SELECT owning_block_id, transaction_data FROM ml_transactions WHERE transaction_id = $1;",&[&transaction_id.encode()]
-            ).await
+        let row = self
+            .tx
+            .query_opt(
+                r#"SELECT owning_block_id, transaction_data
+                 FROM ml_transactions
+                 WHERE transaction_id = $1;
+            "#,
+                &[&transaction_id.encode()],
+            )
+            .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         let data = match row {
