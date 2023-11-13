@@ -210,7 +210,7 @@ fn effective_pool_balance_impl(
              Saturation level:    {pool_saturation_level}\n\
              Pledge influence:    {pledge_influence}\n\
              Final supply:        {final_supply_atoms}\n\
-             ---------------------------------------------\
+             ---------------------------------------------\n\
              Pool balance:        {pool_balance_atoms}\n\
              Capped pool balance: {sigma128}\n\
              Adjustment term:     {adjustment}\n\
