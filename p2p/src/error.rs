@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use p2p_types::services::Services;
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
     chain::{Block, Transaction},
-    primitives::Id,
+    primitives::{time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 
@@ -83,8 +81,8 @@ pub enum PeerError {
     TooManyPeers,
     #[error("Connection to address {0} already pending")]
     Pending(String),
-    #[error("Time difference is too large: {0:?}")]
-    TimeDiff(Duration),
+    #[error("Peer time {0:?} out of the acceptable range {1:?}")]
+    TimeDiff(Time, std::ops::RangeInclusive<Time>),
     #[error("Selected services are empty")]
     EmptyServices,
     #[error(

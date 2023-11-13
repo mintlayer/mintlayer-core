@@ -57,6 +57,7 @@ p2p-backend-test-suite = { path = "backend-test-suite" }
 p2p-test-utils = { path = "p2p-test-utils" }
 storage-inmemory = { path = "../storage/inmemory" }
 test-utils = { path = "../test-utils" }
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
 
 criterion.workspace = true
 ctor.workspace = true

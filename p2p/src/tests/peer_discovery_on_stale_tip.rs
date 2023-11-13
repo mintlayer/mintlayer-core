@@ -309,6 +309,7 @@ fn make_p2p_config() -> P2pConfig {
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
         ping_check_period: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),

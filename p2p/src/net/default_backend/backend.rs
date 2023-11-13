@@ -34,7 +34,10 @@ use common::{
 };
 use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
-use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
+use utils::{
+    atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
+    shallow_clone::ShallowClone,
+};
 
 use crate::{
     config::P2pConfig,
@@ -55,7 +58,7 @@ use crate::{
 
 use super::{
     peer::ConnectionInfo,
-    types::{HandshakeNonce, Message, P2pTimestamp},
+    types::{HandshakeNonce, Message},
 };
 
 /// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
@@ -371,18 +374,18 @@ where
         let peer = peer::Peer::<T>::new(
             remote_peer_id,
             connection_info,
-            Arc::clone(&self.chain_config),
-            Arc::clone(&self.p2p_config),
+            self.chain_config.shallow_clone(),
+            self.p2p_config.shallow_clone(),
             socket,
             receiver_address,
             peer_event_sender,
             backend_event_receiver,
             self.node_protocol_version,
+            self.time_getter.shallow_clone(),
         );
         let shutdown = Arc::clone(&self.shutdown);
-        let local_time = P2pTimestamp::from_time(self.time_getter.get_time());
         let handle = logging::spawn_in_current_span(async move {
-            match peer.run(local_time).await {
+            match peer.run().await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),

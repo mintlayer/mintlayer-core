@@ -27,6 +27,12 @@ pub struct TimeGetter {
     f: Arc<dyn TimeGetterFn>,
 }
 
+impl utils::shallow_clone::ShallowClone for TimeGetter {
+    fn shallow_clone(&self) -> Self {
+        Self::clone(self)
+    }
+}
+
 impl TimeGetter {
     pub fn new(f: Arc<dyn TimeGetterFn>) -> Self {
         Self { f }

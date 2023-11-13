@@ -33,8 +33,9 @@ make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
-make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
+make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
 make_config_setting!(BlockRelayPeers, bool, true);
+make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -90,6 +91,8 @@ pub struct P2pConfig {
     pub ping_check_period: PingCheckPeriod,
     /// When a peer is detected as dead and disconnected
     pub ping_timeout: PingTimeout,
+    /// Timeout for initial peer handshake
+    pub peer_handshake_timeout: PeerHandshakeTimeout,
     /// Maximum acceptable time difference between this node and the remote peer.
     /// If a large difference is detected, the peer will be disconnected.
     pub max_clock_diff: MaxClockDiff,
@@ -107,4 +110,14 @@ pub struct P2pConfig {
     pub connection_count_limits: ConnectionCountLimits,
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
+}
+
+impl P2pConfig {
+    /// Effective max clock difference between our node and a peer.
+    ///
+    /// It is calculated as the max clock diff setting plus handshake timeout to allow for
+    /// imprecisions caused by the network latency.
+    pub fn effective_max_clock_diff(&self) -> Duration {
+        *self.max_clock_diff + *self.peer_handshake_timeout
+    }
 }
