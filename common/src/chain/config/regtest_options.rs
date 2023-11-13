@@ -24,7 +24,7 @@ use crate::{
             Builder, ChainType, EmissionScheduleTabular,
         },
         pos::{
-            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE_V0, DEFAULT_TARGET_BLOCK_TIME,
         },
         pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
         PoSConsensusVersion,
@@ -193,8 +193,7 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V0,
@@ -208,8 +207,7 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V1,

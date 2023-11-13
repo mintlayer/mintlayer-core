@@ -529,26 +529,13 @@ impl ChainConfig {
 
     /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
     #[must_use]
-    pub fn decommission_pool_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
+    pub fn staking_pool_spend_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
         match self.consensus_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
                 self.empty_consensus_reward_maturity_distance
             }
             RequiredConsensus::PoS(status) => {
-                status.get_chain_config().decommission_maturity_distance()
-            }
-        }
-    }
-
-    /// The number of blocks required to pass before a delegation share can be spent after taking it out of the delegation account
-    #[must_use]
-    pub fn spend_share_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
-        match self.consensus_upgrades.consensus_status(block_height) {
-            RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
-                self.empty_consensus_reward_maturity_distance
-            }
-            RequiredConsensus::PoS(status) => {
-                status.get_chain_config().spend_share_maturity_distance()
+                status.get_chain_config().staking_pool_spend_maturity_distance()
             }
         }
     }

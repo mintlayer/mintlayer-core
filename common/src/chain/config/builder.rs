@@ -23,7 +23,8 @@ use crate::{
         },
         get_initial_randomness,
         pos::{
-            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE_V0,
+            DEFAULT_MATURITY_DISTANCE_V1, DEFAULT_TARGET_BLOCK_TIME,
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
@@ -90,8 +91,7 @@ impl ChainType {
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V0,
@@ -105,8 +105,7 @@ impl ChainType {
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                BlockDistance::new(7200),
-                                BlockDistance::new(7200),
+                                DEFAULT_MATURITY_DISTANCE_V1,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V1,

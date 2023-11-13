@@ -15,7 +15,7 @@
 
 use crate::chain::config::ChainType;
 use crate::chain::pos::{
-    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE_V0, DEFAULT_TARGET_BLOCK_TIME,
 };
 use crate::chain::pow::limit;
 use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
@@ -133,8 +133,7 @@ impl NetUpgrades<ConsensusUpgrade> {
                     config: PoSChainConfig::new(
                         target_limit,
                         target_block_time,
-                        DEFAULT_MATURITY_DISTANCE,
-                        DEFAULT_MATURITY_DISTANCE,
+                        DEFAULT_MATURITY_DISTANCE_V0,
                         DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                         PerThousand::new(1).expect("must be valid"),
                         PoSConsensusVersion::V1,

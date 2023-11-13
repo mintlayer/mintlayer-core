@@ -202,7 +202,7 @@ fn effective_pool_balance_impl(
         let pool_balance_atoms = pool_balance.into_atoms();
         let final_supply_atoms = final_supply.into_atoms();
 
-        log::debug!(
+        log::trace!(
             "---------------------------------------------\n\
              Done calculating the effective balance\n\
              ---------------------------------------------\n\
@@ -210,7 +210,7 @@ fn effective_pool_balance_impl(
              Saturation level:    {pool_saturation_level}\n\
              Pledge influence:    {pledge_influence}\n\
              Final supply:        {final_supply_atoms}\n\
-             ---------------------------------------------\
+             ---------------------------------------------\n\
              Pool balance:        {pool_balance_atoms}\n\
              Capped pool balance: {sigma128}\n\
              Adjustment term:     {adjustment}\n\
