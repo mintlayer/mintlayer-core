@@ -42,7 +42,7 @@ impl PoSChainConfig {
     pub fn new(
         target_limit: Uint256,
         target_block_time: NonZeroU64,
-        decommission_maturity_distance: BlockDistance,
+        staking_pool_spend_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
         consensus_version: PoSConsensusVersion,
@@ -52,7 +52,7 @@ impl PoSChainConfig {
         Self {
             target_limit,
             target_block_time,
-            staking_pool_spend_maturity_distance: decommission_maturity_distance,
+            staking_pool_spend_maturity_distance,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
             consensus_version,
