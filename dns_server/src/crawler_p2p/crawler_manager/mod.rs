@@ -249,8 +249,8 @@ where
             ConnectivityEvent::ConnectionError { address, error } => {
                 self.send_crawler_event(CrawlerEvent::ConnectionError { address, error });
             }
-            ConnectivityEvent::HandshakeFailed { address, error } => {
-                self.send_crawler_event(CrawlerEvent::HandshakeFailed { address, error });
+            ConnectivityEvent::MisbehavedOnHandshake { address, error } => {
+                self.send_crawler_event(CrawlerEvent::MisbehavedOnHandshake { address, error });
             }
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });

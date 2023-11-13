@@ -570,11 +570,11 @@ fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
     crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
 }
 
-// Check that a peer is banned on CrawlerEvent::HandshakeFailed.
+// Check that a peer is banned on CrawlerEvent::MisbehavedOnHandshake.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn ban_on_handshake_failure(#[case] seed: Seed) {
+fn ban_on_misbehavior_during_handshake(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
@@ -616,7 +616,7 @@ fn ban_on_handshake_failure(#[case] seed: Seed) {
     );
 
     crawler.step(
-        CrawlerEvent::HandshakeFailed {
+        CrawlerEvent::MisbehavedOnHandshake {
             address: node2,
             error: test_error.clone(),
         },
@@ -624,7 +624,7 @@ fn ban_on_handshake_failure(#[case] seed: Seed) {
     );
 
     // Note: ConnectionError is still expected and is needed for the peer to become disconnected.
-    // Moreover, we want to check that sending both HandshakeFailed and ConnectionError won't
+    // Moreover, we want to check that sending both MisbehavedOnHandshake and ConnectionError won't
     // cause any problems (e.g. won't lead to a crash).
     crawler.step(
         CrawlerEvent::ConnectionError {
@@ -646,7 +646,7 @@ fn ban_on_handshake_failure(#[case] seed: Seed) {
 }
 
 // Check that a peer is not banned on CrawlerEvent::ConnectionError if it's not accompanied
-// by CrawlerEvent::HandshakeFailed.
+// by CrawlerEvent::MisbehavedOnHandshake.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

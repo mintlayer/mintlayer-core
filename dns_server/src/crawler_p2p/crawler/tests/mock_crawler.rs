@@ -127,12 +127,12 @@ impl MockCrawler {
                 let removed = self.pending_connects.remove(address);
                 assert!(removed);
             }
-            CrawlerEvent::HandshakeFailed {
-                address: _,
-                error: _,
-            } => {}
             CrawlerEvent::Misbehaved {
                 peer_id: _,
+                error: _,
+            } => {}
+            CrawlerEvent::MisbehavedOnHandshake {
+                address: _,
                 error: _,
             } => {}
         }

@@ -1365,7 +1365,7 @@ where
             ConnectivityEvent::Misbehaved { peer_id, error } => {
                 self.adjust_peer_score(peer_id, error.ban_score());
             }
-            ConnectivityEvent::HandshakeFailed { address, error } => {
+            ConnectivityEvent::MisbehavedOnHandshake { address, error } => {
                 self.adjust_peer_score_on_failed_handshake(address, error.ban_score());
             }
         }

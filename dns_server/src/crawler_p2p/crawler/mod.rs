@@ -111,18 +111,18 @@ pub enum CrawlerEvent {
         peer_id: PeerId,
     },
     // Note: same as ConnectivityEvent::ConnectionError, this error is not supposed to be
-    // bannable. An additional HandshakeFailed event will be generated if the peer misbehaves
-    // during the handshake.
+    // bannable. An additional MisbehavedOnHandshake event will be generated if the peer misbehaves
+    // during handshake.
     ConnectionError {
-        address: SocketAddress,
-        error: P2pError,
-    },
-    HandshakeFailed {
         address: SocketAddress,
         error: P2pError,
     },
     Misbehaved {
         peer_id: PeerId,
+        error: P2pError,
+    },
+    MisbehavedOnHandshake {
+        address: SocketAddress,
         error: P2pError,
     },
 }
@@ -216,13 +216,17 @@ impl Crawler {
         );
     }
 
-    fn handle_failed_handshake(
+    fn handle_misbehavior_on_handshake(
         &mut self,
         address: SocketAddress,
         error: P2pError,
         callback: &mut impl FnMut(CrawlerCommand),
     ) {
-        log::debug!("handshake failed for {}: {}", address.to_string(), error);
+        log::debug!(
+            "handling misbehavior on handshake for {}: {}",
+            address.to_string(),
+            error
+        );
 
         self.handle_new_ban_score(&address, error.ban_score(), callback);
     }
@@ -515,8 +519,8 @@ impl Crawler {
             CrawlerEvent::ConnectionError { address, error } => {
                 self.handle_connection_error(address, error, callback);
             }
-            CrawlerEvent::HandshakeFailed { address, error } => {
-                self.handle_failed_handshake(address, error, callback);
+            CrawlerEvent::MisbehavedOnHandshake { address, error } => {
+                self.handle_misbehavior_on_handshake(address, error, callback);
             }
             CrawlerEvent::Misbehaved { peer_id, error } => {
                 self.handle_misbehaved_peer(peer_id, error, callback)
