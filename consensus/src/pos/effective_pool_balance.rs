@@ -202,7 +202,7 @@ fn effective_pool_balance_impl(
         let pool_balance_atoms = pool_balance.into_atoms();
         let final_supply_atoms = final_supply.into_atoms();
 
-        log::debug!(
+        log::trace!(
             "---------------------------------------------\n\
              Done calculating the effective balance\n\
              ---------------------------------------------\n\
