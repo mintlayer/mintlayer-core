@@ -99,14 +99,14 @@ pub enum PeerEvent {
     /// Connection closed to remote
     ConnectionClosed,
 
-    /// Handshake failed
-    HandshakeFailed { error: P2pError },
-
     /// Message received from remote
     MessageReceived { message: PeerManagerMessage },
 
     /// Protocol violation
     Misbehaved { error: P2pError },
+
+    /// Protocol violation during handshake
+    MisbehavedOnHandshake { error: P2pError },
 }
 
 /// Events sent by Backend to Peer

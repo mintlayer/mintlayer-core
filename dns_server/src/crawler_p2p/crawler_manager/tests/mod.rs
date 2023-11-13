@@ -178,13 +178,13 @@ async fn private_ip() {
     assert_known_addresses(&crawler, &[node1, node2, node3, node4, node5, node6]);
 }
 
-// 1) Create an erratic node, such that connecting to it produces ConnectivityEvent::HandshakeFailed,
-// and check that it is banned by normal nodes.
+// 1) Create an erratic node, such that connecting to it produces
+// ConnectivityEvent::MisbehavedOnHandshake, and check that it is banned by normal nodes.
 // 2) Report one of the connected node as Misbehaved; check that it is banned by normal nodes.
-// 3) Bring the previously erratic node back online again, wait for its ban time to expire,
+// 3) Bring the previously erratic node from (1) back online again, wait for its ban time to expire,
 // check that it's no longer banned and that its address is added to DNS.
-// 4) Wait for the misbehaved node's ban time to expire, check that it's no longer banned
-// and that its address is added to DNS.
+// 4) Wait for the misbehaved node's (i.e the one from (2)) ban time to expire, check that it's
+// no longer banned and that its address is added to DNS.
 #[tokio::test]
 async fn ban_unban() {
     let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
@@ -203,10 +203,10 @@ async fn ban_unban() {
     state.erratic_node_online(
         node2,
         vec![
-            ErraticNodeConnectError::HandshakeFailed(erratic_node_conn_error.clone()),
+            ErraticNodeConnectError::MisbehavedOnHandshake(erratic_node_conn_error.clone()),
             // Note: ConnectionError is still expected and is needed for the peer to become disconnected.
-            // Moreover, we want to check that sending both HandshakeFailed and ConnectionError won't
-            // cause any problems (e.g. won't lead to a crash).
+            // Moreover, we want to check that sending both MisbehavedOnHandshake and ConnectionError
+            // won't cause any problems (e.g. won't lead to a crash).
             ErraticNodeConnectError::ConnectionError(erratic_node_conn_error.clone()),
         ],
     );
@@ -297,7 +297,7 @@ async fn ban_unban() {
     );
 }
 
-// Check that a ConnectivityEvent::ConnectionError that is not accompanied by HandshakeFailed
+// Check that a ConnectivityEvent::ConnectionError that is not accompanied by MisbehavedOnHandshake
 // doesn't result in a ban even if the error has a non-zero ban score.
 #[tokio::test]
 async fn no_ban_on_connection_error() {
