@@ -246,9 +246,11 @@ where
             } => {
                 unreachable!("unexpected inbound connection");
             }
-            ConnectivityEvent::ConnectionError { address, error }
-            | ConnectivityEvent::HandshakeFailed { address, error } => {
+            ConnectivityEvent::ConnectionError { address, error } => {
                 self.send_crawler_event(CrawlerEvent::ConnectionError { address, error });
+            }
+            ConnectivityEvent::HandshakeFailed { address, error } => {
+                self.send_crawler_event(CrawlerEvent::HandshakeFailed { address, error });
             }
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });
