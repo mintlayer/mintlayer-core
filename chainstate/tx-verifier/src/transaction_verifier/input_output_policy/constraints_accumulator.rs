@@ -104,7 +104,7 @@ impl ConstrainedValueAccumulator {
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let block_distance = chain_config
                                 .as_ref()
-                                .decommission_pool_maturity_distance(block_height);
+                                .staking_pool_spend_maturity_distance(block_height);
                             let pledged_amount = pledge_amount_getter(*pool_id)?
                                 .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
 
@@ -120,8 +120,9 @@ impl ConstrainedValueAccumulator {
                 TxInput::Account(outpoint) => {
                     match outpoint.account() {
                         AccountSpending::DelegationBalance(_, spend_amount) => {
-                            let block_distance =
-                                chain_config.as_ref().spend_share_maturity_distance(block_height);
+                            let block_distance = chain_config
+                                .as_ref()
+                                .staking_pool_spend_maturity_distance(block_height);
 
                             let balance = self
                                 .timelock_constrained
@@ -292,7 +293,7 @@ mod tests {
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
-            chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
+            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
@@ -348,7 +349,7 @@ mod tests {
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
-            chain_config.spend_share_maturity_distance(BlockHeight::new(1));
+            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
 
         let delegation_id = DelegationId::new(H256::zero());
         let delegated_atoms = rng.gen_range(100..1000);
@@ -493,7 +494,7 @@ mod tests {
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
-            chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
+            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
@@ -610,8 +611,8 @@ mod tests {
             ConsensusUpgrade::PoS {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .decommission_maturity_distance(required_decommission_maturity.into())
-                    .spend_share_maturity_distance(required_spend_share_maturity.into())
+                    .staking_pool_spend_maturity_distance(required_decommission_maturity.into())
+                    .staking_pool_spend_maturity_distance(required_spend_share_maturity.into())
                     .build(),
             },
         )];

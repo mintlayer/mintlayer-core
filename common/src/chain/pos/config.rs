@@ -28,10 +28,8 @@ pub struct PoSChainConfig {
     target_limit: Uint256,
     /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
     target_block_time: NonZeroU64,
-    /// The distance required to pass to allow spending the decommission pool
-    decommission_maturity_distance: BlockDistance,
-    /// The distance required to pass to allow spending delegation share
-    spend_share_maturity_distance: BlockDistance,
+    /// The distance required to pass to allow spending the decommission pool and spending delegation share
+    staking_pool_spend_maturity_distance: BlockDistance,
     /// Max number of blocks required to calculate average block time. Min is 2
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
@@ -45,7 +43,6 @@ impl PoSChainConfig {
         target_limit: Uint256,
         target_block_time: NonZeroU64,
         decommission_maturity_distance: BlockDistance,
-        spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
         consensus_version: PoSConsensusVersion,
@@ -55,8 +52,7 @@ impl PoSChainConfig {
         Self {
             target_limit,
             target_block_time,
-            decommission_maturity_distance,
-            spend_share_maturity_distance,
+            staking_pool_spend_maturity_distance: decommission_maturity_distance,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
             consensus_version,
@@ -71,12 +67,8 @@ impl PoSChainConfig {
         self.target_block_time
     }
 
-    pub fn decommission_maturity_distance(&self) -> BlockDistance {
-        self.decommission_maturity_distance
-    }
-
-    pub fn spend_share_maturity_distance(&self) -> BlockDistance {
-        self.spend_share_maturity_distance
+    pub fn staking_pool_spend_maturity_distance(&self) -> BlockDistance {
+        self.staking_pool_spend_maturity_distance
     }
 
     pub fn block_count_to_average_for_blocktime(&self) -> usize {
