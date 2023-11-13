@@ -17,23 +17,28 @@ use std::sync::Arc;
 
 use crate::helpers::make_trial;
 use crate::make_test;
+use pos_accounting::PoolData;
 
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw,
+        ApiServerStorageWrite, ApiServerTransactionRw, Delegation,
     },
 };
-use crypto::random::Rng;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, Block, OutPointSourceId, SignedTransaction, Transaction,
-        TxInput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, DelegationId, Destination, OutPointSourceId,
+        PoolId, SignedTransaction, Transaction, TxInput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -231,6 +236,161 @@ where
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting pool data
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // test missing random pool data
+        {
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap();
+            assert!(pool_data.is_none());
+        }
+
+        {
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
+            let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let random_pool_data = PoolData::new(
+                Destination::PublicKey(pk),
+                amount_to_stake,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+
+            db_tx
+                .set_pool_data_at_height(random_pool_id, &random_pool_data, random_block_height)
+                .await
+                .unwrap();
+
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data);
+
+            let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let random_pool_data_new = PoolData::new(
+                Destination::PublicKey(pk),
+                amount_to_stake,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+
+            // update pool data in next block height
+            db_tx
+                .set_pool_data_at_height(
+                    random_pool_id,
+                    &random_pool_data_new,
+                    random_block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data_new);
+
+            // delete the new data
+            db_tx.del_pools_above_height(random_block_height).await.unwrap();
+
+            // the old data should still be there
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data);
+        }
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting delegation data
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // test missing random pool data
+        {
+            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
+            let delegation_data = db_tx.get_delegation(random_delegation_id).await.unwrap();
+            assert!(delegation_data.is_none());
+        }
+
+        {
+            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
+            let random_block_height = BlockHeight::new(rng.gen_range(1..1000) as u64);
+
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+
+            let random_delegation =
+                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+
+            db_tx
+                .set_delegation_at_height(
+                    random_delegation_id,
+                    &random_delegation,
+                    random_block_height,
+                )
+                .await
+                .unwrap();
+
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation);
+
+            // update delegation on new height
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+
+            let random_delegation_new =
+                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+
+            db_tx
+                .set_delegation_at_height(
+                    random_delegation_id,
+                    &random_delegation_new,
+                    random_block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation_new);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation_new);
+
+            // delete the new one and we should be back to the old one
+            db_tx.del_delegations_above_height(random_block_height).await.unwrap();
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation);
+
+            db_tx
+                .del_delegations_above_height(random_block_height.prev_height().unwrap())
+                .await
+                .unwrap();
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap();
+            assert!(delegation.is_none());
+        }
 
         db_tx.commit().await.unwrap();
     }
