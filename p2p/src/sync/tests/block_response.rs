@@ -162,7 +162,6 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: "test".try_into().unwrap(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
             protocol_config: Default::default(),
         });
@@ -276,7 +275,6 @@ async fn disconnect(#[case] seed: Seed) {
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
             protocol_config: Default::default(),
         });
@@ -344,7 +342,6 @@ async fn slow_response(#[case] seed: Seed) {
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
             protocol_config: Default::default(),
         });

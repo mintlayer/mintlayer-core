@@ -21,7 +21,7 @@ use p2p_types::socket_address::SocketAddress;
 use test_utils::assert_matches;
 
 use crate::{
-    config::{NodeType, P2pConfig},
+    config::NodeType,
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::{
@@ -34,7 +34,7 @@ use crate::{
     },
     peer_manager::{
         tests::{make_peer_manager_custom, utils::cmd_to_peer_man_msg},
-        OutboundConnectType, PeerManager, EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT,
+        OutboundConnectType, PeerManager,
     },
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
@@ -209,28 +209,7 @@ fn test_addr_list_handling_outbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(P2pConfig {
-        enable_block_relay_peers: false.into(),
-
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
-        protocol_config: Default::default(),
-    });
+    let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =

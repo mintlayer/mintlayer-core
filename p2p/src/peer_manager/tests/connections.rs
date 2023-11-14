@@ -662,7 +662,6 @@ async fn connection_timeout_rpc_notified<T>(
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
@@ -776,7 +775,6 @@ where
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
@@ -821,7 +819,6 @@ where
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });
@@ -892,7 +889,6 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
-        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -938,7 +934,6 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
-        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -975,7 +970,6 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
-        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,

@@ -113,7 +113,6 @@ impl From<P2pConfigFile> for P2pConfig {
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: ConnectionCountLimits {
                 max_inbound_connections: c.max_inbound_connections.into(),
 

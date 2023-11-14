@@ -173,7 +173,6 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
     });
 
@@ -263,7 +262,6 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     });

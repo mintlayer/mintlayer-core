@@ -71,7 +71,6 @@ async fn basic(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
         });
 
@@ -310,7 +309,6 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
         });
 

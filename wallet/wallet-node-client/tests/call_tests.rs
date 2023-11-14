@@ -67,7 +67,6 @@ pub async fn start_subsystems(
         allow_discover_private_ips: Default::default(),
         user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
         connection_count_limits: Default::default(),
         protocol_config: Default::default(),
     };

@@ -167,7 +167,6 @@ async fn no_transaction_service(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: "test".try_into().unwrap(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
             protocol_config: Default::default(),
         });
@@ -244,7 +243,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: "test".try_into().unwrap(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
             connection_count_limits: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)

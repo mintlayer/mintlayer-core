@@ -320,7 +320,6 @@ fn make_p2p_config() -> P2pConfig {
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        enable_block_relay_peers: Default::default(),
         protocol_config: Default::default(),
     }
 }

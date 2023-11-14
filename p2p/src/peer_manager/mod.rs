@@ -1188,8 +1188,6 @@ where
             needed_outbound_block_relay_conn_count,
         );
 
-        // FIXME
-        //if *self.p2p_config.enable_block_relay_peers {
         for address in new_block_relay_conn_addresses.into_iter() {
             self.connect(
                 address,
@@ -1198,7 +1196,6 @@ where
                 },
             );
         }
-        //}
 
         let cur_pending_outbound_peer_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
