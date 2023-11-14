@@ -745,7 +745,7 @@ where
     }
 
     /// If there are too many outbound block relay peers, find and disconnect the "worst" one.
-    fn evict_block_relay_peer_if_needed(&mut self) {
+    fn evict_block_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
             &self.p2p_config.connection_count_limits,
@@ -756,7 +756,7 @@ where
     }
 
     /// If there are too many outbound full relay peers, find and disconnect the "worst" one.
-    fn evict_full_relay_peer_if_needed(&mut self) {
+    fn evict_full_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
             self.eviction_candidates(PeerRole::OutboundFullRelay),
             &self.p2p_config.connection_count_limits,
@@ -903,7 +903,6 @@ where
                     PeerRole::OutboundFullRelay
                 }
             }
-            // FIXME: this is ugly
             OutboundConnectType::Reserved => PeerRole::OutboundManual,
             OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
         }
@@ -1105,6 +1104,17 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
+        self.establish_new_connections(need_new_full_relay_peer);
+
+        self.evict_block_relay_peer();
+        self.evict_full_relay_peer();
+
+        if let Some(o) = self.observer.as_mut() {
+            o.on_heartbeat();
+        }
+    }
+
+    fn establish_new_connections(&mut self, need_new_full_relay_peer: bool) {
         let mut cur_outbound_full_relay_conn_count = 0;
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
@@ -1146,10 +1156,6 @@ where
                 count
             }
         };
-        let needed_outbound_block_relay_conn_count =
-            (*self.p2p_config.connection_count_limits.outbound_block_relay_count
-                + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
-                .saturating_sub(cur_outbound_block_relay_conn_count);
 
         let new_full_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
             &cur_outbound_conn_addr_groups,
@@ -1159,12 +1165,6 @@ where
         // TODO: in bitcoin they also try to create an extra outbound full relay connection
         // to an address in a reachable network in which there are no outbound full relay or
         // manual connections. See CConnman::MaybePickPreferredNetwork for reference.
-
-        let cur_pending_outbound_peer_addresses =
-            self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
-        let new_reserved = self
-            .peerdb
-            .select_reserved_outbound_addresses(&cur_pending_outbound_peer_addresses);
 
         for address in new_full_relay_conn_addresses.into_iter() {
             let addr_group = AddressGroup::from_peer_address(&address.as_peer_address());
@@ -1177,6 +1177,11 @@ where
                 },
             );
         }
+
+        let needed_outbound_block_relay_conn_count =
+            (*self.p2p_config.connection_count_limits.outbound_block_relay_count
+                + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
+                .saturating_sub(cur_outbound_block_relay_conn_count);
 
         let new_block_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
             &cur_outbound_conn_addr_groups,
@@ -1195,15 +1200,14 @@ where
         }
         //}
 
-        for address in new_reserved.into_iter() {
+        let cur_pending_outbound_peer_addresses =
+            self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
+        let new_reserved_conn_addresses = self
+            .peerdb
+            .select_reserved_outbound_addresses(&cur_pending_outbound_peer_addresses);
+
+        for address in new_reserved_conn_addresses.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
-        }
-
-        self.evict_block_relay_peer_if_needed();
-        self.evict_full_relay_peer_if_needed();
-
-        if let Some(o) = self.observer.as_mut() {
-            o.on_heartbeat();
         }
     }
 

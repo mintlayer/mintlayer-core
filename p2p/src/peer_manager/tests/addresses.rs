@@ -354,9 +354,7 @@ async fn resend_own_addresses() {
     )
     .unwrap();
 
-    // FIXME: is this EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT needed here?
-    let peer_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
-        + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT;
+    let peer_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count();
     for peer_index in 0..peer_count {
         let new_peer_id = PeerId::new();
         let peer_address = TestAddressMaker::new_random_address();
