@@ -78,7 +78,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
                 "data": {
                     "amount": amount_to_json(data.value(), chain_config),
                     "staker": Address::new(chain_config, data.staker()).expect("no error").get(),
-                    "vrf_public_key": data.vrf_public_key(),
+                    "vrf_public_key": Address::new(chain_config, data.vrf_public_key()).expect("no error").get(),
                     "decommission_key": Address::new(chain_config, data.decommission_key()).expect("no error").get(),
                     "margin_ratio_per_thousand": data.margin_ratio_per_thousand(),
                     "cost_per_block": amount_to_json(data.cost_per_block(), chain_config)

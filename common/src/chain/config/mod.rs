@@ -245,6 +245,16 @@ impl ChainConfig {
         }
     }
 
+    #[must_use]
+    pub fn vrf_public_key_address_prefix(&self) -> &'static str {
+        match self.chain_type {
+            ChainType::Mainnet => "mvrfpk",
+            ChainType::Testnet => "tvrfpk",
+            ChainType::Regtest => "rvrfpk",
+            ChainType::Signet => "svrfpk",
+        }
+    }
+
     /// The BIP44 coin type for this chain
     #[must_use]
     pub fn bip44_coin_type(&self) -> ChildNumber {
