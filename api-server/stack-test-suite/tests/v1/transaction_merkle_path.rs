@@ -15,8 +15,9 @@
 
 use super::*;
 
+use api_server_common::storage::storage_api::block_aux_data::BlockAuxData;
 use common::{
-    chain::Block,
+    chain::{block::timestamp::BlockTimestamp, Block},
     primitives::{Id, H256},
 };
 use std::str::FromStr;
@@ -109,6 +110,18 @@ async fn get_block_failed(#[case] seed: Seed) {
 
                 db_tx
                     .set_transaction(transaction_id, Some(block_id), &signed_transaction)
+                    .await
+                    .unwrap();
+
+                db_tx
+                    .set_block_aux_data(
+                        block_id,
+                        &BlockAuxData::new(
+                            block_id,
+                            BlockHeight::new(rng.gen::<u32>() as u64),
+                            BlockTimestamp::from_int_seconds(rng.gen::<u64>()),
+                        ),
+                    )
                     .await
                     .unwrap();
 

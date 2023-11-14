@@ -15,8 +15,8 @@
 
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
-    ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiServerTransactionRw,
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
+    ApiServerStorageWrite, ApiServerTransactionRw,
 };
 use common::{
     address::Address,
@@ -144,7 +144,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .expect("Unable to update balances from transaction outputs");
             }
 
-            db_tx.set_block(block.get_id(), &block).await.expect("Unable to set block");
+            let block_id = block.get_id();
+            db_tx.set_block(block_id, &block).await.expect("Unable to set block");
+            db_tx
+                .set_block_aux_data(
+                    block_id,
+                    &BlockAuxData::new(block_id, block_height, block.timestamp()),
+                )
+                .await
+                .expect("Unable to set block aux data");
 
             db_tx
                 .set_best_block(block_height, block.get_id().into())

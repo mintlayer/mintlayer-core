@@ -263,7 +263,8 @@ mod tests {
 
         let keys = (0..strings.len())
             .map(|_| match rng.gen::<usize>() % Destination::VARIANT_COUNT {
-                0..=1 => {
+                0 => Destination::AnyoneCanSpend,
+                1 => {
                     let (_private_key, public_key) =
                         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
                     Destination::PublicKey(public_key)
@@ -335,47 +336,6 @@ mod tests {
 
         let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
         assert_eq!(res, "0xabcd");
-    }
-
-    #[test]
-    fn invalid_match_should_replace_with_hex_creating_case_address_creation_error() {
-        let chain_config = create_regtest();
-
-        let s = format!("{}", HexifiedAddress::new(&Destination::AnyoneCanSpend)); // AnyoneCanSpend cannot be converted to an address
-
-        let re = HexifiedAddress::<Destination>::make_regex_object();
-        assert!(re.is_match(&s));
-
-        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
-        assert_eq!(
-            res,
-            "0x".to_string()
-                + &hex::ToHex::encode_hex::<String>(&Destination::AnyoneCanSpend.encode())
-        );
-    }
-
-    #[test]
-    fn serde_serialize_something_that_cannot_go_to_address() {
-        let chain_config = create_regtest();
-
-        // AnyoneCanSpend is too short to go to an address
-        let obj = Destination::AnyoneCanSpend;
-        let obj_json = serde_json::to_string(&obj).unwrap();
-
-        {
-            assert_eq!(obj_json, "\"HexifiedDestination{0x00}\"");
-            let obj_deserialized: Destination = serde_json::from_str(&obj_json).unwrap();
-            assert_eq!(obj_deserialized, obj);
-        }
-
-        {
-            // Do the replacement, which will make it a hex starting with 0x, and deserialization will still succeed
-            let obj_json_replaced =
-                HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
-            assert_eq!(obj_json_replaced, "\"0x00\"");
-            let obj_deserialized: Destination = serde_json::from_str(&obj_json_replaced).unwrap();
-            assert_eq!(obj_deserialized, obj);
-        }
     }
 
     #[rstest]

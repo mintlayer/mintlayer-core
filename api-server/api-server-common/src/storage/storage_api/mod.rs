@@ -78,6 +78,12 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
+    async fn get_transaction_with_block(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError>;
+
+    #[allow(clippy::type_complexity)]
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,

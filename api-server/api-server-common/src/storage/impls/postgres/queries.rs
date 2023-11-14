@@ -573,6 +573,60 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some((block_id, transaction)))
     }
 
+    #[allow(clippy::type_complexity)]
+    pub async fn get_transaction_with_block(
+        &mut self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                r#"
+                SELECT
+                    t.transaction_data,
+                    b.block_data
+                FROM
+                    ml_transactions t
+                LEFT JOIN
+                    ml_block_aux_data b ON t.owning_block_id = b.block_id
+                WHERE
+                    t.transaction_id = $1;
+                "#,
+                &[&transaction_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let data = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let transaction_data: Vec<u8> = data.get(0);
+        let block_data: Option<Vec<u8>> = data.get(1);
+
+        let block_data = {
+            let deserialized_block_id =
+                block_data.map(|d| BlockAuxData::decode_all(&mut d.as_slice())).transpose();
+            deserialized_block_id.map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Block deserialization failed: {}",
+                    e
+                ))
+            })?
+        };
+
+        let transaction =
+            SignedTransaction::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Transaction {} deserialization failed: {}",
+                    transaction_id, e
+                ))
+            })?;
+
+        Ok(Some((block_data, transaction)))
+    }
+
     pub async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,

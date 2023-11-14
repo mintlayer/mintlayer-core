@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::storage::{
-    impls::postgres::queries::QueryFromConnection, storage_api::ApiServerStorageRead,
+    impls::postgres::queries::QueryFromConnection,
+    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageRead},
 };
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
@@ -113,6 +114,19 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_main_chain_block_id(block_height).await?;
+
+        Ok(res)
+    }
+
+    async fn get_transaction_with_block(
+        &self,
+        transaction_id: common::primitives::Id<common::chain::Transaction>,
+    ) -> Result<
+        Option<(Option<BlockAuxData>, common::chain::SignedTransaction)>,
+        crate::storage::storage_api::ApiServerStorageError,
+    > {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_transaction_with_block(transaction_id).await?;
 
         Ok(res)
     }

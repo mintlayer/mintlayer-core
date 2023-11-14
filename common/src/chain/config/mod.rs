@@ -139,14 +139,14 @@ fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static 
             Destination::ClassicMultisig(_) => "mmtc",
         },
         ChainType::Testnet => match destination {
-            Destination::AnyoneCanSpend => "",
+            Destination::AnyoneCanSpend => "anyonecanspend_address",
             Destination::Address(_) => "tmt",
             Destination::PublicKey(_) => "tpmt",
             Destination::ScriptHash(_) => "tstc",
             Destination::ClassicMultisig(_) => "tmtc",
         },
         ChainType::Regtest => match destination {
-            Destination::AnyoneCanSpend => "",
+            Destination::AnyoneCanSpend => "anyonecanspend_address",
             Destination::Address(_) => "rmt",
             Destination::PublicKey(_) => "rpmt",
             Destination::ScriptHash(_) => "rstc",

@@ -224,6 +224,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
+    async fn get_transaction_with_block(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_transaction_with_block(transaction_id).await?;
+
+        Ok(res)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,

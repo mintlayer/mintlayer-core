@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::txoutput_to_json;
+
 use super::*;
 
 #[tokio::test]
@@ -154,12 +156,13 @@ async fn has_reward(#[case] seed: Seed) {
 
                     let genesis_id = tf.genesis().get_id();
 
+                    let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
                     let block = tf
                         .make_block_builder()
                         .with_parent(genesis_id.into())
                         .with_reward(vec![TxOutput::LockThenTransfer(
                             OutputValue::Coin(Amount::from_atoms(100)),
-                            Destination::AnyoneCanSpend,
+                            Destination::PublicKey(pk),
                             OutputTimeLock::ForBlockCount(0),
                         )])
                         .build();
@@ -169,7 +172,12 @@ async fn has_reward(#[case] seed: Seed) {
 
                     _ = tx.send((
                         block_index.block_id().to_hash().encode_hex::<String>(),
-                        json!(block.block_reward().outputs().iter().clone().collect::<Vec<_>>()),
+                        json!(block
+                            .block_reward()
+                            .outputs()
+                            .iter()
+                            .map(|out| txoutput_to_json(out, &chain_config))
+                            .collect::<Vec<_>>()),
                     ));
 
                     block
