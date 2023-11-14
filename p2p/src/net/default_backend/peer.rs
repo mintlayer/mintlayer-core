@@ -26,12 +26,9 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage},
-    net::{
-        default_backend::{
-            transport::TransportSocket,
-            types::{BackendEvent, PeerEvent},
-        },
-        types::Role,
+    net::default_backend::{
+        transport::TransportSocket,
+        types::{BackendEvent, PeerEvent},
     },
     protocol::{choose_common_protocol_version, ProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -49,18 +46,6 @@ pub enum ConnectionInfo {
         handshake_nonce: HandshakeNonce,
         local_services_override: Option<Services>,
     },
-}
-
-impl From<ConnectionInfo> for Role {
-    fn from(role: ConnectionInfo) -> Self {
-        match role {
-            ConnectionInfo::Inbound => Role::Inbound,
-            ConnectionInfo::Outbound {
-                handshake_nonce: _,
-                local_services_override: _,
-            } => Role::Outbound,
-        }
-    }
 }
 
 pub struct Peer<T: TransportSocket> {

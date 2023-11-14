@@ -142,7 +142,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Only one outbound connection is allowed per address group.
     pub fn select_new_outbound_addresses(
         &self,
-        cur_auto_outbound_peer_addresses: &BTreeSet<SocketAddress>,
+        cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         count: usize,
     ) -> Vec<SocketAddress> {
         if count == 0 {
@@ -151,23 +151,21 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let now = self.time_getter.get_time();
 
-        let cur_addr_groups = cur_auto_outbound_peer_addresses
-            .iter()
-            .map(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
-            .collect::<BTreeSet<_>>();
-
         let mut selected = self
             .addresses
             .iter()
             .filter_map(|(addr, address_data)| {
+                log::debug!("trying {addr:?}");
                 if address_data.connect_now(now)
-                    && !cur_addr_groups
+                    && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
+                    log::debug!("trying {addr:?} succeeded");
                     Some(*addr)
                 } else {
+                    log::debug!("trying {addr:?} failed");
                     None
                 }
             })

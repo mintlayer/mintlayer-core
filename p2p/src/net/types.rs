@@ -33,7 +33,10 @@ use crate::{
 
 use self::services::Services;
 
-// TODO: Rename to ConnectionDirection
+// TODO:
+// 1) The name "Role" is bad, consider renaming it e.g. to ConnectionDirection.
+// 2) It's better to remove it and use the PeerRole enum instead (which should better be renamed
+// as well).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Inbound,

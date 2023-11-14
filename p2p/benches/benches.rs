@@ -19,7 +19,7 @@ use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use p2p::{
-    peer_manager::peerdb::PeerDb,
+    peer_manager::{address_groups::AddressGroup, peerdb::PeerDb},
     testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
 
@@ -38,11 +38,15 @@ pub fn peer_db(c: &mut Criterion) {
         peerdb.ban(TestAddressMaker::new_random_address().as_bannable());
     }
 
-    let automatic_outbound =
-        (0..5).map(|_| TestAddressMaker::new_random_address()).collect::<BTreeSet<_>>();
+    let outbound_addr_groups = (0..5)
+        .map(|_| {
+            let addr = TestAddressMaker::new_random_address();
+            AddressGroup::from_peer_address(&addr.as_peer_address())
+        })
+        .collect::<BTreeSet<_>>();
 
     c.bench_function("PeerDb", |b| {
-        b.iter(|| peerdb.select_new_outbound_addresses(&automatic_outbound, 11))
+        b.iter(|| peerdb.select_new_outbound_addresses(&outbound_addr_groups, 11))
     });
 }
 

@@ -84,15 +84,6 @@ impl EvictionCandidate {
     }
 }
 
-// Only consider inbound connections for eviction (attackers have no control over outbound connections)
-fn filter_peer_role(
-    mut candidates: Vec<EvictionCandidate>,
-    peer_role: PeerRole,
-) -> Vec<EvictionCandidate> {
-    candidates.retain(|peer| peer.peer_role == peer_role);
-    candidates
-}
-
 fn filter_old_peers(
     mut candidates: Vec<EvictionCandidate>,
     age: Duration,
@@ -180,7 +171,8 @@ pub fn select_for_eviction_inbound(
 ) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
-    let candidates = filter_peer_role(candidates, PeerRole::Inbound);
+    debug_assert!(candidates.iter().all(|c| c.peer_role == PeerRole::Inbound));
+
     let candidates =
         filter_address_group(candidates, *limits.preserved_inbound_count_address_group);
     let candidates = filter_fast_ping(candidates, *limits.preserved_inbound_count_ping);
@@ -194,16 +186,60 @@ pub fn select_for_eviction_inbound(
     find_group_most_connections(candidates)
 }
 
-#[must_use]
+/// Outbound block relay connections younger that this age will not be taken into account
+/// during eviction.
+/// Note that extra block relay connections are established and evicted on a regular basis
+/// during normal operation. So, this interval basically determines how often those extra
+/// connections will come and go.
+const BLOCK_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(120);
+
+/// Outbound full relay connections younger that this age will not be taken into account
+/// during eviction.
+/// Note that extra full relay connections are established if the current tip becomes stale.
+/// There is no point in making this interval large, it should just give the peer enough
+/// time to send us a block.
+const FULL_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(30);
+
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
     limits: &ConnectionCountLimits,
 ) -> Option<PeerId> {
-    let candidates = filter_peer_role(candidates, PeerRole::OutboundBlockRelay);
+    select_for_eviction_outbound(
+        candidates,
+        PeerRole::OutboundBlockRelay,
+        BLOCK_RELAY_CONNECTION_MIN_AGE,
+        *limits.outbound_block_relay_count,
+    )
+}
 
-    // Give peers some time to have a chance to send blocks
-    let mut candidates = filter_old_peers(candidates, Duration::from_secs(120));
-    if candidates.len() <= *limits.outbound_block_relay_count {
+pub fn select_for_eviction_full_relay(
+    candidates: Vec<EvictionCandidate>,
+    limits: &ConnectionCountLimits,
+) -> Option<PeerId> {
+    // TODO: in bitcoin they protect full relay peers from eviction if there are no other
+    // connection to their network (counting outbound-full-relay and manual peers). We should
+    // probably do the same.
+    select_for_eviction_outbound(
+        candidates,
+        PeerRole::OutboundFullRelay,
+        FULL_RELAY_CONNECTION_MIN_AGE,
+        *limits.outbound_full_relay_count,
+    )
+}
+
+fn select_for_eviction_outbound(
+    candidates: Vec<EvictionCandidate>,
+    peer_role: PeerRole,
+    min_age: Duration,
+    max_count: usize,
+) -> Option<PeerId> {
+    debug_assert!(candidates.iter().all(|c| c.peer_role == peer_role));
+
+    // Give peers some time to have a chance to send blocks.
+    // TODO: in bitcoin, in addition to checking MINIMUM_CONNECT_TIME, they also check whether
+    // there are blocks in-flight with this peer; we should consider doing it too.
+    let mut candidates = filter_old_peers(candidates, min_age);
+    if candidates.len() <= max_count {
         return None;
     }
 

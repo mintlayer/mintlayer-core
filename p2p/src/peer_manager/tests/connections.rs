@@ -142,7 +142,7 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
-    pm1.heartbeat();
+    pm1.heartbeat(false);
 
     assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(

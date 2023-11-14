@@ -259,7 +259,12 @@ fn test_addr_list_handling_outbound() {
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     };
-    pm.connect(peer_address, OutboundConnectType::Automatic);
+    pm.connect(
+        peer_address,
+        OutboundConnectType::Automatic {
+            block_relay_only: false,
+        },
+    );
 
     // New peer connection is requested
     match cmd_receiver.try_recv() {

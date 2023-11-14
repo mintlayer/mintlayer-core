@@ -74,6 +74,7 @@ use crate::{
 };
 
 use self::{
+    address_groups::AddressGroup,
     dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
@@ -156,17 +157,28 @@ const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
 const PEER_ADDRESSES_ROLLING_BLOOM_FPP: f64 = 0.001;
 
 enum OutboundConnectType {
-    /// OutboundBlockRelay or OutboundFullRelay
-    Automatic,
+    Automatic {
+        block_relay_only: bool,
+    },
     Reserved,
     Manual {
         response_sender: oneshot_nofail::Sender<crate::Result<()>>,
     },
 }
 
+impl OutboundConnectType {
+    fn block_relay_only(&self) -> bool {
+        match self {
+            OutboundConnectType::Automatic { block_relay_only } => *block_relay_only,
+            OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
+                false
+            }
+        }
+    }
+}
+
 struct PendingConnect {
     outbound_connect_type: OutboundConnectType,
-    block_relay_only: bool,
 }
 
 struct PendingDisconnect {
@@ -534,24 +546,9 @@ where
         Ok(())
     }
 
-    /// Initiate a new outbound connection or send an error via `response_sender` if it's not possible
+    /// Initiate a new outbound connection or send an error via `response_sender` if it's not possible.
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
-        // TODO: why do we prioritize block relay connections here?
-        // Note: in bitcoin they first create block relay connections to anchor addresses
-        // (which we handle separately, before the first heartbeat), then they create full
-        // relay connections until they hit the limit, and only after that they start creating
-        // ordinary block relay connections.
-        let block_relay_only = match &outbound_connect_type {
-            OutboundConnectType::Automatic => {
-                *self.p2p_config.enable_block_relay_peers
-                    && self.block_relay_peer_count()
-                        < *self.p2p_config.connection_count_limits.outbound_block_relay_count
-                            + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT
-            }
-            OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
-                false
-            }
-        };
+        let block_relay_only = outbound_connect_type.block_relay_only();
 
         let local_services_override: Option<Services> = if block_relay_only {
             Some([Service::Blocks].as_slice().into())
@@ -568,7 +565,6 @@ where
                     address,
                     PendingConnect {
                         outbound_connect_type,
-                        block_relay_only,
                     },
                 );
                 assert!(old_value.is_none());
@@ -576,7 +572,10 @@ where
             Err(e) => {
                 log::debug!("outbound connection to {address:?} failed: {e}");
                 match outbound_connect_type {
-                    OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
+                    OutboundConnectType::Automatic {
+                        block_relay_only: _,
+                    }
+                    | OutboundConnectType::Reserved => {}
                     OutboundConnectType::Manual { response_sender } => {
                         response_sender.send(Err(e));
                     }
@@ -745,14 +744,24 @@ where
         }
     }
 
-    /// Try to disconnect the "worst" block relay peer.
-    /// Once it's disconnected, PeerManager will connect to a new one and may find a better blockchain somewhere.
-    fn try_evict_block_relay_peer(&mut self) {
+    /// If there are too many outbound block relay peers, find and disconnect the "worst" one.
+    fn evict_block_relay_peer_if_needed(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
             &self.p2p_config.connection_count_limits,
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+        }
+    }
+
+    /// If there are too many outbound full relay peers, find and disconnect the "worst" one.
+    fn evict_full_relay_peer_if_needed(&mut self) {
+        if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
+            self.eviction_candidates(PeerRole::OutboundFullRelay),
+            &self.p2p_config.connection_count_limits,
+        ) {
+            log::info!("full relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
@@ -887,13 +896,14 @@ where
 
     fn determine_outbound_peer_role(pending_connect: &PendingConnect) -> PeerRole {
         match pending_connect.outbound_connect_type {
-            OutboundConnectType::Automatic => {
-                if pending_connect.block_relay_only {
+            OutboundConnectType::Automatic { block_relay_only } => {
+                if block_relay_only {
                     PeerRole::OutboundBlockRelay
                 } else {
                     PeerRole::OutboundFullRelay
                 }
             }
+            // FIXME: this is ugly
             OutboundConnectType::Reserved => PeerRole::OutboundManual,
             OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
         }
@@ -916,7 +926,10 @@ where
                 );
                 let role = Self::determine_outbound_peer_role(&pending_connect);
                 let response_sender = match pending_connect.outbound_connect_type {
-                    OutboundConnectType::Automatic | OutboundConnectType::Reserved => None,
+                    OutboundConnectType::Automatic {
+                        block_relay_only: _,
+                    }
+                    | OutboundConnectType::Reserved => None,
                     OutboundConnectType::Manual { response_sender } => Some(response_sender),
                 };
 
@@ -972,12 +985,14 @@ where
 
         let PendingConnect {
             outbound_connect_type,
-            block_relay_only: _,
         } = self.pending_outbound_connects.remove(&address).expect(
             "the address must be present in pending_outbound_connects (handle_outbound_error)",
         );
         match outbound_connect_type {
-            OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
+            OutboundConnectType::Automatic {
+                block_relay_only: _,
+            }
+            | OutboundConnectType::Reserved => {}
             OutboundConnectType::Manual { response_sender } => {
                 response_sender.send(Err(error));
             }
@@ -1054,20 +1069,15 @@ where
         }
     }
 
-    fn automatic_outbound_peer_addresses(&self) -> BTreeSet<SocketAddress> {
+    fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, PeerRole)> + '_ {
         let pending_automatic_outbound =
-            self.pending_outbound_connects.iter().filter_map(|(addr, peer)| {
-                match peer.outbound_connect_type {
-                    OutboundConnectType::Automatic => Some(*addr),
-                    OutboundConnectType::Reserved | OutboundConnectType::Manual { .. } => None,
-                }
+            self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
+                let role = Self::determine_outbound_peer_role(pending_conn);
+                (*addr, role)
             });
         let connected_automatic_outbound =
-            self.peers.values().filter_map(|peer| match peer.peer_role {
-                PeerRole::Inbound | PeerRole::OutboundManual => None,
-                PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => Some(peer.address),
-            });
-        connected_automatic_outbound.chain(pending_automatic_outbound).collect()
+            self.peers.values().map(|peer_ctx| (peer_ctx.address, peer_ctx.peer_role));
+        connected_automatic_outbound.chain(pending_automatic_outbound)
     }
 
     /// Maintains the peer manager state.
@@ -1091,20 +1101,63 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    fn heartbeat(&mut self) {
+    fn heartbeat(&mut self, need_new_full_relay_peer: bool) {
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let cur_auto_outbound_peer_addresses = self.automatic_outbound_peer_addresses();
-        let count = (self.p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
-            + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
-            .saturating_sub(cur_auto_outbound_peer_addresses.len());
-        let new_automatic = self
-            .peerdb
-            .select_new_outbound_addresses(&cur_auto_outbound_peer_addresses, count);
+        let mut cur_outbound_full_relay_conn_count = 0;
+        let mut cur_outbound_block_relay_conn_count = 0;
+        let mut cur_outbound_conn_addr_groups = BTreeSet::new();
+        for (addr, role) in self.peer_addresses_iter() {
+            log::debug!("(addr, role) = ({addr:?}, {role:?})");
+
+            let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
+
+            match role {
+                PeerRole::Inbound => {}
+                PeerRole::OutboundManual => {
+                    // TODO: should we include manual peer connection in cur_outbound_conn_addr_groups,
+                    // in order to avoid opening new automatic connections to their address groups?
+                    // (Bitcoin does it).
+                    // Note that this change will require adjusting expected connections numbers
+                    // in the "discovered_node" tests.
+                }
+                PeerRole::OutboundFullRelay => {
+                    cur_outbound_full_relay_conn_count += 1;
+                    cur_outbound_conn_addr_groups.insert(addr_group);
+                }
+                PeerRole::OutboundBlockRelay => {
+                    cur_outbound_block_relay_conn_count += 1;
+                    cur_outbound_conn_addr_groups.insert(addr_group);
+                }
+            }
+        }
+
+        let needed_outbound_full_relay_conn_count = {
+            let count = self
+                .p2p_config
+                .connection_count_limits
+                .outbound_full_relay_count
+                .saturating_sub(cur_outbound_full_relay_conn_count);
+
+            if count == 0 && need_new_full_relay_peer {
+                1
+            } else {
+                count
+            }
+        };
+        let needed_outbound_block_relay_conn_count =
+            (*self.p2p_config.connection_count_limits.outbound_block_relay_count
+                + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
+                .saturating_sub(cur_outbound_block_relay_conn_count);
+
+        let new_full_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
+            &cur_outbound_conn_addr_groups,
+            needed_outbound_full_relay_conn_count,
+        );
 
         // TODO: in bitcoin they also try to create an extra outbound full relay connection
-        // to an address in a reachable network in which we have no outbound full relay or
+        // to an address in a reachable network in which there are no outbound full relay or
         // manual connections. See CConnman::MaybePickPreferredNetwork for reference.
 
         let cur_pending_outbound_peer_addresses =
@@ -1113,14 +1166,41 @@ where
             .peerdb
             .select_reserved_outbound_addresses(&cur_pending_outbound_peer_addresses);
 
-        for address in new_automatic.into_iter() {
-            self.connect(address, OutboundConnectType::Automatic);
+        for address in new_full_relay_conn_addresses.into_iter() {
+            let addr_group = AddressGroup::from_peer_address(&address.as_peer_address());
+            cur_outbound_conn_addr_groups.insert(addr_group);
+
+            self.connect(
+                address,
+                OutboundConnectType::Automatic {
+                    block_relay_only: false,
+                },
+            );
         }
+
+        let new_block_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
+            &cur_outbound_conn_addr_groups,
+            needed_outbound_block_relay_conn_count,
+        );
+
+        // FIXME
+        //if *self.p2p_config.enable_block_relay_peers {
+        for address in new_block_relay_conn_addresses.into_iter() {
+            self.connect(
+                address,
+                OutboundConnectType::Automatic {
+                    block_relay_only: true,
+                },
+            );
+        }
+        //}
+
         for address in new_reserved.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
         }
 
-        self.try_evict_block_relay_peer();
+        self.evict_block_relay_peer_if_needed();
+        self.evict_full_relay_peer_if_needed();
 
         if let Some(o) = self.observer.as_mut() {
             o.on_heartbeat();
@@ -1435,24 +1515,6 @@ where
             .count()
     }
 
-    fn block_relay_peer_count(&self) -> usize {
-        self.pending_outbound_connects
-            .values()
-            .filter(|peer| peer.block_relay_only)
-            .count()
-            + self
-                .peers
-                .values()
-                .map(|peer| peer.peer_role)
-                .filter(|peer_role| match peer_role {
-                    PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
-                        false
-                    }
-                    PeerRole::OutboundBlockRelay => true,
-                })
-                .count()
-    }
-
     /// Sends ping requests and disconnects peers that do not respond in time
     fn ping_check(&mut self) {
         let now = self.time_getter.get_time();
@@ -1514,14 +1576,22 @@ where
         let anchor_peers = self.peerdb.anchors().clone();
         if anchor_peers.is_empty() {
             // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
-            self.heartbeat();
+            self.heartbeat(false);
         } else {
             // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
             // The stored anchor peers should be the first connected block relay peers.
-            for anchor_address in anchor_peers {
+            for anchor_address in anchor_peers
+                .into_iter()
+                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count)
+            {
                 log::debug!("try to connect to anchor peer {anchor_address}");
                 // The first peers should become anchor peers
-                self.connect(anchor_address, OutboundConnectType::Automatic);
+                self.connect(
+                    anchor_address,
+                    OutboundConnectType::Automatic {
+                        block_relay_only: true,
+                    },
+                );
             }
         }
         // Last time when heartbeat was called
@@ -1585,15 +1655,19 @@ where
             let last_heartbeat_max =
                 (last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX).expect("Cannot happen 2");
 
+            let time_since_last_chainstate_tip =
+                (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
+            let tip_is_stale = time_since_last_chainstate_tip > stale_tip_time_diff;
+
             // Periodic heartbeat call where new outbound connections are made
-            if (now >= last_heartbeat_min && heartbeat_call_needed) || (now >= last_heartbeat_max) {
-                self.heartbeat();
+            if (now >= last_heartbeat_min && heartbeat_call_needed)
+                || (now >= last_heartbeat_max)
+                || tip_is_stale
+            {
+                self.heartbeat(tip_is_stale);
                 last_heartbeat = now;
                 heartbeat_call_needed = false;
             }
-
-            let time_since_last_chainstate_tip =
-                (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
 
             // Reload DNS if there are no outbound connections or if we haven't done it at least
             // once yet.
@@ -1606,8 +1680,7 @@ where
             if !had_dns_reload
                 || (now >= next_dns_reload
                     && self.pending_outbound_connects.is_empty()
-                    && (self.peers.is_empty()
-                        || time_since_last_chainstate_tip > stale_tip_time_diff))
+                    && (self.peers.is_empty() || tip_is_stale))
             {
                 log::debug!(
                     concat!(

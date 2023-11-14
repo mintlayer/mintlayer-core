@@ -15,61 +15,24 @@
 
 use std::collections::BTreeSet;
 
-use crypto::random::{make_pseudo_rng, SliceRandom};
+use crypto::random::SliceRandom;
 use rstest::rstest;
 use test_utils::random::Seed;
 
 use super::*;
 
-fn shuffle_vec<T>(mut vec: Vec<T>) -> Vec<T> {
-    vec.shuffle(&mut make_pseudo_rng());
+fn shuffle_vec<T>(mut vec: Vec<T>, rng: &mut impl Rng) -> Vec<T> {
+    vec.shuffle(rng);
     vec
 }
 
-#[tracing::instrument]
-#[test]
-fn test_filter_peer_role() {
-    let peer1 = PeerId::new();
-    let peer2 = PeerId::new();
-    assert_eq!(
-        filter_peer_role(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(123),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(123),
-                    ping_min: 0,
-                    peer_role: PeerRole::OutboundFullRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                }
-            ]),
-            PeerRole::Inbound
-        ),
-        vec![EvictionCandidate {
-            age: Duration::ZERO,
-            peer_id: peer1,
-            net_group_keyed: NetGroupKeyed(123),
-            ping_min: 0,
-            peer_role: PeerRole::Inbound,
-            last_tip_block_time: None,
-            last_tx_time: None,
-        },]
-    );
-}
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_filter_address_group(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
 
-#[tracing::instrument]
-#[test]
-fn test_filter_address_group() {
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
@@ -92,26 +55,29 @@ fn test_filter_address_group() {
 
     assert_eq!(
         filter_address_group(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(2),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(2),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             1
         ),
         vec![EvictionCandidate {
@@ -127,26 +93,29 @@ fn test_filter_address_group() {
 
     assert_eq!(
         filter_address_group(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(2),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(2),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             1
         ),
         vec![EvictionCandidate {
@@ -162,35 +131,38 @@ fn test_filter_address_group() {
 
     assert_eq!(
         filter_address_group(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(2),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(2),
-                    ping_min: 0,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(2),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer3,
+                        net_group_keyed: NetGroupKeyed(2),
+                        ping_min: 0,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             2
         ),
         vec![EvictionCandidate {
@@ -205,9 +177,13 @@ fn test_filter_address_group() {
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_ping() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_ping(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
@@ -230,26 +206,29 @@ fn test_ping() {
 
     assert_eq!(
         filter_fast_ping(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 234,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 234,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             1
         ),
         vec![EvictionCandidate {
@@ -265,35 +244,38 @@ fn test_ping() {
 
     assert_eq!(
         filter_fast_ping(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 234,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 234,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer3,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             2
         ),
         vec![EvictionCandidate {
@@ -308,9 +290,13 @@ fn test_ping() {
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_filter_by_last_block_time() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_filter_by_last_block_time(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
@@ -333,28 +319,31 @@ fn test_filter_by_last_block_time() {
 
     assert_eq!(
         filter_by_last_tip_block_time(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Time::from_duration_since_epoch(
-                        Duration::from_secs(10000000)
-                    )),
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: Some(Time::from_duration_since_epoch(
+                            Duration::from_secs(10000000)
+                        )),
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             1
         ),
         vec![EvictionCandidate {
@@ -370,41 +359,44 @@ fn test_filter_by_last_block_time() {
 
     assert_eq!(
         filter_by_last_tip_block_time(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Time::from_duration_since_epoch(
-                        Duration::from_secs(10000000)
-                    )),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Time::from_duration_since_epoch(
-                        Duration::from_secs(10000001)
-                    )),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Time::from_duration_since_epoch(
-                        Duration::from_secs(10000002)
-                    )),
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: Some(Time::from_duration_since_epoch(
+                            Duration::from_secs(10000000)
+                        )),
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: Some(Time::from_duration_since_epoch(
+                            Duration::from_secs(10000001)
+                        )),
+                        last_tx_time: None,
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer3,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: Some(Time::from_duration_since_epoch(
+                            Duration::from_secs(10000002)
+                        )),
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             2
         ),
         vec![EvictionCandidate {
@@ -419,9 +411,13 @@ fn test_filter_by_last_block_time() {
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_filter_by_last_transaction_time() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
@@ -444,26 +440,29 @@ fn test_filter_by_last_transaction_time() {
 
     assert_eq!(
         filter_by_last_transaction_time(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: Some(Time::from_secs_since_epoch(1000000)),
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: Some(Time::from_secs_since_epoch(1000000)),
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: None,
+                    },
+                ],
+                &mut rng
+            ),
             1
         ),
         vec![EvictionCandidate {
@@ -479,35 +478,38 @@ fn test_filter_by_last_transaction_time() {
 
     assert_eq!(
         filter_by_last_transaction_time(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: Some(Time::from_secs_since_epoch(10000001)),
-                },
-                EvictionCandidate {
-                    age: Duration::ZERO,
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::Inbound,
-                    last_tip_block_time: None,
-                    last_tx_time: Some(Time::from_secs_since_epoch(10000002)),
-                },
-            ]),
+            shuffle_vec(
+                vec![
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer1,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer2,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: Some(Time::from_secs_since_epoch(10000001)),
+                    },
+                    EvictionCandidate {
+                        age: Duration::ZERO,
+                        peer_id: peer3,
+                        net_group_keyed: NetGroupKeyed(1),
+                        ping_min: 123,
+                        peer_role: PeerRole::Inbound,
+                        last_tip_block_time: None,
+                        last_tx_time: Some(Time::from_secs_since_epoch(10000002)),
+                    },
+                ],
+                &mut rng
+            ),
             2
         ),
         vec![EvictionCandidate {
@@ -522,9 +524,13 @@ fn test_filter_by_last_transaction_time() {
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_find_group_most_connections() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_find_group_most_connections(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
@@ -546,59 +552,65 @@ fn test_find_group_most_connections() {
 
     // The youngest peer is selected (with the latest id)
     assert_eq!(
-        find_group_most_connections(shuffle_vec(vec![
-            EvictionCandidate {
-                age: Duration::ZERO,
-                peer_id: peer1,
-                net_group_keyed: NetGroupKeyed(1),
-                ping_min: 123,
-                peer_role: PeerRole::Inbound,
-                last_tip_block_time: None,
-                last_tx_time: None,
-            },
-            EvictionCandidate {
-                age: Duration::ZERO,
-                peer_id: peer2,
-                net_group_keyed: NetGroupKeyed(1),
-                ping_min: 123,
-                peer_role: PeerRole::Inbound,
-                last_tip_block_time: None,
-                last_tx_time: None,
-            }
-        ])),
+        find_group_most_connections(shuffle_vec(
+            vec![
+                EvictionCandidate {
+                    age: Duration::ZERO,
+                    peer_id: peer1,
+                    net_group_keyed: NetGroupKeyed(1),
+                    ping_min: 123,
+                    peer_role: PeerRole::Inbound,
+                    last_tip_block_time: None,
+                    last_tx_time: None,
+                },
+                EvictionCandidate {
+                    age: Duration::ZERO,
+                    peer_id: peer2,
+                    net_group_keyed: NetGroupKeyed(1),
+                    ping_min: 123,
+                    peer_role: PeerRole::Inbound,
+                    last_tip_block_time: None,
+                    last_tx_time: None,
+                }
+            ],
+            &mut rng
+        )),
         Some(peer2)
     );
 
     assert_eq!(
-        find_group_most_connections(shuffle_vec(vec![
-            EvictionCandidate {
-                age: Duration::ZERO,
-                peer_id: peer1,
-                net_group_keyed: NetGroupKeyed(1),
-                ping_min: 123,
-                peer_role: PeerRole::Inbound,
-                last_tip_block_time: None,
-                last_tx_time: None,
-            },
-            EvictionCandidate {
-                age: Duration::ZERO,
-                peer_id: peer2,
-                net_group_keyed: NetGroupKeyed(1),
-                ping_min: 123,
-                peer_role: PeerRole::Inbound,
-                last_tip_block_time: None,
-                last_tx_time: None,
-            },
-            EvictionCandidate {
-                age: Duration::ZERO,
-                peer_id: peer3,
-                net_group_keyed: NetGroupKeyed(2),
-                ping_min: 123,
-                peer_role: PeerRole::Inbound,
-                last_tip_block_time: None,
-                last_tx_time: None,
-            },
-        ])),
+        find_group_most_connections(shuffle_vec(
+            vec![
+                EvictionCandidate {
+                    age: Duration::ZERO,
+                    peer_id: peer1,
+                    net_group_keyed: NetGroupKeyed(1),
+                    ping_min: 123,
+                    peer_role: PeerRole::Inbound,
+                    last_tip_block_time: None,
+                    last_tx_time: None,
+                },
+                EvictionCandidate {
+                    age: Duration::ZERO,
+                    peer_id: peer2,
+                    net_group_keyed: NetGroupKeyed(1),
+                    ping_min: 123,
+                    peer_role: PeerRole::Inbound,
+                    last_tip_block_time: None,
+                    last_tx_time: None,
+                },
+                EvictionCandidate {
+                    age: Duration::ZERO,
+                    peer_id: peer3,
+                    net_group_keyed: NetGroupKeyed(2),
+                    ping_min: 123,
+                    peer_role: PeerRole::Inbound,
+                    last_tip_block_time: None,
+                    last_tx_time: None,
+                },
+            ],
+            &mut rng
+        )),
         Some(peer2)
     );
 }
@@ -674,180 +686,338 @@ fn test_randomized(#[case] seed: Seed) {
     }
 }
 
-#[tracing::instrument]
-#[test]
-fn test_block_relay_eviction_young_old_peers() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits: ConnectionCountLimits = Default::default();
+    let limits = block_relay_count_limits(2);
 
-    // Young peers should not be disconnected
-    assert_eq!(
-        select_for_eviction_block_relay(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::from_secs(20000),
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(100),
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
-            &limits
+    fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
+        EvictionCandidate {
+            age,
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundBlockRelay,
+            last_tip_block_time: None,
+            last_tx_time: None,
+        }
+    }
+
+    // Young peers should not be evicted
+    let candidates = vec![
+        make_candidate(peer1, Duration::from_secs(20000)),
+        make_candidate(peer2, Duration::from_secs(10000)),
+        make_candidate(
+            peer3,
+            BLOCK_RELAY_CONNECTION_MIN_AGE - Duration::from_secs(1),
         ),
+    ];
+    assert_eq!(
+        select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &limits),
         None
     );
 
-    // Older peer can be disconnected
-    assert_eq!(
-        select_for_eviction_block_relay(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::from_secs(20000),
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(130),
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
-            &limits
+    // Older peer can be evicted
+    let candidates = vec![
+        make_candidate(peer1, Duration::from_secs(20000)),
+        make_candidate(peer2, Duration::from_secs(10000)),
+        make_candidate(
+            peer3,
+            BLOCK_RELAY_CONNECTION_MIN_AGE + Duration::from_secs(1),
         ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_block_relay(candidates.clone(), &limits),
         Some(peer3)
+    );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &no_limits()),
+        None
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_block_relay_eviction_no_blocks() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits: ConnectionCountLimits = Default::default();
+    let limits = block_relay_count_limits(2);
 
-    // The peer that never sent us new blocks is disconnected
+    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
+        EvictionCandidate {
+            age: Duration::from_secs(10000),
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundBlockRelay,
+            last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
+            last_tx_time: None,
+        }
+    }
+
+    // The peer that never sent us new blocks is evicted
+    let candidates = vec![
+        make_candidate(peer1, Some(10000)),
+        make_candidate(peer2, Some(20000)),
+        make_candidate(peer3, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: Some(Time::from_secs_since_epoch(10000)),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: Some(Time::from_secs_since_epoch(20000)),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: None,
-                    last_tx_time: None,
-                },
-            ]),
-            &limits
-        ),
+        select_for_eviction_block_relay(candidates.clone(), &limits),
         Some(peer3)
+    );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &no_limits()),
+        None
     );
 }
 
-#[tracing::instrument]
-#[test]
-fn test_block_relay_eviction_old_blocks() {
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let peer1 = PeerId::new();
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits: ConnectionCountLimits = Default::default();
+    let limits = block_relay_count_limits(2);
 
-    // The peer that sent blocks a long time ago is disconnected
+    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
+        EvictionCandidate {
+            age: Duration::from_secs(10000),
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundBlockRelay,
+            last_tip_block_time: Some(Time::from_secs_since_epoch(last_tip_block_time_secs)),
+            last_tx_time: None,
+        }
+    }
+
+    // The peer that sent blocks a long time ago is evicted
+    let candidates = vec![
+        make_candidate(peer1, 10000),
+        make_candidate(peer2, 20000),
+        make_candidate(peer3, 30000),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(
-            shuffle_vec(vec![
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer1,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: Some(Time::from_secs_since_epoch(10000)),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer2,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: Some(Time::from_secs_since_epoch(20000)),
-                    last_tx_time: None,
-                },
-                EvictionCandidate {
-                    age: Duration::from_secs(10000),
-                    peer_id: peer3,
-                    net_group_keyed: NetGroupKeyed(1),
-                    ping_min: 123,
-                    peer_role: PeerRole::OutboundBlockRelay,
-                    last_tip_block_time: Some(Time::from_secs_since_epoch(30000)),
-                    last_tx_time: None,
-                },
-            ]),
-            &limits
-        ),
+        select_for_eviction_block_relay(candidates.clone(), &limits),
         Some(peer1)
     );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &no_limits()),
+        None
+    );
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    let limits = full_relay_count_limits(2);
+
+    fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
+        EvictionCandidate {
+            age,
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundFullRelay,
+            last_tip_block_time: None,
+            last_tx_time: None,
+        }
+    }
+
+    // Young peers should not be evicted
+    let candidates = vec![
+        make_candidate(peer1, Duration::from_secs(20000)),
+        make_candidate(peer2, Duration::from_secs(10000)),
+        make_candidate(
+            peer3,
+            FULL_RELAY_CONNECTION_MIN_AGE - Duration::from_secs(1),
+        ),
+    ];
+    assert_eq!(
+        select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &limits),
+        None
+    );
+
+    // Older peer can be evicted
+    let candidates = vec![
+        make_candidate(peer1, Duration::from_secs(20000)),
+        make_candidate(peer2, Duration::from_secs(10000)),
+        make_candidate(
+            peer3,
+            FULL_RELAY_CONNECTION_MIN_AGE + Duration::from_secs(1),
+        ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &limits),
+        Some(peer3)
+    );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &no_limits()),
+        None
+    );
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    let limits = full_relay_count_limits(2);
+
+    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
+        EvictionCandidate {
+            age: Duration::from_secs(10000),
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundFullRelay,
+            last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
+            last_tx_time: None,
+        }
+    }
+
+    // The peer that never sent us new blocks is evicted
+    let candidates = vec![
+        make_candidate(peer1, Some(10000)),
+        make_candidate(peer2, Some(20000)),
+        make_candidate(peer3, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &limits),
+        Some(peer3)
+    );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &no_limits()),
+        None
+    );
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    let limits = full_relay_count_limits(2);
+
+    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
+        EvictionCandidate {
+            age: Duration::from_secs(10000),
+            peer_id,
+            net_group_keyed: NetGroupKeyed(1),
+            ping_min: 123,
+            peer_role: PeerRole::OutboundFullRelay,
+            last_tip_block_time: Some(Time::from_secs_since_epoch(last_tip_block_time_secs)),
+            last_tx_time: None,
+        }
+    }
+
+    // The peer that sent blocks a long time ago is evicted
+    let candidates = vec![
+        make_candidate(peer1, 10000),
+        make_candidate(peer2, 20000),
+        make_candidate(peer3, 30000),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &limits),
+        Some(peer1)
+    );
+
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &no_limits()),
+        None
+    );
+}
+
+fn block_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
+    ConnectionCountLimits {
+        outbound_block_relay_count: max_connections.into(),
+
+        max_inbound_connections: usize::MAX.into(),
+        preserved_inbound_count_address_group: usize::MAX.into(),
+        preserved_inbound_count_ping: usize::MAX.into(),
+        preserved_inbound_count_new_blocks: usize::MAX.into(),
+        preserved_inbound_count_new_transactions: usize::MAX.into(),
+        outbound_full_relay_count: usize::MAX.into(),
+    }
+}
+
+fn full_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
+    ConnectionCountLimits {
+        outbound_full_relay_count: max_connections.into(),
+
+        max_inbound_connections: usize::MAX.into(),
+        preserved_inbound_count_address_group: usize::MAX.into(),
+        preserved_inbound_count_ping: usize::MAX.into(),
+        preserved_inbound_count_new_blocks: usize::MAX.into(),
+        preserved_inbound_count_new_transactions: usize::MAX.into(),
+        outbound_block_relay_count: usize::MAX.into(),
+    }
+}
+
+fn no_limits() -> ConnectionCountLimits {
+    ConnectionCountLimits {
+        max_inbound_connections: usize::MAX.into(),
+        preserved_inbound_count_address_group: usize::MAX.into(),
+        preserved_inbound_count_ping: usize::MAX.into(),
+        preserved_inbound_count_new_blocks: usize::MAX.into(),
+        preserved_inbound_count_new_transactions: usize::MAX.into(),
+        outbound_block_relay_count: usize::MAX.into(),
+        outbound_full_relay_count: usize::MAX.into(),
+    }
 }
