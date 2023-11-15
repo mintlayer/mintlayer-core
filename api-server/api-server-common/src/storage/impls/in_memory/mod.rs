@@ -124,8 +124,8 @@ impl ApiServerInMemoryStorage {
         Ok(version_table_handle)
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
-        let best_block_table_handle = self.best_block;
+    fn get_best_block(&self) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
+        let best_block_table_handle = Some(self.best_block);
         Ok(best_block_table_handle)
     }
 
@@ -233,12 +233,15 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_block(
+    fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
+        block_height: BlockHeight,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
         self.block_table.insert(block_id, block.clone());
+        self.main_chain_blocks_table.insert(block_height, block_id);
+        self.best_block = (block_height, block_id.into());
         Ok(())
     }
 
@@ -253,15 +256,6 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_best_block(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<GenBlock>,
-    ) -> Result<(), ApiServerStorageError> {
-        self.best_block = (block_height, block_id);
-        Ok(())
-    }
-
     fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
@@ -271,20 +265,11 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_main_chain_block_id(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<Block>,
-    ) -> Result<(), ApiServerStorageError> {
-        self.main_chain_blocks_table.insert(block_height, block_id);
-        Ok(())
-    }
-
-    fn del_main_chain_block_id(
+    fn del_main_chain_blocks_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.main_chain_blocks_table.remove(&block_height);
+        self.main_chain_blocks_table.retain(|k, _| k <= &block_height);
         Ok(())
     }
 }

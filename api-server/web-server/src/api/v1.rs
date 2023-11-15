@@ -222,6 +222,17 @@ pub async fn chain_at_height<T: ApiServerStorage>(
 pub async fn chain_tip<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let best_block = best_block(&state).await?;
+
+    Ok(Json(json!({
+      "block_height": best_block.0,
+      "block_id": best_block.1,
+    })))
+}
+
+async fn best_block<T: ApiServerStorage>(
+    state: &ApiServerWebServerState<Arc<T>>,
+) -> Result<(BlockHeight, Id<common::chain::GenBlock>), ApiServerWebServerError> {
     let best_block = state
         .db
         .transaction_ro()
@@ -233,12 +244,9 @@ pub async fn chain_tip<T: ApiServerStorage>(
         .await
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
-
-    Ok(Json(json!({
-      "block_height": best_block.0,
-      "block_id": best_block.1,
-    })))
+        })?
+        .unwrap_or_else(|| (BlockHeight::new(0), state.chain_config.genesis_block_id()));
+    Ok(best_block)
 }
 
 //
@@ -282,23 +290,7 @@ pub async fn transaction<T: ApiServerStorage>(
     let (block, transaction) = get_transaction(&transaction_id, &state).await?;
 
     let confirmations = if let Some(block) = &block {
-        let (tip_height, _) = state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_best_block()
-            .await
-            .map_err(|_| {
-                ApiServerWebServerError::ServerError(
-                    ApiServerWebServerServerError::InternalServerError,
-                )
-            })?;
-
+        let (tip_height, _) = best_block(&state).await?;
         tip_height.sub(block.block_height())
     } else {
         None

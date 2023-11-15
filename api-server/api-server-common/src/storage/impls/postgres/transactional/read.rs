@@ -13,27 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::{
+    chain::GenBlock,
+    primitives::{BlockHeight, Id},
+};
+
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
-    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageRead},
+    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead},
 };
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
 
 #[async_trait::async_trait]
 impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
-    async fn is_initialized(
-        &self,
-    ) -> Result<bool, crate::storage::storage_api::ApiServerStorageError> {
+    async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
-    async fn get_storage_version(
-        &self,
-    ) -> Result<Option<u32>, crate::storage::storage_api::ApiServerStorageError> {
+    async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_storage_version().await?;
 
@@ -43,10 +44,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_address_balance(
         &self,
         address: &str,
-    ) -> Result<
-        Option<common::primitives::Amount>,
-        crate::storage::storage_api::ApiServerStorageError,
-    > {
+    ) -> Result<Option<common::primitives::Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_balance(address).await?;
 
@@ -56,10 +54,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_address_transactions(
         &self,
         address: &str,
-    ) -> Result<
-        Vec<common::primitives::Id<common::chain::Transaction>>,
-        crate::storage::storage_api::ApiServerStorageError,
-    > {
+    ) -> Result<Vec<Id<common::chain::Transaction>>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_transactions(address).await?;
 
@@ -68,13 +63,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_best_block(
         &self,
-    ) -> Result<
-        (
-            common::primitives::BlockHeight,
-            common::primitives::Id<common::chain::GenBlock>,
-        ),
-        crate::storage::storage_api::ApiServerStorageError,
-    > {
+    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 
@@ -83,9 +72,8 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_block(
         &self,
-        block_id: common::primitives::Id<common::chain::Block>,
-    ) -> Result<Option<common::chain::Block>, crate::storage::storage_api::ApiServerStorageError>
-    {
+        block_id: Id<common::chain::Block>,
+    ) -> Result<Option<common::chain::Block>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
 
@@ -94,10 +82,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_block_aux_data(
         &self,
-        block_id: common::primitives::Id<common::chain::Block>,
+        block_id: Id<common::chain::Block>,
     ) -> Result<
         Option<crate::storage::storage_api::block_aux_data::BlockAuxData>,
-        crate::storage::storage_api::ApiServerStorageError,
+        ApiServerStorageError,
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block_aux_data(block_id).await?;
@@ -107,11 +95,8 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_main_chain_block_id(
         &self,
-        block_height: common::primitives::BlockHeight,
-    ) -> Result<
-        Option<common::primitives::Id<common::chain::Block>>,
-        crate::storage::storage_api::ApiServerStorageError,
-    > {
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<common::chain::Block>>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_main_chain_block_id(block_height).await?;
 
@@ -120,10 +105,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_transaction_with_block(
         &self,
-        transaction_id: common::primitives::Id<common::chain::Transaction>,
+        transaction_id: Id<common::chain::Transaction>,
     ) -> Result<
         Option<(Option<BlockAuxData>, common::chain::SignedTransaction)>,
-        crate::storage::storage_api::ApiServerStorageError,
+        ApiServerStorageError,
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction_with_block(transaction_id).await?;
@@ -133,13 +118,13 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_transaction(
         &self,
-        transaction_id: common::primitives::Id<common::chain::Transaction>,
+        transaction_id: Id<common::chain::Transaction>,
     ) -> Result<
         Option<(
-            Option<common::primitives::Id<common::chain::Block>>,
+            Option<Id<common::chain::Block>>,
             common::chain::SignedTransaction,
         )>,
-        crate::storage::storage_api::ApiServerStorageError,
+        ApiServerStorageError,
     > {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;

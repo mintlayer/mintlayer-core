@@ -34,10 +34,10 @@ use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     async fn initialize_storage(
         &mut self,
-        chain_config: &ChainConfig,
+        _chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.initialize_database(chain_config).await?;
+        conn.initialize_database().await?;
 
         Ok(())
     }
@@ -87,24 +87,14 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         Ok(())
     }
 
-    async fn set_best_block(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<GenBlock>,
-    ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_best_block(block_height, block_id).await?;
-
-        Ok(())
-    }
-
-    async fn set_block(
+    async fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
+        block_height: BlockHeight,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_block(block_id, block).await?;
+        conn.set_mainchain_block(block_id, block_height, block).await?;
 
         Ok(())
     }
@@ -132,23 +122,12 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         Ok(())
     }
 
-    async fn set_main_chain_block_id(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<Block>,
-    ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_main_chain_block_id(block_height, block_id).await?;
-
-        Ok(())
-    }
-
-    async fn del_main_chain_block_id(
+    async fn del_main_chain_blocks_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.del_main_chain_block_id(block_height).await?;
+        conn.del_main_chain_blocks_above_height(block_height).await?;
 
         Ok(())
     }
@@ -190,7 +169,9 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
-    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    async fn get_best_block(
+        &self,
+    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 

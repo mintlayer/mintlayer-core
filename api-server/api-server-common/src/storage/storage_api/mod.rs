@@ -63,7 +63,9 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
-    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
+    async fn get_best_block(
+        &self,
+    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError>;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
 
@@ -121,15 +123,10 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
-    async fn set_best_block(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<GenBlock>,
-    ) -> Result<(), ApiServerStorageError>;
-
-    async fn set_block(
+    async fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
+        block_height: BlockHeight,
         block: &Block,
     ) -> Result<(), ApiServerStorageError>;
 
@@ -146,13 +143,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError>;
 
-    async fn set_main_chain_block_id(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<Block>,
-    ) -> Result<(), ApiServerStorageError>;
-
-    async fn del_main_chain_block_id(
+    async fn del_main_chain_blocks_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

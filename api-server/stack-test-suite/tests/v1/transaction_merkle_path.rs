@@ -274,10 +274,10 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
+    let mut rng = make_seedable_rng(seed);
+    let block_height = rng.gen_range(1..50);
     let task = tokio::spawn(async move {
         let web_server_state = {
-            let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(1..50);
             let n_blocks = rng.gen_range(block_height..100);
 
             let chain_config = create_unit_test_config();
@@ -339,8 +339,9 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
                 .unwrap();
 
                 db_tx
-                    .set_block(
+                    .set_mainchain_block(
                         block_id.classify(&chain_config).chain_block_id().unwrap(),
+                        BlockHeight::new(block_height as u64),
                         &empty_block,
                     )
                     .await
