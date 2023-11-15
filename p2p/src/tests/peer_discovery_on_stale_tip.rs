@@ -306,6 +306,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     )
     .await;
     let main_node_address = *main_node.local_address();
+    log::debug!("main_node_address = {main_node_address}");
 
     for i in 0..extra_nodes_count {
         extra_nodes.push(
@@ -341,8 +342,17 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         .assert_connected_to(&[(extra_nodes_addresses[0], PeerRole::OutboundFullRelay)])
         .await;
 
+    let all_dns_addresses = {
+        // Note: since full relay nodes can exchange addresses, the main node may receive its own
+        // address eventually and attempt to connect to itself. I.e. we have to deal with
+        // self-connections when making assertions below anyway. So, let's announce main_node_address
+        // from the very beginning to make self-connections more deterministic.
+        let mut addresses = extra_nodes_addresses.clone();
+        addresses.push(main_node_address);
+        addresses
+    };
     // Now announce all extra nodes.
-    main_node.set_dns_seed_addresses(extra_nodes_addresses.clone());
+    main_node.set_dns_seed_addresses(all_dns_addresses);
     time_getter.advance_time(PEER_MGR_DNS_RELOAD_INTERVAL);
 
     // Wait for a while, giving main node's peer manager time to connect to other nodes
@@ -379,18 +389,22 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         if let Some(notification) = main_node.try_recv_peer_mgr_notification() {
             if let PeerManagerNotification::ConnectionAccepted { address, peer_role } = notification
             {
-                assert_eq!(peer_role, PeerRole::OutboundFullRelay);
-                tried_connections.insert(address);
+                log::debug!("Connection accepted from {address}, role is {peer_role:?}");
 
-                // Make sure that at any given time the total number of outbound full relay connections
-                // is not bigger than outbound_full_relay_count plus outbound_full_relay_extra_count.
-                main_node.assert_outbound_conn_count_within_limits().await;
+                if address.socket_addr().ip() != main_node_address.socket_addr().ip() {
+                    assert_eq!(peer_role, PeerRole::OutboundFullRelay);
+                    tried_connections.insert(address);
 
-                log::debug!(
-                    "Got {} connections out of {}",
-                    tried_connections.len(),
-                    extra_nodes_count
-                );
+                    // Make sure that at any given time the total number of outbound full relay connections
+                    // is not bigger than outbound_full_relay_count plus outbound_full_relay_extra_count.
+                    main_node.assert_outbound_conn_count_within_limits().await;
+
+                    log::debug!(
+                        "Got {} connections out of {}",
+                        tried_connections.len(),
+                        extra_nodes_count
+                    );
+                }
             }
         } else {
             // When the tip is stale, heartbeat should happen at the minimum interval.
