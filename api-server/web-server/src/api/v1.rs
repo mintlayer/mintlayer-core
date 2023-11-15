@@ -304,7 +304,7 @@ pub async fn transaction<T: ApiServerStorage>(
     "is_replaceable": transaction.is_replaceable(),
     "flags": transaction.flags(),
     // TODO: add fee
-    "fee": amount_to_json(Amount::ZERO, &state.chain_config),
+    "fee": amount_to_json(Amount::ZERO),
     "inputs": transaction.inputs(),
     "outputs": transaction.outputs()
             .iter()
