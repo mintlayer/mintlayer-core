@@ -208,7 +208,10 @@ mod tests {
         address::{
             hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
         },
-        chain::{config::create_regtest, Destination},
+        chain::{
+            config::{create_regtest, create_testnet},
+            Destination,
+        },
         primitives::H256,
     };
 
@@ -336,6 +339,20 @@ mod tests {
 
         let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
         assert_eq!(res, "0xabcd");
+    }
+
+    #[test]
+    fn invalid_match_should_replace_with_hex_creating_case_address_creation_error() {
+        let chain_config = create_testnet();
+
+        // Invalid Destination that cannot be converted to an address
+        let s = "HexifiedDestination{0x06}";
+
+        let re = HexifiedAddress::<Destination>::make_regex_object();
+        assert!(re.is_match(s));
+
+        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, s);
+        assert_eq!(res, "0x06".to_string());
     }
 
     #[rstest]

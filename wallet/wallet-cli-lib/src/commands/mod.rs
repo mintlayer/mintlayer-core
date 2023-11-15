@@ -1111,7 +1111,9 @@ impl CommandHandler {
                     .await?
                     .get_vrf_public_key()
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
+                let vrf_public_key =
+                    Address::new(chain_config, &vrf_public_key).expect("should not fail");
+                Ok(ConsoleCommand::Print(vrf_public_key.get().to_string()))
             }
 
             WalletCommand::GetTransaction { transaction_id } => {
