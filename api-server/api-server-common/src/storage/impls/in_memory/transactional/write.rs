@@ -164,6 +164,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_main_chain_block_id(block_height)
     }
 
+    async fn get_transaction_with_block(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+        self.transaction.get_transaction_with_block(transaction_id)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,

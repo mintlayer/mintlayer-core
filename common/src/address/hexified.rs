@@ -201,14 +201,15 @@ mod tests {
         random,
     };
     use rstest::rstest;
-    use serialization::Encode;
+    use serialization::{Decode, DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     use crate::{
         address::{
             hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
+            AddressError,
         },
-        chain::{config::create_regtest, Destination},
+        chain::{config::create_regtest, ChainConfig, Destination},
         primitives::H256,
     };
 
@@ -263,7 +264,8 @@ mod tests {
 
         let keys = (0..strings.len())
             .map(|_| match rng.gen::<usize>() % Destination::VARIANT_COUNT {
-                0..=1 => {
+                0 => Destination::AnyoneCanSpend,
+                1 => {
                     let (_private_key, public_key) =
                         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
                     Destination::PublicKey(public_key)
@@ -341,39 +343,81 @@ mod tests {
     fn invalid_match_should_replace_with_hex_creating_case_address_creation_error() {
         let chain_config = create_regtest();
 
-        let s = format!("{}", HexifiedAddress::new(&Destination::AnyoneCanSpend)); // AnyoneCanSpend cannot be converted to an address
+        // Invalid Destination that cannot be converted to an address
+        let s = "HexifiedDestination{0x06}";
 
         let re = HexifiedAddress::<Destination>::make_regex_object();
-        assert!(re.is_match(&s));
+        assert!(re.is_match(s));
 
-        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
-        assert_eq!(
-            res,
-            "0x".to_string()
-                + &hex::ToHex::encode_hex::<String>(&Destination::AnyoneCanSpend.encode())
-        );
+        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, s);
+        assert_eq!(res, "0x06".to_string());
+    }
+
+    /// Used only for the test below
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+    pub enum Foo {
+        #[codec(index = 0)]
+        TooShortForBech32,
+    }
+
+    impl Addressable for Foo {
+        type Error = AddressError;
+
+        fn address_prefix(&self, _chain_config: &ChainConfig) -> &str {
+            "Foo"
+        }
+
+        fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+            self.encode()
+        }
+
+        fn decode_from_bytes_from_address<T: AsRef<[u8]>>(
+            address_bytes: T,
+        ) -> Result<Self, Self::Error>
+        where
+            Self: Sized,
+        {
+            Self::decode_all(&mut address_bytes.as_ref())
+                .map_err(|e| AddressError::DecodingError(e.to_string()))
+        }
+
+        fn json_wrapper_prefix() -> &'static str {
+            "HexifiedFoo"
+        }
+    }
+
+    impl serde::Serialize for Foo {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            HexifiedAddress::serde_serialize(self, serializer)
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for Foo {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            HexifiedAddress::<Self>::serde_deserialize(deserializer)
+        }
     }
 
     #[test]
     fn serde_serialize_something_that_cannot_go_to_address() {
         let chain_config = create_regtest();
 
-        // AnyoneCanSpend is too short to go to an address
-        let obj = Destination::AnyoneCanSpend;
+        // Foo::TooShortForBech32 is too short to go to an address
+        let obj = Foo::TooShortForBech32;
         let obj_json = serde_json::to_string(&obj).unwrap();
 
         {
-            assert_eq!(obj_json, "\"HexifiedDestination{0x00}\"");
-            let obj_deserialized: Destination = serde_json::from_str(&obj_json).unwrap();
+            assert_eq!(obj_json, "\"HexifiedFoo{0x00}\"");
+            let obj_deserialized: Foo = serde_json::from_str(&obj_json).unwrap();
             assert_eq!(obj_deserialized, obj);
         }
 
         {
             // Do the replacement, which will make it a hex starting with 0x, and deserialization will still succeed
             let obj_json_replaced =
-                HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
+                HexifiedAddress::<Foo>::replace_with_address(&chain_config, &obj_json);
             assert_eq!(obj_json_replaced, "\"0x00\"");
-            let obj_deserialized: Destination = serde_json::from_str(&obj_json_replaced).unwrap();
+            let obj_deserialized: Foo = serde_json::from_str(&obj_json_replaced).unwrap();
             assert_eq!(obj_deserialized, obj);
         }
     }

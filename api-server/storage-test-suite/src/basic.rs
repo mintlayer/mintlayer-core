@@ -29,7 +29,10 @@ use crypto::random::Rng;
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
-    chain::{Block, OutPointSourceId, SignedTransaction, Transaction, TxInput, UtxoOutPoint},
+    chain::{
+        block::timestamp::BlockTimestamp, Block, OutPointSourceId, SignedTransaction, Transaction,
+        TxInput, UtxoOutPoint,
+    },
     primitives::{Id, Idable, H256},
 };
 use futures::Future;
@@ -214,12 +217,13 @@ where
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
+        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
         let block = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert!(block.is_none());
 
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
-        let aux_data1 = BlockAuxData::new(random_block_id, height1);
+        let aux_data1 = BlockAuxData::new(random_block_id, height1, random_block_timestamp);
         db_tx.set_block_aux_data(random_block_id, &aux_data1).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
@@ -228,7 +232,8 @@ where
         // Test overwrite
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
-        let aux_data2 = BlockAuxData::new(random_block_id, height2);
+        let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
+        let aux_data2 = BlockAuxData::new(random_block_id, height2, random_block_timestamp);
         db_tx.set_block_aux_data(random_block_id, &aux_data2).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();

@@ -90,6 +90,23 @@ impl ApiServerInMemoryStorage {
     }
 
     #[allow(clippy::type_complexity)]
+    fn get_transaction_with_block(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+        let transaction_result = self.transaction_table.get(&transaction_id);
+        let (block_id, tx) = match transaction_result {
+            Some(tx) => tx,
+            None => return Ok(None),
+        };
+
+        Ok(Some((
+            block_id.and_then(|block_id| self.block_aux_data_table.get(&block_id)).cloned(),
+            tx.clone(),
+        )))
+    }
+
+    #[allow(clippy::type_complexity)]
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,

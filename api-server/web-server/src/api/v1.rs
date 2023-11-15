@@ -13,10 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::{
-    ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerServerError,
+use crate::{
+    api::json_helpers::amount_to_json,
+    error::{
+        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerServerError,
+    },
 };
-use api_server_common::storage::storage_api::{ApiServerStorage, ApiServerStorageRead};
+use api_server_common::storage::storage_api::{
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
+};
 use axum::{
     extract::{Path, State},
     response::IntoResponse,
@@ -26,14 +31,16 @@ use axum::{
 use common::{
     address::Address,
     chain::{Block, Destination, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{make_true_rng, Rng};
 use hex::ToHex;
 use serde_json::json;
-use std::{str::FromStr, sync::Arc};
+use std::{ops::Sub, str::FromStr, sync::Arc};
 
 use crate::ApiServerWebServerState;
+
+use super::json_helpers::txoutput_to_json;
 
 pub const API_VERSION: &str = "1.0.0";
 
@@ -107,7 +114,11 @@ pub async fn block<T: ApiServerStorage>(
         "witness_merkle_root": block.witness_merkle_root(),
     },
     "body": {
-        "reward": block.block_reward().outputs().iter().clone().collect::<Vec<_>>(),
+        "reward": block.block_reward()
+            .outputs()
+            .iter()
+            .map(|out| txoutput_to_json(out, &state.chain_config))
+            .collect::<Vec<_>>(),
         "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
     },
     })))
@@ -122,7 +133,7 @@ pub async fn block_header<T: ApiServerStorage>(
 
     Ok(Json(json!({
         "previous_block_id": block.prev_block_id(),
-    "timestamp": block.timestamp(),
+        "timestamp": block.timestamp(),
         "merkle_root": block.merkle_root(),
         "witness_merkle_root": block.witness_merkle_root(),
     })))
@@ -139,7 +150,7 @@ pub async fn block_reward<T: ApiServerStorage>(
         .block_reward()
         .outputs()
         .iter()
-        .clone()
+        .map(|out| txoutput_to_json(out, &state.chain_config))
         .collect::<Vec<_>>())))
 }
 
@@ -237,7 +248,7 @@ pub async fn chain_tip<T: ApiServerStorage>(
 async fn get_transaction(
     transaction_id: &str,
     state: &ApiServerWebServerState<Arc<impl ApiServerStorage>>,
-) -> Result<(Option<Id<Block>>, SignedTransaction), ApiServerWebServerError> {
+) -> Result<(Option<BlockAuxData>, SignedTransaction), ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(transaction_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(
@@ -253,7 +264,7 @@ async fn get_transaction(
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_transaction(transaction_id)
+        .get_transaction_with_block(transaction_id)
         .await
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
@@ -268,15 +279,45 @@ pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (block_id, transaction) = get_transaction(&transaction_id, &state).await?;
+    let (block, transaction) = get_transaction(&transaction_id, &state).await?;
+
+    let confirmations = if let Some(block) = &block {
+        let (tip_height, _) = state
+            .db
+            .transaction_ro()
+            .await
+            .map_err(|_| {
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_best_block()
+            .await
+            .map_err(|_| {
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?;
+
+        tip_height.sub(block.block_height())
+    } else {
+        None
+    };
 
     Ok(Json(json!({
-    "block_id": block_id.map_or("".to_string(), |b| b.to_hash().encode_hex::<String>()),
+    "block_id": block.as_ref().map_or("".to_string(), |b| b.block_id().to_hash().encode_hex::<String>()),
+    "timestamp": block.as_ref().map_or("".to_string(), |b| b.block_timestamp().to_string()),
+    "confirmations": confirmations.map_or("".to_string(), |c| c.to_string()),
     "version_byte": transaction.version_byte(),
     "is_replaceable": transaction.is_replaceable(),
     "flags": transaction.flags(),
+    // TODO: add fee
+    "fee": amount_to_json(Amount::ZERO, &state.chain_config),
     "inputs": transaction.inputs(),
-    "outputs": transaction.outputs(),
+    "outputs": transaction.outputs()
+            .iter()
+            .map(|out| txoutput_to_json(out, &state.chain_config))
+            .collect::<Vec<_>>()
     })))
 }
 
@@ -286,8 +327,12 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
-        (Some(block_id), transaction) => {
-            let block = get_block(&block_id.to_hash().encode_hex::<String>(), &state).await?;
+        (Some(block_data), transaction) => {
+            let block = get_block(
+                &block_data.block_id().to_hash().encode_hex::<String>(),
+                &state,
+            )
+            .await?;
             (block, transaction.transaction().clone())
         }
         (None, _) => {

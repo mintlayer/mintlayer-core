@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::txoutput_to_json;
+
 use super::*;
 
 #[tokio::test]
@@ -83,11 +85,16 @@ async fn ok(#[case] seed: Seed) {
 
                 let expected_transaction = json!({
                 "block_id": block_id.to_hash().encode_hex::<String>(),
+                "timestamp": block.timestamp().to_string(),
+                "confirmations": BlockHeight::new((n_blocks - block_height) as u64).to_string(),
                 "version_byte": transaction.version_byte(),
                 "is_replaceable": transaction.is_replaceable(),
                 "flags": transaction.flags(),
                 "inputs": transaction.inputs(),
-                "outputs": transaction.outputs(),
+                "outputs": transaction.outputs()
+                            .iter()
+                            .map(|out| txoutput_to_json(out, &chain_config))
+                            .collect::<Vec<_>>(),
                 });
 
                 _ = tx.send((
@@ -155,6 +162,14 @@ async fn ok(#[case] seed: Seed) {
     assert_eq!(
         body.get("outputs").unwrap(),
         &expected_transaction["outputs"]
+    );
+    assert_eq!(
+        body.get("timestamp").unwrap(),
+        &expected_transaction["timestamp"]
+    );
+    assert_eq!(
+        body.get("confirmations").unwrap(),
+        &expected_transaction["confirmations"]
     );
 
     task.abort();
