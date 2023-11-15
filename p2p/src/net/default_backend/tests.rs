@@ -436,17 +436,6 @@ where
     // Try to connect to some broken peer
     conn.connect(addr[0], None).unwrap();
 
-    // First, HandshakeFailed should be reported
-    let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
-
-    match event {
-        ConnectivityEvent::HandshakeFailed { address, error: _ } => {
-            assert_eq!(address, addr[0]);
-        }
-        event => panic!("invalid event received: {event:?}"),
-    }
-
-    // Then, ConnectionError should be reported
     let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
 
     match event {

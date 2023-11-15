@@ -572,11 +572,13 @@ where
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 
-            PeerEvent::HandshakeFailed { error } => {
+            PeerEvent::MisbehavedOnHandshake { error } => {
                 if let Some(pending_peer) = self.pending.get(&peer_id) {
-                    log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
+                    log::debug!(
+                        "Sending ConnectivityEvent::MisbehavedOnHandshake for peer {peer_id}"
+                    );
 
-                    self.conn_event_sender.send(ConnectivityEvent::HandshakeFailed {
+                    self.conn_event_sender.send(ConnectivityEvent::MisbehavedOnHandshake {
                         address: pending_peer.address,
                         error,
                     })?;
@@ -589,17 +591,27 @@ where
 
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {
+                    // Note: we'll get here if handshake has failed, so no need to use log levels
+                    // higher that debug, because the error should have been logged properly already.
                     match pending_peer.connection_info {
                         ConnectionInfo::Inbound => {
-                            // Just log the error
-                            log::warn!("inbound pending connection closed unexpectedly");
+                            log::debug!(
+                                "Inbound pending connection from {} was closed",
+                                pending_peer.address
+                            );
                         }
                         ConnectionInfo::Outbound {
                             handshake_nonce: _,
                             local_services_override: _,
                         } => {
-                            log::warn!("outbound pending connection closed unexpectedly");
+                            log::debug!(
+                                "Outbound pending connection to {} was closed",
+                                pending_peer.address
+                            );
 
+                            // TODO: this ConnectionRefusedOrTimedOut is misleading; probably
+                            // we should include the actual error in PeerEvent::ConnectionClosed
+                            // and propagate it here.
                             self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
                                 address: pending_peer.address,
                                 error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),

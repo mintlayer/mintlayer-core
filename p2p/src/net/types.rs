@@ -143,6 +143,9 @@ pub enum ConnectivityEvent {
     },
 
     /// Outbound connection failed
+    ///
+    // Note: the contained error is not supposed to be bannable. For bannable errors that happen
+    // during handshake, an additional MisbehavedOnHandshake event will be produced.
     ConnectionError {
         /// Address that was dialed
         address: SocketAddress,
@@ -166,8 +169,16 @@ pub enum ConnectivityEvent {
         error: P2pError,
     },
 
-    /// Handshake failed
-    HandshakeFailed {
+    /// Protocol violation during handshake
+    ///
+    /// This event is used to report protocol violations at the handshake stage, when no peer id
+    /// has been assigned yet.
+    ///
+    // Note: unlike ConnectionError, it may be produced both for outbound and inbound connections.
+    // TODO: we should probably have a single ConnectionError variant, which would be produced
+    // for both outbound and inbound connections, and which could be used to report bannable errors
+    // that happen during handshake as well.
+    MisbehavedOnHandshake {
         /// Peer's address
         address: SocketAddress,
 
