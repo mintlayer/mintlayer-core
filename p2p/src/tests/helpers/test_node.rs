@@ -263,14 +263,8 @@ where
         }
     }
 
-    pub async fn wait_for_any_connection(&mut self) -> (SocketAddress, PeerRole) {
-        loop {
-            if let PeerManagerNotification::ConnectionAccepted { address, peer_role } =
-                self.peer_mgr_notification_receiver.recv().await.unwrap()
-            {
-                return (address, peer_role);
-            }
-        }
+    pub fn try_recv_peer_mgr_notification(&mut self) -> Option<PeerManagerNotification> {
+        self.peer_mgr_notification_receiver.try_recv().ok()
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {
@@ -299,7 +293,10 @@ where
         }
     }
 
-    pub async fn assert_max_outbound_conn_count(&self) {
+    // Assert that the number of outbound full/block relay connections is at least
+    // outbound_xxx_relay_count.
+    // Still, the number shouldn't exceed outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
+    pub async fn assert_outbound_conn_count_maximums_reached(&self) {
         let conn_count_limits = &self.p2p_config.connection_count_limits;
 
         let peers_info = self.get_peers_info().await;
@@ -316,6 +313,30 @@ where
         );
 
         assert!(outbound_block_relay_peers_count >= *conn_count_limits.outbound_block_relay_count);
+        assert!(
+            outbound_block_relay_peers_count
+                <= *conn_count_limits.outbound_block_relay_count
+                    + *conn_count_limits.outbound_block_relay_extra_count
+        );
+    }
+
+    // Assert that the number of outbound full/block relay connections doesn't exceed
+    // outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
+    pub async fn assert_outbound_conn_count_within_limits(&self) {
+        let conn_count_limits = &self.p2p_config.connection_count_limits;
+
+        let peers_info = self.get_peers_info().await;
+        let outbound_full_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
+        let outbound_block_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
+
+        assert!(
+            outbound_full_relay_peers_count
+                <= *conn_count_limits.outbound_full_relay_count
+                    + *conn_count_limits.outbound_full_relay_extra_count
+        );
+
         assert!(
             outbound_block_relay_peers_count
                 <= *conn_count_limits.outbound_block_relay_count

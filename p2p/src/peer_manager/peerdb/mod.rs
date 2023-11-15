@@ -138,9 +138,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.addresses.keys()
     }
 
-    /// Selects peer addresses for outbound connections (except reserved).
+    /// Selects peer addresses for outbound connections, excluding reserved ones.
     /// Only one outbound connection is allowed per address group.
-    pub fn select_new_outbound_addresses(
+    pub fn select_new_non_reserved_outbound_addresses(
         &self,
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         count: usize,
@@ -155,17 +155,14 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .addresses
             .iter()
             .filter_map(|(addr, address_data)| {
-                log::debug!("trying {addr:?}");
                 if address_data.connect_now(now)
                     && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
-                    log::debug!("trying {addr:?} succeeded");
                     Some(*addr)
                 } else {
-                    log::debug!("trying {addr:?} failed");
                     None
                 }
             })
@@ -182,7 +179,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(
         &self,
-        cur_pending_outbound_peer_addresses: &BTreeSet<SocketAddress>,
+        cur_pending_outbound_conn_addresses: &BTreeSet<SocketAddress>,
     ) -> Vec<SocketAddress> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
@@ -193,7 +190,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
                 if address_data.connect_now(now)
-                    && !cur_pending_outbound_peer_addresses.contains(addr)
+                    && !cur_pending_outbound_conn_addresses.contains(addr)
                 {
                     Some(*addr)
                 } else {

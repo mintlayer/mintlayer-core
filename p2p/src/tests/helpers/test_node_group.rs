@@ -61,9 +61,9 @@ where
         self.nodes.iter().map(|node| *node.local_address()).collect()
     }
 
-    pub async fn assert_max_outbound_conn_count(&self) {
+    pub async fn assert_outbound_conn_count_maximums_reached(&self) {
         for node in &self.nodes {
-            node.assert_max_outbound_conn_count().await;
+            node.assert_outbound_conn_count_maximums_reached().await;
         }
     }
 

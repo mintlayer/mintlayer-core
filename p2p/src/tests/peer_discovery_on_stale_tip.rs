@@ -31,10 +31,11 @@ use crate::{
     peer_manager::{
         self, address_groups::AddressGroup, stale_tip_time_diff, ConnectionCountLimits,
         PEER_MGR_DNS_RELOAD_INTERVAL, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+        PEER_MGR_HEARTBEAT_INTERVAL_MIN,
     },
     sync::test_helpers::make_new_block,
     testing_utils::{TestTransportChannel, TestTransportMaker, TEST_PROTOCOL_VERSION},
-    tests::helpers::{timeout, TestNode, TestNodeGroup},
+    tests::helpers::{timeout, PeerManagerNotification, TestNode, TestNodeGroup},
 };
 
 // In these tests we want to create nodes in different "address groups" to ensure that
@@ -168,7 +169,7 @@ async fn peer_discovery_on_stale_tip_impl(
     time_getter.advance_time(Duration::from_secs(60 * 60));
 
     // All the connections must still be in place
-    node_group.assert_max_outbound_conn_count().await;
+    node_group.assert_outbound_conn_count_maximums_reached().await;
 
     // Start a new node that would produce a block.
     let new_node_idx = node_group.nodes().len() + 1;
@@ -248,9 +249,10 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
             .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             // Note: this will affect stale_tip_time_diff
-            .target_block_spacing(Duration::from_secs(60 * 10))
+            .target_block_spacing(Duration::from_secs(60 * 30))
             .build(),
     );
+    let stale_tip_time_diff = stale_tip_time_diff(&chain_config);
 
     let main_node_conn_count_limits = ConnectionCountLimits {
         outbound_full_relay_count: 1.into(),
@@ -352,36 +354,48 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
     // Sanity check - the tip is not stale yet
     let cur_time_diff = (time_getter.get_time_getter().get_time() - start_time).unwrap();
-    assert!(cur_time_diff < stale_tip_time_diff(&chain_config));
+    log::debug!("cur_time_diff = {cur_time_diff:?}, stale_tip_time_diff = {stale_tip_time_diff:?}");
+    assert!(cur_time_diff < stale_tip_time_diff);
 
     // We're still connected to the same one node.
     main_node
         .assert_connected_to(&[(extra_nodes_addresses[0], PeerRole::OutboundFullRelay)])
         .await;
 
-    // Advance the time by 1 hour
-    log::debug!("Advancing time by 1 hour");
-    time_getter.advance_time(Duration::from_secs(60 * 60));
+    // Advance the time by 2 hours
+    log::debug!("Advancing time by 2 hours");
+    time_getter.advance_time(Duration::from_secs(60 * 60 * 2));
 
     // Sanity check - the tip is now stale
     let cur_time_diff = (time_getter.get_time_getter().get_time() - start_time).unwrap();
-    assert!(cur_time_diff >= stale_tip_time_diff(&chain_config));
+    log::debug!("cur_time_diff = {cur_time_diff:?}");
+    assert!(cur_time_diff >= stale_tip_time_diff);
 
     let mut tried_connections = BTreeSet::new();
     tried_connections.insert(extra_nodes_addresses[0]);
 
     // Wait until the main node has tried connecting to all of the extra nodes.
     while tried_connections.len() < extra_nodes_addresses.len() {
-        let (addr, role) = main_node.wait_for_any_connection().await;
-        assert_eq!(role, PeerRole::OutboundFullRelay);
-        tried_connections.insert(addr);
+        if let Some(notification) = main_node.try_recv_peer_mgr_notification() {
+            if let PeerManagerNotification::ConnectionAccepted { address, peer_role } = notification
+            {
+                assert_eq!(peer_role, PeerRole::OutboundFullRelay);
+                tried_connections.insert(address);
 
-        // Make sure that at any given time the total number of outbound full relay connections
-        // is at least outbound_full_relay_count, but not bigger than outbound_full_relay_count plus
-        // outbound_full_relay_extra_count.
-        main_node.assert_max_outbound_conn_count().await;
+                // Make sure that at any given time the total number of outbound full relay connections
+                // is not bigger than outbound_full_relay_count plus outbound_full_relay_extra_count.
+                main_node.assert_outbound_conn_count_within_limits().await;
 
-        time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
+                log::debug!(
+                    "Got {} connections out of {}",
+                    tried_connections.len(),
+                    extra_nodes_count
+                );
+            }
+        } else {
+            // When the tip is stale, heartbeat should happen at the minimum interval.
+            time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MIN);
+        }
     }
 
     extra_nodes_group.join().await;
@@ -389,16 +403,16 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 }
 
 pub fn make_p2p_config(connection_count_limits: ConnectionCountLimits) -> P2pConfig {
-    let two_hours = Duration::from_secs(60 * 60 * 2);
+    let several_hours = Duration::from_secs(60 * 60 * 5);
 
     P2pConfig {
-        // Note: these tests move mocked time forward by 1 hour once and by smaller intervals
+        // Note: these tests move mocked time forward by 1 or 2 hours once and by smaller intervals
         // multiple times; because of this, nodes may see each other as dead or as having invalid
         // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
         // and clock diff.
-        ping_timeout: two_hours.into(),
-        max_clock_diff: two_hours.into(),
-        sync_stalling_timeout: two_hours.into(),
+        ping_timeout: several_hours.into(),
+        max_clock_diff: several_hours.into(),
+        sync_stalling_timeout: several_hours.into(),
 
         connection_count_limits,
         bind_addresses: Default::default(),
@@ -481,7 +495,7 @@ async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>
         }
     }
 
-    node_group.assert_max_outbound_conn_count().await;
+    node_group.assert_outbound_conn_count_maximums_reached().await;
 }
 
 async fn wait_for_connections_to_impl(

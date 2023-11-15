@@ -100,7 +100,7 @@ pub struct ConnectionCountLimits {
 
     /// The desired maximum number of full relay outbound connections.
     /// Note that this limit may be exceeded temporarily by up to outbound_full_relay_extra_count
-    /// connection.
+    /// connections.
     pub outbound_full_relay_count: OutboundFullRelayCount,
     /// The number of extra full relay connections that we may establish when a stale tip
     /// is detected.
@@ -135,7 +135,7 @@ make_config_setting!(OutboundBlockRelayCount, usize, 2);
 make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
-const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
+pub const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 pub const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
@@ -887,8 +887,8 @@ where
                     PeerRole::OutboundBlockRelay => Some(peer.address),
                 })
                 // Note: there may be more than outbound_block_relay_count block relay connections
-                // at a given moment, but the extra ones will soon be evicted. Since the latest
-                // connections are most likely to be evicted, we skip them here.
+                // at a given moment, but the extra ones will soon be evicted. Since connections
+                // with smaller peer ids are less likely to be evicted, we choose them here.
                 .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count)
                 .collect();
             self.peerdb.set_anchors(anchor_addresses);
@@ -1159,7 +1159,7 @@ where
                 .saturating_sub(cur_outbound_full_relay_conn_count)
         };
 
-        let new_full_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
+        let new_full_relay_conn_addresses = self.peerdb.select_new_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
             needed_outbound_full_relay_conn_count,
         );
@@ -1185,10 +1185,11 @@ where
                 + *self.p2p_config.connection_count_limits.outbound_block_relay_extra_count)
                 .saturating_sub(cur_outbound_block_relay_conn_count);
 
-        let new_block_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
-            &cur_outbound_conn_addr_groups,
-            needed_outbound_block_relay_conn_count,
-        );
+        let new_block_relay_conn_addresses =
+            self.peerdb.select_new_non_reserved_outbound_addresses(
+                &cur_outbound_conn_addr_groups,
+                needed_outbound_block_relay_conn_count,
+            );
 
         for address in new_block_relay_conn_addresses.into_iter() {
             self.connect(
@@ -1199,11 +1200,11 @@ where
             );
         }
 
-        let cur_pending_outbound_peer_addresses =
+        let cur_pending_outbound_conn_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
         let new_reserved_conn_addresses = self
             .peerdb
-            .select_reserved_outbound_addresses(&cur_pending_outbound_peer_addresses);
+            .select_reserved_outbound_addresses(&cur_pending_outbound_conn_addresses);
 
         for address in new_reserved_conn_addresses.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
@@ -1583,10 +1584,7 @@ where
         } else {
             // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
             // The stored anchor peers should be the first connected block relay peers.
-            for anchor_address in anchor_peers
-                .into_iter()
-                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count)
-            {
+            for anchor_address in anchor_peers {
                 log::debug!("try to connect to anchor peer {anchor_address}");
                 // The first peers should become anchor peers
                 self.connect(
@@ -1660,11 +1658,12 @@ where
                 (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
             let tip_is_stale = time_since_last_chainstate_tip > stale_tip_time_diff;
 
+            if tip_is_stale {
+                heartbeat_call_needed = true;
+            }
+
             // Periodic heartbeat call where new outbound connections are made
-            if (now >= last_heartbeat_min && heartbeat_call_needed)
-                || (now >= last_heartbeat_max)
-                || tip_is_stale
-            {
+            if (now >= last_heartbeat_min && heartbeat_call_needed) || (now >= last_heartbeat_max) {
                 self.heartbeat(tip_is_stale);
                 last_heartbeat = now;
                 heartbeat_call_needed = false;

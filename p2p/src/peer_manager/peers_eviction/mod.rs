@@ -186,14 +186,14 @@ pub fn select_for_eviction_inbound(
     find_group_most_connections(candidates)
 }
 
-/// Outbound block relay connections younger that this age will not be taken into account
+/// Outbound block relay connections younger than this age will not be taken into account
 /// during eviction.
 /// Note that extra block relay connections are established and evicted on a regular basis
 /// during normal operation. So, this interval basically determines how often those extra
 /// connections will come and go.
 const BLOCK_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(120);
 
-/// Outbound full relay connections younger that this age will not be taken into account
+/// Outbound full relay connections younger than this age will not be taken into account
 /// during eviction.
 /// Note that extra full relay connections are established if the current tip becomes stale.
 /// There is no point in making this interval large, it should just give the peer enough
