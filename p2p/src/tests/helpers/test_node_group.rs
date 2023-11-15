@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use common::{chain::Block, primitives::Id};
 use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
@@ -29,24 +29,20 @@ where
     Transport: TransportSocket,
 {
     nodes: Vec<TestNode<Transport>>,
-    time_getter: P2pBasicTestTimeGetter,
-    p2p_config: Arc<P2pConfig>,
 }
 
 impl<Transport> TestNodeGroup<Transport>
 where
     Transport: TransportSocket,
 {
-    pub fn new(
-        nodes: Vec<TestNode<Transport>>,
-        time_getter: P2pBasicTestTimeGetter,
-        p2p_config: Arc<P2pConfig>,
-    ) -> Self {
-        Self {
-            nodes,
-            time_getter,
-            p2p_config,
+    pub fn new(nodes: Vec<TestNode<Transport>>) -> Self {
+        assert!(!nodes.is_empty());
+        for i in 1..nodes.len() {
+            assert!(std::ptr::eq(nodes[0].p2p_config(), nodes[i].p2p_config()));
+            assert!(nodes[0].time_getter().is_same_instance(nodes[i].time_getter()));
         }
+
+        Self { nodes }
     }
 
     pub fn nodes(&self) -> &[TestNode<Transport>] {
@@ -54,15 +50,21 @@ where
     }
 
     pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
-        &self.time_getter
+        self.nodes[0].time_getter()
     }
 
     pub fn p2p_config(&self) -> &P2pConfig {
-        &self.p2p_config
+        self.nodes[0].p2p_config()
     }
 
     pub fn get_adresses(&self) -> Vec<SocketAddress> {
         self.nodes.iter().map(|node| *node.local_address()).collect()
+    }
+
+    pub async fn assert_max_outbound_conn_count(&self) {
+        for node in &self.nodes {
+            node.assert_max_outbound_conn_count().await;
+        }
     }
 
     pub fn set_dns_seed_addresses(&self, addresses: &[SocketAddress]) {
@@ -105,7 +107,7 @@ where
             }
 
             time::sleep(SHORT_TIMEOUT).await;
-            self.time_getter.advance_time(time_diff);
+            self.time_getter().advance_time(time_diff);
         }
     }
 

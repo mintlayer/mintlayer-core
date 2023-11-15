@@ -47,6 +47,10 @@ where
     time::timeout(LONG_TIMEOUT, future).await.unwrap();
 }
 
+// TODO: test utilities related to peer manager should probably go into peer_manager/tests.
+// Or perhaps we should have a dedicated test_helpers module, which wouldn't be specific to
+// any particular kind of tests.
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerNotification {
     BanScoreAdjustment {
@@ -59,6 +63,7 @@ pub enum PeerManagerNotification {
     Heartbeat,
     ConnectionAccepted {
         address: SocketAddress,
+        peer_role: PeerRole,
     },
 }
 
@@ -95,8 +100,8 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::Heartbeat);
     }
 
-    fn on_connection_accepted(&mut self, address: SocketAddress) {
-        self.send_notification(PeerManagerNotification::ConnectionAccepted { address });
+    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole) {
+        self.send_notification(PeerManagerNotification::ConnectionAccepted { address, peer_role });
     }
 }
 

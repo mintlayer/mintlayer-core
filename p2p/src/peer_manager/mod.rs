@@ -99,11 +99,19 @@ pub struct ConnectionCountLimits {
     pub preserved_inbound_count_new_transactions: PreservedInboundCountNewTransactions,
 
     /// The desired maximum number of full relay outbound connections.
-    /// Note that this limit may be exceeded temporarily.
+    /// Note that this limit may be exceeded temporarily by up to outbound_full_relay_extra_count
+    /// connection.
     pub outbound_full_relay_count: OutboundFullRelayCount,
+    /// The number of extra full relay connections that we may establish when a stale tip
+    /// is detected.
+    pub outbound_full_relay_extra_count: OutboundFullRelayExtraCount,
+
     /// The desired maximum number of block relay outbound connections.
-    /// Note that this limit may be exceeded temporarily.
+    /// Note that this limit may be exceeded temporarily by up to outbound_block_relay_extra_count
+    /// connections.
     pub outbound_block_relay_count: OutboundBlockRelayCount,
+    /// The number of extra block relay connections that we will establish and evict regularly.
+    pub outbound_block_relay_extra_count: OutboundBlockRelayExtraCount,
 }
 
 impl ConnectionCountLimits {
@@ -122,7 +130,9 @@ impl ConnectionCountLimits {
 
 make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(OutboundFullRelayCount, usize, 8);
+make_config_setting!(OutboundFullRelayExtraCount, usize, 1);
 make_config_setting!(OutboundBlockRelayCount, usize, 2);
+make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -148,9 +158,6 @@ pub const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
-
-/// The number of extra block relay connections that we will establish and evict regularly.
-pub const EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT: usize = 1;
 
 // Use the same parameters as Bitcoin Core (last 5000 addresses)
 const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
@@ -888,7 +895,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_accepted(address)
+            o.on_connection_accepted(address, peer_role)
         }
 
         Ok(())
@@ -1100,11 +1107,11 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    fn heartbeat(&mut self, need_new_full_relay_peer: bool) {
+    fn heartbeat(&mut self, stale_tip_detected: bool) {
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        self.establish_new_connections(need_new_full_relay_peer);
+        self.establish_new_connections(stale_tip_detected);
 
         self.evict_block_relay_peer();
         self.evict_full_relay_peer();
@@ -1114,13 +1121,11 @@ where
         }
     }
 
-    fn establish_new_connections(&mut self, need_new_full_relay_peer: bool) {
+    fn establish_new_connections(&mut self, stale_tip_detected: bool) {
         let mut cur_outbound_full_relay_conn_count = 0;
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
         for (addr, role) in self.peer_addresses_iter() {
-            log::debug!("(addr, role) = ({addr:?}, {role:?})");
-
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
             match role {
@@ -1144,17 +1149,14 @@ where
         }
 
         let needed_outbound_full_relay_conn_count = {
-            let count = self
-                .p2p_config
-                .connection_count_limits
-                .outbound_full_relay_count
-                .saturating_sub(cur_outbound_full_relay_conn_count);
-
-            if count == 0 && need_new_full_relay_peer {
-                1
+            let extra_conn_count = if stale_tip_detected {
+                *self.p2p_config.connection_count_limits.outbound_full_relay_extra_count
             } else {
-                count
-            }
+                0
+            };
+
+            (*self.p2p_config.connection_count_limits.outbound_full_relay_count + extra_conn_count)
+                .saturating_sub(cur_outbound_full_relay_conn_count)
         };
 
         let new_full_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
@@ -1180,7 +1182,7 @@ where
 
         let needed_outbound_block_relay_conn_count =
             (*self.p2p_config.connection_count_limits.outbound_block_relay_count
-                + EXTRA_BLOCK_RELAY_CONNECTIONS_COUNT)
+                + *self.p2p_config.connection_count_limits.outbound_block_relay_extra_count)
                 .saturating_sub(cur_outbound_block_relay_conn_count);
 
         let new_block_relay_conn_addresses = self.peerdb.select_new_outbound_addresses(
@@ -1609,9 +1611,7 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
-        // Note: bitcoin core also uses "3 * block_spacing" for stale tip detection, but their
-        // "block spacing" is 10 min instead of out 2. TODO: should we use bigger time diff?
-        let stale_tip_time_diff = *self.chain_config.target_block_spacing() * 3;
+        let stale_tip_time_diff = stale_tip_time_diff(&self.chain_config);
 
         if let Some(chan) = loop_started_sender {
             chan.send(());
@@ -1720,10 +1720,15 @@ where
                 self.resend_own_address_randomly();
 
                 // Pick a random outbound peer to resend the listening address to.
-                // The delay has this value because there are at most `OUTBOUND_FULL_RELAY_COUNT`
-                // that can have `discovered_own_address`.
-                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD
-                    / *self.p2p_config.connection_count_limits.outbound_full_relay_count as u32)
+                // The delay has this value because normally there are at most
+                // `outbound_full_relay_count` peers that can have `discovered_own_address`.
+                // Note that in tests `outbound_full_relay_count` may be zero, so we have to
+                // adjust it for this case.
+                let delay_divisor = std::cmp::max(
+                    *self.p2p_config.connection_count_limits.outbound_full_relay_count,
+                    1,
+                );
+                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                 next_time_resend_own_address = (next_time_resend_own_address + delay)
                     .expect("Time derived from local clock; cannot fail");
@@ -1747,13 +1752,19 @@ where
     }
 }
 
+pub fn stale_tip_time_diff(chain_config: &ChainConfig) -> Duration {
+    // Note: bitcoin core also uses "3 * block_spacing" for stale tip detection, but their
+    // "block spacing" is 10 min instead of out 2. TODO: should we use bigger time diff?
+    *chain_config.target_block_spacing() * 3
+}
+
 pub trait Observer {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
     fn on_peer_ban(&mut self, address: BannableAddress);
     // This will be called at the end of "heartbeat" function.
     fn on_heartbeat(&mut self);
     // This will be called for both incoming and outgoing connections.
-    fn on_connection_accepted(&mut self, address: SocketAddress);
+    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
 }
 
 pub trait PeerManagerQueryInterface {

@@ -122,7 +122,9 @@ impl From<P2pConfigFile> for P2pConfig {
                 preserved_inbound_count_new_transactions: Default::default(),
 
                 outbound_full_relay_count: Default::default(),
+                outbound_full_relay_extra_count: Default::default(),
                 outbound_block_relay_count: Default::default(),
+                outbound_block_relay_extra_count: Default::default(),
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),

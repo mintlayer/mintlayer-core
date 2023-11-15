@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
-use p2p_test_utils::SHORT_TIMEOUT;
+use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
@@ -36,6 +36,7 @@ use crate::{
     error::P2pError,
     net::{
         default_backend::{transport::TransportSocket, DefaultNetworkingService},
+        types::PeerRole,
         ConnectivityService,
     },
     peer_manager::{
@@ -48,7 +49,7 @@ use crate::{
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::chain::ChainConfig;
 use utils::atomics::SeqCstAtomicBool;
 
 use super::{PeerManagerNotification, PeerManagerObserver, TestDnsSeed, TestPeersInfo};
@@ -60,6 +61,8 @@ pub struct TestNode<Transport>
 where
     Transport: TransportSocket,
 {
+    time_getter: P2pBasicTestTimeGetter,
+    p2p_config: Arc<P2pConfig>,
     peer_mgr_event_sender: mpsc::UnboundedSender<PeerManagerEvent>,
     local_address: SocketAddress,
     shutdown: Arc<SeqCstAtomicBool>,
@@ -92,7 +95,7 @@ where
     Transport: TransportSocket,
 {
     pub async fn start(
-        time_getter: TimeGetter,
+        time_getter: P2pBasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         transport: Transport,
@@ -105,14 +108,14 @@ where
             chainstate_storage::inmemory::Store::new_empty().unwrap(),
             DefaultTransactionVerificationStrategy::new(),
             None,
-            time_getter.clone(),
+            time_getter.get_time_getter(),
         )
         .unwrap();
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
             p2p_test_utils::start_subsystems_with_chainstate(
                 chainstate,
                 Arc::clone(&chain_config),
-                time_getter.clone(),
+                time_getter.get_time_getter(),
             );
 
         let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
@@ -126,7 +129,7 @@ where
                 vec![bind_address],
                 Arc::clone(&chain_config),
                 Arc::clone(&p2p_config),
-                time_getter.clone(),
+                time_getter.get_time_getter(),
                 Arc::clone(&shutdown),
                 backend_shutdown_receiver,
                 subscribers_receiver,
@@ -147,7 +150,7 @@ where
             Arc::clone(&p2p_config),
             conn_handle,
             peer_mgr_event_receiver,
-            time_getter.clone(),
+            time_getter.get_time_getter(),
             peerdb_inmemory_store(),
             Some(peer_mgr_observer),
             Box::new(TestDnsSeed::new(dns_seed_addresses.clone())),
@@ -171,7 +174,7 @@ where
             chainstate.clone(),
             mempool,
             peer_mgr_event_sender.clone(),
-            time_getter.clone(),
+            time_getter.get_time_getter(),
         );
         let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
             match sync_mgr.run().await {
@@ -181,6 +184,8 @@ where
         });
 
         TestNode {
+            time_getter,
+            p2p_config,
             peer_mgr_event_sender,
             local_address,
             shutdown,
@@ -195,6 +200,14 @@ where
             chainstate,
             dns_seed_addresses,
         }
+    }
+
+    pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
+        &self.time_getter
+    }
+
+    pub fn p2p_config(&self) -> &P2pConfig {
+        &self.p2p_config
     }
 
     pub fn local_address(&self) -> &SocketAddress {
@@ -250,6 +263,16 @@ where
         }
     }
 
+    pub async fn wait_for_any_connection(&mut self) -> (SocketAddress, PeerRole) {
+        loop {
+            if let PeerManagerNotification::ConnectionAccepted { address, peer_role } =
+                self.peer_mgr_notification_receiver.recv().await.unwrap()
+            {
+                return (address, peer_role);
+            }
+        }
+    }
+
     pub async fn get_peers_info(&self) -> TestPeersInfo {
         let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
 
@@ -264,6 +287,40 @@ where
             .unwrap();
 
         response_receiver.recv().await.unwrap()
+    }
+
+    pub async fn assert_connected_to(&self, expected_connections: &[(SocketAddress, PeerRole)]) {
+        let peers_info = self.get_peers_info().await;
+        assert_eq!(peers_info.info.len(), expected_connections.len());
+
+        for (addr, role) in expected_connections {
+            let peer_info = peers_info.info.get(addr).unwrap();
+            assert_eq!(peer_info.role, *role);
+        }
+    }
+
+    pub async fn assert_max_outbound_conn_count(&self) {
+        let conn_count_limits = &self.p2p_config.connection_count_limits;
+
+        let peers_info = self.get_peers_info().await;
+        let outbound_full_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
+        let outbound_block_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
+
+        assert!(outbound_full_relay_peers_count >= *conn_count_limits.outbound_full_relay_count);
+        assert!(
+            outbound_full_relay_peers_count
+                <= *conn_count_limits.outbound_full_relay_count
+                    + *conn_count_limits.outbound_full_relay_extra_count
+        );
+
+        assert!(outbound_block_relay_peers_count >= *conn_count_limits.outbound_block_relay_count);
+        assert!(
+            outbound_block_relay_peers_count
+                <= *conn_count_limits.outbound_block_relay_count
+                    + *conn_count_limits.outbound_block_relay_extra_count
+        );
     }
 
     pub fn set_dns_seed_addresses(&self, addresses: Vec<SocketAddress>) {

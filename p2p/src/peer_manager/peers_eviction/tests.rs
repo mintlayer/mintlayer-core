@@ -742,7 +742,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_limits()),
+        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -786,7 +786,7 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_limits()),
+        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -830,7 +830,7 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_limits()),
+        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -891,7 +891,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_limits()),
+        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -935,7 +935,7 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_limits()),
+        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -979,7 +979,7 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_limits()),
+        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
         None
     );
 }
@@ -988,12 +988,15 @@ fn block_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
     ConnectionCountLimits {
         outbound_block_relay_count: max_connections.into(),
 
+        // The values that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
         preserved_inbound_count_address_group: usize::MAX.into(),
         preserved_inbound_count_ping: usize::MAX.into(),
         preserved_inbound_count_new_blocks: usize::MAX.into(),
         preserved_inbound_count_new_transactions: usize::MAX.into(),
         outbound_full_relay_count: usize::MAX.into(),
+        outbound_full_relay_extra_count: usize::MAX.into(),
+        outbound_block_relay_extra_count: usize::MAX.into(),
     }
 }
 
@@ -1001,23 +1004,30 @@ fn full_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
     ConnectionCountLimits {
         outbound_full_relay_count: max_connections.into(),
 
+        // The values that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
         preserved_inbound_count_address_group: usize::MAX.into(),
         preserved_inbound_count_ping: usize::MAX.into(),
         preserved_inbound_count_new_blocks: usize::MAX.into(),
         preserved_inbound_count_new_transactions: usize::MAX.into(),
+        outbound_full_relay_extra_count: usize::MAX.into(),
         outbound_block_relay_count: usize::MAX.into(),
+        outbound_block_relay_extra_count: usize::MAX.into(),
     }
 }
 
-fn no_limits() -> ConnectionCountLimits {
+fn no_outbound_conn_limits() -> ConnectionCountLimits {
     ConnectionCountLimits {
-        max_inbound_connections: usize::MAX.into(),
-        preserved_inbound_count_address_group: usize::MAX.into(),
-        preserved_inbound_count_ping: usize::MAX.into(),
-        preserved_inbound_count_new_blocks: usize::MAX.into(),
-        preserved_inbound_count_new_transactions: usize::MAX.into(),
         outbound_block_relay_count: usize::MAX.into(),
         outbound_full_relay_count: usize::MAX.into(),
+
+        // The values that should not influence tests' behavior are set to 0.
+        max_inbound_connections: 0.into(),
+        preserved_inbound_count_address_group: 0.into(),
+        preserved_inbound_count_ping: 0.into(),
+        preserved_inbound_count_new_blocks: 0.into(),
+        preserved_inbound_count_new_transactions: 0.into(),
+        outbound_full_relay_extra_count: 0.into(),
+        outbound_block_relay_extra_count: 0.into(),
     }
 }

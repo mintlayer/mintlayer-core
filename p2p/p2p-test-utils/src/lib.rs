@@ -115,6 +115,10 @@ impl P2pBasicTestTimeGetter {
     pub fn advance_time(&self, duration: Duration) {
         self.current_time_millis.fetch_add(duration.as_millis() as u64);
     }
+
+    pub fn is_same_instance(&self, other: &P2pBasicTestTimeGetter) -> bool {
+        Arc::as_ptr(&self.current_time_millis) == Arc::as_ptr(&other.current_time_millis)
+    }
 }
 
 /// A timeout for blocking calls.
