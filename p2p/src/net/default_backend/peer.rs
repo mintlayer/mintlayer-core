@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use chainstate::ban_score::BanScore;
 use p2p_types::services::Services;
 use tokio::{sync::mpsc, time::timeout};
 
@@ -295,18 +296,25 @@ where
         match handshake_res {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
-                log::debug!("handshake failed for peer {}: {err}", self.peer_id);
+                let ban_score = err.ban_score();
+                log::debug!(
+                    "Handshake failed for peer {}: {err} (error ban score = {})",
+                    self.peer_id,
+                    ban_score
+                );
 
-                let send_result = self
-                    .peer_event_tx
-                    .send(PeerEvent::HandshakeFailed { error: err.clone() })
-                    .await;
-                if let Err(send_error) = send_result {
-                    log::error!(
-                        "Cannot send PeerEvent::HandshakeFailed to peer {}: {}",
-                        self.peer_id,
-                        send_error
-                    );
+                if ban_score > 0 {
+                    let send_result = self
+                        .peer_event_tx
+                        .send(PeerEvent::MisbehavedOnHandshake { error: err.clone() })
+                        .await;
+                    if let Err(send_error) = send_result {
+                        log::error!(
+                            "Cannot send PeerEvent::MisbehavedOnHandshake to peer {}: {}",
+                            self.peer_id,
+                            send_error
+                        );
+                    }
                 }
 
                 return Err(err);

@@ -131,6 +131,10 @@ impl MockCrawler {
                 peer_id: _,
                 error: _,
             } => {}
+            CrawlerEvent::MisbehavedOnHandshake {
+                address: _,
+                error: _,
+            } => {}
         }
 
         let mut cmd_handler = |cmd| match cmd {
