@@ -123,7 +123,7 @@ impl P2pBasicTestTimeGetter {
     }
 
     pub fn is_same_instance(&self, other: &P2pBasicTestTimeGetter) -> bool {
-        Arc::as_ptr(&self.current_time_millis) == Arc::as_ptr(&other.current_time_millis)
+        Arc::ptr_eq(&self.current_time_millis, &other.current_time_millis)
     }
 }
 

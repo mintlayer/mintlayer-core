@@ -200,6 +200,7 @@ const BLOCK_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(120);
 /// time to send us a block.
 const FULL_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(30);
 
+#[must_use]
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
     limits: &ConnectionCountLimits,
@@ -212,6 +213,7 @@ pub fn select_for_eviction_block_relay(
     )
 }
 
+#[must_use]
 pub fn select_for_eviction_full_relay(
     candidates: Vec<EvictionCandidate>,
     limits: &ConnectionCountLimits,
