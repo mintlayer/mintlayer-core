@@ -142,6 +142,7 @@ async fn peer_discovery_on_stale_tip_impl(
                 &p2p_config,
                 i + 1,
                 initial_block.clone(),
+                &format!("node{i}"),
             )
             .await,
         );
@@ -179,6 +180,7 @@ async fn peer_discovery_on_stale_tip_impl(
         &p2p_config,
         new_node_idx,
         initial_block.clone(),
+        "new_node",
     )
     .await;
     let new_node_addr = *new_node.local_address();
@@ -303,6 +305,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         &main_node_p2p_config,
         0,
         Some(initial_block.clone()),
+        "main",
     )
     .await;
     let main_node_address = *main_node.local_address();
@@ -316,6 +319,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
                 &extra_nodes_p2p_config,
                 i + 1,
                 Some(initial_block.clone()),
+                &format!("extra{i}"),
             )
             .await,
         );
@@ -323,6 +327,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
     let extra_nodes_group = TestNodeGroup::new(extra_nodes);
     let extra_nodes_addresses = extra_nodes_group.get_adresses();
+    log::debug!("extra_nodes_addresses = {extra_nodes_addresses:?}");
 
     let address_groups: BTreeSet<_> = extra_nodes_addresses
         .iter()
@@ -409,6 +414,14 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         } else {
             // When the tip is stale, heartbeat should happen at the minimum interval.
             time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MIN);
+
+            // Note: sleeping even for 1 ms here will slow the test down noticeably.
+            // This is probably due to the fact that peer manager's periodic tick interval,
+            // which wakes up its event loop, is 1s, but the main loop is also woken up by
+            // various events. And the rapid advancement of the mock time here is probably helping
+            // the extra nodes "generate" those events.
+            // TODO: make peer manager's periodic tick interval configurable.
+            tokio::task::yield_now().await;
         }
     }
 
@@ -417,16 +430,14 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 }
 
 pub fn make_p2p_config(connection_count_limits: ConnectionCountLimits) -> P2pConfig {
-    let several_hours = Duration::from_secs(60 * 60 * 5);
-
+    let millenium = Duration::from_secs(60 * 60 * 24 * 365 * 1000);
     P2pConfig {
-        // Note: these tests move mocked time forward by 1 or 2 hours once and by smaller intervals
-        // multiple times; because of this, nodes may see each other as dead or as having invalid
-        // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
-        // and clock diff.
-        ping_timeout: several_hours.into(),
-        max_clock_diff: several_hours.into(),
-        sync_stalling_timeout: several_hours.into(),
+        // Note: these tests may move mocked time forward an unlimited number of times,
+        // so we use timeouts as big as possible to prevent nodes from being disconnected from
+        // each other (but we can't use MAX, because it'll cause overflow during calculations).
+        ping_timeout: millenium.into(),
+        max_clock_diff: millenium.into(),
+        sync_stalling_timeout: millenium.into(),
 
         connection_count_limits,
         bind_addresses: Default::default(),
@@ -437,6 +448,8 @@ pub fn make_p2p_config(connection_count_limits: ConnectionCountLimits) -> P2pCon
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        // Note: peer_handshake_timeout specifies real time rather than mocked time (it's passed
+        // into tokio::time::timeout), so no need to make it artificially large.
         peer_handshake_timeout: Default::default(),
         ping_check_period: Default::default(),
         node_type: Default::default(),
@@ -466,6 +479,7 @@ async fn start_node(
     p2p_config: &Arc<P2pConfig>,
     node_index: usize,
     initial_block: Option<Block>,
+    name: &str,
 ) -> TestNode<Transport> {
     let node = TestNode::<Transport>::start(
         time_getter.clone(),
@@ -474,6 +488,7 @@ async fn start_node(
         make_transport_with_local_addr_in_group(node_index as u32),
         TestTransportChannel::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        Some(name),
     )
     .await;
 

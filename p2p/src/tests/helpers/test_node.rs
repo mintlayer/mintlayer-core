@@ -35,7 +35,10 @@ use crate::{
     config::P2pConfig,
     error::P2pError,
     net::{
-        default_backend::{transport::TransportSocket, DefaultNetworkingService},
+        default_backend::{
+            transport::{TransportListener, TransportSocket},
+            DefaultNetworkingService,
+        },
         types::PeerRole,
         ConnectivityService,
     },
@@ -101,7 +104,32 @@ where
         transport: Transport,
         bind_address: SocketAddress,
         protocol_version: ProtocolVersion,
+        node_name: Option<&str>,
     ) -> Self {
+        let socket = transport.bind(vec![bind_address]).await.unwrap();
+        let local_address = socket.local_addresses().unwrap()[0];
+
+        let tracing_span = if let Some(node_name) = node_name {
+            tracing::debug_span!(
+                parent: &tracing::Span::current(),
+                "",
+                node = node_name,
+                addr = ?local_address.socket_addr()
+            )
+        } else {
+            tracing::Span::current()
+        };
+
+        let _tracing_span_guard = tracing_span.enter();
+
+        // TODO: if one of the tasks that is spawned below panics, it won't cause the current test
+        // to fail. In fact, some tests (e.g. new_full_relay_connections_on_stale_tip) will
+        // continue running until the timeout kicks in, unable to make any progress.
+        // Moreover, nothing informative will be printed to the log or console, making the failure
+        // rather cryptic.
+        // We need a mechanism that would cause immediate test failure when a panic occurs
+        // inside a task/separate thread.
+
         let chainstate = make_chainstate(
             Arc::clone(&chain_config),
             ChainstateConfig::new(),
@@ -112,10 +140,11 @@ where
         )
         .unwrap();
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
-            p2p_test_utils::start_subsystems_with_chainstate(
+            p2p_test_utils::start_subsystems_generic(
                 chainstate,
                 Arc::clone(&chain_config),
                 time_getter.get_time_getter(),
+                tracing_span.clone(),
             );
 
         let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
@@ -124,9 +153,9 @@ where
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
         let (conn_handle, messaging_handle, syncing_event_receiver, backend_join_handle) =
-            DefaultNetworkingService::<Transport>::start_with_version(
+            DefaultNetworkingService::<Transport>::start_generic(
                 transport,
-                vec![bind_address],
+                socket,
                 Arc::clone(&chain_config),
                 Arc::clone(&p2p_config),
                 time_getter.get_time_getter(),
@@ -134,8 +163,8 @@ where
                 backend_shutdown_receiver,
                 subscribers_receiver,
                 protocol_version,
+                tracing_span.clone(),
             )
-            .await
             .unwrap();
 
         let local_address = conn_handle.local_addresses()[0];
@@ -156,15 +185,18 @@ where
             Box::new(TestDnsSeed::new(dns_seed_addresses.clone())),
         )
         .unwrap();
-        let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-            let mut peer_mgr = peer_mgr;
-            let err = match peer_mgr.run_without_consuming_self().await {
-                Err(err) => err,
-                Ok(never) => match never {},
-            };
+        let peer_mgr_join_handle = logging::spawn_in_span(
+            async move {
+                let mut peer_mgr = peer_mgr;
+                let err = match peer_mgr.run_without_consuming_self().await {
+                    Err(err) => err,
+                    Ok(never) => match never {},
+                };
 
-            (peer_mgr, err)
-        });
+                (peer_mgr, err)
+            },
+            tracing_span.clone(),
+        );
 
         let sync_mgr = SyncManager::<DefaultNetworkingService<Transport>>::new(
             Arc::clone(&chain_config),
@@ -176,12 +208,15 @@ where
             peer_mgr_event_sender.clone(),
             time_getter.get_time_getter(),
         );
-        let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
-            match sync_mgr.run().await {
-                Err(err) => err,
-                Ok(never) => match never {},
-            }
-        });
+        let sync_mgr_join_handle = logging::spawn_in_span(
+            async move {
+                match sync_mgr.run().await {
+                    Err(err) => err,
+                    Ok(never) => match never {},
+                }
+            },
+            tracing_span.clone(),
+        );
 
         TestNode {
             time_getter,

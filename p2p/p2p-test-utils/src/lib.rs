@@ -50,13 +50,19 @@ pub fn start_subsystems(
         time_getter.clone(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate, chain_config, time_getter)
+    start_subsystems_generic(
+        chainstate,
+        chain_config,
+        time_getter,
+        tracing::Span::current(),
+    )
 }
 
-pub fn start_subsystems_with_chainstate(
+pub fn start_subsystems_generic(
     chainstate: ChainstateSubsystem,
     chain_config: Arc<ChainConfig>,
     time_getter: TimeGetter,
+    tracing_span: tracing::Span,
 ) -> (
     ChainstateHandle,
     MempoolHandle,
@@ -71,7 +77,7 @@ pub fn start_subsystems_with_chainstate(
     let mempool = mempool::make_mempool(chain_config, chainstate.clone(), time_getter);
     let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
 
-    let manager_handle = manager.main_in_task();
+    let manager_handle = manager.main_in_task_in_span(tracing_span);
 
     (chainstate, mempool, shutdown_trigger, manager_handle)
 }

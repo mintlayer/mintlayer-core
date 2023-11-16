@@ -29,7 +29,7 @@ use log_style::{get_log_style_from_env, LogStyle, TextColoring};
 
 pub use log;
 
-pub use tracing_utils::spawn_in_current_span;
+pub use tracing_utils::{spawn_in_current_span, spawn_in_span};
 
 /// Send log output to the terminal.
 pub fn init_logging() {

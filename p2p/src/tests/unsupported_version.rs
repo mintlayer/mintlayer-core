@@ -47,6 +47,7 @@ where
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 
@@ -124,6 +125,7 @@ where
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 
@@ -193,6 +195,7 @@ where
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 

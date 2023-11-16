@@ -353,7 +353,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     // peers by checking they reply within certain amount of time. In order to avoid spuriously
     // blaming the peer for being unresponsive while we wait for blocks in the future to be
     // acceptable to the consensus machinery, the responsiveness timeout has to be greater than
-    // the effective max clock diff (ideally by by some margin).
+    // the effective max clock diff (ideally by some margin).
     assert!(
         p2p_config.effective_max_clock_diff()
             <= *p2p_config.sync_stalling_timeout + Duration::from_secs(1),

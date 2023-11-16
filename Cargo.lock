@@ -4567,6 +4567,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "tokio",
+ "tracing",
  "utils",
 ]
 
