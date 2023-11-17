@@ -16,6 +16,8 @@ subsystem = { path = "../../subsystem/" }
 test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
 
+ctor.workspace = true
+once_cell.workspace = true
 portpicker.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 tracing.workspace = true

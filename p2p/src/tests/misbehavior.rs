@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
 use test_utils::assert_matches;
 
 use crate::{
@@ -30,7 +30,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, TestNode},
+    tests::helpers::TestNode,
 };
 
 async fn unexpected_handshake_message<TTM>()
@@ -112,15 +112,15 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_tcp() {
-    timeout(unexpected_handshake_message::<TestTransportTcp>()).await;
+    test_timeout(unexpected_handshake_message::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_channels() {
-    timeout(unexpected_handshake_message::<TestTransportChannel>()).await;
+    test_timeout(unexpected_handshake_message::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_noise() {
-    timeout(unexpected_handshake_message::<TestTransportNoise>()).await;
+    test_timeout(unexpected_handshake_message::<TestTransportNoise>()).await;
 }

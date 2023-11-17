@@ -122,14 +122,6 @@ where
 
         let _tracing_span_guard = tracing_span.enter();
 
-        // TODO: if one of the tasks that is spawned below panics, it won't cause the current test
-        // to fail. In fact, some tests (e.g. new_full_relay_connections_on_stale_tip) will
-        // continue running until the timeout kicks in, unable to make any progress.
-        // Moreover, nothing informative will be printed to the log or console, making the failure
-        // rather cryptic.
-        // We need a mechanism that would cause immediate test failure when a panic occurs
-        // inside a task/separate thread.
-
         let chainstate = make_chainstate(
             Arc::clone(&chain_config),
             ChainstateConfig::new(),

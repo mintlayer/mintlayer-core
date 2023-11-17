@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
 use test_utils::assert_matches;
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, TestNode},
+    tests::helpers::TestNode,
 };
 
 // Note: these tests are mainly a sanity check to ensure that the corresponding test harness
@@ -104,17 +104,17 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_tcp() {
-    timeout(correct_handshake_outgoing::<TestTransportTcp>()).await;
+    test_timeout(correct_handshake_outgoing::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_channels() {
-    timeout(correct_handshake_outgoing::<TestTransportChannel>()).await;
+    test_timeout(correct_handshake_outgoing::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_noise() {
-    timeout(correct_handshake_outgoing::<TestTransportNoise>()).await;
+    test_timeout(correct_handshake_outgoing::<TestTransportNoise>()).await;
 }
 
 async fn correct_handshake_incoming<TTM>()
@@ -181,15 +181,15 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_tcp() {
-    timeout(correct_handshake_incoming::<TestTransportTcp>()).await;
+    test_timeout(correct_handshake_incoming::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_channels() {
-    timeout(correct_handshake_incoming::<TestTransportChannel>()).await;
+    test_timeout(correct_handshake_incoming::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_noise() {
-    timeout(correct_handshake_incoming::<TestTransportNoise>()).await;
+    test_timeout(correct_handshake_incoming::<TestTransportNoise>()).await;
 }

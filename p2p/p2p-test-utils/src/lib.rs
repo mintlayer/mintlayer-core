@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
@@ -31,6 +31,10 @@ use mempool::MempoolHandle;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use utils::atomics::SeqCstAtomicU64;
+
+use crate::panic_handling::get_panic_notification;
+
+mod panic_handling;
 
 pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
@@ -131,6 +135,22 @@ impl P2pBasicTestTimeGetter {
 pub const LONG_TIMEOUT: Duration = Duration::from_secs(600);
 /// A short timeout for events that shouldn't occur.
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// This function can be called on the entire async test's future to ensure that it completes
+/// in a reasonable time; it also ensures that the future will complete once a panic occurs anywhere.
+pub async fn test_timeout<F>(future: F)
+where
+    F: Future,
+{
+    let future_or_panic = async {
+        tokio::select! {
+            () = get_panic_notification() => {},
+            _ = future => {},
+        }
+    };
+
+    tokio::time::timeout(LONG_TIMEOUT, future_or_panic).await.unwrap();
+}
 
 /// Await for the specified future for some reasonably big amount of time; panic if the timeout
 /// is reached.

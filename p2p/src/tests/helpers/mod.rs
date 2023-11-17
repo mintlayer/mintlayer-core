@@ -19,11 +19,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::Future;
-use tokio::{sync::mpsc::UnboundedSender, time};
+use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
-use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 
 use crate::{
@@ -36,16 +34,6 @@ pub mod test_node_group;
 
 pub use test_node::*;
 pub use test_node_group::*;
-
-pub async fn timeout<F>(future: F)
-where
-    F: Future,
-{
-    // TODO: in the case of timeout, a panic is likely to occur in an unrelated place,
-    // e.g. "subsystem manager's handle hasn't been joined" is a common one. This can be
-    // confusing, so we need a way to abort the test before some unrelated code decides to panic.
-    time::timeout(LONG_TIMEOUT, future).await.unwrap();
-}
 
 // TODO: test utilities related to peer manager should probably go into peer_manager/tests.
 // Or perhaps we should have a dedicated test_helpers module, which wouldn't be specific to

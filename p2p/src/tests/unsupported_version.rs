@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
 use test_utils::assert_matches;
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, TestNode},
+    tests::helpers::TestNode,
 };
 
 async fn unsupported_version_outgoing<TTM>()
@@ -96,17 +96,17 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_tcp() {
-    timeout(unsupported_version_outgoing::<TestTransportTcp>()).await;
+    test_timeout(unsupported_version_outgoing::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_channels() {
-    timeout(unsupported_version_outgoing::<TestTransportChannel>()).await;
+    test_timeout(unsupported_version_outgoing::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_noise() {
-    timeout(unsupported_version_outgoing::<TestTransportNoise>()).await;
+    test_timeout(unsupported_version_outgoing::<TestTransportNoise>()).await;
 }
 
 async fn unsupported_version_incoming<TTM>()
@@ -164,17 +164,17 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_tcp() {
-    timeout(unsupported_version_incoming::<TestTransportTcp>()).await;
+    test_timeout(unsupported_version_incoming::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_channels() {
-    timeout(unsupported_version_incoming::<TestTransportChannel>()).await;
+    test_timeout(unsupported_version_incoming::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_noise() {
-    timeout(unsupported_version_incoming::<TestTransportNoise>()).await;
+    test_timeout(unsupported_version_incoming::<TestTransportNoise>()).await;
 }
 
 // Here we have a peer with an unsupported version and a normal peer connected at the same time.
@@ -267,15 +267,15 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_tcp() {
-    timeout(unsupported_version_two_peers::<TestTransportTcp>()).await;
+    test_timeout(unsupported_version_two_peers::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_channels() {
-    timeout(unsupported_version_two_peers::<TestTransportChannel>()).await;
+    test_timeout(unsupported_version_two_peers::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_noise() {
-    timeout(unsupported_version_two_peers::<TestTransportNoise>()).await;
+    test_timeout(unsupported_version_two_peers::<TestTransportNoise>()).await;
 }
