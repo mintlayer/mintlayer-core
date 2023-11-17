@@ -112,6 +112,9 @@ pub struct PeerManagerConfig {
     pub outbound_block_relay_count: OutboundBlockRelayCount,
     /// The number of extra block relay connections that we will establish and evict regularly.
     pub outbound_block_relay_extra_count: OutboundBlockRelayExtraCount,
+
+    /// The time after which the tip will be considered stale.
+    pub stale_tip_time_diff: StaleTipTimeDiff,
 }
 
 impl PeerManagerConfig {
@@ -133,6 +136,7 @@ make_config_setting!(OutboundFullRelayCount, usize, 8);
 make_config_setting!(OutboundFullRelayExtraCount, usize, 1);
 make_config_setting!(OutboundBlockRelayCount, usize, 2);
 make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
+make_config_setting!(StaleTipTimeDiff, Duration, Duration::from_secs(30 * 60));
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -1609,8 +1613,6 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
-        let stale_tip_time_diff = stale_tip_time_diff(&self.chain_config);
-
         if let Some(chan) = loop_started_sender {
             chan.send(());
         }
@@ -1656,7 +1658,8 @@ where
 
             let time_since_last_chainstate_tip =
                 (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
-            let tip_is_stale = time_since_last_chainstate_tip > stale_tip_time_diff;
+            let tip_is_stale = time_since_last_chainstate_tip
+                > *self.p2p_config.peer_manager_config.stale_tip_time_diff;
 
             if tip_is_stale {
                 heartbeat_call_needed = true;
@@ -1696,7 +1699,7 @@ where
                     self.pending_outbound_connects.is_empty(),
                     self.peers.is_empty(),
                     time_since_last_chainstate_tip,
-                    stale_tip_time_diff
+                    self.p2p_config.peer_manager_config.stale_tip_time_diff
                 );
 
                 self.reload_dns_seed().await;
@@ -1749,12 +1752,6 @@ where
     pub fn peerdb(&self) -> &peerdb::PeerDb<S> {
         &self.peerdb
     }
-}
-
-pub fn stale_tip_time_diff(chain_config: &ChainConfig) -> Duration {
-    // Note: bitcoin core also uses "3 * block_spacing" for stale tip detection, but their
-    // "block spacing" is 10 min instead of out 2. TODO: should we use bigger time diff?
-    *chain_config.target_block_spacing() * 3
 }
 
 pub trait Observer {

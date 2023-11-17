@@ -125,6 +125,8 @@ impl From<P2pConfigFile> for P2pConfig {
                 outbound_full_relay_extra_count: Default::default(),
                 outbound_block_relay_count: Default::default(),
                 outbound_block_relay_extra_count: Default::default(),
+
+                stale_tip_time_diff: Default::default(),
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),

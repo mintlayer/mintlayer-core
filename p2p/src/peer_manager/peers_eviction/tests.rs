@@ -997,6 +997,9 @@ fn config_with_block_relay_conn_limits(max_connections: usize) -> PeerManagerCon
         outbound_full_relay_count: usize::MAX.into(),
         outbound_full_relay_extra_count: usize::MAX.into(),
         outbound_block_relay_extra_count: usize::MAX.into(),
+
+        // Other values are irrelevant
+        stale_tip_time_diff: Default::default(),
     }
 }
 
@@ -1013,6 +1016,9 @@ fn config_with_full_relay_conn_limits(max_connections: usize) -> PeerManagerConf
         outbound_full_relay_extra_count: usize::MAX.into(),
         outbound_block_relay_count: usize::MAX.into(),
         outbound_block_relay_extra_count: usize::MAX.into(),
+
+        // Other values are irrelevant
+        stale_tip_time_diff: Default::default(),
     }
 }
 
@@ -1029,5 +1035,8 @@ fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
         preserved_inbound_count_new_transactions: 0.into(),
         outbound_full_relay_extra_count: 0.into(),
         outbound_block_relay_extra_count: 0.into(),
+
+        // Other values are irrelevant
+        stale_tip_time_diff: Default::default(),
     }
 }

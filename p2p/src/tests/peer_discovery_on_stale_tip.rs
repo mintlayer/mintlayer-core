@@ -17,7 +17,7 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use chainstate::BlockSource;
 use common::{
-    chain::{config::ChainType, Block, ChainConfig, Destination, NetUpgrades},
+    chain::{Block, ChainConfig},
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
@@ -29,9 +29,8 @@ use crate::{
     config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, stale_tip_time_diff, PeerManagerConfig,
-        PEER_MGR_DNS_RELOAD_INTERVAL, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
-        PEER_MGR_HEARTBEAT_INTERVAL_MIN,
+        self, address_groups::AddressGroup, PeerManagerConfig, PEER_MGR_DNS_RELOAD_INTERVAL,
+        PEER_MGR_HEARTBEAT_INTERVAL_MAX, PEER_MGR_HEARTBEAT_INTERVAL_MIN,
     },
     sync::test_helpers::make_new_block,
     testing_utils::{TestTransportChannel, TestTransportMaker, TEST_PROTOCOL_VERSION},
@@ -114,6 +113,8 @@ async fn peer_discovery_on_stale_tip_impl(
         preserved_inbound_count_new_transactions: Default::default(),
 
         max_inbound_connections: Default::default(),
+
+        stale_tip_time_diff: Default::default(),
     };
     let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
@@ -246,15 +247,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let time_getter = P2pBasicTestTimeGetter::new();
     let start_time = time_getter.get_time_getter().get_time();
-    let chain_config = Arc::new(
-        common::chain::config::Builder::new(ChainType::Testnet)
-            .consensus_upgrades(NetUpgrades::unit_tests())
-            .genesis_unittest(Destination::AnyoneCanSpend)
-            // Note: this will affect stale_tip_time_diff
-            .target_block_spacing(Duration::from_secs(60 * 30))
-            .build(),
-    );
-    let stale_tip_time_diff = stale_tip_time_diff(&chain_config);
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let stale_tip_time_diff = Duration::from_secs(60 * 60);
 
     let main_node_peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: 1.into(),
@@ -262,6 +256,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
         outbound_block_relay_count: 0.into(),
         outbound_block_relay_extra_count: 0.into(),
+
+        stale_tip_time_diff: stale_tip_time_diff.into(),
 
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
@@ -279,6 +275,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
         outbound_block_relay_count: 0.into(),
         outbound_block_relay_extra_count: 0.into(),
+
+        stale_tip_time_diff: stale_tip_time_diff.into(),
 
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
