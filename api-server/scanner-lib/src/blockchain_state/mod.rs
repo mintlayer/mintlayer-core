@@ -62,11 +62,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
         let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
-        let best_block = db_tx
-            .get_best_block()
-            .await
-            .expect("Unable to get best block")
-            .unwrap_or_else(|| (BlockHeight::new(0), self.chain_config.genesis_block_id()));
+        let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
         Ok(best_block)
     }
 

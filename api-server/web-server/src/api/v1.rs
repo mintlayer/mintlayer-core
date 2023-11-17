@@ -233,7 +233,7 @@ pub async fn chain_tip<T: ApiServerStorage>(
 async fn best_block<T: ApiServerStorage>(
     state: &ApiServerWebServerState<Arc<T>>,
 ) -> Result<(BlockHeight, Id<common::chain::GenBlock>), ApiServerWebServerError> {
-    let best_block = state
+    state
         .db
         .transaction_ro()
         .await
@@ -244,9 +244,7 @@ async fn best_block<T: ApiServerStorage>(
         .await
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .unwrap_or_else(|| (BlockHeight::new(0), state.chain_config.genesis_block_id()));
-    Ok(best_block)
+        })
 }
 
 //

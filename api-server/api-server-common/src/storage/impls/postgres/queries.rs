@@ -19,7 +19,7 @@ use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use serialization::{DecodeAll, Encode};
 
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id},
 };
 use tokio_postgres::NoTls;
@@ -269,14 +269,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
     pub async fn get_best_block(
         &mut self,
-    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
-        let query_result = self
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+        let row = self
             .tx
-            .query_opt(
-                r#"SELECT block_height, block_id
-                FROM ml_blocks;
-                WHERE block_height IS NOT NULL
-                ORDER BY block_height DESC
+            .query_one(
+                r#"
+                (
+                    (
+                        SELECT block_height, block_id
+                        FROM ml_blocks
+                        WHERE block_height IS NOT NULL
+                        ORDER BY block_height DESC
+                    )
+                    UNION ALL
+                    SELECT block_height, block_id
+                    FROM ml_genesis
+                )
                 LIMIT 1
                 "#,
                 &[],
@@ -284,28 +292,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        if let Some(row) = query_result {
-            let block_height: Vec<u8> = row.get(0);
-            let block_id: Vec<u8> = row.get(1);
+        let block_height: i64 = row.get(0);
+        let block_id: Vec<u8> = row.get(1);
 
-            let block_height =
-                BlockHeight::decode_all(&mut block_height.as_slice()).map_err(|e| {
-                    ApiServerStorageError::InvalidInitializedState(format!(
-                        "BlockHeight deserialization failed: {}",
-                        e
-                    ))
-                })?;
-            let block_id = Id::<GenBlock>::decode_all(&mut block_id.as_slice()).map_err(|e| {
-                ApiServerStorageError::InvalidInitializedState(format!(
-                    "BlockId deserialization failed: {}",
-                    e
-                ))
-            })?;
+        let block_height = BlockHeight::new(block_height as u64);
+        let block_id = Id::<GenBlock>::decode_all(&mut block_id.as_slice()).map_err(|e| {
+            ApiServerStorageError::InvalidInitializedState(format!(
+                "BlockId deserialization failed: {}",
+                e
+            ))
+        })?;
 
-            Ok(Some((block_height, block_id)))
-        } else {
-            Ok(None)
-        }
+        Ok((block_height, block_id))
     }
 
     async fn just_execute(&mut self, query: &str) -> Result<(), ApiServerStorageError> {
@@ -324,6 +322,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_misc_data (
             name TEXT PRIMARY KEY,
             value bytea NOT NULL
+        );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_genesis (
+            block_height bigint PRIMARY KEY,
+            block_id bytea NOT NULL,
+            block_data bytea NOT NULL
+        );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_main_chain_blocks (
+            block_height bigint PRIMARY KEY,
+            block_id bytea NOT NULL
         );",
         )
         .await?;
@@ -379,7 +394,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn initialize_database(&mut self) -> Result<(), ApiServerStorageError> {
+    pub async fn initialize_database(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
         self.create_tables().await?;
 
         // Insert row to the table
@@ -387,6 +405,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)",
                 &[&VERSION_STR, &CURRENT_STORAGE_VERSION.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_genesis (block_height, block_id, block_data) VALUES ($1, $2, $3)",
+                &[
+                    &(0i64),
+                    &chain_config.genesis_block_id().encode(),
+                    &chain_config.genesis_block().encode(),
+                ],
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;

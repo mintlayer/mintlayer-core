@@ -81,7 +81,14 @@ where
 
     // Test setting/getting blocks
     {
+        let mut test_framework = TestFramework::builder(&mut rng).build();
+        let chain_config = test_framework.chain_config().clone();
         let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // should return genesis block id
+        let (height, block_id) = db_tx.get_best_block().await.unwrap();
+        assert_eq!(height, BlockHeight::new(0));
+        assert_eq!(block_id, chain_config.genesis_block_id());
 
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
@@ -90,8 +97,6 @@ where
         }
         // Create a test framework and blocks
 
-        let mut test_framework = TestFramework::builder(&mut rng).build();
-        let chain_config = test_framework.chain_config().clone();
         let genesis_id = chain_config.genesis_block_id();
         test_framework.create_chain(&genesis_id, 10, &mut rng).unwrap();
 

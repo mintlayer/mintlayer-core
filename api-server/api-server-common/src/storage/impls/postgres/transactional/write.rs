@@ -34,10 +34,10 @@ use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     async fn initialize_storage(
         &mut self,
-        _chain_config: &ChainConfig,
+        chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.initialize_database().await?;
+        conn.initialize_database(chain_config).await?;
 
         Ok(())
     }
@@ -169,9 +169,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
-    async fn get_best_block(
-        &self,
-    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 

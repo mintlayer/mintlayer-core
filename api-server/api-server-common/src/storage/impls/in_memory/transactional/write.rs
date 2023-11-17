@@ -127,9 +127,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_address_transactions(address)
     }
 
-    async fn get_best_block(
-        &self,
-    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         self.transaction.get_best_block()
     }
 

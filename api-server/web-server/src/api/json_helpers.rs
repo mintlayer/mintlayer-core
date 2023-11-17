@@ -21,7 +21,7 @@ use common::{
 use serde_json::json;
 
 pub fn amount_to_json(amount: Amount) -> serde_json::Value {
-    json!(amount.into_atoms().to_string())
+    amount.into_atoms().to_string().into()
 }
 
 pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> serde_json::Value {

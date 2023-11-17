@@ -63,9 +63,7 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
-    async fn get_best_block(
-        &self,
-    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError>;
+    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
 

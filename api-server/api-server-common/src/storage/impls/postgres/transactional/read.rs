@@ -61,9 +61,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
-    async fn get_best_block(
-        &self,
-    ) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 

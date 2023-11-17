@@ -124,9 +124,8 @@ impl ApiServerInMemoryStorage {
         Ok(version_table_handle)
     }
 
-    fn get_best_block(&self) -> Result<Option<(BlockHeight, Id<GenBlock>)>, ApiServerStorageError> {
-        let best_block_table_handle = Some(self.best_block);
-        Ok(best_block_table_handle)
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+        Ok(self.best_block)
     }
 
     fn get_block_aux_data(
