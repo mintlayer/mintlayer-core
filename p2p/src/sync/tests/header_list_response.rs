@@ -227,7 +227,7 @@ async fn disconnect() {
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
             user_agent: "test".try_into().unwrap(),
-            connection_count_limits: Default::default(),
+            peer_manager_config: Default::default(),
             protocol_config: Default::default(),
         });
         let mut node = TestNode::builder(protocol_version)

@@ -21,7 +21,7 @@ use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
-use super::{address_groups::AddressGroup, peer_context::PeerContext, ConnectionCountLimits};
+use super::{address_groups::AddressGroup, peer_context::PeerContext, PeerManagerConfig};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
@@ -167,20 +167,20 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 #[must_use]
 pub fn select_for_eviction_inbound(
     candidates: Vec<EvictionCandidate>,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
     debug_assert!(candidates.iter().all(|c| c.peer_role == PeerRole::Inbound));
 
     let candidates =
-        filter_address_group(candidates, *limits.preserved_inbound_count_address_group);
-    let candidates = filter_fast_ping(candidates, *limits.preserved_inbound_count_ping);
+        filter_address_group(candidates, *config.preserved_inbound_count_address_group);
+    let candidates = filter_fast_ping(candidates, *config.preserved_inbound_count_ping);
     let candidates =
-        filter_by_last_tip_block_time(candidates, *limits.preserved_inbound_count_new_blocks);
+        filter_by_last_tip_block_time(candidates, *config.preserved_inbound_count_new_blocks);
     let candidates = filter_by_last_transaction_time(
         candidates,
-        *limits.preserved_inbound_count_new_transactions,
+        *config.preserved_inbound_count_new_transactions,
     );
 
     find_group_most_connections(candidates)
@@ -203,20 +203,20 @@ const FULL_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(30);
 #[must_use]
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> Option<PeerId> {
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundBlockRelay,
         BLOCK_RELAY_CONNECTION_MIN_AGE,
-        *limits.outbound_block_relay_count,
+        *config.outbound_block_relay_count,
     )
 }
 
 #[must_use]
 pub fn select_for_eviction_full_relay(
     candidates: Vec<EvictionCandidate>,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> Option<PeerId> {
     // TODO: in bitcoin they protect full relay peers from eviction if there are no other
     // connection to their network (counting outbound-full-relay and manual peers). We should
@@ -225,7 +225,7 @@ pub fn select_for_eviction_full_relay(
         candidates,
         PeerRole::OutboundFullRelay,
         FULL_RELAY_CONNECTION_MIN_AGE,
-        *limits.outbound_full_relay_count,
+        *config.outbound_full_relay_count,
     )
 }
 

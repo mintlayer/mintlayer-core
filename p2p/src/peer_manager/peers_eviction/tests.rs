@@ -630,21 +630,21 @@ fn random_eviction_candidate(rng: &mut impl Rng) -> EvictionCandidate {
 fn test_preserved_by_ping(
     index: usize,
     candidate: &mut EvictionCandidate,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> bool {
     // Check that `PRESERVED_COUNT_PING` peers with the lowest ping times are preserved
     candidate.ping_min = index as i64;
-    index < *limits.preserved_inbound_count_ping
+    index < *config.preserved_inbound_count_ping
 }
 
 fn test_preserved_by_address_group(
     index: usize,
     candidate: &mut EvictionCandidate,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> bool {
     // Check that `PRESERVED_COUNT_ADDRESS_GROUP` peers with the highest net_group_keyed values are preserved
     candidate.net_group_keyed = NetGroupKeyed(u64::MAX - index as u64);
-    index < *limits.preserved_inbound_count_address_group
+    index < *config.preserved_inbound_count_address_group
 }
 
 #[tracing::instrument(skip(seed))]
@@ -654,7 +654,7 @@ fn test_preserved_by_address_group(
 fn test_randomized(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let limits: ConnectionCountLimits = Default::default();
+    let config: PeerManagerConfig = Default::default();
     let tests = [test_preserved_by_ping, test_preserved_by_address_group];
 
     for _ in 0..10 {
@@ -666,16 +666,16 @@ fn test_randomized(#[case] seed: Seed) {
 
             let mut preserved = BTreeSet::new();
             for (index, candidate) in candidates.iter_mut().enumerate() {
-                let is_preserved = test(index, candidate, &limits);
+                let is_preserved = test(index, candidate, &config);
                 if is_preserved {
                     preserved.insert(candidate.peer_id);
                 }
             }
 
             candidates.shuffle(&mut rng);
-            let peer_id = select_for_eviction_inbound(candidates.clone(), &limits);
+            let peer_id = select_for_eviction_inbound(candidates.clone(), &config);
             assert_eq!(
-                count > limits.total_preserved_inbound_count(),
+                count > config.total_preserved_inbound_count(),
                 peer_id.is_some(),
                 "unexpected result, candidates: {candidates:?}, peer_id: {peer_id:?}"
             );
@@ -697,7 +697,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = block_relay_count_limits(2);
+    let config = config_with_block_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
         EvictionCandidate {
@@ -721,7 +721,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
         ),
     ];
     assert_eq!(
-        select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &limits),
+        select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &config),
         None
     );
 
@@ -736,13 +736,13 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &limits),
+        select_for_eviction_block_relay(candidates.clone(), &config),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
@@ -758,7 +758,7 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = block_relay_count_limits(2);
+    let config = config_with_block_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
         EvictionCandidate {
@@ -780,13 +780,13 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &limits),
+        select_for_eviction_block_relay(candidates.clone(), &config),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
@@ -802,7 +802,7 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = block_relay_count_limits(2);
+    let config = config_with_block_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
         EvictionCandidate {
@@ -824,13 +824,13 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &limits),
+        select_for_eviction_block_relay(candidates.clone(), &config),
         Some(peer1)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
@@ -846,7 +846,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = full_relay_count_limits(2);
+    let config = config_with_full_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
         EvictionCandidate {
@@ -870,7 +870,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
         ),
     ];
     assert_eq!(
-        select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &limits),
+        select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &config),
         None
     );
 
@@ -885,13 +885,13 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &limits),
+        select_for_eviction_full_relay(candidates.clone(), &config),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
@@ -907,7 +907,7 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = full_relay_count_limits(2);
+    let config = config_with_full_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
         EvictionCandidate {
@@ -929,13 +929,13 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &limits),
+        select_for_eviction_full_relay(candidates.clone(), &config),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
@@ -951,7 +951,7 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let limits = full_relay_count_limits(2);
+    let config = config_with_full_relay_conn_limits(2);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
         EvictionCandidate {
@@ -973,22 +973,22 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &limits),
+        select_for_eviction_full_relay(candidates.clone(), &config),
         Some(peer1)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
         None
     );
 }
 
-fn block_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
-    ConnectionCountLimits {
+fn config_with_block_relay_conn_limits(max_connections: usize) -> PeerManagerConfig {
+    PeerManagerConfig {
         outbound_block_relay_count: max_connections.into(),
 
-        // The values that should not influence tests' behavior are set to MAX.
+        // Connection count limits that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
         preserved_inbound_count_address_group: usize::MAX.into(),
         preserved_inbound_count_ping: usize::MAX.into(),
@@ -1000,11 +1000,11 @@ fn block_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
     }
 }
 
-fn full_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
-    ConnectionCountLimits {
+fn config_with_full_relay_conn_limits(max_connections: usize) -> PeerManagerConfig {
+    PeerManagerConfig {
         outbound_full_relay_count: max_connections.into(),
 
-        // The values that should not influence tests' behavior are set to MAX.
+        // Connection count limits that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
         preserved_inbound_count_address_group: usize::MAX.into(),
         preserved_inbound_count_ping: usize::MAX.into(),
@@ -1016,12 +1016,12 @@ fn full_relay_count_limits(max_connections: usize) -> ConnectionCountLimits {
     }
 }
 
-fn no_outbound_conn_limits() -> ConnectionCountLimits {
-    ConnectionCountLimits {
+fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
+    PeerManagerConfig {
         outbound_block_relay_count: usize::MAX.into(),
         outbound_full_relay_count: usize::MAX.into(),
 
-        // The values that should not influence tests' behavior are set to 0.
+        // Connection count limits that should not influence tests' behavior are set to 0.
         max_inbound_connections: 0.into(),
         preserved_inbound_count_address_group: 0.into(),
         preserved_inbound_count_ping: 0.into(),

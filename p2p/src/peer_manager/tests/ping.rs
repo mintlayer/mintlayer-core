@@ -62,7 +62,7 @@ async fn ping_timeout() {
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;

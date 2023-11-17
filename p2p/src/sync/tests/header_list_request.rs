@@ -173,7 +173,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
     });
 
     let blocks = make_new_blocks(
@@ -262,7 +262,7 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
 

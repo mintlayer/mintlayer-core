@@ -68,7 +68,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         allow_discover_private_ips: Default::default(),
         user_agent,
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
 

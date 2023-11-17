@@ -662,7 +662,7 @@ async fn connection_timeout_rpc_notified<T>(
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
@@ -775,7 +775,7 @@ where
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -819,7 +819,7 @@ where
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -905,7 +905,7 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -949,7 +949,7 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -985,7 +985,7 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(

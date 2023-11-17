@@ -85,7 +85,7 @@ use self::{
 };
 
 #[derive(Default, Debug)]
-pub struct ConnectionCountLimits {
+pub struct PeerManagerConfig {
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: MaxInboundConnections,
 
@@ -114,7 +114,7 @@ pub struct ConnectionCountLimits {
     pub outbound_block_relay_extra_count: OutboundBlockRelayExtraCount,
 }
 
-impl ConnectionCountLimits {
+impl PeerManagerConfig {
     pub fn total_preserved_inbound_count(&self) -> usize {
         *self.preserved_inbound_count_address_group
             + *self.preserved_inbound_count_ping
@@ -685,7 +685,7 @@ where
                 // only when needed or from RPC requests.
                 // TODO: Always allow connections from the whitelisted IPs
                 if self.inbound_peer_count()
-                    >= *self.p2p_config.connection_count_limits.max_inbound_connections
+                    >= *self.p2p_config.peer_manager_config.max_inbound_connections
                     && !self.try_evict_random_inbound_connection()
                 {
                     log::info!("no peer is selected for eviction, new connection is dropped");
@@ -741,7 +741,7 @@ where
     fn try_evict_random_inbound_connection(&mut self) -> bool {
         if let Some(peer_id) = peers_eviction::select_for_eviction_inbound(
             self.eviction_candidates(PeerRole::Inbound),
-            &self.p2p_config.connection_count_limits,
+            &self.p2p_config.peer_manager_config,
         ) {
             log::info!("inbound peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -755,7 +755,7 @@ where
     fn evict_block_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
-            &self.p2p_config.connection_count_limits,
+            &self.p2p_config.peer_manager_config,
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -766,7 +766,7 @@ where
     fn evict_full_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
             self.eviction_candidates(PeerRole::OutboundFullRelay),
-            &self.p2p_config.connection_count_limits,
+            &self.p2p_config.peer_manager_config,
         ) {
             log::info!("full relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -889,7 +889,7 @@ where
                 // Note: there may be more than outbound_block_relay_count block relay connections
                 // at a given moment, but the extra ones will soon be evicted. Since connections
                 // with smaller peer ids are less likely to be evicted, we choose them here.
-                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count)
+                .take(*self.p2p_config.peer_manager_config.outbound_block_relay_count)
                 .collect();
             self.peerdb.set_anchors(anchor_addresses);
         }
@@ -1150,12 +1150,12 @@ where
 
         let needed_outbound_full_relay_conn_count = {
             let extra_conn_count = if stale_tip_detected {
-                *self.p2p_config.connection_count_limits.outbound_full_relay_extra_count
+                *self.p2p_config.peer_manager_config.outbound_full_relay_extra_count
             } else {
                 0
             };
 
-            (*self.p2p_config.connection_count_limits.outbound_full_relay_count + extra_conn_count)
+            (*self.p2p_config.peer_manager_config.outbound_full_relay_count + extra_conn_count)
                 .saturating_sub(cur_outbound_full_relay_conn_count)
         };
 
@@ -1181,8 +1181,8 @@ where
         }
 
         let needed_outbound_block_relay_conn_count =
-            (*self.p2p_config.connection_count_limits.outbound_block_relay_count
-                + *self.p2p_config.connection_count_limits.outbound_block_relay_extra_count)
+            (*self.p2p_config.peer_manager_config.outbound_block_relay_count
+                + *self.p2p_config.peer_manager_config.outbound_block_relay_extra_count)
                 .saturating_sub(cur_outbound_block_relay_conn_count);
 
         let new_block_relay_conn_addresses =
@@ -1724,7 +1724,7 @@ where
                 // Note that in tests `outbound_full_relay_count` may be zero, so we have to
                 // adjust it for this case.
                 let delay_divisor = std::cmp::max(
-                    *self.p2p_config.connection_count_limits.outbound_full_relay_count,
+                    *self.p2p_config.peer_manager_config.outbound_full_relay_count,
                     1,
                 );
                 let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)

@@ -332,7 +332,7 @@ where
     // outbound_xxx_relay_count.
     // Still, the number shouldn't exceed outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
     pub async fn assert_outbound_conn_count_maximums_reached(&self) {
-        let conn_count_limits = &self.p2p_config.connection_count_limits;
+        let peer_mgr_config = &self.p2p_config.peer_manager_config;
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
@@ -340,25 +340,25 @@ where
         let outbound_block_relay_peers_count =
             peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
 
-        assert!(outbound_full_relay_peers_count >= *conn_count_limits.outbound_full_relay_count);
+        assert!(outbound_full_relay_peers_count >= *peer_mgr_config.outbound_full_relay_count);
         assert!(
             outbound_full_relay_peers_count
-                <= *conn_count_limits.outbound_full_relay_count
-                    + *conn_count_limits.outbound_full_relay_extra_count
+                <= *peer_mgr_config.outbound_full_relay_count
+                    + *peer_mgr_config.outbound_full_relay_extra_count
         );
 
-        assert!(outbound_block_relay_peers_count >= *conn_count_limits.outbound_block_relay_count);
+        assert!(outbound_block_relay_peers_count >= *peer_mgr_config.outbound_block_relay_count);
         assert!(
             outbound_block_relay_peers_count
-                <= *conn_count_limits.outbound_block_relay_count
-                    + *conn_count_limits.outbound_block_relay_extra_count
+                <= *peer_mgr_config.outbound_block_relay_count
+                    + *peer_mgr_config.outbound_block_relay_extra_count
         );
     }
 
     // Assert that the number of outbound full/block relay connections doesn't exceed
     // outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
     pub async fn assert_outbound_conn_count_within_limits(&self) {
-        let conn_count_limits = &self.p2p_config.connection_count_limits;
+        let peer_mgr_config = &self.p2p_config.peer_manager_config;
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
@@ -368,14 +368,14 @@ where
 
         assert!(
             outbound_full_relay_peers_count
-                <= *conn_count_limits.outbound_full_relay_count
-                    + *conn_count_limits.outbound_full_relay_extra_count
+                <= *peer_mgr_config.outbound_full_relay_count
+                    + *peer_mgr_config.outbound_full_relay_extra_count
         );
 
         assert!(
             outbound_block_relay_peers_count
-                <= *conn_count_limits.outbound_block_relay_count
-                    + *conn_count_limits.outbound_block_relay_extra_count
+                <= *peer_mgr_config.outbound_block_relay_count
+                    + *peer_mgr_config.outbound_block_relay_extra_count
         );
     }
 

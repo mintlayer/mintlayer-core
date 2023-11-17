@@ -29,7 +29,7 @@ use crate::{
     config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, stale_tip_time_diff, ConnectionCountLimits,
+        self, address_groups::AddressGroup, stale_tip_time_diff, PeerManagerConfig,
         PEER_MGR_DNS_RELOAD_INTERVAL, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
         PEER_MGR_HEARTBEAT_INTERVAL_MIN,
     },
@@ -98,7 +98,7 @@ async fn peer_discovery_on_stale_tip_impl(
         } else {
             (1, 0)
         };
-    let conn_count_limits = ConnectionCountLimits {
+    let peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: outbound_full_relay_conn_count.into(),
         outbound_block_relay_count: outbound_block_relay_conn_count.into(),
 
@@ -115,11 +115,11 @@ async fn peer_discovery_on_stale_tip_impl(
 
         max_inbound_connections: Default::default(),
     };
-    let p2p_config = Arc::new(make_p2p_config(conn_count_limits));
+    let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
-    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count()
-        + *p2p_config.connection_count_limits.outbound_full_relay_extra_count
-        + *p2p_config.connection_count_limits.outbound_block_relay_extra_count
+    let nodes_count = p2p_config.peer_manager_config.outbound_full_and_block_relay_count()
+        + *p2p_config.peer_manager_config.outbound_full_relay_extra_count
+        + *p2p_config.peer_manager_config.outbound_block_relay_extra_count
         + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
@@ -256,7 +256,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     );
     let stale_tip_time_diff = stale_tip_time_diff(&chain_config);
 
-    let main_node_conn_count_limits = ConnectionCountLimits {
+    let main_node_peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: 1.into(),
         outbound_full_relay_extra_count: 1.into(),
 
@@ -270,10 +270,10 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
         max_inbound_connections: Default::default(),
     };
-    let main_node_p2p_config = Arc::new(make_p2p_config(main_node_conn_count_limits));
+    let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
 
     // The extra nodes won't create outbound connections.
-    let extra_nodes_conn_count_limits = ConnectionCountLimits {
+    let extra_nodes_peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: 0.into(),
         outbound_full_relay_extra_count: 0.into(),
 
@@ -287,7 +287,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
         max_inbound_connections: Default::default(),
     };
-    let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_conn_count_limits));
+    let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
 
     let extra_nodes_count = 10;
     let mut extra_nodes = Vec::with_capacity(extra_nodes_count);
@@ -429,7 +429,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     main_node.join().await;
 }
 
-pub fn make_p2p_config(connection_count_limits: ConnectionCountLimits) -> P2pConfig {
+pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
     let millenium = Duration::from_secs(60 * 60 * 24 * 365 * 1000);
     P2pConfig {
         // Note: these tests may move mocked time forward an unlimited number of times,
@@ -439,7 +439,7 @@ pub fn make_p2p_config(connection_count_limits: ConnectionCountLimits) -> P2pCon
         max_clock_diff: millenium.into(),
         sync_stalling_timeout: millenium.into(),
 
-        connection_count_limits,
+        peer_manager_config,
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
@@ -509,9 +509,9 @@ async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>
         let mut outbound_full_relay_peers_count = 0;
         let mut outbound_block_relay_peers_count = 0;
         while outbound_full_relay_peers_count
-            < *node_group.p2p_config().connection_count_limits.outbound_full_relay_count
+            < *node_group.p2p_config().peer_manager_config.outbound_full_relay_count
             || outbound_block_relay_peers_count
-                < *node_group.p2p_config().connection_count_limits.outbound_block_relay_count
+                < *node_group.p2p_config().peer_manager_config.outbound_block_relay_count
         {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let peers_info = node.get_peers_info().await;

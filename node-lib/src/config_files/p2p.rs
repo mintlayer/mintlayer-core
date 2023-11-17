@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use p2p::{
     config::{NodeType, P2pConfig},
-    peer_manager::ConnectionCountLimits,
+    peer_manager::PeerManagerConfig,
     types::ip_or_socket_address::IpOrSocketAddress,
 };
 
@@ -113,7 +113,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
-            connection_count_limits: ConnectionCountLimits {
+            peer_manager_config: PeerManagerConfig {
                 max_inbound_connections: c.max_inbound_connections.into(),
 
                 preserved_inbound_count_address_group: Default::default(),

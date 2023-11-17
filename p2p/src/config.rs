@@ -21,7 +21,7 @@ use utils::make_config_setting;
 
 use crate::{
     net::types::services::{Service, Services},
-    peer_manager::ConnectionCountLimits,
+    peer_manager::PeerManagerConfig,
     protocol::ProtocolConfig,
 };
 
@@ -103,8 +103,8 @@ pub struct P2pConfig {
     pub user_agent: UserAgent,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
-    /// Various limits for connection counts; these should only be overridden in tests.
-    pub connection_count_limits: ConnectionCountLimits,
+    /// Various limits used internally by the peer manager; these should only be overridden in tests.
+    pub peer_manager_config: PeerManagerConfig,
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
 }

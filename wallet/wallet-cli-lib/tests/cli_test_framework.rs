@@ -179,7 +179,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         allow_discover_private_ips: Default::default(),
         user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     };
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
