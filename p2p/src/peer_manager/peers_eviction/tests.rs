@@ -697,7 +697,8 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_block_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_block_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
         EvictionCandidate {
@@ -715,10 +716,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let candidates = vec![
         make_candidate(peer1, Duration::from_secs(20000)),
         make_candidate(peer2, Duration::from_secs(10000)),
-        make_candidate(
-            peer3,
-            BLOCK_RELAY_CONNECTION_MIN_AGE - Duration::from_secs(1),
-        ),
+        make_candidate(peer3, min_age - Duration::from_secs(1)),
     ];
     assert_eq!(
         select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &config),
@@ -729,10 +727,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let candidates = vec![
         make_candidate(peer1, Duration::from_secs(20000)),
         make_candidate(peer2, Duration::from_secs(10000)),
-        make_candidate(
-            peer3,
-            BLOCK_RELAY_CONNECTION_MIN_AGE + Duration::from_secs(1),
-        ),
+        make_candidate(peer3, min_age + Duration::from_secs(1)),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
@@ -758,7 +753,8 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_block_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_block_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
         EvictionCandidate {
@@ -802,7 +798,8 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_block_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_block_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
         EvictionCandidate {
@@ -846,7 +843,8 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_full_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_full_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, age: Duration) -> EvictionCandidate {
         EvictionCandidate {
@@ -864,10 +862,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let candidates = vec![
         make_candidate(peer1, Duration::from_secs(20000)),
         make_candidate(peer2, Duration::from_secs(10000)),
-        make_candidate(
-            peer3,
-            FULL_RELAY_CONNECTION_MIN_AGE - Duration::from_secs(1),
-        ),
+        make_candidate(peer3, min_age - Duration::from_secs(1)),
     ];
     assert_eq!(
         select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &config),
@@ -878,10 +873,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let candidates = vec![
         make_candidate(peer1, Duration::from_secs(20000)),
         make_candidate(peer2, Duration::from_secs(10000)),
-        make_candidate(
-            peer3,
-            FULL_RELAY_CONNECTION_MIN_AGE + Duration::from_secs(1),
-        ),
+        make_candidate(peer3, min_age + Duration::from_secs(1)),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
@@ -907,7 +899,8 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_full_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_full_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
         EvictionCandidate {
@@ -951,7 +944,8 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
-    let config = config_with_full_relay_conn_limits(2);
+    let min_age = Duration::from_secs(5000);
+    let config = config_with_full_relay_conn_limits(2, min_age);
 
     fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
         EvictionCandidate {
@@ -984,9 +978,13 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
     );
 }
 
-fn config_with_block_relay_conn_limits(max_connections: usize) -> PeerManagerConfig {
+fn config_with_block_relay_conn_limits(
+    max_connections: usize,
+    min_age: Duration,
+) -> PeerManagerConfig {
     PeerManagerConfig {
         outbound_block_relay_count: max_connections.into(),
+        outbound_block_relay_connection_min_age: min_age.into(),
 
         // Connection count limits that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
@@ -997,15 +995,20 @@ fn config_with_block_relay_conn_limits(max_connections: usize) -> PeerManagerCon
         outbound_full_relay_count: usize::MAX.into(),
         outbound_full_relay_extra_count: usize::MAX.into(),
         outbound_block_relay_extra_count: usize::MAX.into(),
+        outbound_full_relay_connection_min_age: Duration::MAX.into(),
 
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),
     }
 }
 
-fn config_with_full_relay_conn_limits(max_connections: usize) -> PeerManagerConfig {
+fn config_with_full_relay_conn_limits(
+    max_connections: usize,
+    min_age: Duration,
+) -> PeerManagerConfig {
     PeerManagerConfig {
         outbound_full_relay_count: max_connections.into(),
+        outbound_full_relay_connection_min_age: min_age.into(),
 
         // Connection count limits that should not influence tests' behavior are set to MAX.
         max_inbound_connections: usize::MAX.into(),
@@ -1016,6 +1019,7 @@ fn config_with_full_relay_conn_limits(max_connections: usize) -> PeerManagerConf
         outbound_full_relay_extra_count: usize::MAX.into(),
         outbound_block_relay_count: usize::MAX.into(),
         outbound_block_relay_extra_count: usize::MAX.into(),
+        outbound_block_relay_connection_min_age: Duration::MAX.into(),
 
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),
@@ -1026,6 +1030,7 @@ fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
     PeerManagerConfig {
         outbound_block_relay_count: usize::MAX.into(),
         outbound_full_relay_count: usize::MAX.into(),
+        outbound_full_relay_connection_min_age: Duration::MAX.into(),
 
         // Connection count limits that should not influence tests' behavior are set to 0.
         max_inbound_connections: 0.into(),
@@ -1035,6 +1040,7 @@ fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
         preserved_inbound_count_new_transactions: 0.into(),
         outbound_full_relay_extra_count: 0.into(),
         outbound_block_relay_extra_count: 0.into(),
+        outbound_block_relay_connection_min_age: Duration::ZERO.into(),
 
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),

@@ -113,8 +113,9 @@ async fn peer_discovery_on_stale_tip_impl(
         preserved_inbound_count_new_transactions: Default::default(),
 
         max_inbound_connections: Default::default(),
-
         stale_tip_time_diff: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
     };
     let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
@@ -265,6 +266,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         preserved_inbound_count_new_transactions: Default::default(),
 
         max_inbound_connections: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
 
@@ -284,6 +287,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         preserved_inbound_count_new_transactions: Default::default(),
 
         max_inbound_connections: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
     };
     let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
 

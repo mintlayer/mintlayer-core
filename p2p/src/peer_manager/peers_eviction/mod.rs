@@ -31,6 +31,17 @@ make_config_setting!(PreservedInboundCountPing, usize, 8);
 make_config_setting!(PreservedInboundCountNewBlocks, usize, 8);
 make_config_setting!(PreservedInboundCountNewTransactions, usize, 4);
 
+make_config_setting!(
+    OutboundBlockRelayConnectionMinAge,
+    Duration,
+    Duration::from_secs(120)
+);
+make_config_setting!(
+    OutboundFullRelayConnectionMinAge,
+    Duration,
+    Duration::from_secs(120)
+);
+
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
 /// See `select_for_eviction` for more details.
@@ -186,20 +197,6 @@ pub fn select_for_eviction_inbound(
     find_group_most_connections(candidates)
 }
 
-/// Outbound block relay connections younger than this age will not be taken into account
-/// during eviction.
-/// Note that extra block relay connections are established and evicted on a regular basis
-/// during normal operation. So, this interval basically determines how often those extra
-/// connections will come and go.
-const BLOCK_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(120);
-
-/// Outbound full relay connections younger than this age will not be taken into account
-/// during eviction.
-/// Note that extra full relay connections are established if the current tip becomes stale.
-/// There is no point in making this interval large, it should just give the peer enough
-/// time to send us a block.
-const FULL_RELAY_CONNECTION_MIN_AGE: Duration = Duration::from_secs(30);
-
 #[must_use]
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
@@ -208,7 +205,7 @@ pub fn select_for_eviction_block_relay(
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundBlockRelay,
-        BLOCK_RELAY_CONNECTION_MIN_AGE,
+        *config.outbound_block_relay_connection_min_age,
         *config.outbound_block_relay_count,
     )
 }
@@ -224,7 +221,7 @@ pub fn select_for_eviction_full_relay(
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundFullRelay,
-        FULL_RELAY_CONNECTION_MIN_AGE,
+        *config.outbound_full_relay_connection_min_age,
         *config.outbound_full_relay_count,
     )
 }

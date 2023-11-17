@@ -79,6 +79,7 @@ use self::{
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
     peers_eviction::{
+        OutboundBlockRelayConnectionMinAge, OutboundFullRelayConnectionMinAge,
         PreservedInboundCountAddressGroup, PreservedInboundCountNewBlocks,
         PreservedInboundCountNewTransactions, PreservedInboundCountPing,
     },
@@ -115,6 +116,17 @@ pub struct PeerManagerConfig {
 
     /// The time after which the tip will be considered stale.
     pub stale_tip_time_diff: StaleTipTimeDiff,
+
+    /// Outbound block relay connections younger than this age will not be taken into account
+    /// during eviction.
+    /// Note that extra block relay connections are established and evicted on a regular basis
+    /// during normal operation. So, this interval basically determines how often those extra
+    /// connections will come and go.
+    pub outbound_block_relay_connection_min_age: OutboundBlockRelayConnectionMinAge,
+    /// Outbound full relay connections younger than this age will not be taken into account
+    /// during eviction.
+    /// Note that extra full relay connections are established if the current tip becomes stale.
+    pub outbound_full_relay_connection_min_age: OutboundFullRelayConnectionMinAge,
 }
 
 impl PeerManagerConfig {
