@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{panic, sync::Arc};
+use std::{collections::BTreeSet, panic, sync::Arc};
 
 use async_trait::async_trait;
 use logging::log;
@@ -28,7 +28,10 @@ use tokio::{
 
 use crypto::random::Rng;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
-use p2p_types::socket_address::SocketAddress;
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 use test_utils::random::Seed;
 
 use chainstate::{
@@ -269,6 +272,19 @@ impl TestNode {
                 sender.send(Ok(()));
             }
             e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+        }
+    }
+
+    pub async fn receive_peer_manager_events(
+        &mut self,
+        mut events: BTreeSet<PeerManagerEventDesc>,
+    ) {
+        while !events.is_empty() {
+            let event = self.peer_manager_event_receiver.recv().await.unwrap();
+            assert!(
+                events.remove(&(&event).into()),
+                "Unexpected peer manager event: {event:?}"
+            );
         }
     }
 
@@ -527,6 +543,75 @@ impl TestNodeBuilder {
             protocol_version,
         )
         .await
+    }
+}
+
+// A "descriptor" for PeerManagerEvent that can be put into a set.
+// TODO: put it somewhere else
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub enum PeerManagerEventDesc {
+    Connect(IpOrSocketAddress),
+    Disconnect(PeerId),
+    GetPeerCount,
+    GetBindAddresses,
+    GetConnectedPeers,
+    AdjustPeerScore(PeerId, u32),
+    NewTipReceived {
+        peer_id: PeerId,
+        block_id: Id<Block>,
+    },
+    NewChainstateTip(Id<Block>),
+    NewValidTransactionReceived {
+        peer_id: PeerId,
+        txid: Id<Transaction>,
+    },
+    AddReserved(IpOrSocketAddress),
+    RemoveReserved(IpOrSocketAddress),
+    ListBanned,
+    Ban(BannableAddress),
+    Unban(BannableAddress),
+    GenericQuery,
+}
+
+impl From<&PeerManagerEvent> for PeerManagerEventDesc {
+    fn from(event: &PeerManagerEvent) -> Self {
+        match event {
+            PeerManagerEvent::Connect(addr, _) => PeerManagerEventDesc::Connect(addr.clone()),
+            PeerManagerEvent::Disconnect(peer_id, _, _) => {
+                PeerManagerEventDesc::Disconnect(*peer_id)
+            }
+            PeerManagerEvent::GetPeerCount(_) => PeerManagerEventDesc::GetPeerCount,
+            PeerManagerEvent::GetBindAddresses(_) => PeerManagerEventDesc::GetBindAddresses,
+            PeerManagerEvent::GetConnectedPeers(_) => PeerManagerEventDesc::GetConnectedPeers,
+            PeerManagerEvent::AdjustPeerScore(peer_id, score, _) => {
+                PeerManagerEventDesc::AdjustPeerScore(*peer_id, *score)
+            }
+            PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
+                PeerManagerEventDesc::NewTipReceived {
+                    peer_id: *peer_id,
+                    block_id: *block_id,
+                }
+            }
+            PeerManagerEvent::NewChainstateTip(block_id) => {
+                PeerManagerEventDesc::NewChainstateTip(*block_id)
+            }
+            PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
+                PeerManagerEventDesc::NewValidTransactionReceived {
+                    peer_id: *peer_id,
+                    txid: *txid,
+                }
+            }
+            PeerManagerEvent::AddReserved(addr, _) => {
+                PeerManagerEventDesc::AddReserved(addr.clone())
+            }
+            PeerManagerEvent::RemoveReserved(addr, _) => {
+                PeerManagerEventDesc::RemoveReserved(addr.clone())
+            }
+            PeerManagerEvent::ListBanned(_) => PeerManagerEventDesc::ListBanned,
+            PeerManagerEvent::Ban(addr, _) => PeerManagerEventDesc::Ban(*addr),
+            PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
+            PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
+        }
     }
 }
 

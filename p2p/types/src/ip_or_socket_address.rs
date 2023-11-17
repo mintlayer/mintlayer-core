@@ -20,7 +20,7 @@ use std::{
 };
 
 /// IP or socket address
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpOrSocketAddress {
     Ip(IpAddr),
     Socket(SocketAddr),
