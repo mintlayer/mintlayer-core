@@ -74,17 +74,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
 
         // Disconnect blocks from main-chain
-        while db_tx.get_best_block().await.expect("Unable to get best block").0
-            > common_block_height
-        {
-            let current_best = db_tx.get_best_block().await?;
-            logging::log::info!("Disconnecting block: {:?}", current_best);
-
-            db_tx
-                .del_main_chain_block_id(current_best.0)
-                .await
-                .expect("Unable to disconnect block");
-        }
+        db_tx
+            .del_main_chain_blocks_above_height(common_block_height)
+            .await
+            .expect("Unable to disconnect block");
 
         // Disconnect address balances
         db_tx
@@ -100,11 +93,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
-
-            db_tx
-                .set_main_chain_block_id(block_height, block.get_id())
-                .await
-                .expect("Unable to connect block");
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
@@ -145,7 +133,10 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             }
 
             let block_id = block.get_id();
-            db_tx.set_block(block_id, &block).await.expect("Unable to set block");
+            db_tx
+                .set_mainchain_block(block_id, block_height, &block)
+                .await
+                .expect("Unable to set block");
             db_tx
                 .set_block_aux_data(
                     block_id,
@@ -153,11 +144,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 )
                 .await
                 .expect("Unable to set block aux data");
-
-            db_tx
-                .set_best_block(block_height, block.get_id().into())
-                .await
-                .expect("Unable to set best block");
         }
 
         db_tx.commit().await.expect("Unable to commit transaction");

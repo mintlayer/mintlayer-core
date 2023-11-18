@@ -69,12 +69,13 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
             .set_address_transactions_at_height(address, transactions, block_height)
     }
 
-    async fn set_block(
+    async fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
+        block_height: BlockHeight,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_block(block_id, block)
+        self.transaction.set_mainchain_block(block_id, block_height, block)
     }
 
     async fn set_transaction(
@@ -86,14 +87,6 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.set_transaction(transaction_id, owning_block, transaction)
     }
 
-    async fn set_best_block(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<GenBlock>,
-    ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_best_block(block_height, block_id)
-    }
-
     async fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
@@ -102,19 +95,11 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.set_block_aux_data(block_id, block_aux_data)
     }
 
-    async fn set_main_chain_block_id(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<Block>,
-    ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_main_chain_block_id(block_height, block_id)
-    }
-
-    async fn del_main_chain_block_id(
+    async fn del_main_chain_blocks_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.del_main_chain_block_id(block_height)
+        self.transaction.del_main_chain_blocks_above_height(block_height)
     }
 }
 

@@ -30,7 +30,6 @@ use crate::storage::{
 };
 
 const VERSION_STR: &str = "version";
-const BEST_BLOCK_STR: &str = "best_block";
 
 pub struct QueryFromConnection<'a, 'b> {
     tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
@@ -271,46 +270,40 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_best_block(
         &mut self,
     ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
-        let query_result = self
+        let row = self
             .tx
             .query_one(
-                "SELECT value FROM ml_misc_data WHERE name = 'best_block';",
+                r#"
+                (
+                    (
+                        SELECT block_height, block_id
+                        FROM ml_blocks
+                        WHERE block_height IS NOT NULL
+                        ORDER BY block_height DESC
+                    )
+                    UNION ALL
+                    SELECT block_height, block_id
+                    FROM ml_genesis
+                )
+                LIMIT 1
+                "#,
                 &[],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        let data: Vec<u8> = query_result.get(0);
+        let block_height: i64 = row.get(0);
+        let block_id: Vec<u8> = row.get(1);
 
-        let best =
-            <(BlockHeight, Id<GenBlock>)>::decode_all(&mut data.as_slice()).map_err(|e| {
-                ApiServerStorageError::InvalidInitializedState(format!(
-                    "Version deserialization failed: {}",
-                    e
-                ))
-            })?;
+        let block_height = BlockHeight::new(block_height as u64);
+        let block_id = Id::<GenBlock>::decode_all(&mut block_id.as_slice()).map_err(|e| {
+            ApiServerStorageError::InvalidInitializedState(format!(
+                "BlockId deserialization failed: {}",
+                e
+            ))
+        })?;
 
-        Ok(best)
-    }
-
-    pub async fn set_best_block(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<GenBlock>,
-    ) -> Result<(), ApiServerStorageError> {
-        logging::log::debug!("Inserting best block with block_id {}", block_id);
-
-        self.tx
-            .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)
-                    ON CONFLICT (name) DO UPDATE
-                    SET value = $2;",
-                &[&BEST_BLOCK_STR, &(block_height, block_id).encode()],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        Ok(())
+        Ok((block_height, block_id))
     }
 
     async fn just_execute(&mut self, query: &str) -> Result<(), ApiServerStorageError> {
@@ -334,6 +327,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml_genesis (
+            block_height bigint PRIMARY KEY,
+            block_id bytea NOT NULL,
+            block_data bytea NOT NULL
+        );",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml_main_chain_blocks (
             block_height bigint PRIMARY KEY,
             block_id bytea NOT NULL
@@ -344,6 +346,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml_blocks (
                 block_id bytea PRIMARY KEY,
+                block_height bigint,
                 block_data bytea NOT NULL
             );",
         )
@@ -406,7 +409,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
 
-        self.set_best_block(0.into(), chain_config.genesis_block_id()).await?;
+        self.tx
+            .execute(
+                "INSERT INTO ml_genesis (block_height, block_id, block_data) VALUES ($1, $2, $3)",
+                &[
+                    &(0i64),
+                    &chain_config.genesis_block_id().encode(),
+                    &chain_config.genesis_block().encode(),
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
 
         Ok(())
     }
@@ -420,7 +433,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_id FROM ml_main_chain_blocks WHERE block_height = $1;",
+                "SELECT block_id FROM ml_blocks WHERE block_height = $1;",
                 &[&height],
             )
             .await
@@ -443,29 +456,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(block_id))
     }
 
-    pub async fn set_main_chain_block_id(
-        &mut self,
-        block_height: BlockHeight,
-        block_id: Id<Block>,
-    ) -> Result<(), ApiServerStorageError> {
-        let height = Self::block_height_to_postgres_friendly(block_height);
-
-        logging::log::debug!("Inserting block id: {:?} for height: {}", block_id, height);
-
-        self.tx
-            .execute(
-                "INSERT INTO ml_main_chain_blocks (block_height, block_id) VALUES ($1, $2)
-                    ON CONFLICT (block_height) DO UPDATE
-                    SET block_id = $2;",
-                &[&height, &block_id.encode()],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        Ok(())
-    }
-
-    pub async fn del_main_chain_block_id(
+    pub async fn del_main_chain_blocks_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
@@ -473,8 +464,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_main_chain_blocks
-                WHERE block_height = $1;",
+                "UPDATE ml_blocks
+                SET block_height = NULL
+                WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -513,19 +505,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(block))
     }
 
-    pub async fn set_block(
+    pub async fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
+        block_height: BlockHeight,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
+        let height = Self::block_height_to_postgres_friendly(block_height);
 
         self.tx
             .execute(
-                "INSERT INTO ml_blocks (block_id, block_data) VALUES ($1, $2)
+                "INSERT INTO ml_blocks (block_id, block_height, block_data) VALUES ($1, $2, $3)
                     ON CONFLICT (block_id) DO UPDATE
-                    SET block_data = $2;",
-                &[&block_id.encode(), &block.encode()],
+                    SET block_data = $3, block_height = $2;",
+                &[&block_id.encode(), &height, &block.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -584,7 +578,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 SELECT
                     t.transaction_data,
-                    b.block_data
+                    b.aux_data
                 FROM
                     ml_transactions t
                 LEFT JOIN

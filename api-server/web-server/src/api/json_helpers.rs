@@ -20,8 +20,8 @@ use common::{
 };
 use serde_json::json;
 
-pub fn amount_to_json(amount: Amount, chain_config: &ChainConfig) -> serde_json::Value {
-    json!(amount.into_fixedpoint_str(chain_config.coin_decimals()))
+pub fn amount_to_json(amount: Amount) -> serde_json::Value {
+    amount.into_atoms().to_string().into()
 }
 
 pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> serde_json::Value {
@@ -29,7 +29,7 @@ pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> s
         OutputValue::Coin(amount) => {
             json!({
                 "type": "Coin",
-                "amount": amount_to_json(*amount, chain_config),
+                "amount": amount_to_json(*amount),
             })
         }
         OutputValue::TokenV0(_) => {
@@ -42,7 +42,7 @@ pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> s
                 "type": "TokenV1",
                 "token_id": Address::new(chain_config, token_id).expect("no error").get(),
                 // TODO: fix this with token decimals when we store token info in the DB
-                "amount": amount_to_json(*amount, chain_config),
+                "amount": amount_to_json(*amount),
             })
         }
     }
@@ -76,12 +76,12 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
                 "type": "CreateStakePool",
                 "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
                 "data": {
-                    "amount": amount_to_json(data.value(), chain_config),
+                    "amount": amount_to_json(data.value()),
                     "staker": Address::new(chain_config, data.staker()).expect("no error").get(),
                     "vrf_public_key": Address::new(chain_config, data.vrf_public_key()).expect("no error").get(),
                     "decommission_key": Address::new(chain_config, data.decommission_key()).expect("no error").get(),
                     "margin_ratio_per_thousand": data.margin_ratio_per_thousand(),
-                    "cost_per_block": amount_to_json(data.cost_per_block(), chain_config)
+                    "cost_per_block": amount_to_json(data.cost_per_block())
                 },
             })
         }
@@ -89,7 +89,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
             json!({
                 "type": "DelegateStaking",
                 "delegation_id": Address::new(chain_config, delegation_id).expect("no error").get(),
-                "amount": amount_to_json(*amount, chain_config),
+                "amount": amount_to_json(*amount),
             })
         }
         TxOutput::CreateDelegationId(dest, pool_id) => {

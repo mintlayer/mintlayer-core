@@ -33,7 +33,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, OutPointSourceId, SignedTransaction, Transaction,
         TxInput, UtxoOutPoint,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{BlockHeight, Id, Idable, H256},
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -79,50 +79,16 @@ where
 
     // TODO: add more tests with different variations of rw/ro transactions, where things are done in different orders
 
-    // Test setting mainchain block id and getting it back
-    {
-        let mut db_tx = storage.transaction_rw().await.unwrap();
-
-        let height_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
-        let height = height_u64.into();
-
-        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
-        assert!(block_id.is_none());
-
-        let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
-        db_tx.set_main_chain_block_id(height, random_block_id1).await.unwrap();
-
-        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
-        assert_eq!(block_id, Some(random_block_id1));
-
-        let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
-        db_tx.set_main_chain_block_id(height, random_block_id2).await.unwrap();
-
-        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
-        assert_eq!(block_id, Some(random_block_id2));
-
-        // Now delete the block id, then get it, and it won't be there
-        db_tx.del_main_chain_block_id(height).await.unwrap();
-        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
-        assert!(block_id.is_none());
-
-        // Delete again, as deleting non-existing data is OK
-        db_tx.del_main_chain_block_id(height).await.unwrap();
-        db_tx.del_main_chain_block_id(height).await.unwrap();
-
-        db_tx.commit().await.unwrap();
-
-        let db_tx = storage.transaction_ro().await.unwrap();
-
-        {
-            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
-            assert!(block_id.is_none());
-        }
-    }
-
     // Test setting/getting blocks
     {
+        let mut test_framework = TestFramework::builder(&mut rng).build();
+        let chain_config = test_framework.chain_config().clone();
         let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // should return genesis block id
+        let (height, block_id) = db_tx.get_best_block().await.unwrap();
+        assert_eq!(height, BlockHeight::new(0));
+        assert_eq!(block_id, chain_config.genesis_block_id());
 
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
@@ -131,26 +97,53 @@ where
         }
         // Create a test framework and blocks
 
-        let mut test_framework = TestFramework::builder(&mut rng).build();
-        let chain_config = test_framework.chain_config().clone();
         let genesis_id = chain_config.genesis_block_id();
         test_framework.create_chain(&genesis_id, 10, &mut rng).unwrap();
 
         let block_id1 =
             test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
         let block1 = test_framework.block(block_id1);
+        let block_height = BlockHeight::new(1);
 
         {
             let block_id = db_tx.get_block(block_id1).await.unwrap();
             assert!(block_id.is_none());
 
-            db_tx.set_block(block_id1, &block1).await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            assert!(block_id.is_none());
+
+            db_tx.set_mainchain_block(block_id1, block_height, &block1).await.unwrap();
 
             let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block, Some(block1));
+            assert_eq!(block.unwrap(), block1);
+
+            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            assert_eq!(block_id.unwrap(), block_id1);
+
+            // delete the main chain block
+            db_tx
+                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .await
+                .unwrap();
+            // no main chain block on that height
+            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            assert!(block_id.is_none());
+            // but the block is still there just not on main chain
+            let block = db_tx.get_block(block_id1).await.unwrap();
+            assert_eq!(block.unwrap(), block1);
         }
 
         db_tx.commit().await.unwrap();
+
+        {
+            // with read only tx reconfirm everything is the same after the commit
+            let db_tx = storage.transaction_ro().await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
+            assert!(block_id.is_none());
+
+            let block = db_tx.get_block(block_id1).await.unwrap();
+            assert_eq!(block.unwrap(), block1);
+        }
     }
 
     // Test setting/getting transactions
@@ -238,41 +231,6 @@ where
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
-
-        db_tx.commit().await.unwrap();
-    }
-
-    // Test setting/getting best block
-    {
-        let mut db_tx = storage.transaction_rw().await.unwrap();
-
-        // Set once then get best block
-        {
-            let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
-            let height1 = height1_u64.into();
-            let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
-
-            db_tx.set_best_block(height1, random_block_id1.into()).await.unwrap();
-
-            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().await.unwrap();
-
-            assert_eq!(height1, retrieved_best_height);
-            assert_eq!(random_block_id1, retrieved_best_id);
-        }
-
-        // Set again to test overwrite
-        {
-            let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
-            let height2 = height2_u64.into();
-            let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
-
-            db_tx.set_best_block(height2, random_block_id2.into()).await.unwrap();
-
-            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().await.unwrap();
-
-            assert_eq!(height2, retrieved_best_height);
-            assert_eq!(random_block_id2, retrieved_best_id);
-        }
 
         db_tx.commit().await.unwrap();
     }
