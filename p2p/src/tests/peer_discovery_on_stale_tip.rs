@@ -30,7 +30,7 @@ use crate::{
     net::types::PeerRole,
     peer_manager::{
         self, address_groups::AddressGroup, PeerManagerConfig, PEER_MGR_DNS_RELOAD_INTERVAL,
-        PEER_MGR_HEARTBEAT_INTERVAL_MAX, PEER_MGR_HEARTBEAT_INTERVAL_MIN,
+        PEER_MGR_HEARTBEAT_INTERVAL_MAX,
     },
     sync::test_helpers::make_new_block,
     testing_utils::{TestTransportChannel, TestTransportMaker, TEST_PROTOCOL_VERSION},
@@ -113,9 +113,10 @@ async fn peer_discovery_on_stale_tip_impl(
         preserved_inbound_count_new_transactions: Default::default(),
 
         max_inbound_connections: Default::default(),
-        stale_tip_time_diff: Default::default(),
         outbound_block_relay_connection_min_age: Default::default(),
         outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
     };
     let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
@@ -250,6 +251,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let start_time = time_getter.get_time_getter().get_time();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let stale_tip_time_diff = Duration::from_secs(60 * 60);
+    let outbound_conn_min_age = Duration::from_secs(30);
+    let peer_mgr_main_loop_tick_interval = Duration::from_millis(1);
 
     let main_node_peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: 1.into(),
@@ -259,6 +262,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_block_relay_extra_count: 0.into(),
 
         stale_tip_time_diff: stale_tip_time_diff.into(),
+        outbound_full_relay_connection_min_age: outbound_conn_min_age.into(),
+        main_loop_tick_interval: peer_mgr_main_loop_tick_interval.into(),
 
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
@@ -267,7 +272,6 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
         max_inbound_connections: Default::default(),
         outbound_block_relay_connection_min_age: Default::default(),
-        outbound_full_relay_connection_min_age: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
 
@@ -280,6 +284,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_block_relay_extra_count: 0.into(),
 
         stale_tip_time_diff: stale_tip_time_diff.into(),
+        main_loop_tick_interval: peer_mgr_main_loop_tick_interval.into(),
 
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
@@ -415,16 +420,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
                 }
             }
         } else {
-            // When the tip is stale, heartbeat should happen at the minimum interval.
-            time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MIN);
-
-            // Note: sleeping even for 1 ms here will slow the test down noticeably.
-            // This is probably due to the fact that peer manager's periodic tick interval,
-            // which wakes up its event loop, is 1s, but the main loop is also woken up by
-            // various events. And the rapid advancement of the mock time here is probably helping
-            // the extra nodes "generate" those events.
-            // TODO: make peer manager's periodic tick interval configurable.
-            tokio::task::yield_now().await;
+            time_getter.advance_time(outbound_conn_min_age);
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -550,6 +547,7 @@ async fn wait_for_connections_to_impl(
         }
 
         time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 

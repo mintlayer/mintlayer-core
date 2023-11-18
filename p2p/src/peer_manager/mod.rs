@@ -114,9 +114,6 @@ pub struct PeerManagerConfig {
     /// The number of extra block relay connections that we will establish and evict regularly.
     pub outbound_block_relay_extra_count: OutboundBlockRelayExtraCount,
 
-    /// The time after which the tip will be considered stale.
-    pub stale_tip_time_diff: StaleTipTimeDiff,
-
     /// Outbound block relay connections younger than this age will not be taken into account
     /// during eviction.
     /// Note that extra block relay connections are established and evicted on a regular basis
@@ -127,6 +124,12 @@ pub struct PeerManagerConfig {
     /// during eviction.
     /// Note that extra full relay connections are established if the current tip becomes stale.
     pub outbound_full_relay_connection_min_age: OutboundFullRelayConnectionMinAge,
+
+    /// The time after which the tip will be considered stale.
+    pub stale_tip_time_diff: StaleTipTimeDiff,
+
+    /// How often the main loop should be woken up when no other events occur.
+    pub main_loop_tick_interval: MainLoopTickInterval,
 }
 
 impl PeerManagerConfig {
@@ -149,6 +152,7 @@ make_config_setting!(OutboundFullRelayExtraCount, usize, 1);
 make_config_setting!(OutboundBlockRelayCount, usize, 2);
 make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
 make_config_setting!(StaleTipTimeDiff, Duration, Duration::from_secs(30 * 60));
+make_config_setting!(MainLoopTickInterval, Duration, Duration::from_secs(1));
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -1623,7 +1627,8 @@ where
 
         let mut heartbeat_call_needed = false;
 
-        let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
+        let mut periodic_interval =
+            tokio::time::interval(*self.p2p_config.peer_manager_config.main_loop_tick_interval);
 
         if let Some(chan) = loop_started_sender {
             chan.send(());
