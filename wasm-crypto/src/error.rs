@@ -29,6 +29,28 @@ pub enum Error {
     InvalidMnemonic,
     #[error("Invalid key index, MSB bit set")]
     InvalidKeyIndex,
+    #[error("Invalid outpoint ID encoding")]
+    InvalidOutpointId,
+    #[error("Invalid addressable encoding")]
+    InvalidAddressable,
+    #[error("Invalid amount")]
+    InvalidAmount,
+    #[error("Invalid time lock encoding")]
+    InvalidTimeLock,
+    #[error("Invalid per thousand {0} valid range is [0, 1000]")]
+    InvalidPerThousedns(u16),
+    #[error("Invalid stake pool data encoding")]
+    InvalidStakePoolData,
+    #[error("Invalid Transaction output encoding")]
+    InvalidOutput,
+    #[error("Invalid Transaction input encoding")]
+    InvalidInput,
+    #[error("Invalid Transaction witness encoding")]
+    InvalidWitness,
+    #[error("Invalid transaction encoding")]
+    InvalidTransaction,
+    #[error("The number of signatures does not match the number of inputs")]
+    InvalidWitnessCount,
 }
 
 // This is required to make an error readable in JavaScript
