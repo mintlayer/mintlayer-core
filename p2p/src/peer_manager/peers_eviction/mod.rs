@@ -218,6 +218,7 @@ pub fn select_for_eviction_full_relay(
     // TODO: in bitcoin they protect full relay peers from eviction if there are no other
     // connection to their network (counting outbound-full-relay and manual peers). We should
     // probably do the same.
+    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundFullRelay,
@@ -237,6 +238,7 @@ fn select_for_eviction_outbound(
     // Give peers some time to have a chance to send blocks.
     // TODO: in bitcoin, in addition to checking MINIMUM_CONNECT_TIME, they also check whether
     // there are blocks in-flight with this peer; we should consider doing it too.
+    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
     let mut candidates = filter_old_peers(candidates, min_age);
     if candidates.len() <= max_count {
         return None;

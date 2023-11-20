@@ -1170,6 +1170,7 @@ where
                     // TODO: should we include manual peer connection in cur_outbound_conn_addr_groups,
                     // in order to avoid opening new automatic connections to their address groups?
                     // (Bitcoin does it).
+                    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
                     // Note that this change will require adjusting expected connections numbers
                     // in the "discovered_node" tests.
                 }
@@ -1202,7 +1203,8 @@ where
 
         // TODO: in bitcoin they also try to create an extra outbound full relay connection
         // to an address in a reachable network in which there are no outbound full relay or
-        // manual connections. See CConnman::MaybePickPreferredNetwork for reference.
+        // manual connections (see CConnman::MaybePickPreferredNetwork for reference).
+        // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
 
         for address in new_full_relay_conn_addresses.into_iter() {
             let addr_group = AddressGroup::from_peer_address(&address.as_peer_address());
@@ -1693,6 +1695,8 @@ where
         let mut last_time = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
 
+        // If true, the next heartbeat will be an "early one" (i.e. it will be triggered once
+        // the "min" heartbeat interval has elapsed rather than the "max").
         let mut early_heartbeat_needed = false;
 
         let mut periodic_interval =
