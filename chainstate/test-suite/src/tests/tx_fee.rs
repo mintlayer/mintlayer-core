@@ -391,7 +391,7 @@ fn delegate_staking(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn fee_from_decommissiong_stake_pool(#[case] seed: Seed) {
+fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (_, storage, mut tf) = setup(&mut rng);

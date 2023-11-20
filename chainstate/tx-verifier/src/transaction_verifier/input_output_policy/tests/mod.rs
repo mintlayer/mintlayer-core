@@ -32,6 +32,7 @@ use utxo::{Utxo, UtxosDBInMemoryImpl};
 use super::*;
 
 mod constraints_tests;
+mod homomorphism;
 mod outputs_utils;
 mod purpose_tests;
 

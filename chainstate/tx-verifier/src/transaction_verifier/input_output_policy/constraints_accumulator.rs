@@ -77,6 +77,8 @@ impl ConstrainedValueAccumulator {
         Ok(Fee(fee))
     }
 
+    // FIXME: break things down
+
     #[allow(clippy::too_many_arguments)]
     pub fn process_inputs<
         PledgeAmountGetterFn,
