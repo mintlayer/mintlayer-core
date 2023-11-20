@@ -23,13 +23,15 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, DelegationId, PoolId, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use utils::ensure;
 
 use crate::{transaction_verifier::amounts_map::CoinOrTokenId, Fee};
 
 use super::IOPolicyError;
+
+type BlockCount = u64;
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -38,7 +40,7 @@ use super::IOPolicyError;
 /// using other valid inputs and outputs in the same tx.
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: BTreeMap<CoinOrTokenId, Amount>,
-    timelock_constrained: BTreeMap<BlockDistance, Amount>,
+    timelock_constrained: BTreeMap<BlockCount, Amount>,
 }
 
 impl ConstrainedValueAccumulator {
@@ -61,13 +63,16 @@ impl ConstrainedValueAccumulator {
             .cloned()
             .unwrap_or(Amount::ZERO);
 
+        let maturity_distance: BlockCount = chain_config
+            .staking_pool_spend_maturity_distance(block_height)
+            .to_int()
+            .try_into()
+            .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
+
         let timelocked_change = self
             .timelock_constrained
             .into_iter()
-            .filter_map(|(lock, amount)| {
-                (lock <= chain_config.staking_pool_spend_maturity_distance(block_height))
-                    .then_some(amount)
-            })
+            .filter_map(|(lock, amount)| (lock <= maturity_distance).then_some(amount))
             .sum::<Option<Amount>>()
             .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
 
@@ -225,13 +230,16 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let block_distance =
-                    chain_config.as_ref().staking_pool_spend_maturity_distance(block_height);
+                let maturity_distance: BlockCount = chain_config
+                    .staking_pool_spend_maturity_distance(block_height)
+                    .to_int()
+                    .try_into()
+                    .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
                 let pledged_amount = pledge_amount_getter(*pool_id)?
                     .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
 
                 let balance =
-                    self.timelock_constrained.entry(block_distance).or_insert(Amount::ZERO);
+                    self.timelock_constrained.entry(maturity_distance).or_insert(Amount::ZERO);
                 *balance = (*balance + pledged_amount)
                     .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
             }
@@ -259,11 +267,14 @@ impl ConstrainedValueAccumulator {
                     IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
                 );
 
-                let block_distance =
-                    chain_config.as_ref().staking_pool_spend_maturity_distance(block_height);
+                let maturity_distance: BlockCount = chain_config
+                    .staking_pool_spend_maturity_distance(block_height)
+                    .to_int()
+                    .try_into()
+                    .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
 
                 let balance =
-                    self.timelock_constrained.entry(block_distance).or_insert(Amount::ZERO);
+                    self.timelock_constrained.entry(maturity_distance).or_insert(Amount::ZERO);
                 *balance = (*balance + *spend_amount)
                     .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
             }
@@ -432,17 +443,12 @@ impl ConstrainedValueAccumulator {
                 )?;
             }
             OutputTimeLock::ForBlockCount(block_count) => {
-                let block_count: i64 = (*block_count)
-                    .try_into()
-                    .map_err(|_| IOPolicyError::BlockHeightArithmeticError)?;
-                let distance = BlockDistance::from(block_count);
-
                 // find the range that can be satisfied with the current timelock
                 let mut constraint_range_iter = self
                     .timelock_constrained
                     .range_mut((
                         std::ops::Bound::Unbounded,
-                        std::ops::Bound::Included(distance),
+                        std::ops::Bound::Included(block_count),
                     ))
                     .rev()
                     .peekable();

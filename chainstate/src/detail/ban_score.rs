@@ -485,7 +485,6 @@ impl BanScore for IOPolicyError {
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 100,
-            IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
             IOPolicyError::MultipleAccountCommands => 100,
@@ -496,6 +495,7 @@ impl BanScore for IOPolicyError {
             IOPolicyError::TokenIdNotFound => 0,
             IOPolicyError::DelegationBalanceNotFound(_) => 0,
             IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
+            IOPolicyError::NegativeMaturityDistance => 100,
         }
     }
 }

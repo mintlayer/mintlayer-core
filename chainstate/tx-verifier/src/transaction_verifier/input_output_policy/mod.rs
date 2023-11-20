@@ -59,8 +59,6 @@ pub enum IOPolicyError {
     InputsAndInputsUtxosLengthMismatch(usize, usize),
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
-    #[error("Error while calculating block height; possibly an overflow")]
-    BlockHeightArithmeticError,
     #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
@@ -77,6 +75,8 @@ pub enum IOPolicyError {
     TokenIssuanceInputMustBeTransactionUtxo,
     #[error("Balance not found for delegation `{0}`")]
     DelegationBalanceNotFound(DelegationId),
+    #[error("Negative maturity distance")]
+    NegativeMaturityDistance,
 }
 
 pub fn check_reward_inputs_outputs_policy(
