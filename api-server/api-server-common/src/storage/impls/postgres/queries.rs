@@ -275,16 +275,19 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_one(
                 r#"
                 (
-                    (
-                        SELECT block_height, block_id
-                        FROM ml_blocks
-                        WHERE block_height IS NOT NULL
-                        ORDER BY block_height DESC
-                    )
-                    UNION ALL
+                    SELECT block_height, block_id
+                    FROM ml_blocks
+                    WHERE block_height IS NOT NULL
+                    ORDER BY block_height DESC
+                    LIMIT 1
+                )
+                UNION ALL
+                (
                     SELECT block_height, block_id
                     FROM ml_genesis
+                    LIMIT 1
                 )
+                ORDER BY block_height DESC
                 LIMIT 1
                 "#,
                 &[],
