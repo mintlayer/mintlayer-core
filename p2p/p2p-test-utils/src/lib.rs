@@ -150,6 +150,8 @@ pub async fn run_with_timeout<F>(future: F)
 where
     F: Future,
 {
+    // Note: "NEXTEST" is always defined by nextest when running the tests, see
+    // https://nexte.st/book/env-vars.html#environment-variables-nextest-sets
     let running_under_nextest = std::env::var("NEXTEST").is_ok();
     let custom_env_var_set = std::env::var("ML_P2P_TEST_ENABLE_EARLY_PANIC_DETECTION").is_ok();
     let can_stop_on_panic = running_under_nextest || custom_env_var_set;
