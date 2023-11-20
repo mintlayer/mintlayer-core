@@ -21,7 +21,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{TokenData, TokenId},
         AccountCommand, AccountSpending, ChainConfig, DelegationId, PoolId, Transaction, TxInput,
-        TxOutput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id},
 };
@@ -49,7 +49,7 @@ impl ConstrainedValueAccumulator {
         }
     }
 
-    /// Return accumulated amounts that are left
+    /// Return accumulated coins that are left
     pub fn consume(
         self,
         chain_config: &ChainConfig,
@@ -76,8 +76,6 @@ impl ConstrainedValueAccumulator {
 
         Ok(Fee(fee))
     }
-
-    // FIXME: break things down
 
     #[allow(clippy::too_many_arguments)]
     pub fn process_inputs<
@@ -109,154 +107,32 @@ impl ConstrainedValueAccumulator {
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
                 TxInput::Utxo(outpoint) => {
-                    match input_utxo
+                    let input_utxo = input_utxo
                         .as_ref()
-                        .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?
-                    {
-                        TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
-                            match value {
-                                OutputValue::Coin(amount) => insert_or_increase(
-                                    &mut self.unconstrained_value,
-                                    CoinOrTokenId::Coin,
-                                    *amount,
-                                )?,
-                                OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                                    TokenData::TokenTransfer(transfer) => insert_or_increase(
-                                        &mut self.unconstrained_value,
-                                        CoinOrTokenId::TokenId(transfer.token_id),
-                                        transfer.amount,
-                                    )?,
-                                    TokenData::TokenIssuance(issuance) => {
-                                        let issuance_tx_id = input
-                                            .utxo_outpoint()
-                                            .ok_or(IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo)?
-                                            .source_id()
-                                            .get_tx_id()
-                                            .cloned()
-                                            .ok_or(IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo)?;
-                                        let token_id = issuance_token_id_getter(issuance_tx_id)?
-                                            .ok_or(IOPolicyError::TokenIdNotFound)?;
-                                        insert_or_increase(
-                                            &mut self.unconstrained_value,
-                                            CoinOrTokenId::TokenId(token_id),
-                                            issuance.amount_to_issue,
-                                        )?;
-                                    }
-                                    TokenData::NftIssuance(_) => {
-                                        let issuance_tx_id = input
-                                            .utxo_outpoint()
-                                            .ok_or(IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo)?
-                                            .source_id()
-                                            .get_tx_id()
-                                            .cloned()
-                                            .ok_or(IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo)?;
-                                        let token_id = issuance_token_id_getter(issuance_tx_id)?
-                                            .ok_or(IOPolicyError::TokenIdNotFound)?;
-                                        insert_or_increase(
-                                            &mut self.unconstrained_value,
-                                            CoinOrTokenId::TokenId(token_id),
-                                            Amount::from_atoms(1),
-                                        )?;
-                                    }
-                                },
-                                OutputValue::TokenV1(token_id, amount) => insert_or_increase(
-                                    &mut self.unconstrained_value,
-                                    CoinOrTokenId::TokenId(*token_id),
-                                    *amount,
-                                )?,
-                            };
-                        }
-                        TxOutput::CreateDelegationId(..)
-                        | TxOutput::IssueFungibleToken(..)
-                        | TxOutput::Burn(_)
-                        | TxOutput::DataDeposit(_) => {
-                            return Err(IOPolicyError::SpendingNonSpendableOutput(
-                                outpoint.clone(),
-                            ));
-                        }
-                        TxOutput::IssueNft(token_id, _, _) => {
-                            insert_or_increase(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::TokenId(*token_id),
-                                Amount::from_atoms(1),
-                            )?;
-                        }
-                        TxOutput::DelegateStaking(coins, _) => {
-                            insert_or_increase(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::Coin,
-                                *coins,
-                            )?;
-                        }
-                        TxOutput::CreateStakePool(pool_id, _)
-                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            let block_distance = chain_config
-                                .as_ref()
-                                .staking_pool_spend_maturity_distance(block_height);
-                            let pledged_amount = pledge_amount_getter(*pool_id)?
-                                .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
-
-                            let balance = self
-                                .timelock_constrained
-                                .entry(block_distance)
-                                .or_insert(Amount::ZERO);
-                            *balance = (*balance + pledged_amount)
-                                .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-                        }
-                    };
+                        .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?;
+                    self.process_input_utxo(
+                        chain_config,
+                        block_height,
+                        &pledge_amount_getter,
+                        &issuance_token_id_getter,
+                        outpoint.clone(),
+                        input_utxo,
+                    )?;
                 }
                 TxInput::Account(outpoint) => {
-                    match outpoint.account() {
-                        AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
-                            let delegation_balance = delegation_balance_getter(*delegation_id)?
-                                .ok_or(IOPolicyError::DelegationBalanceNotFound(*delegation_id))?;
-                            ensure!(
-                                *spend_amount <= delegation_balance,
-                                IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
-                            );
-
-                            let block_distance = chain_config
-                                .as_ref()
-                                .staking_pool_spend_maturity_distance(block_height);
-
-                            let balance = self
-                                .timelock_constrained
-                                .entry(block_distance)
-                                .or_insert(Amount::ZERO);
-                            *balance = (*balance + *spend_amount)
-                                .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-                        }
-                    };
+                    self.process_input_account(
+                        chain_config,
+                        block_height,
+                        outpoint.account(),
+                        &delegation_balance_getter,
+                    )?;
                 }
                 TxInput::AccountCommand(_, command) => {
-                    match command {
-                        AccountCommand::MintTokens(token_id, amount) => {
-                            total_fee_deducted = (total_fee_deducted
-                                + chain_config.token_min_supply_change_fee())
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                    let fee_to_deduct =
+                        self.process_input_account_command(chain_config, command)?;
 
-                            insert_or_increase(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::TokenId(*token_id),
-                                *amount,
-                            )?;
-                        }
-                        AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
-                            total_fee_deducted = (total_fee_deducted
-                                + chain_config.token_min_supply_change_fee())
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-                        }
-                        AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                            total_fee_deducted = (total_fee_deducted
-                                + chain_config.token_min_freeze_fee())
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-                        }
-                        AccountCommand::ChangeTokenAuthority(_, _) => {
-                            total_fee_deducted = (total_fee_deducted
-                                + chain_config.token_min_change_authority_fee())
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-                        }
-                    };
+                    total_fee_deducted = (total_fee_deducted + fee_to_deduct)
+                        .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
                 }
             }
         }
@@ -269,6 +145,157 @@ impl ConstrainedValueAccumulator {
         )?;
 
         Ok(())
+    }
+
+    fn process_input_utxo<PledgeAmountGetterFn, IssuanceTokenIdGetterFn>(
+        &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        pledge_amount_getter: &PledgeAmountGetterFn,
+        issuance_token_id_getter: &IssuanceTokenIdGetterFn,
+        outpoint: UtxoOutPoint,
+        input_utxo: &TxOutput,
+    ) -> Result<(), IOPolicyError>
+    where
+        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
+        IssuanceTokenIdGetterFn: Fn(Id<Transaction>) -> Result<Option<TokenId>, IOPolicyError>,
+    {
+        match input_utxo {
+            TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
+                match value {
+                    OutputValue::Coin(amount) => insert_or_increase(
+                        &mut self.unconstrained_value,
+                        CoinOrTokenId::Coin,
+                        *amount,
+                    )?,
+                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                        TokenData::TokenTransfer(transfer) => insert_or_increase(
+                            &mut self.unconstrained_value,
+                            CoinOrTokenId::TokenId(transfer.token_id),
+                            transfer.amount,
+                        )?,
+                        TokenData::TokenIssuance(issuance) => {
+                            let issuance_tx_id =
+                                outpoint.source_id().get_tx_id().cloned().ok_or(
+                                    IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo,
+                                )?;
+                            let token_id = issuance_token_id_getter(issuance_tx_id)?
+                                .ok_or(IOPolicyError::TokenIdNotFound)?;
+                            insert_or_increase(
+                                &mut self.unconstrained_value,
+                                CoinOrTokenId::TokenId(token_id),
+                                issuance.amount_to_issue,
+                            )?;
+                        }
+                        TokenData::NftIssuance(_) => {
+                            let issuance_tx_id =
+                                outpoint.source_id().get_tx_id().cloned().ok_or(
+                                    IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo,
+                                )?;
+                            let token_id = issuance_token_id_getter(issuance_tx_id)?
+                                .ok_or(IOPolicyError::TokenIdNotFound)?;
+                            insert_or_increase(
+                                &mut self.unconstrained_value,
+                                CoinOrTokenId::TokenId(token_id),
+                                Amount::from_atoms(1),
+                            )?;
+                        }
+                    },
+                    OutputValue::TokenV1(token_id, amount) => insert_or_increase(
+                        &mut self.unconstrained_value,
+                        CoinOrTokenId::TokenId(*token_id),
+                        *amount,
+                    )?,
+                };
+            }
+            TxOutput::CreateDelegationId(..)
+            | TxOutput::IssueFungibleToken(..)
+            | TxOutput::Burn(_)
+            | TxOutput::DataDeposit(_) => {
+                return Err(IOPolicyError::SpendingNonSpendableOutput(outpoint.clone()));
+            }
+            TxOutput::IssueNft(token_id, _, _) => {
+                insert_or_increase(
+                    &mut self.unconstrained_value,
+                    CoinOrTokenId::TokenId(*token_id),
+                    Amount::from_atoms(1),
+                )?;
+            }
+            TxOutput::DelegateStaking(coins, _) => {
+                insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
+            }
+            TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                let block_distance =
+                    chain_config.as_ref().staking_pool_spend_maturity_distance(block_height);
+                let pledged_amount = pledge_amount_getter(*pool_id)?
+                    .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
+
+                let balance =
+                    self.timelock_constrained.entry(block_distance).or_insert(Amount::ZERO);
+                *balance = (*balance + pledged_amount)
+                    .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+            }
+        };
+
+        Ok(())
+    }
+
+    fn process_input_account<DelegationBalanceGetterFn>(
+        &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        account: &AccountSpending,
+        delegation_balance_getter: &DelegationBalanceGetterFn,
+    ) -> Result<(), IOPolicyError>
+    where
+        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, IOPolicyError>,
+    {
+        match account {
+            AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
+                let delegation_balance = delegation_balance_getter(*delegation_id)?
+                    .ok_or(IOPolicyError::DelegationBalanceNotFound(*delegation_id))?;
+                ensure!(
+                    *spend_amount <= delegation_balance,
+                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
+                );
+
+                let block_distance =
+                    chain_config.as_ref().staking_pool_spend_maturity_distance(block_height);
+
+                let balance =
+                    self.timelock_constrained.entry(block_distance).or_insert(Amount::ZERO);
+                *balance = (*balance + *spend_amount)
+                    .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+            }
+        };
+
+        Ok(())
+    }
+
+    fn process_input_account_command(
+        &mut self,
+        chain_config: &ChainConfig,
+        command: &AccountCommand,
+    ) -> Result<Amount, IOPolicyError> {
+        match command {
+            AccountCommand::MintTokens(token_id, amount) => {
+                insert_or_increase(
+                    &mut self.unconstrained_value,
+                    CoinOrTokenId::TokenId(*token_id),
+                    *amount,
+                )?;
+                Ok(chain_config.token_min_supply_change_fee())
+            }
+            AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
+                Ok(chain_config.token_min_supply_change_fee())
+            }
+            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
+                Ok(chain_config.token_min_freeze_fee())
+            }
+            AccountCommand::ChangeTokenAuthority(_, _) => {
+                Ok(chain_config.token_min_change_authority_fee())
+            }
+        }
     }
 
     pub fn process_outputs(
@@ -333,100 +360,37 @@ impl ConstrainedValueAccumulator {
                 TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => {
                     /* do nothing as these outputs cannot produce values */
                 }
-                TxOutput::LockThenTransfer(value, _, timelock) => {
-                    match value {
-                        OutputValue::Coin(coins) => {
-                            match timelock {
-                                OutputTimeLock::UntilHeight(_)
-                                | OutputTimeLock::UntilTime(_)
-                                | OutputTimeLock::ForSeconds(_) => {
-                                    decrease_or(
-                                        &mut self.unconstrained_value,
-                                        CoinOrTokenId::Coin,
-                                        *coins,
-                                        IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-                                    )?;
-                                }
-                                OutputTimeLock::ForBlockCount(block_count) => {
-                                    let block_count: i64 = (*block_count)
-                                        .try_into()
-                                        .map_err(|_| IOPolicyError::BlockHeightArithmeticError)?;
-                                    let distance = BlockDistance::from(block_count);
-
-                                    // find the range that can be satisfied with the current timelock
-                                    let mut constraint_range_iter = self
-                                        .timelock_constrained
-                                        .range_mut((
-                                            std::ops::Bound::Unbounded,
-                                            std::ops::Bound::Included(distance),
-                                        ))
-                                        .rev()
-                                        .peekable();
-
-                                    // iterate over the range until current output coins are completely used
-                                    // or all suitable constraints are satisfied
-                                    let mut output_coins = *coins;
-                                    while output_coins > Amount::ZERO {
-                                        match constraint_range_iter.peek_mut() {
-                                            Some((_, constrained_coins)) => {
-                                                if output_coins > **constrained_coins {
-                                                    // satisfy current constraint completely and move on to the next one
-                                                    output_coins = (output_coins
-                                                        - **constrained_coins)
-                                                        .expect("cannot fail");
-                                                    **constrained_coins = Amount::ZERO;
-                                                    constraint_range_iter.next();
-                                                } else {
-                                                    // satisfy current constraint partially and exit the loop
-                                                    **constrained_coins = (**constrained_coins
-                                                        - output_coins)
-                                                        .expect("cannot fail");
-                                                    output_coins = Amount::ZERO;
-                                                }
-                                            }
-                                            None => {
-                                                // if the output cannot satisfy any constraints then use it as unconstrained
-                                                decrease_or(
-                                                    &mut self.unconstrained_value,
-                                                    CoinOrTokenId::Coin,
-                                                    *coins,
-                                                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-                                                )?;
-                                                output_coins = Amount::ZERO;
-                                            }
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                        OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                            TokenData::TokenTransfer(transfer) => {
-                                decrease_or(
-                                    &mut self.unconstrained_value,
-                                    CoinOrTokenId::TokenId(transfer.token_id),
-                                    transfer.amount,
-                                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(
-                                        transfer.token_id,
-                                    )),
-                                )?;
-                            }
-                            TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                                decrease_or(
-                                    &mut self.unconstrained_value,
-                                    CoinOrTokenId::Coin,
-                                    chain_config.token_min_issuance_fee(),
-                                    IOPolicyError::AttemptToViolateFeeRequirements,
-                                )?;
-                            }
-                        },
-                        OutputValue::TokenV1(token_id, amount) => decrease_or(
-                            &mut self.unconstrained_value,
-                            CoinOrTokenId::TokenId(*token_id),
-                            *amount,
-                            IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(*token_id)),
-                        )?,
+                TxOutput::LockThenTransfer(value, _, timelock) => match value {
+                    OutputValue::Coin(coins) => {
+                        self.process_output_timelock(timelock, *coins)?;
                     }
-                }
+                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                        TokenData::TokenTransfer(transfer) => {
+                            decrease_or(
+                                &mut self.unconstrained_value,
+                                CoinOrTokenId::TokenId(transfer.token_id),
+                                transfer.amount,
+                                IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(
+                                    transfer.token_id,
+                                )),
+                            )?;
+                        }
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
+                            decrease_or(
+                                &mut self.unconstrained_value,
+                                CoinOrTokenId::Coin,
+                                chain_config.token_min_issuance_fee(),
+                                IOPolicyError::AttemptToViolateFeeRequirements,
+                            )?;
+                        }
+                    },
+                    OutputValue::TokenV1(token_id, amount) => decrease_or(
+                        &mut self.unconstrained_value,
+                        CoinOrTokenId::TokenId(*token_id),
+                        *amount,
+                        IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(*token_id)),
+                    )?,
+                },
                 TxOutput::DataDeposit(_) => {
                     decrease_or(
                         &mut self.unconstrained_value,
@@ -445,6 +409,79 @@ impl ConstrainedValueAccumulator {
                 }
             };
         }
+
+        Ok(())
+    }
+
+    fn process_output_timelock(
+        &mut self,
+        timelock: &OutputTimeLock,
+        locked_coins: Amount,
+    ) -> Result<(), IOPolicyError> {
+        match timelock {
+            OutputTimeLock::UntilHeight(_)
+            | OutputTimeLock::UntilTime(_)
+            | OutputTimeLock::ForSeconds(_) => {
+                decrease_or(
+                    &mut self.unconstrained_value,
+                    CoinOrTokenId::Coin,
+                    locked_coins,
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin,
+                    ),
+                )?;
+            }
+            OutputTimeLock::ForBlockCount(block_count) => {
+                let block_count: i64 = (*block_count)
+                    .try_into()
+                    .map_err(|_| IOPolicyError::BlockHeightArithmeticError)?;
+                let distance = BlockDistance::from(block_count);
+
+                // find the range that can be satisfied with the current timelock
+                let mut constraint_range_iter = self
+                    .timelock_constrained
+                    .range_mut((
+                        std::ops::Bound::Unbounded,
+                        std::ops::Bound::Included(distance),
+                    ))
+                    .rev()
+                    .peekable();
+
+                // iterate over the range until current output coins are completely used
+                // or all suitable constraints are satisfied
+                let mut output_coins = locked_coins;
+                while output_coins > Amount::ZERO {
+                    match constraint_range_iter.peek_mut() {
+                        Some((_, constrained_coins)) => {
+                            if output_coins > **constrained_coins {
+                                // satisfy current constraint completely and move on to the next one
+                                output_coins =
+                                    (output_coins - **constrained_coins).expect("cannot fail");
+                                **constrained_coins = Amount::ZERO;
+                                constraint_range_iter.next();
+                            } else {
+                                // satisfy current constraint partially and exit the loop
+                                **constrained_coins =
+                                    (**constrained_coins - output_coins).expect("cannot fail");
+                                output_coins = Amount::ZERO;
+                            }
+                        }
+                        None => {
+                            // if the output cannot satisfy any constraints then use it as unconstrained
+                            decrease_or(
+                                &mut self.unconstrained_value,
+                                CoinOrTokenId::Coin,
+                                locked_coins,
+                                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                                    CoinOrTokenId::Coin,
+                                ),
+                            )?;
+                            output_coins = Amount::ZERO;
+                        }
+                    };
+                }
+            }
+        };
 
         Ok(())
     }
@@ -484,608 +521,4 @@ fn decrease_or(
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use common::{
-        chain::{
-            config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-            timelock::OutputTimeLock, AccountNonce, ConsensusUpgrade, DelegationId, Destination,
-            NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput, UtxoOutPoint,
-        },
-        primitives::{per_thousand::PerThousand, Amount, Id, H256},
-    };
-    use crypto::{
-        random::{CryptoRng, Rng},
-        vrf::{VRFKeyKind, VRFPrivateKey},
-    };
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
-
-    fn create_stake_pool_data(
-        rng: &mut (impl Rng + CryptoRng),
-        atoms_to_stake: u128,
-    ) -> StakePoolData {
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-        StakePoolData::new(
-            Amount::from_atoms(atoms_to_stake),
-            Destination::AnyoneCanSpend,
-            vrf_pub_key,
-            Destination::AnyoneCanSpend,
-            PerThousand::new(0).unwrap(),
-            Amount::ZERO,
-        )
-    }
-
-    // Check that it's allowed to pay fees from decommissioning a pool
-    // by providing smaller total outputs than inputs
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn allow_fees_from_decommission(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::regtest_with_pos())
-            .build();
-        let required_maturity_distance =
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
-
-        let pool_id = PoolId::new(H256::zero());
-        let staked_atoms = rng.gen_range(100..1000);
-        let fee_atoms = rng.gen_range(1..100);
-        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
-
-        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-        let delegation_balance_getter = |_| Ok(None);
-        let issuance_token_id_getter = |_| unreachable!();
-
-        let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-            0,
-        ))];
-        let input_utxos = vec![Some(TxOutput::CreateStakePool(
-            pool_id,
-            Box::new(stake_pool_data),
-        ))];
-
-        let outputs = vec![TxOutput::LockThenTransfer(
-            OutputValue::Coin(Amount::from_atoms(staked_atoms - fee_atoms)),
-            Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
-        )];
-
-        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                BlockHeight::new(1),
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                &inputs,
-                &input_utxos,
-            )
-            .unwrap();
-
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-
-        assert_eq!(
-            constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
-            Fee(Amount::from_atoms(fee_atoms))
-        );
-    }
-
-    // Check that it's allowed to pay fees from spending a delegation share
-    // by providing smaller total outputs than inputs
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn allow_fees_from_spend_share(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::regtest_with_pos())
-            .build();
-        let required_maturity_distance =
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
-
-        let delegation_id = DelegationId::new(H256::zero());
-        let delegated_atoms = rng.gen_range(100..1000);
-        let fee_atoms = rng.gen_range(1..100);
-
-        let pledge_getter = |_| Ok(None);
-        let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
-        let issuance_token_id_getter = |_| unreachable!();
-
-        let inputs_utxos = vec![None];
-        let inputs = vec![TxInput::from_account(
-            AccountNonce::new(0),
-            AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
-        )];
-
-        let outputs = vec![TxOutput::LockThenTransfer(
-            OutputValue::Coin(Amount::from_atoms(delegated_atoms - fee_atoms)),
-            Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
-        )];
-
-        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                BlockHeight::new(1),
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                &inputs,
-                &inputs_utxos,
-            )
-            .unwrap();
-
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-
-        assert_eq!(
-            constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
-            Fee(Amount::from_atoms(fee_atoms))
-        );
-    }
-
-    // Create a staking pool.
-    // Try to decommission and spend a utxo in a tx. Outputs of a tx are not locked and has more coins than input utxo.
-    // Check that it's a timelock violation.
-    // Next decommission a pool and spend a utxo. Outputs are not locked but are equal to utxo value.
-    // Check it's ok.
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::regtest_with_pos())
-            .build();
-
-        let pool_id = PoolId::new(H256::zero());
-        let staked_atoms = rng.gen_range(100..1000);
-        let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
-        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
-
-        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-        let delegation_balance_getter = |_| Ok(None);
-        let issuance_token_id_getter = |_| unreachable!();
-
-        let inputs = vec![
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                0,
-            ),
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                1,
-            ),
-        ];
-        let inputs_utxos = vec![
-            Some(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            )),
-            Some(TxOutput::Transfer(
-                OutputValue::Coin(less_than_staked_amount),
-                Destination::AnyoneCanSpend,
-            )),
-        ];
-
-        // it's an error if output includes staked coins
-        let outputs = vec![TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(staked_atoms)),
-            Destination::AnyoneCanSpend,
-        )];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            constraints_accumulator
-                .process_inputs(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    pledge_getter,
-                    delegation_balance_getter,
-                    issuance_token_id_getter,
-                    &inputs,
-                    &inputs_utxos,
-                )
-                .unwrap();
-
-            let result =
-                constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
-            assert_eq!(
-                result,
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-            );
-        }
-
-        // it's not an error if output does not include staked coins
-        let outputs = vec![TxOutput::Transfer(
-            OutputValue::Coin(less_than_staked_amount),
-            Destination::AnyoneCanSpend,
-        )];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            constraints_accumulator
-                .process_inputs(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    pledge_getter,
-                    delegation_balance_getter,
-                    issuance_token_id_getter,
-                    &inputs,
-                    &inputs_utxos,
-                )
-                .unwrap();
-
-            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-        }
-    }
-
-    // Create a staking pool.
-    // Try to decommission a pool by providing locked outputs with not enough block count.
-    // Check it's an error.
-    // Then create and check valid case.
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::regtest_with_pos())
-            .build();
-        let required_maturity_distance =
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
-
-        let pool_id = PoolId::new(H256::zero());
-        let staked_atoms = rng.gen_range(100..1000);
-        let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
-        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
-
-        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-        let delegation_balance_getter = |_| Ok(None);
-        let issuance_token_id_getter = |_| unreachable!();
-
-        let inputs = vec![
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                0,
-            ),
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                1,
-            ),
-        ];
-        let inputs_utxos = vec![
-            Some(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            )),
-            Some(TxOutput::Transfer(
-                OutputValue::Coin(less_than_staked_amount),
-                Destination::AnyoneCanSpend,
-            )),
-        ];
-
-        let outputs = vec![
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
-            ),
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(10)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64 - 1),
-            ),
-            TxOutput::Transfer(
-                OutputValue::Coin(less_than_staked_amount),
-                Destination::AnyoneCanSpend,
-            ),
-        ];
-
-        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                BlockHeight::new(1),
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                &inputs,
-                &inputs_utxos,
-            )
-            .unwrap();
-
-        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
-        assert_eq!(
-            result,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-        );
-
-        // valid case
-        let outputs = vec![
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
-            ),
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(10)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
-            ),
-            TxOutput::Transfer(
-                OutputValue::Coin(less_than_staked_amount),
-                Destination::AnyoneCanSpend,
-            ),
-        ];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            constraints_accumulator
-                .process_inputs(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    pledge_getter,
-                    delegation_balance_getter,
-                    issuance_token_id_getter,
-                    &inputs,
-                    &inputs_utxos,
-                )
-                .unwrap();
-
-            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-        }
-    }
-
-    // Create a stake pool with delegation.
-    // Decommission the pool and spend delegation share in the same tx.
-    // First create a tx with output where outputs are locked for the smaller block count.
-    // Check an error.
-    // Then check that timelock constraints can be satisfied with a single output in a valid case.
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn check_timelock_saturation(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let required_decommission_maturity = 100;
-        let required_spend_share_maturity = 200;
-        let upgrades = vec![(
-            BlockHeight::new(0),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(required_spend_share_maturity.into())
-                    .build(),
-            },
-        )];
-        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(net_upgrades)
-            .build();
-
-        let pool_id = PoolId::new(H256::zero());
-        let staked_atoms = rng.gen_range(100..1000);
-        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
-
-        let delegation_id = DelegationId::new(H256::zero());
-        let delegated_atoms = rng.gen_range(1..1000);
-
-        let transferred_atoms = rng.gen_range(100..1000);
-
-        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-        let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
-        let issuance_token_id_getter = |_| unreachable!();
-
-        let inputs = vec![
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                0,
-            ),
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-                1,
-            ),
-            TxInput::from_account(
-                AccountNonce::new(0),
-                AccountSpending::DelegationBalance(
-                    delegation_id,
-                    Amount::from_atoms(delegated_atoms),
-                ),
-            ),
-        ];
-        let inputs_utxos = vec![
-            Some(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            )),
-            Some(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(transferred_atoms)),
-                Destination::AnyoneCanSpend,
-            )),
-            None,
-        ];
-
-        let outputs = vec![
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(
-                    required_decommission_maturity as u64 + required_spend_share_maturity as u64
-                        - 1,
-                ),
-            ),
-            TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(transferred_atoms)),
-                Destination::AnyoneCanSpend,
-            ),
-        ];
-
-        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
-        assert_eq!(
-            result,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-        );
-
-        // valid case
-        let outputs = vec![
-            TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
-                Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(
-                    required_decommission_maturity as u64 + required_spend_share_maturity as u64,
-                ),
-            ),
-            TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(transferred_atoms)),
-                Destination::AnyoneCanSpend,
-            ),
-        ];
-
-        let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                BlockHeight::new(1),
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                &inputs,
-                &inputs_utxos,
-            )
-            .unwrap();
-
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-
-        assert_eq!(
-            constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
-            Fee(Amount::ZERO)
-        );
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::regtest_with_pos())
-            .build();
-
-        let delegation_id = DelegationId::new(H256::zero());
-        let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
-        let overspent_amount = (delegation_balance + Amount::from_atoms(1)).unwrap();
-
-        let pledge_getter = |_| Ok(None);
-        let delegation_balance_getter = |_| Ok(Some(delegation_balance));
-        let issuance_token_id_getter = |_| unreachable!();
-
-        // it's an error to spend more the balance
-        let inputs = vec![TxInput::from_account(
-            AccountNonce::new(0),
-            AccountSpending::DelegationBalance(delegation_id, overspent_amount),
-        )];
-        let inputs_utxos = vec![None];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            let result = constraints_accumulator.process_inputs(
-                &chain_config,
-                BlockHeight::new(1),
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                &inputs,
-                &inputs_utxos,
-            );
-
-            assert_eq!(
-                result.unwrap_err(),
-                IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
-            );
-        }
-
-        // overspend in output
-        let inputs = vec![TxInput::from_account(
-            AccountNonce::new(0),
-            AccountSpending::DelegationBalance(delegation_id, delegation_balance),
-        )];
-        let outputs = vec![TxOutput::LockThenTransfer(
-            OutputValue::Coin(overspent_amount),
-            Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(
-                chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int()
-                    as u64,
-            ),
-        )];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            constraints_accumulator
-                .process_inputs(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    pledge_getter,
-                    delegation_balance_getter,
-                    issuance_token_id_getter,
-                    &inputs,
-                    &inputs_utxos,
-                )
-                .unwrap();
-
-            let result = constraints_accumulator.process_outputs(&chain_config, &outputs);
-            assert_eq!(
-                result.unwrap_err(),
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
-            );
-        }
-
-        // valid case
-        let inputs = vec![TxInput::from_account(
-            AccountNonce::new(0),
-            AccountSpending::DelegationBalance(delegation_id, delegation_balance),
-        )];
-        let outputs = vec![TxOutput::LockThenTransfer(
-            OutputValue::Coin(delegation_balance),
-            Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(
-                chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int()
-                    as u64,
-            ),
-        )];
-
-        {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
-            constraints_accumulator
-                .process_inputs(
-                    &chain_config,
-                    BlockHeight::new(1),
-                    pledge_getter,
-                    delegation_balance_getter,
-                    issuance_token_id_getter,
-                    &inputs,
-                    &inputs_utxos,
-                )
-                .unwrap();
-
-            constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
-        }
-    }
 }
