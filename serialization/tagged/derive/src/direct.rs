@@ -25,11 +25,11 @@ struct VariantInfo<'a> {
 }
 
 impl<'a> VariantInfo<'a> {
-    fn new(the_enum: &'a syn::ItemEnum, variant: &'a Variant) -> VariantInfo<'a> {
+    fn new(the_enum: &'a syn::ItemEnum, variant: &'a Variant) -> Self {
         Self { the_enum, variant }
     }
 
-    fn collect(the_enum: &'a syn::ItemEnum) -> Vec<VariantInfo<'a>> {
+    fn collect(the_enum: &'a syn::ItemEnum) -> Vec<Self> {
         the_enum.variants.iter().map(|variant| Self::new(the_enum, variant)).collect()
     }
 

@@ -50,7 +50,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
             PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         >,
-    ) -> Result<ApiServerPostgresTransactionalRo<'a>, ApiServerStorageError> {
+    ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
             connection: Some(connection),
             finished: false,
@@ -165,7 +165,7 @@ impl<'a> ApiServerPostgresTransactionalRw<'a> {
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
             PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         >,
-    ) -> Result<ApiServerPostgresTransactionalRw<'a>, ApiServerStorageError> {
+    ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
             connection: Some(connection),
             finished: false,
