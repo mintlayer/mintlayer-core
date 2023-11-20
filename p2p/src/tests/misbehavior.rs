@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
-use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
+use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
 use test_utils::assert_matches;
 
 use crate::{
@@ -112,15 +112,15 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_tcp() {
-    test_timeout(unexpected_handshake_message::<TestTransportTcp>()).await;
+    run_with_timeout(unexpected_handshake_message::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_channels() {
-    test_timeout(unexpected_handshake_message::<TestTransportChannel>()).await;
+    run_with_timeout(unexpected_handshake_message::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_noise() {
-    test_timeout(unexpected_handshake_message::<TestTransportNoise>()).await;
+    run_with_timeout(unexpected_handshake_message::<TestTransportNoise>()).await;
 }

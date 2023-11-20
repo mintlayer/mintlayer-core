@@ -4563,6 +4563,7 @@ dependencies = [
  "common",
  "crypto",
  "ctor",
+ "logging",
  "mempool",
  "once_cell",
  "portpicker",

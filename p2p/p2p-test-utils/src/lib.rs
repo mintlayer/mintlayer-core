@@ -27,6 +27,7 @@ use common::{
     primitives::Idable,
     time_getter::TimeGetter,
 };
+use logging::log;
 use mempool::MempoolHandle;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
@@ -137,15 +138,34 @@ pub const LONG_TIMEOUT: Duration = Duration::from_secs(600);
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// This function can be called on the entire async test's future to ensure that it completes
-/// in a reasonable time; it also ensures that the future will complete once a panic occurs anywhere.
-pub async fn test_timeout<F>(future: F)
+/// in a reasonable time.
+///
+/// It can also ensure that the future will complete early once a panic occurs anywhere; this
+/// may be important when debugging sporadically failing tests that can only be debugged by
+/// examining the logs (and running a test for LONG_TIMEOUT time may produce an enormous amount
+/// of logs). Unfortunately, this mechanism will not work properly if multiple tests are failing
+/// simultaneously or if there is a "should_panic" test. So, we only enable it if running under
+/// 'nextest' (which runs each test in a separate process) or if forced via a custom env var.
+pub async fn run_with_timeout<F>(future: F)
 where
     F: Future,
 {
+    let running_under_nextest = std::env::var("NEXTEST").is_ok();
+    let custom_env_var_set = std::env::var("ML_P2P_TEST_ENABLE_EARLY_PANIC_DETECTION").is_ok();
+    let can_stop_on_panic = running_under_nextest || custom_env_var_set;
+
     let future_or_panic = async {
         tokio::select! {
-            () = get_panic_notification() => {},
-            _ = future => {},
+            () = get_panic_notification(), if can_stop_on_panic => {
+                // Note that this line may not be printed to the log after all.
+                // The reason is that (it looks like) tokio::select cancels (drops) the other
+                // future first, before entering the handler for the completed one. And dropping
+                // the test's future may panic itself, e.g. because the subsystem manager's handle
+                // hasn't been joined.
+                log::debug!("Stopping current test because a panic has been detected");
+            },
+            _ = future => {
+            },
         }
     };
 

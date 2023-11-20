@@ -21,7 +21,7 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
+use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 
@@ -69,7 +69,7 @@ async fn peer_discovery_on_stale_tip(
     #[values(true, false)] start_in_ibd: bool,
     #[values(true, false)] use_extra_block_relay_peers: bool,
 ) {
-    test_timeout(peer_discovery_on_stale_tip_impl(
+    run_with_timeout(peer_discovery_on_stale_tip_impl(
         seed,
         start_in_ibd,
         use_extra_block_relay_peers,
@@ -242,7 +242,7 @@ async fn peer_discovery_on_stale_tip_impl(
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn new_full_relay_connections_on_stale_tip(#[case] seed: Seed) {
-    test_timeout(new_full_relay_connections_on_stale_tip_impl(seed)).await;
+    run_with_timeout(new_full_relay_connections_on_stale_tip_impl(seed)).await;
 }
 
 async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {

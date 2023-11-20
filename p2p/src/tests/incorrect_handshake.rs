@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use p2p_test_utils::{test_timeout, P2pBasicTestTimeGetter};
+use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
 use test_utils::assert_matches;
 
 use crate::{
@@ -89,17 +89,17 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_outgoing_tcp() {
-    test_timeout(incorrect_handshake_outgoing::<TestTransportTcp>()).await;
+    run_with_timeout(incorrect_handshake_outgoing::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_outgoing_channels() {
-    test_timeout(incorrect_handshake_outgoing::<TestTransportChannel>()).await;
+    run_with_timeout(incorrect_handshake_outgoing::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_outgoing_noise() {
-    test_timeout(incorrect_handshake_outgoing::<TestTransportNoise>()).await;
+    run_with_timeout(incorrect_handshake_outgoing::<TestTransportNoise>()).await;
 }
 
 async fn incorrect_handshake_incoming<TTM>()
@@ -147,15 +147,15 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_incoming_tcp() {
-    test_timeout(incorrect_handshake_incoming::<TestTransportTcp>()).await;
+    run_with_timeout(incorrect_handshake_incoming::<TestTransportTcp>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_incoming_channels() {
-    test_timeout(incorrect_handshake_incoming::<TestTransportChannel>()).await;
+    run_with_timeout(incorrect_handshake_incoming::<TestTransportChannel>()).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incorrect_handshake_incoming_noise() {
-    test_timeout(incorrect_handshake_incoming::<TestTransportNoise>()).await;
+    run_with_timeout(incorrect_handshake_incoming::<TestTransportNoise>()).await;
 }

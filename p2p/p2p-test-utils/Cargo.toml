@@ -11,6 +11,7 @@ chainstate-storage = { path = "../../chainstate/storage" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
+logging = { path = "../../logging/" }
 mempool = { path = "../../mempool/" }
 subsystem = { path = "../../subsystem/" }
 test-utils = { path = "../../test-utils" }

@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use once_cell::sync::Lazy;
 use tokio::sync::Notify;
 
-static PANIC_NOTIFICATION: Lazy<Arc<Notify>> = Lazy::new(|| Arc::new(Notify::new()));
+use logging::log;
+
+static PANIC_NOTIFICATION: Lazy<Notify> = Lazy::new(Notify::new);
 
 // If a panic occurs inside a thread or tokio task, the application won't be aborted until
 // the corresponding handle is joined. On the other hand, in p2p tests we often wait for a
@@ -32,6 +32,8 @@ pub async fn get_panic_notification() {
 fn setup_panic_handling() {
     let old_panic_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
+        log::error!("A panic occurred: {panic_info}");
+
         PANIC_NOTIFICATION.notify_one();
         old_panic_hook(panic_info);
     }));
