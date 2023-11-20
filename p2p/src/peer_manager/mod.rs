@@ -248,15 +248,23 @@ where
 
     peer_eviction_random_state: peers_eviction::RandomState,
 
-    /// Last time when a new tip was added to the chainstate.
-    last_chainstate_tip_block_time: Time,
-
     /// PeerManager's observer for use by tests.
     observer: Option<Box<dyn Observer + Send>>,
 
     /// Normally, this will be DefaultDnsSeed, which performs the actual address lookup, but tests can
     /// substitute it with a mock implementation.
     dns_seed: Box<dyn DnsSeed>,
+
+    /// The time when PeerManager was initialized.
+    init_time: Time,
+    /// Last time when a new tip was added to the chainstate.
+    last_chainstate_tip_block_time: Option<Time>,
+    /// Last heartbeat time.
+    last_heartbeat_time: Option<Time>,
+    /// Last time dns seed was queried.
+    last_dns_query_time: Option<Time>,
+    /// Last time ping check was performed.
+    last_ping_check_time: Option<Time>,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -326,9 +334,13 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
-            last_chainstate_tip_block_time: now,
             observer,
             dns_seed,
+            init_time: now,
+            last_chainstate_tip_block_time: None,
+            last_heartbeat_time: None,
+            last_dns_query_time: None,
+            last_ping_check_time: None,
         })
     }
 
@@ -1087,12 +1099,14 @@ where
     }
 
     /// Fill PeerDb with addresses from the DNS seed servers
-    async fn reload_dns_seed(&mut self) {
+    async fn query_dns_seed(&mut self) {
         let addresses = self.dns_seed.obtain_addresses().await;
-        log::debug!("Dns seed reloaded, address = {addresses:?}");
+        log::debug!("Dns seed queried, addresses = {addresses:?}");
         for addr in addresses {
             self.peerdb.peer_discovered(addr);
         }
+
+        self.last_dns_query_time = Some(self.time_getter.get_time());
     }
 
     fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, PeerRole)> + '_ {
@@ -1127,21 +1141,23 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    fn heartbeat(&mut self, stale_tip_detected: bool) {
+    fn heartbeat(&mut self) {
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        self.establish_new_connections(stale_tip_detected);
+        self.establish_new_connections();
 
         self.evict_block_relay_peer();
         self.evict_full_relay_peer();
+
+        self.last_heartbeat_time = Some(self.time_getter.get_time());
 
         if let Some(o) = self.observer.as_mut() {
             o.on_heartbeat();
         }
     }
 
-    fn establish_new_connections(&mut self, stale_tip_detected: bool) {
+    fn establish_new_connections(&mut self) {
         let mut cur_outbound_full_relay_conn_count = 0;
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
@@ -1169,7 +1185,7 @@ where
         }
 
         let needed_outbound_full_relay_conn_count = {
-            let extra_conn_count = if stale_tip_detected {
+            let extra_conn_count = if self.tip_is_stale() {
                 *self.p2p_config.peer_manager_config.outbound_full_relay_extra_count
             } else {
                 0
@@ -1403,7 +1419,7 @@ where
             }
             PeerManagerEvent::NewChainstateTip(block_id) => {
                 log::debug!("new tip {block_id} added to chainstate");
-                self.last_chainstate_tip_block_time = self.time_getter.get_time();
+                self.last_chainstate_tip_block_time = Some(self.time_getter.get_time());
             }
             PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
@@ -1574,11 +1590,70 @@ where
         for peer_id in dead_peers {
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
+
+        self.last_ping_check_time = Some(now);
+    }
+
+    fn tip_is_stale(&self) -> bool {
+        let now = self.time_getter.get_time();
+        let last_tip_time = self.last_chainstate_tip_block_time.unwrap_or(self.init_time);
+        let time_since_last_tip = (now - last_tip_time).unwrap_or(Duration::ZERO);
+
+        time_since_last_tip > *self.p2p_config.peer_manager_config.stale_tip_time_diff
+    }
+
+    fn heartbeat_needed(&self, is_early_heartbeat: bool) -> bool {
+        let now = self.time_getter.get_time();
+        let last_heartbeat_time = self.last_heartbeat_time.unwrap_or(self.init_time);
+
+        let next_heartbeat_min_time =
+            (last_heartbeat_time + PEER_MGR_HEARTBEAT_INTERVAL_MIN).expect("Cannot happen");
+        let next_heartbeat_max_time =
+            (last_heartbeat_time + PEER_MGR_HEARTBEAT_INTERVAL_MAX).expect("Cannot happen");
+
+        (now >= next_heartbeat_min_time && is_early_heartbeat) || now >= next_heartbeat_max_time
+    }
+
+    // We query dns seed if there are no outbound connections, or the tip is stale, or we
+    // haven't queried it at least once yet.
+    fn dns_seed_query_needed(&self) -> bool {
+        if let Some(last_time) = self.last_dns_query_time {
+            let now = self.time_getter.get_time();
+            let next_time = (last_time + PEER_MGR_DNS_RELOAD_INTERVAL).expect("Cannot happen");
+
+            now >= next_time
+                && self.pending_outbound_connects.is_empty()
+                && (self.peers.is_empty() || self.tip_is_stale())
+        } else {
+            // Always make one query early, even if some outbound connections already exist.
+            // This is useful in the case when a "fresh" node has been passed some initial
+            // addresses at startup (via boot_nodes or reserved_nodes) and either their number
+            // is too small or they all are in the same address group. In that case the node
+            // might establish only a few OutboundBlockRelay connections and then stop establishing
+            // new connections until both it's out of IBD and its tip becomes stale (following
+            // the second part of the condition above).
+            true
+        }
+    }
+
+    fn ping_check_needed(&self) -> bool {
+        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
+
+        if ping_check_enabled {
+            let now = self.time_getter.get_time();
+            let last_time = self.last_ping_check_time.unwrap_or(self.init_time);
+            let next_time =
+                (last_time + *self.p2p_config.ping_check_period).expect("Cannot happen");
+
+            now >= next_time
+        } else {
+            false
+        }
     }
 
     /// Runs the `PeerManager` event loop.
     ///
-    /// The event loop has this main responsibilities:
+    /// The event loop has these main responsibilities:
     /// - listening to and handling control events from [`crate::sync::SyncManager`]/RPC
     /// - listening to network events
     /// - updating internal state
@@ -1600,7 +1675,7 @@ where
         let anchor_peers = self.peerdb.anchors().clone();
         if anchor_peers.is_empty() {
             // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
-            self.heartbeat(false);
+            self.heartbeat();
         } else {
             // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
             // The stored anchor peers should be the first connected block relay peers.
@@ -1615,17 +1690,10 @@ where
                 );
             }
         }
-        // Last time when heartbeat was called
-        let mut last_heartbeat = self.time_getter.get_time();
         let mut last_time = self.time_getter.get_time();
-
-        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
-        let mut last_ping_check = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
-        let mut next_dns_reload = self.time_getter.get_time();
-        let mut had_dns_reload = false;
 
-        let mut heartbeat_call_needed = false;
+        let mut early_heartbeat_needed = false;
 
         let mut periodic_interval =
             tokio::time::interval(*self.p2p_config.peer_manager_config.main_loop_tick_interval);
@@ -1638,18 +1706,16 @@ where
             tokio::select! {
                 event_res = self.peer_mgr_event_receiver.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
-                    heartbeat_call_needed = true;
+                    early_heartbeat_needed = true;
                 }
 
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);
-                    heartbeat_call_needed = true;
+                    early_heartbeat_needed = true;
                 },
 
                 _ = periodic_interval.tick() => {}
             }
-
-            // Update the peer manager state as needed:
 
             // Changing the clock time can cause various problems, log such events to make it easier to find the source of the problems
             let now = self.time_getter.get_time();
@@ -1668,70 +1734,27 @@ where
             }
             last_time = now;
 
-            let last_heartbeat_min =
-                (last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN).expect("Cannot happen 1");
-            let last_heartbeat_max =
-                (last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX).expect("Cannot happen 2");
-
-            let time_since_last_chainstate_tip =
-                (now - self.last_chainstate_tip_block_time).unwrap_or(Duration::ZERO);
-            let tip_is_stale = time_since_last_chainstate_tip
-                > *self.p2p_config.peer_manager_config.stale_tip_time_diff;
+            let tip_is_stale = self.tip_is_stale();
 
             if tip_is_stale {
-                heartbeat_call_needed = true;
+                early_heartbeat_needed = true;
             }
 
             // Periodic heartbeat call where new outbound connections are made
-            if (now >= last_heartbeat_min && heartbeat_call_needed) || (now >= last_heartbeat_max) {
-                self.heartbeat(tip_is_stale);
-                last_heartbeat = now;
-                heartbeat_call_needed = false;
+            if self.heartbeat_needed(early_heartbeat_needed) {
+                self.heartbeat();
+                early_heartbeat_needed = false;
             }
 
-            // Reload DNS if there are no outbound connections or if we haven't done it at least
-            // once yet.
-            // Note: the latter is useful in the case when a "fresh" node has been passed some
-            // initial addresses at startup (via boot_nodes or reserved_nodes) and either their
-            // number is too small or they all are in the same address group. In that case the node
-            // might establish a few OutboundBlockRelay connections and then stop establishing
-            // new ones until it's out of IBD and its tip becomes stale (following the second
-            // part of the condition below).
-            if !had_dns_reload
-                || (now >= next_dns_reload
-                    && self.pending_outbound_connects.is_empty()
-                    && (self.peers.is_empty() || tip_is_stale))
-            {
-                log::debug!(
-                    concat!(
-                        "Choosing to reload dns seed, now is {:?}, ",
-                        "next_dns_reload is {:?}, ",
-                        "self.pending_outbound_connects.is_empty() is {}, ",
-                        "self.peers.is_empty() is {}, ",
-                        "time_since_last_chainstate_tip is {:?}, ",
-                        "stale_tip_time_diff is {:?}"
-                    ),
-                    now,
-                    next_dns_reload,
-                    self.pending_outbound_connects.is_empty(),
-                    self.peers.is_empty(),
-                    time_since_last_chainstate_tip,
-                    self.p2p_config.peer_manager_config.stale_tip_time_diff
-                );
-
-                self.reload_dns_seed().await;
-                next_dns_reload = (now + PEER_MGR_DNS_RELOAD_INTERVAL)
-                    .expect("Times derived from local clock; cannot fail");
-                had_dns_reload = true;
-                heartbeat_call_needed = true;
+            // Query dns seed
+            if self.dns_seed_query_needed() {
+                self.query_dns_seed().await;
+                early_heartbeat_needed = true;
             }
 
             // Send ping requests and disconnect dead peers
-            let ping_timeout_time = (last_ping_check + *self.p2p_config.ping_check_period)
-                .expect("All local, cannot fail");
-            if ping_check_enabled && now >= ping_timeout_time {
+            if self.ping_check_needed() {
                 self.ping_check();
-                last_ping_check = now;
             }
 
             // Advertise local address regularly
