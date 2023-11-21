@@ -117,6 +117,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     &mut db_tx,
                     block_height,
                     tx.inputs(),
+                    tx.transaction().get_id(),
                 )
                 .await
                 .expect("Unable to update balances from inputs");
@@ -158,6 +159,7 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
     inputs: &[TxInput],
+    tx_id: Id<Transaction>,
 ) -> Result<(), ApiServerStorageError> {
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
@@ -205,7 +207,7 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
                                         address_transactions
                                             .entry(address.clone())
                                             .or_default()
-                                            .insert(transaction_id);
+                                            .insert(tx_id);
 
                                         match output_value {
                                             OutputValue::TokenV0(_)

@@ -177,6 +177,29 @@ pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Resul
     Ok(private_key.encode())
 }
 
+/// From an extended private key create a change private key for a given key index
+/// derivation path: 44'/mintlayer_coin_type'/0'/1/key_index
+#[wasm_bindgen]
+pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
+    const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
+
+    let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
+        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+
+    let change_funds_pkey = account_privkey
+        .derive_child(CHANGE_FUNDS_INDEX)
+        .expect("Should not fail to derive key");
+
+    let private_key: PrivateKey = change_funds_pkey
+        .derive_child(ChildNumber::from_normal(
+            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
+        ))
+        .expect("Should not fail to derive key")
+        .private_key();
+
+    Ok(private_key.encode())
+}
+
 #[wasm_bindgen]
 pub fn pubkey_to_string(public_key_bytes: &[u8], network: Network) -> Result<String, Error> {
     let public_key = PublicKey::decode_all(&mut &public_key_bytes[..])

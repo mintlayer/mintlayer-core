@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    api::json_helpers::amount_to_json,
+    api::json_helpers::{amount_to_json, tx_to_json},
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerServerError,
     },
@@ -119,7 +119,10 @@ pub async fn block<T: ApiServerStorage>(
             .iter()
             .map(|out| txoutput_to_json(out, &state.chain_config))
             .collect::<Vec<_>>(),
-        "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
+        "transactions": block.transactions()
+                            .iter()
+                            .map(|tx| tx_to_json(tx.transaction(), &state.chain_config))
+                            .collect::<Vec<_>>(),
     },
     })))
 }
@@ -184,7 +187,10 @@ pub async fn chain_genesis<T: ApiServerStorage>(
         "block_id": genesis.get_id(),
         "fun_message": genesis.fun_message(),
         "timestamp": genesis.timestamp(),
-        "utxos": genesis.utxos(),
+        "utxos": genesis.utxos()
+                 .iter()
+                 .map(|out| txoutput_to_json(out, &state.chain_config))
+                 .collect::<Vec<_>>(),
     })))
 }
 

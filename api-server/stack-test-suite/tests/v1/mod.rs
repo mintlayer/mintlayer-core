@@ -31,7 +31,10 @@ use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
-use api_web_server::{api::web_server, ApiServerWebServerState};
+use api_web_server::{
+    api::{json_helpers::txoutput_to_json, web_server},
+    ApiServerWebServerState,
+};
 use chainstate::BlockSource;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
@@ -74,7 +77,10 @@ async fn chain_genesis() {
                     "block_id": expected_genesis.get_id(),
                     "fun_message": expected_genesis.fun_message(),
                     "timestamp": expected_genesis.timestamp(),
-                    "utxos": expected_genesis.utxos(),
+                    "utxos": expected_genesis.utxos()
+                             .iter()
+                             .map(|out| txoutput_to_json(out, &chain_config))
+                             .collect::<Vec<_>>(),
                 }));
 
                 let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
