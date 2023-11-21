@@ -15,16 +15,17 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable, tokens::TokenId, Block, ChainConfig, DelegationId, PoolId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        block::BlockRewardTransactable,
+        tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
+        Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
 
-use crate::Fee;
+use crate::{error::TokensError, Fee};
 
 use super::{amounts_map::CoinOrTokenId, error::ConnectTransactionError};
 
@@ -104,6 +105,19 @@ where
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
+    // For TokenIssuanceVersion::V0 it is required to provide explicit Burn outputs as token issuance fee.
+    let latest_token_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .token_issuance_version();
+    match latest_token_version {
+        TokenIssuanceVersion::V0 => {
+            check_issuance_fee_burn_v0(chain_config, tx)?;
+        }
+        TokenIssuanceVersion::V1 => { /* do nothing */ }
+    }
+
     let inputs_utxos = tx
         .inputs()
         .iter()
@@ -149,12 +163,47 @@ where
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     constraints_accumulator
-        .process_outputs(chain_config, tx.outputs())
+        .process_outputs(chain_config, block_height, tx.outputs())
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     constraints_accumulator
         .consume(chain_config, block_height)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))
+}
+
+fn check_issuance_fee_burn_v0(
+    chain_config: &ChainConfig,
+    tx: &Transaction,
+) -> Result<(), ConnectTransactionError> {
+    // Check if the fee is enough for issuance
+    let issuance_count = get_tokens_issuance_count(tx.outputs());
+    if issuance_count > 0 {
+        let total_burned = tx
+            .outputs()
+            .iter()
+            .filter_map(|output| match output {
+                TxOutput::Burn(v) => v.coin_amount(),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _) => None,
+            })
+            .sum::<Option<Amount>>()
+            .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
+
+        if total_burned < chain_config.token_min_issuance_fee() {
+            return Err(ConnectTransactionError::TokensError(
+                TokensError::InsufficientTokenFees(tx.get_id()),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 // TODO: use FallibleIterator to avoid manually collecting to a Result

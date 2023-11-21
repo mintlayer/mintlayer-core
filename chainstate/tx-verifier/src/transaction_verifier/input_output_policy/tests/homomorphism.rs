@@ -210,7 +210,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             )
             .unwrap();
         constraints_accumulator
-            .process_outputs(&chain_config, decommission_tx.outputs())
+            .process_outputs(&chain_config, block_height, decommission_tx.outputs())
             .unwrap();
 
         constraints_accumulator
@@ -225,7 +225,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             )
             .unwrap();
         constraints_accumulator
-            .process_outputs(&chain_config, spend_share_tx.outputs())
+            .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
             .unwrap();
 
         constraints_accumulator.consume(&chain_config, block_height).unwrap()
@@ -247,7 +247,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             )
             .unwrap();
         constraints_accumulator_1
-            .process_outputs(&chain_config, decommission_tx.outputs())
+            .process_outputs(&chain_config, block_height, decommission_tx.outputs())
             .unwrap();
 
         let fee1 = constraints_accumulator_1.consume(&chain_config, block_height).unwrap();
@@ -267,7 +267,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             )
             .unwrap();
         constraints_accumulator_2
-            .process_outputs(&chain_config, spend_share_tx.outputs())
+            .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
             .unwrap();
 
         let fee2 = constraints_accumulator_2.consume(&chain_config, block_height).unwrap();

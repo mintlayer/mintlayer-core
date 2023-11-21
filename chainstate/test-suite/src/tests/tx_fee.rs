@@ -27,8 +27,8 @@ use common::{
         output_value::OutputValue,
         timelock::OutputTimeLock,
         tokens::{
-            make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenIssuanceVersion,
-            TokenTotalSupply,
+            make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
+            TokenIssuanceVersion, TokenTotalSupply,
         },
         ChainConfig, ChainstateUpgrade, Destination, NetUpgrades, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -559,7 +559,59 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn issue_fungible_token(#[case] seed: Seed) {
+fn issue_fungible_token_v0(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let storage = TestStore::new_empty().unwrap();
+
+        let tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let storage = InMemoryStorageWrapper::new(storage, tf.chain_config().as_ref().clone());
+
+        let issuance = TokenIssuanceV0 {
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
+            amount_to_issue: Amount::from_atoms(100),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
+        };
+
+        let token_min_issuance_fee = tf.chain_config().token_min_issuance_fee();
+
+        let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
+            .unwrap()
+            .coin_amount()
+            .unwrap();
+        let expected_fee = Fee((genesis_amount - token_min_issuance_fee).unwrap());
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tf.genesis().get_id().into(), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                issuance.into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+
+        let mut verifier = TransactionVerifier::new(&storage, tf.chain_config().as_ref());
+
+        let tx_source = TransactionSourceForConnect::Mempool {
+            current_best: &tf.best_block_index(),
+            effective_height: BlockHeight::new(1),
+        };
+
+        let actual_fee = verifier
+            .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
+            .unwrap();
+        assert_eq!(expected_fee, actual_fee);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_fungible_token_v1(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, tf) = setup(&mut rng);

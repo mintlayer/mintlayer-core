@@ -84,8 +84,9 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
+    let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
+        chain_config.staking_pool_spend_maturity_distance(block_height);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -116,7 +117,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     constraints_accumulator
         .process_inputs(
             &chain_config,
-            BlockHeight::new(1),
+            block_height,
             pledge_getter,
             delegation_balance_getter,
             issuance_token_id_getter,
@@ -125,10 +126,12 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         )
         .unwrap();
 
-    constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+    constraints_accumulator
+        .process_outputs(&chain_config, block_height, &outputs)
+        .unwrap();
 
     assert_eq!(
-        constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
+        constraints_accumulator.consume(&chain_config, block_height).unwrap(),
         Fee(Amount::from_atoms(fee_atoms))
     );
 }
@@ -144,8 +147,9 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
+    let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
+        chain_config.staking_pool_spend_maturity_distance(block_height);
 
     let delegation_id = DelegationId::new(H256::zero());
     let delegated_atoms = rng.gen_range(100..1000);
@@ -172,7 +176,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     constraints_accumulator
         .process_inputs(
             &chain_config,
-            BlockHeight::new(1),
+            block_height,
             pledge_getter,
             delegation_balance_getter,
             issuance_token_id_getter,
@@ -181,10 +185,12 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         )
         .unwrap();
 
-    constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+    constraints_accumulator
+        .process_outputs(&chain_config, block_height, &outputs)
+        .unwrap();
 
     assert_eq!(
-        constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
+        constraints_accumulator.consume(&chain_config, block_height).unwrap(),
         Fee(Amount::from_atoms(fee_atoms))
     );
 }
@@ -203,6 +209,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
+    let block_height = BlockHeight::new(1);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -246,7 +253,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         constraints_accumulator
             .process_inputs(
                 &chain_config,
-                BlockHeight::new(1),
+                block_height,
                 pledge_getter,
                 delegation_balance_getter,
                 issuance_token_id_getter,
@@ -255,7 +262,9 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             )
             .unwrap();
 
-        let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
+        let result = constraints_accumulator
+            .process_outputs(&chain_config, block_height, &outputs)
+            .unwrap_err();
         assert_eq!(
             result,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -274,7 +283,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         constraints_accumulator
             .process_inputs(
                 &chain_config,
-                BlockHeight::new(1),
+                block_height,
                 pledge_getter,
                 delegation_balance_getter,
                 issuance_token_id_getter,
@@ -283,7 +292,9 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+        constraints_accumulator
+            .process_outputs(&chain_config, block_height, &outputs)
+            .unwrap();
     }
 }
 
@@ -300,8 +311,9 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
+    let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1));
+        chain_config.staking_pool_spend_maturity_distance(block_height);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -355,7 +367,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     constraints_accumulator
         .process_inputs(
             &chain_config,
-            BlockHeight::new(1),
+            block_height,
             pledge_getter,
             delegation_balance_getter,
             issuance_token_id_getter,
@@ -364,7 +376,9 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
+    let result = constraints_accumulator
+        .process_outputs(&chain_config, block_height, &outputs)
+        .unwrap_err();
     assert_eq!(
         result,
         IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -394,7 +408,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         constraints_accumulator
             .process_inputs(
                 &chain_config,
-                BlockHeight::new(1),
+                block_height,
                 pledge_getter,
                 delegation_balance_getter,
                 issuance_token_id_getter,
@@ -403,7 +417,9 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+        constraints_accumulator
+            .process_outputs(&chain_config, block_height, &outputs)
+            .unwrap();
     }
 }
 
@@ -433,6 +449,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(net_upgrades)
         .build();
+    let block_height = BlockHeight::new(1);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -488,7 +505,9 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     ];
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
-    let result = constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap_err();
+    let result = constraints_accumulator
+        .process_outputs(&chain_config, block_height, &outputs)
+        .unwrap_err();
     assert_eq!(
         result,
         IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -514,7 +533,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     constraints_accumulator
         .process_inputs(
             &chain_config,
-            BlockHeight::new(1),
+            block_height,
             pledge_getter,
             delegation_balance_getter,
             issuance_token_id_getter,
@@ -523,7 +542,9 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         )
         .unwrap();
 
-    constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+    constraints_accumulator
+        .process_outputs(&chain_config, block_height, &outputs)
+        .unwrap();
 
     assert_eq!(
         constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
@@ -540,6 +561,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
+    let block_height = BlockHeight::new(1);
 
     let delegation_id = DelegationId::new(H256::zero());
     let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
@@ -594,7 +616,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         constraints_accumulator
             .process_inputs(
                 &chain_config,
-                BlockHeight::new(1),
+                block_height,
                 pledge_getter,
                 delegation_balance_getter,
                 issuance_token_id_getter,
@@ -603,7 +625,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             )
             .unwrap();
 
-        let result = constraints_accumulator.process_outputs(&chain_config, &outputs);
+        let result = constraints_accumulator.process_outputs(&chain_config, block_height, &outputs);
         assert_eq!(
             result.unwrap_err(),
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -629,7 +651,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         constraints_accumulator
             .process_inputs(
                 &chain_config,
-                BlockHeight::new(1),
+                block_height,
                 pledge_getter,
                 delegation_balance_getter,
                 issuance_token_id_getter,
@@ -638,7 +660,9 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             )
             .unwrap();
 
-        constraints_accumulator.process_outputs(&chain_config, &outputs).unwrap();
+        constraints_accumulator
+            .process_outputs(&chain_config, block_height, &outputs)
+            .unwrap();
     }
 }
 

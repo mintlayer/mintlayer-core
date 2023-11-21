@@ -19,7 +19,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        tokens::{TokenData, TokenId},
+        tokens::{TokenData, TokenId, TokenIssuanceVersion},
         AccountCommand, AccountSpending, ChainConfig, DelegationId, PoolId, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -312,6 +312,7 @@ impl ConstrainedValueAccumulator {
     pub fn process_outputs(
         &mut self,
         chain_config: &ChainConfig,
+        block_height: BlockHeight,
         outputs: &[TxOutput],
     ) -> Result<(), IOPolicyError> {
         for output in outputs {
@@ -337,12 +338,22 @@ impl ConstrainedValueAccumulator {
                             )?;
                         }
                         TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                            decrease_or(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::Coin,
-                                chain_config.token_min_issuance_fee(),
-                                IOPolicyError::AttemptToViolateFeeRequirements,
-                            )?;
+                            let latest_token_version = chain_config
+                                .chainstate_upgrades()
+                                .version_at_height(block_height)
+                                .1
+                                .token_issuance_version();
+                            match latest_token_version {
+                                TokenIssuanceVersion::V0 => { /* do nothing */ }
+                                TokenIssuanceVersion::V1 => {
+                                    decrease_or(
+                                        &mut self.unconstrained_value,
+                                        CoinOrTokenId::Coin,
+                                        chain_config.token_min_issuance_fee(),
+                                        IOPolicyError::AttemptToViolateFeeRequirements,
+                                    )?;
+                                }
+                            }
                         }
                     },
                     OutputValue::TokenV1(token_id, amount) => decrease_or(
@@ -387,12 +398,22 @@ impl ConstrainedValueAccumulator {
                             )?;
                         }
                         TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                            decrease_or(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::Coin,
-                                chain_config.token_min_issuance_fee(),
-                                IOPolicyError::AttemptToViolateFeeRequirements,
-                            )?;
+                            let latest_token_version = chain_config
+                                .chainstate_upgrades()
+                                .version_at_height(block_height)
+                                .1
+                                .token_issuance_version();
+                            match latest_token_version {
+                                TokenIssuanceVersion::V0 => { /* do nothing */ }
+                                TokenIssuanceVersion::V1 => {
+                                    decrease_or(
+                                        &mut self.unconstrained_value,
+                                        CoinOrTokenId::Coin,
+                                        chain_config.token_min_issuance_fee(),
+                                        IOPolicyError::AttemptToViolateFeeRequirements,
+                                    )?;
+                                }
+                            }
                         }
                     },
                     OutputValue::TokenV1(token_id, amount) => decrease_or(

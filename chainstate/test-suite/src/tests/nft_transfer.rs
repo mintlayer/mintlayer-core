@@ -339,6 +339,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_issuance_fee),
                 Destination::AnyoneCanSpend,
             ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let second_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf

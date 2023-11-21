@@ -726,12 +726,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                        CoinOrTokenId::Coin
-                    ),
-                    tx_id.into()
-                )
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(tx_id))
             ))
         );
 
@@ -1652,6 +1647,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         OutputValue::Coin(token_min_issuance_fee),
                         Destination::AnyoneCanSpend,
                     ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
