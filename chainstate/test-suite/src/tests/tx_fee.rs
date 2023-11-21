@@ -20,7 +20,7 @@ use super::helpers::{
 use super::*;
 
 use chainstate_test_framework::{empty_witness, TestFramework, TestStore, TransactionBuilder};
-use common::chain::{AccountCommand, AccountNonce};
+use common::chain::{AccountCommand, AccountNonce, AccountSpending};
 use common::{
     chain::{
         config::ChainType,
@@ -426,6 +426,10 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             .build();
         let required_maturity_distance =
             chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(2));
+        let maturity_distance = rng.gen_range(
+            required_maturity_distance.to_int() as u64
+                ..(required_maturity_distance.to_int() as u64 * 2),
+        );
 
         let decomission_outputs =
             test_utils::split_value(&mut rng, amount_to_stake.into_atoms() / 2)
@@ -434,14 +438,12 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
                     TxOutput::LockThenTransfer(
                         OutputValue::Coin(Amount::from_atoms(value)),
                         Destination::AnyoneCanSpend,
-                        OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+                        OutputTimeLock::ForBlockCount(maturity_distance),
                     )
                 })
                 .collect::<Vec<_>>();
 
-        let expected_fee = Fee(Amount::from_atoms(
-            amount_to_stake.into_atoms() - (amount_to_stake.into_atoms() / 2),
-        ));
+        let expected_fee = Fee((amount_to_stake / 2).and_then(|v| amount_to_stake - v).unwrap());
 
         let decommission_tx = TransactionBuilder::new()
             .add_input(
@@ -460,6 +462,95 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
 
         let actual_fee = verifier
             .connect_transaction(&tx_source, &decommission_tx, &tf.genesis().timestamp())
+            .unwrap();
+        assert_eq!(expected_fee, actual_fee);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fee_from_spending_delegation_share(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (_, storage, mut tf) = setup(&mut rng);
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_owner(
+            &mut rng,
+            tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+            vrf_pk,
+        );
+
+        let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
+        let delegation_id = pos_accounting::make_delegation_id(&stake_pool_outpoint);
+        let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..100_000));
+
+        let delegate_staking_tx = TransactionBuilder::new()
+            .add_input(TxInput::Utxo(stake_pool_outpoint), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                pool_id,
+            ))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .build();
+
+        tf.make_block_builder()
+            .add_transaction(delegate_staking_tx)
+            .build_and_process()
+            .unwrap();
+
+        // use regtest with pos for new tx
+        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
+            .build();
+        let required_maturity_distance =
+            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(2));
+        let maturity_distance = rng.gen_range(
+            required_maturity_distance.to_int() as u64
+                ..(required_maturity_distance.to_int() as u64 * 2),
+        );
+
+        let spend_share_outputs =
+            test_utils::split_value(&mut rng, amount_to_delegate.into_atoms() / 2)
+                .into_iter()
+                .map(|value| {
+                    TxOutput::LockThenTransfer(
+                        OutputValue::Coin(Amount::from_atoms(value)),
+                        Destination::AnyoneCanSpend,
+                        OutputTimeLock::ForBlockCount(maturity_distance),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+        let expected_fee =
+            Fee((amount_to_delegate / 2).and_then(|v| amount_to_delegate - v).unwrap());
+
+        let spend_share_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountSpending::DelegationBalance(delegation_id, amount_to_delegate),
+                ),
+                empty_witness(&mut rng),
+            )
+            .with_outputs(spend_share_outputs)
+            .build();
+
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+
+        let tx_source = TransactionSourceForConnect::Mempool {
+            current_best: &tf.best_block_index(),
+            effective_height: BlockHeight::new(2),
+        };
+
+        let actual_fee = verifier
+            .connect_transaction(&tx_source, &spend_share_tx, &tf.genesis().timestamp())
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
