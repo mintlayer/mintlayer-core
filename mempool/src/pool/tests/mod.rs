@@ -23,11 +23,11 @@ use chainstate::{
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
-        config::ChainConfig,
+        config::{ChainConfig, ChainType},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         transaction::{Destination, TxInput, TxOutput},
-        OutPointSourceId, Transaction, UtxoOutPoint,
+        NetUpgrades, OutPointSourceId, Transaction, UtxoOutPoint,
     },
     primitives::{Id, Idable, H256},
 };
@@ -47,6 +47,20 @@ const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 /// Max tip age of about 100 years, useful to avoid the IBD state during testing
 const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365 * 24 * 60 * 60));
 
+const TEST_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(1);
+
+fn create_chain_config_with_min_tx_relay_fee(fee_per_byte: Amount) -> ChainConfig {
+    common::chain::config::Builder::new(ChainType::Testnet)
+        .consensus_upgrades(NetUpgrades::unit_tests())
+        .genesis_unittest(Destination::AnyoneCanSpend)
+        .min_tx_relay_fee_per_byte(fee_per_byte)
+        .build()
+}
+
+fn create_chain_config() -> ChainConfig {
+    create_chain_config_with_min_tx_relay_fee(TEST_MIN_TX_RELAY_FEE_PER_BYTE)
+}
+
 #[test]
 fn dummy_size() {
     logging::init_logging();
@@ -61,7 +75,9 @@ fn dummy_size() {
 #[test]
 fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -86,8 +102,8 @@ impl<M> Mempool<M> {
     }
 }
 
-fn get_relay_fee_from_tx_size(tx_size: usize) -> u128 {
-    u128::try_from(tx_size * RELAY_FEE_PER_BYTE).expect("relay fee overflow")
+fn get_relay_fee_from_tx_size(tx_size: usize) -> Amount {
+    (TEST_MIN_TX_RELAY_FEE_PER_BYTE * tx_size.try_into().unwrap()).unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -98,7 +114,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 
     let flags = 0;
     let input = TxInput::from_utxo(outpoint_source_id, 0);
-    let relay_fee: Fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
+    let relay_fee: Fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE).into();
     let tx = tx_spend_input(
         &mempool,
         input,
@@ -122,13 +138,55 @@ async fn add_single_tx() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn add_tx_with_relay_fee_below_minimum() {
+    let min_relay_fee_per_byte = Amount::from_atoms(123);
+    let mut mempool = setup_with_min_tx_relay_fee(min_relay_fee_per_byte);
+
+    async fn make_tx(
+        mempool: &Mempool<StoreMemoryUsageEstimator>,
+        relay_fee: Fee,
+    ) -> SignedTransaction {
+        let outpoint_source_id = mempool.chain_config.genesis_block_id().into();
+        let flags = 0;
+        let input = TxInput::from_utxo(outpoint_source_id, 0);
+
+        tx_spend_input(
+            mempool,
+            input,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            relay_fee,
+            flags,
+        )
+        .await
+        .unwrap()
+    }
+
+    let estimated_tx_size = make_tx(&mempool, Amount::ZERO.into()).await.encoded_size();
+
+    let min_relay_fee: Fee = (min_relay_fee_per_byte * estimated_tx_size as u128).unwrap().into();
+    let tx_relay_fee = (min_relay_fee - Amount::from_atoms(1).into()).unwrap();
+    let tx = make_tx(&mempool, tx_relay_fee).await;
+
+    let err = mempool.add_transaction_test(tx).unwrap_err();
+    assert!(matches!(
+        err,
+        Error::Policy(MempoolPolicyError::InsufficientFeesToRelay {
+            tx_fee: _,
+            relay_fee: _
+        })
+    ));
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate());
     let target_txs = 10;
@@ -210,7 +268,19 @@ pub fn start_chainstate_with_config(
 
 fn setup() -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let config = Arc::new(create_chain_config());
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
+    Mempool::new(
+        config,
+        chainstate_interface,
+        Default::default(),
+        StoreMemoryUsageEstimator,
+    )
+}
+
+fn setup_with_min_tx_relay_fee(fee: Amount) -> Mempool<StoreMemoryUsageEstimator> {
+    logging::init_logging();
+    let config = Arc::new(create_chain_config_with_min_tx_relay_fee(fee));
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
     Mempool::new(
         config,
@@ -224,10 +294,10 @@ fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
-        config,
+        chain_config,
         chainstate_handle,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -247,7 +317,9 @@ pub fn start_chainstate(chainstate: Box<dyn ChainstateInterface>) -> chainstate:
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
@@ -334,7 +406,9 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let chainstate = tf.chainstate();
     let mut mempool = setup_with_chainstate(chainstate);
 
@@ -376,7 +450,9 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let single_output_size = TxOutput::Transfer(
@@ -418,7 +494,7 @@ async fn tx_spend_input<M>(
     flags: u128,
 ) -> anyhow::Result<SignedTransaction> {
     let fee = fee.into().map_or_else(
-        || Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into(),
+        || get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into(),
         std::convert::identity,
     );
     tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags).await
@@ -485,7 +561,9 @@ async fn tx_spend_several_inputs<M>(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -723,7 +801,9 @@ async fn test_bip125_max_replacements(
     num_potential_replacements: usize,
 ) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -817,7 +897,9 @@ async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -853,7 +935,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     mempool.add_transaction_test(replaced_tx)?.assert_in_mempool();
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let replacement_fee: Fee = Amount::from_atoms(100 + relay_fee).into();
+    let replacement_fee: Fee = (Amount::from_atoms(100) + relay_fee).unwrap().into();
     let incoming_tx = tx_spend_several_inputs(
         &mempool,
         &[input1, input2],
@@ -893,7 +975,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     mock_usage.expect_estimate_memory_usage().return_const(0usize);
 
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -946,9 +1030,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let child_0_id = child_0.transaction().get_id();
     log::debug!("child_0_id {}", child_0_id.to_hash());
 
-    let big_fee: Fee = Amount::from_atoms(
-        get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100,
-    )
+    let big_fee: Fee = (get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs))
+        + Amount::from_atoms(100))
+    .unwrap()
     .into();
     let child_1 = tx_spend_input(
         &mempool,
@@ -1165,7 +1249,9 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     use std::time::Instant;
 
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::builder(&mut rng).build();
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let mut tx_builder = TransactionBuilder::new().add_input(
@@ -1238,7 +1324,9 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let tx = TransactionBuilder::new()
@@ -1264,8 +1352,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let flags = 0;
 
-    let tx_b_fee: Fee =
-        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_b_fee: Fee = get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into();
     let tx_a_fee: Fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
@@ -1391,7 +1478,9 @@ fn check_txs_sorted_by_ancestor_score<E>(mempool: &Mempool<E>) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let tx = TransactionBuilder::new()
@@ -1417,8 +1506,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let flags = 0;
 
-    let tx_b_fee: Fee =
-        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_b_fee: Fee = get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into();
     let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
@@ -1514,7 +1602,9 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging();
 
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let mut mock_usage = MockMemoryUsageEstimator::new();
@@ -1589,7 +1679,9 @@ async fn mempool_full_real(#[case] seed: Seed) {
     assert!(memory_size >= encoded_size);
 
     // Set up mempool such that exactly one of the transactions does not fit
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let mut mempool = setup_with_chainstate(tf.chainstate());
     mempool.max_size = MempoolMaxSize::from_bytes(memory_size - 1);
 
@@ -1633,7 +1725,9 @@ async fn mempool_full_real(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -1664,7 +1758,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
                 &mempool,
                 TxInput::from_utxo(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
                 empty_witness(&mut rng),
-                Fee::new(Amount::from_atoms(fee + u128::try_from(i).unwrap())),
+                Fee::new((fee + Amount::from_atoms(i as u128)).unwrap()),
                 flags,
             )
             .await?,

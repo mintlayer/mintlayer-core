@@ -52,9 +52,6 @@ pub const ROLLING_FEE_BASE_HALFLIFE: Duration = Duration::new(60 * 60 * 12, 1);
 
 pub const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
 
-// TODO this should really be taken from some global node settings
-pub const RELAY_FEE_PER_BYTE: usize = 1;
-
 pub const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
 
 pub const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);

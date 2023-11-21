@@ -77,12 +77,6 @@ mod work_queue;
 
 pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
-fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
-    let fee = u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE)
-        .map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
-    Ok(Amount::from_atoms(fee).into())
-}
-
 pub struct Mempool<M> {
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
@@ -520,9 +514,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         res
     }
 
+    fn get_min_relay_fee(&self, tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
+        let size =
+            tx.encoded_size().try_into().map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
+        let min_fee = (self.chain_config.min_tx_relay_fee_per_byte() * size)
+            .ok_or(MempoolPolicyError::RelayFeeOverflow)?;
+        Ok(min_fee.into())
+    }
+
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
-        let relay_fee = get_relay_fee(tx.transaction())?;
+        let relay_fee = self.get_min_relay_fee(tx.transaction())?;
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
@@ -625,15 +627,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
             (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx.transaction())?;
+        let min_relay_fee = self.get_min_relay_fee(tx.transaction())?;
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
             total_conflict_fees,
             additional_fees,
-            relay_fee
+            min_relay_fee
         );
         ensure!(
-            additional_fees >= relay_fee,
+            additional_fees >= min_relay_fee,
             MempoolPolicyError::InsufficientFeesToRelayRBF
         );
         Ok(())

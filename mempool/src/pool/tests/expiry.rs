@@ -28,7 +28,9 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging();
 
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
 
     let parent = TransactionBuilder::new()
@@ -87,7 +89,9 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let num_outputs = 2;
     let mut tx_builder = TransactionBuilder::new().add_input(

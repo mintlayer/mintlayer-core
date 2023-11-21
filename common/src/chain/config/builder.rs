@@ -209,6 +209,7 @@ pub struct Builder {
     empty_consensus_reward_maturity_distance: BlockDistance,
     max_classic_multisig_public_keys_count: usize,
     min_stake_pool_pledge: Amount,
+    min_tx_relay_fee_per_byte: Amount,
 }
 
 impl Builder {
@@ -256,6 +257,7 @@ impl Builder {
             empty_consensus_reward_maturity_distance: BlockDistance::new(0),
             max_classic_multisig_public_keys_count: super::MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT,
             min_stake_pool_pledge: super::MIN_STAKE_POOL_PLEDGE,
+            min_tx_relay_fee_per_byte: super::DEFAULT_MIN_TX_RELAY_FEE_PER_BYTE,
         }
     }
 
@@ -308,6 +310,7 @@ impl Builder {
             empty_consensus_reward_maturity_distance,
             max_classic_multisig_public_keys_count,
             min_stake_pool_pledge,
+            min_tx_relay_fee_per_byte,
         } = self;
 
         let emission_table = match emission_schedule {
@@ -394,6 +397,7 @@ impl Builder {
             token_max_hash_len,
             max_classic_multisig_public_keys_count,
             min_stake_pool_pledge,
+            min_tx_relay_fee_per_byte,
         }
     }
 }
@@ -429,6 +433,7 @@ impl Builder {
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
+    builder_method!(min_tx_relay_fee_per_byte: Amount);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

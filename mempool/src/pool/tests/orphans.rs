@@ -41,7 +41,9 @@ async fn two_transactions_in_sequence(
     #[case] expected_in_mempool: bool,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     let tx0 = TransactionBuilder::new()
@@ -133,7 +135,9 @@ async fn two_transactions_in_sequence(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, usize, usize)>) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     // Set up the transactions
@@ -178,7 +182,9 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     // Set up the transactions
@@ -242,7 +248,9 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 
     let mut results: Vec<Vec<Option<TxStatus>>> = Vec::new();
     for tx_subseq in [tx_subseq_0, tx_subseq_1] {
-        let tf = TestFramework::builder(&mut rng).build();
+        let tf = TestFramework::builder(&mut rng)
+            .with_chain_config(create_chain_config())
+            .build();
         let mut mempool = setup_with_chainstate(tf.chainstate());
         let mut work_queue = WorkQueue::new();
 
@@ -291,7 +299,9 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigin) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     // Set up the transactions
@@ -320,7 +330,9 @@ async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigi
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn bad_orphan_does_not_block_good_one(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     let tx0 = make_tx(
@@ -360,7 +372,9 @@ async fn bad_orphan_does_not_block_good_one(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn orphan_scheduling(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis_id = tf.genesis().get_id();
 
     let mut gen_origin = {

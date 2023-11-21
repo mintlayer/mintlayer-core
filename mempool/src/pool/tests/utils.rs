@@ -228,7 +228,7 @@ pub fn generate_transaction_graph(
     rng: &mut (impl Rng + CryptoRng),
     time: Time,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
-    let tf = TestFramework::builder(rng).build();
+    let tf = TestFramework::builder(rng).with_chain_config(create_chain_config()).build();
     let mut utxos = vec![(
         TxInput::from_utxo(tf.genesis().get_id().into(), 0),
         100_000_000_000_000_u128,

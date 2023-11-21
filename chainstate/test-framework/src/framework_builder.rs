@@ -22,15 +22,7 @@ use crate::{
     TestFramework, TestStore,
 };
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
-use common::{
-    chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
-        tokens::TokenIssuanceVersion,
-        ChainConfig, ChainstateUpgrade, ConsensusUpgrade, Destination, NetUpgrades,
-    },
-    primitives::BlockHeight,
-    time_getter::TimeGetter,
-};
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{CryptoRng, Rng};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
@@ -57,23 +49,7 @@ pub struct TestFrameworkBuilder {
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new(_rng: &mut (impl Rng + CryptoRng)) -> Self {
-        let chain_config = ChainConfigBuilder::new(ChainType::Testnet)
-            .consensus_upgrades(
-                NetUpgrades::initialize(vec![(
-                    BlockHeight::zero(),
-                    ConsensusUpgrade::IgnoreConsensus,
-                )])
-                .unwrap(),
-            )
-            .chainstate_upgrades(
-                NetUpgrades::initialize(vec![(
-                    BlockHeight::zero(),
-                    ChainstateUpgrade::new(TokenIssuanceVersion::V0),
-                )])
-                .unwrap(),
-            )
-            .genesis_unittest(Destination::AnyoneCanSpend)
-            .build();
+        let chain_config = common::chain::config::create_unit_test_config();
         let chainstate_config = ChainstateConfig {
             max_db_commit_attempts: Default::default(),
             max_orphan_blocks: Default::default(),

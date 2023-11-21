@@ -24,7 +24,9 @@ const DUMMY_TIME: BlockTimestamp = BlockTimestamp::from_int_seconds(1639975461);
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn basic_reorg(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate());
     let chainstate = mempool.chainstate_handle().shallow_clone();
@@ -121,7 +123,9 @@ async fn basic_reorg(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_chain_in_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
+    let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
+        .build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate());
     let chainstate = mempool.chainstate_handle().shallow_clone();
@@ -199,6 +203,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
 
     // Set up chainstate, mempool, and mock time
     let tf = TestFramework::builder(&mut rng)
+        .with_chain_config(create_chain_config())
         .with_max_tip_age(Duration::from_secs(10).into())
         .with_initial_time_since_genesis(200)
         .build();
