@@ -102,16 +102,19 @@ where
     assert_eq!(peer_score, 0);
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_tcp() {
     run_with_timeout(correct_handshake_outgoing::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_channels() {
     run_with_timeout(correct_handshake_outgoing::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_outgoing_noise() {
     run_with_timeout(correct_handshake_outgoing::<TestTransportNoise>()).await;
@@ -179,16 +182,19 @@ where
     assert_eq!(peer_score, 0);
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_tcp() {
     run_with_timeout(correct_handshake_incoming::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_channels() {
     run_with_timeout(correct_handshake_incoming::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn correct_handshake_incoming_noise() {
     run_with_timeout(correct_handshake_incoming::<TestTransportNoise>()).await;

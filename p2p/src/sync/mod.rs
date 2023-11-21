@@ -18,7 +18,6 @@
 
 mod chainstate_handle;
 mod peer_common;
-mod peer_v1;
 mod peer_v2;
 mod types;
 
@@ -184,7 +183,7 @@ where
         &mut self,
         peer_id: PeerId,
         common_services: Services,
-        protocol_version: SupportedProtocolVersion,
+        _protocol_version: SupportedProtocolVersion,
         block_sync_msg_receiver: Receiver<BlockSyncMessage>,
         transaction_sync_msg_receiver: Receiver<TransactionSyncMessage>,
     ) {
@@ -193,84 +192,52 @@ where
         let mut peer_tasks = JoinSet::new();
         let mut peer_local_event_senders = Vec::new();
 
-        match protocol_version {
-            SupportedProtocolVersion::V1 => {
-                let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
+        let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
+        let mut mgr = peer_v2::block_manager::PeerBlockSyncManager::<T>::new(
+            peer_id,
+            common_services,
+            Arc::clone(&self.chain_config),
+            Arc::clone(&self.p2p_config),
+            self.chainstate_handle.clone(),
+            self.peer_mgr_event_sender.clone(),
+            block_sync_msg_receiver,
+            self.messaging_handle.clone(),
+            local_event_receiver,
+            self.time_getter.clone(),
+        );
 
-                let mut mgr = peer_v1::PeerSyncManager::<T>::new(
-                    peer_id,
-                    common_services,
-                    Arc::clone(&self.chain_config),
-                    Arc::clone(&self.p2p_config),
-                    self.chainstate_handle.clone(),
-                    self.mempool_handle.clone(),
-                    self.peer_mgr_event_sender.clone(),
-                    block_sync_msg_receiver,
-                    transaction_sync_msg_receiver,
-                    self.messaging_handle.clone(),
-                    local_event_receiver,
-                    self.time_getter.clone(),
-                );
-
-                peer_tasks.spawn(
-                    async move {
-                        mgr.run().await;
-                    }
-                    .in_current_span(),
-                );
-
-                peer_local_event_senders.push(local_event_sender);
+        peer_tasks.spawn(
+            async move {
+                mgr.run().await;
             }
+            .in_current_span(),
+        );
 
-            SupportedProtocolVersion::V2 => {
-                let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
-                let mut mgr = peer_v2::block_manager::PeerBlockSyncManager::<T>::new(
-                    peer_id,
-                    common_services,
-                    Arc::clone(&self.chain_config),
-                    Arc::clone(&self.p2p_config),
-                    self.chainstate_handle.clone(),
-                    self.peer_mgr_event_sender.clone(),
-                    block_sync_msg_receiver,
-                    self.messaging_handle.clone(),
-                    local_event_receiver,
-                    self.time_getter.clone(),
-                );
+        peer_local_event_senders.push(local_event_sender);
 
-                peer_tasks.spawn(
-                    async move {
-                        mgr.run().await;
-                    }
-                    .in_current_span(),
-                );
+        let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
+        let mut mgr = peer_v2::transaction_manager::PeerTransactionSyncManager::<T>::new(
+            peer_id,
+            common_services,
+            Arc::clone(&self.p2p_config),
+            self.chainstate_handle.clone(),
+            self.mempool_handle.clone(),
+            self.peer_mgr_event_sender.clone(),
+            transaction_sync_msg_receiver,
+            self.messaging_handle.clone(),
+            local_event_receiver,
+            self.time_getter.clone(),
+            self.observer.clone(),
+        );
 
-                peer_local_event_senders.push(local_event_sender);
-
-                let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
-                let mut mgr = peer_v2::transaction_manager::PeerTransactionSyncManager::<T>::new(
-                    peer_id,
-                    common_services,
-                    Arc::clone(&self.p2p_config),
-                    self.chainstate_handle.clone(),
-                    self.mempool_handle.clone(),
-                    self.peer_mgr_event_sender.clone(),
-                    transaction_sync_msg_receiver,
-                    self.messaging_handle.clone(),
-                    local_event_receiver,
-                    self.time_getter.clone(),
-                    self.observer.clone(),
-                );
-
-                peer_tasks.spawn(
-                    async move {
-                        mgr.run().await;
-                    }
-                    .in_current_span(),
-                );
-
-                peer_local_event_senders.push(local_event_sender);
+        peer_tasks.spawn(
+            async move {
+                mgr.run().await;
             }
-        }
+            .in_current_span(),
+        );
+
+        peer_local_event_senders.push(local_event_sender);
 
         let peer_context = PeerContext {
             tasks: peer_tasks,

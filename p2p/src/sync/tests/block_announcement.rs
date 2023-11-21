@@ -34,7 +34,7 @@ use crate::{
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
-    protocol::{ProtocolConfig, SupportedProtocolVersion},
+    protocol::ProtocolConfig,
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -43,228 +43,47 @@ use crate::{
 
 use super::helpers::{make_new_blocks, make_new_top_blocks_return_headers};
 
-// V1: the header list request is sent if the parent of the singular announced block is unknown.
-// However, if max_singular_unconnected_headers is exceeded, the DisconnectedHeaders error
-// is generated.
+// Sending even 1 singular unconnected header should produce the DisconnectedHeaders error.
 #[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
-    let protocol_version = SupportedProtocolVersion::V1.into();
+async fn single_header_with_unknown_prev_block(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let mut rng = test_utils::random::make_seedable_rng(seed);
+        let chain_config = Arc::new(create_unit_test_config());
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .build();
+        let block_1 = tf.make_block_builder().build();
+        let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
 
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let block_1 = tf.make_block_builder().build();
-    let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
+        let p2p_config = Arc::new(test_p2p_config());
 
-    let p2p_config = Arc::new(P2pConfig {
-        protocol_config: ProtocolConfig {
-            max_singular_unconnected_headers: 1.into(),
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
 
-            msg_header_count_limit: Default::default(),
-            max_request_blocks_count: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-        },
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
-    });
+        // Sending even 1 unconnected header should lead to ban score increase.
+        peer.send_headers(vec![block_2.header().clone()]).await;
 
-    let mut node = TestNode::builder(protocol_version)
-        .with_chain_config(chain_config)
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_chainstate(tf.into_chainstate())
-        .build()
+        node.assert_peer_score_adjustment(
+            peer.get_id(),
+            P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
+        )
         .await;
+        node.assert_no_sync_message().await;
 
-    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-    // The first attempt to send an unconnected header should trigger HeaderListRequest.
-    peer.send_headers(vec![block_2.header().clone()]).await;
-
-    // Note: we call assert_no_peer_manager_event twice; the last call is needed to make sure
-    // that the event is caught even if it's late; the first one just allows the test to fail
-    // faster if the event is not late.
-    node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.get_sent_block_sync_message().await;
-    assert_eq!(sent_to, peer.get_id());
-    assert!(matches!(message, BlockSyncMessage::HeaderListRequest(_)));
-    node.assert_no_peer_manager_event().await;
-
-    // The second attempt to send an unconnected header should increase the ban score.
-    peer.send_headers(vec![block_2.header().clone()]).await;
-
-    node.assert_peer_score_adjustment(
-        peer.get_id(),
-        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
-    )
+        node.join_subsystem_manager().await;
+    })
     .await;
-    node.assert_no_sync_message().await;
-
-    node.join_subsystem_manager().await;
-}
-
-// Same as single_header_with_unknown_prev_block_v1, but here a connected header list is sent
-// in between the two attempts to send unconnected ones. This should reset the number of
-// singular unconnected headers, so no error should be generated.
-#[tracing::instrument(skip(seed))]
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn single_header_with_unknown_prev_block_with_intermittent_connected_headers_v1(
-    #[case] seed: Seed,
-) {
-    let protocol_version = SupportedProtocolVersion::V1.into();
-
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let block_1 = tf.make_block_builder().add_test_transaction(&mut rng).build();
-    let block_11 = tf
-        .make_block_builder()
-        .add_test_transaction(&mut rng)
-        .with_parent(chain_config.genesis_block_id())
-        .build();
-    let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-
-    let p2p_config = Arc::new(P2pConfig {
-        protocol_config: ProtocolConfig {
-            max_singular_unconnected_headers: 1.into(),
-
-            msg_header_count_limit: Default::default(),
-            max_request_blocks_count: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-        },
-
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
-    });
-
-    let mut node = TestNode::builder(protocol_version)
-        .with_chain_config(chain_config)
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_chainstate(tf.into_chainstate())
-        .build()
-        .await;
-
-    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-    // The first attempt to send an unconnected header should trigger HeaderListRequest.
-    peer.send_headers(vec![block_2.header().clone()]).await;
-
-    node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.get_sent_block_sync_message().await;
-    assert_eq!(sent_to, peer.get_id());
-    assert!(matches!(message, BlockSyncMessage::HeaderListRequest(_)));
-    node.assert_no_peer_manager_event().await;
-
-    // Send a header with a known parent, the node should ask for blocks
-    peer.send_headers(vec![block_11.header().clone()]).await;
-
-    node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.get_sent_block_sync_message().await;
-    assert_eq!(sent_to, peer.get_id());
-    assert!(matches!(message, BlockSyncMessage::BlockListRequest(_)));
-    node.assert_no_peer_manager_event().await;
-
-    // The second attempt to send an unconnected header should again trigger HeaderListRequest,
-    // because a correct header list message was received between the attempts and the counter
-    // for the unconnected headers has been reset.
-    peer.send_headers(vec![block_2.header().clone()]).await;
-
-    node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.get_sent_block_sync_message().await;
-    assert_eq!(sent_to, peer.get_id());
-    assert!(matches!(message, BlockSyncMessage::HeaderListRequest(_)));
-    node.assert_no_peer_manager_event().await;
-
-    node.join_subsystem_manager().await;
-}
-
-// In V2 sending even 1 singular unconnected header should produce the DisconnectedHeaders error.
-#[tracing::instrument(skip(seed))]
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn single_header_with_unknown_prev_block_v2(#[case] seed: Seed) {
-    let protocol_version = SupportedProtocolVersion::V2.into();
-
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let block_1 = tf.make_block_builder().build();
-    let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-
-    let p2p_config = Arc::new(test_p2p_config());
-
-    let mut node = TestNode::builder(protocol_version)
-        .with_chain_config(chain_config)
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_chainstate(tf.into_chainstate())
-        .build()
-        .await;
-
-    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-    // Sending even 1 unconnected header should lead to ban score increase.
-    peer.send_headers(vec![block_2.header().clone()]).await;
-
-    node.assert_peer_score_adjustment(
-        peer.get_id(),
-        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
-    )
-    .await;
-    node.assert_no_sync_message().await;
-
-    node.join_subsystem_manager().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
