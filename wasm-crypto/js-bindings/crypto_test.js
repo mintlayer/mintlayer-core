@@ -12,6 +12,7 @@ import {
   verify_signature,
   make_default_account_privkey,
   make_receiving_address,
+  make_change_address,
   pubkey_to_string,
   Network,
   encode_input_utxo,
@@ -93,6 +94,16 @@ export async function run_test() {
     console.log("Tested decoding bad account public key successfully");
   }
 
+  try {
+    make_change_address(bad_priv_key, 0);
+    throw new Error("Invalid public key worked somehow!");
+  } catch (e) {
+    if (!e.includes("Invalid public key encoding")) {
+      throw e;
+    }
+    console.log("Tested decoding bad account public key successfully");
+  }
+
   const mnemonic = "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
   {
     const account_pubkey = make_default_account_privkey(mnemonic, Network.Mainnet);
@@ -116,6 +127,27 @@ export async function run_test() {
     const address = pubkey_to_string(receiving_pubkey, Network.Mainnet);
     console.log(`address = ${address}`);
     if (address != "mtc1qyqmdpxk2w42w37qsdj0e8g54ysvnlvpny3svzqx") {
+      throw new Error("Incorrect address generated");
+    }
+
+    const change_privkey = make_change_address(account_pubkey, 0);
+    console.log(`receiving privkey = ${change_privkey}`);
+
+    // test bad key index
+    try {
+      make_change_address(account_pubkey, 1<<31);
+      throw new Error("Invalid key index worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid key index, MSB bit set")) {
+        throw e;
+      }
+      console.log("Tested invalid key index with set MSB bit successfully");
+    }
+
+    const change_pubkey = public_key_from_private_key(change_privkey);
+    const caddress = pubkey_to_string(change_pubkey, Network.Mainnet);
+    console.log(`address = ${caddress}`);
+    if (caddress != "mtc1qxyhrpytqrvjalg2dzw4tdvzt2zz8ps6nyav2n56") {
       throw new Error("Incorrect address generated");
     }
   }
