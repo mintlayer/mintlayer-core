@@ -15,7 +15,7 @@
 
 use common::{
     address::Address,
-    chain::{output_value::OutputValue, ChainConfig, TxOutput},
+    chain::{output_value::OutputValue, ChainConfig, Transaction, TxOutput},
     primitives::Amount,
 };
 use serde_json::json;
@@ -134,4 +134,17 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
             })
         }
     }
+}
+
+pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::Value {
+    json!({
+    "version_byte": tx.version_byte(),
+    "is_replaceable": tx.is_replaceable(),
+    "flags": tx.flags(),
+    // TODO: add fee
+    "fee": amount_to_json(Amount::ZERO),
+    "inputs": tx.inputs(),
+    "outputs": tx.outputs()
+    .iter().map(|out| txoutput_to_json(out, chain_config)).collect::<Vec<_>>()
+    })
 }

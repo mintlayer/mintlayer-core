@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::{tx_to_json, txoutput_to_json};
+
 use super::*;
 
 #[tokio::test]
@@ -103,8 +105,15 @@ async fn ok(#[case] seed: Seed) {
                     "timestamp": block.timestamp(),
                 },
                 "body": {
-                    "reward": block.block_reward().outputs().iter().clone().collect::<Vec<_>>(),
-                    "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
+                    "reward": block.block_reward()
+                        .outputs()
+                        .iter()
+                        .map(|out| txoutput_to_json(out, &chain_config))
+                        .collect::<Vec<_>>(),
+                    "transactions": block.transactions()
+                                        .iter()
+                                        .map(|tx| tx_to_json(tx.transaction(), &chain_config))
+                                        .collect::<Vec<_>>(),
                 },
             });
 
@@ -137,8 +146,15 @@ async fn ok(#[case] seed: Seed) {
                     "timestamp": block.timestamp(),
                 },
                 "body": {
-                    "reward": block.block_reward().outputs().iter().clone().collect::<Vec<_>>(),
-                    "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
+                    "reward": block.block_reward()
+                        .outputs()
+                        .iter()
+                        .map(|out| txoutput_to_json(out, &chain_config))
+                        .collect::<Vec<_>>(),
+                    "transactions": block.transactions()
+                                        .iter()
+                                        .map(|tx| tx_to_json(tx.transaction(), &chain_config))
+                                        .collect::<Vec<_>>(),
                 },
             });
 
