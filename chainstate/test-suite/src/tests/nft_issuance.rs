@@ -725,7 +725,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
         let output_value: OutputValue = TokenData::from(NftIssuanceV0 {
             metadata: Metadata {
@@ -934,7 +934,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
         // Metadata URI is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -1148,7 +1148,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
         // Media URI is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -1295,7 +1295,7 @@ fn new_block_with_media_hash(
     let description = random_ascii_alphanumeric_string(rng, 1..max_desc_len).into_bytes();
     let ticker = random_ascii_alphanumeric_string(rng, 1..max_ticker_len).into_bytes();
     let genesis_id = tf.genesis().get_id();
-    let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+    let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
     tf.make_block_builder()
         .with_parent(genesis_id.into())
@@ -1457,7 +1457,7 @@ fn nft_valid_case(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let valid_rfc3986_uri =
             b"https://something.com/?a:b.c_d-e~f!g/h?I#J[K]L@M$N&O/P'Q(R)S*T+U,V;W=Xyz".to_vec();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
         let output_value = NftIssuanceV0 {
             metadata: Metadata {
@@ -1530,7 +1530,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1584,7 +1584,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let genesis_block_id = tf.best_block_id();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();

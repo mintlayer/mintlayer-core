@@ -1682,9 +1682,10 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
-                OutputValue::Coin(chain_config.token_min_issuance_fee())
+            TxOutput::IssueFungibleToken(_) => {
+                OutputValue::Coin(chain_config.fungible_token_min_issuance_fee())
             }
+            TxOutput::IssueNft(_, _, _) => OutputValue::Coin(chain_config.nft_min_issuance_fee()),
             TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_min_fee()),
             TxOutput::CreateDelegationId(_, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {

@@ -380,7 +380,7 @@ impl<'a> RandomTxMaker<'a> {
         let switch = rng.gen_range(0..3);
         if switch == 0 && self.token_can_be_issued {
             // issue token v1
-            let min_tx_fee = self.chainstate.get_chain_config().token_min_issuance_fee();
+            let min_tx_fee = self.chainstate.get_chain_config().fungible_token_min_issuance_fee();
             if coins >= min_tx_fee {
                 self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();
@@ -397,7 +397,7 @@ impl<'a> RandomTxMaker<'a> {
             }
         } else if switch == 1 && self.token_can_be_issued {
             // issue nft v1
-            let min_tx_fee = self.chainstate.get_chain_config().token_min_issuance_fee();
+            let min_tx_fee = self.chainstate.get_chain_config().nft_min_issuance_fee();
             if coins >= min_tx_fee {
                 self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();

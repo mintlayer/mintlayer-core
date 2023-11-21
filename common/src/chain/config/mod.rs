@@ -214,7 +214,8 @@ pub struct ChainConfig {
     initial_randomness: H256,
     data_deposit_max_size: usize,
     data_deposit_min_fee: Amount,
-    token_min_issuance_fee: Amount,
+    fungible_token_min_issuance_fee: Amount,
+    nft_min_issuance_fee: Amount,
     token_min_supply_change_fee: Amount,
     token_min_freeze_fee: Amount,
     token_min_change_authority_fee: Amount,
@@ -492,9 +493,14 @@ impl ChainConfig {
         self.data_deposit_min_fee
     }
 
-    /// The fee for issuing a token
-    pub fn token_min_issuance_fee(&self) -> Amount {
-        self.token_min_issuance_fee
+    /// The fee for issuing a fungible token
+    pub fn fungible_token_min_issuance_fee(&self) -> Amount {
+        self.fungible_token_min_issuance_fee
+    }
+
+    /// The fee for issuing a NFT
+    pub fn nft_min_issuance_fee(&self) -> Amount {
+        self.nft_min_issuance_fee
     }
 
     /// The fee for changing supply of a token
@@ -610,7 +616,8 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
-const TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const FUNGIBLE_TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const NFT_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MIN_FREEZE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();

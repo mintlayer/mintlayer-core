@@ -90,7 +90,7 @@ fn issue_token_from_block(
     utxo_to_pay_fee: UtxoOutPoint,
     issuance: TokenIssuance,
 ) -> (TokenId, Id<Block>, UtxoOutPoint) {
-    let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+    let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_min_issuance_fee();
 
     let fee_utxo_coins = chainstate_test_framework::get_output_value(
         tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
@@ -515,7 +515,8 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().fungible_token_min_issuance_fee();
         let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
@@ -582,7 +583,8 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = make_test_framework_with_v1(&mut rng);
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().fungible_token_min_issuance_fee();
 
         let tx_with_fee = TransactionBuilder::new()
             .add_input(
@@ -3964,7 +3966,8 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = make_test_framework_with_v1(&mut rng);
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().fungible_token_min_issuance_fee();
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
         let data_deposit_fee = tf.chainstate.get_chain_config().data_deposit_min_fee();

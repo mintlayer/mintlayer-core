@@ -586,7 +586,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         };
 
-        let token_min_issuance_fee = tf.chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chain_config().fungible_token_min_issuance_fee();
 
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
@@ -643,7 +643,8 @@ fn issue_fungible_token_v1(#[case] seed: Seed) {
             .unwrap()
             .coin_amount()
             .unwrap();
-        let expected_fee = Fee((genesis_amount - chain_config.token_min_issuance_fee()).unwrap());
+        let expected_fee =
+            Fee((genesis_amount - chain_config.fungible_token_min_issuance_fee()).unwrap());
 
         let tx = TransactionBuilder::new()
             .add_input(
