@@ -7,8 +7,8 @@ FROM debian:bookworm-slim
 
 COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
 
-# Node daemon listens on ports 3030 and 13031
-EXPOSE 3030 13031
+# Node daemon listens on ports 13030 and 13031
+EXPOSE 13030 13031
 
 # Define mintlayer directory as a volume
 VOLUME ["/root/.mintlayer"]
