@@ -102,6 +102,9 @@ class TestNode():
         # For functional tests, we don't want to fail when blocks are too old
         max_tip_age = 60 * 60 * 24 * 365 * 100
 
+        # The legacy minimum tx relay fee value that certain tests depend on.
+        min_tx_relay_fee_per_byte = 1
+
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
@@ -112,6 +115,7 @@ class TestNode():
             "--http-rpc-addr={}".format(rpc_address),
             "--p2p-addr={}".format(p2p_addr),
             "--max-tip-age={}".format(max_tip_age),
+            "--min-tx-relay-fee-per-byte={}".format(min_tx_relay_fee_per_byte),
             #"-X",
             #"-logtimemicros",
             #"-debug",
