@@ -79,6 +79,7 @@ pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
 pub struct Mempool<M> {
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: MempoolMaxSize,
@@ -100,6 +101,7 @@ impl<M> std::fmt::Debug for Mempool<M> {
 impl<M> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
@@ -113,6 +115,7 @@ impl<M> Mempool<M> {
         log::trace!("Creating mempool object");
         Self {
             chain_config,
+            mempool_config,
             store: MempoolStore::new(),
             chainstate_handle,
             max_size: MempoolMaxSize::default(),
@@ -517,7 +520,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     fn get_minimum_relay_fee(&self, tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
         let size =
             tx.encoded_size().try_into().map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
-        let min_fee = (self.chain_config.min_tx_relay_fee_per_byte() * size)
+        let min_fee = (*self.mempool_config.min_tx_relay_fee_per_byte * size)
             .ok_or(MempoolPolicyError::RelayFeeOverflow)?;
         Ok(min_fee.into())
     }

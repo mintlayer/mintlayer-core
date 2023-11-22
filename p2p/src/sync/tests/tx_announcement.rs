@@ -19,7 +19,7 @@ use chainstate::{ban_score::BanScore, BlockSource};
 use chainstate_test_framework::{anyonecanspend_address, TestFramework};
 use common::{
     chain::{
-        self, config::create_unit_test_config, output_value::OutputValue,
+        config::create_unit_test_config, output_value::OutputValue,
         signature::inputsig::InputWitness, timelock::OutputTimeLock, GenBlock, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput,
     },
@@ -28,6 +28,7 @@ use common::{
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
+    MempoolConfig,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use serialization::Encode;
@@ -451,15 +452,9 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let min_fee_per_byte = Amount::from_atoms(1000);
-        let chain_config = chain::config::create_unit_test_config_builder()
-            .min_tx_relay_fee_per_byte(min_fee_per_byte)
-            .build();
-        let chain_config = Arc::new(chain_config);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(chain_config.as_ref().clone())
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
+        let min_fee_per_byte = Amount::from_atoms(1000);
         let new_block_reward_amount = Amount::from_atoms(1_000_000);
 
         let new_block_reward = vec![TxOutput::LockThenTransfer(
@@ -475,9 +470,12 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
         tf.process_block(block2, BlockSource::Local).unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
+        let mempool_config = Arc::new(MempoolConfig {
+            min_tx_relay_fee_per_byte: min_fee_per_byte.into(),
+        });
         let mut node = TestNode::builder(protocol_version)
-            .with_chain_config(Arc::clone(&chain_config))
             .with_p2p_config(Arc::clone(&p2p_config))
+            .with_mempool_config(mempool_config)
             .with_chainstate(tf.into_chainstate())
             .build()
             .await;

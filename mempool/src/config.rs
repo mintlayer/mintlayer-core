@@ -15,7 +15,8 @@
 
 use std::time::Duration;
 
-use common::primitives::BlockDistance;
+use common::primitives::{Amount, BlockDistance};
+use utils::make_config_setting;
 
 /// Mempool size configuration
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
@@ -69,3 +70,17 @@ pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;
 pub const FUTURE_TIMELOCK_TOLERANCE: Duration = Duration::from_secs(5 * 60);
 
 pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);
+
+// 10^-7 of a coin
+make_config_setting!(MinTxRelayFeePerByte, Amount, Amount::from_atoms(10_000));
+
+#[derive(Debug, Clone, Default)]
+pub struct MempoolConfig {
+    pub min_tx_relay_fee_per_byte: MinTxRelayFeePerByte,
+}
+
+impl MempoolConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}

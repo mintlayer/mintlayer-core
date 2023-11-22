@@ -49,16 +49,18 @@ const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365
 
 const TEST_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(1);
 
-fn create_chain_config_with_min_tx_relay_fee(fee_per_byte: Amount) -> ChainConfig {
+fn create_mempool_config() -> MempoolConfig {
+    MempoolConfig {
+        min_tx_relay_fee_per_byte: TEST_MIN_TX_RELAY_FEE_PER_BYTE.into(),
+    }
+}
+
+// FIXME remove this
+fn create_chain_config() -> ChainConfig {
     common::chain::config::Builder::new(ChainType::Testnet)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(Destination::AnyoneCanSpend)
-        .min_tx_relay_fee_per_byte(fee_per_byte)
         .build()
-}
-
-fn create_chain_config() -> ChainConfig {
-    create_chain_config_with_min_tx_relay_fee(TEST_MIN_TX_RELAY_FEE_PER_BYTE)
 }
 
 #[test]
@@ -268,10 +270,12 @@ pub fn start_chainstate_with_config(
 
 fn setup() -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(create_chain_config());
-    let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
+    let chain_config = Arc::new(create_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     Mempool::new(
-        config,
+        chain_config,
+        mempool_config,
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -280,10 +284,14 @@ fn setup() -> Mempool<StoreMemoryUsageEstimator> {
 
 fn setup_with_min_tx_relay_fee(fee: Amount) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(create_chain_config_with_min_tx_relay_fee(fee));
-    let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
+    let chain_config = Arc::new(create_chain_config());
+    let mempool_config = Arc::new(MempoolConfig {
+        min_tx_relay_fee_per_byte: fee.into(),
+    });
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     Mempool::new(
-        config,
+        chain_config,
+        mempool_config,
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -295,9 +303,11 @@ fn setup_with_chainstate(
 ) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
     let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
         chain_config,
+        mempool_config,
         chainstate_handle,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -997,7 +1007,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
-    let config = Arc::clone(chainstate.get_chain_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_interface = start_chainstate(chainstate);
 
     let num_inputs = 1;
@@ -1007,7 +1018,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("parent_id: {}", parent_id.to_hash());
     log::debug!("before adding parent");
     let mut mempool = Mempool::new(
-        Arc::clone(&config),
+        Arc::clone(&chain_config),
+        mempool_config,
         chainstate_interface,
         mock_clock,
         mock_usage,
@@ -1614,10 +1626,17 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chainstate = tf.chainstate();
-    let config = Arc::clone(chainstate.get_chain_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_handle = start_chainstate(chainstate);
 
-    let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);
+    let mut mempool = Mempool::new(
+        chain_config,
+        mempool_config,
+        chainstate_handle,
+        Default::default(),
+        mock_usage,
+    );
 
     let tx = TransactionBuilder::new()
         .add_input(

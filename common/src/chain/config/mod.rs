@@ -206,7 +206,6 @@ pub struct ChainConfig {
     empty_consensus_reward_maturity_distance: BlockDistance,
     max_classic_multisig_public_keys_count: usize,
     min_stake_pool_pledge: Amount,
-    min_tx_relay_fee_per_byte: Amount,
 }
 
 impl ChainConfig {
@@ -565,10 +564,6 @@ impl ChainConfig {
     pub fn final_supply(&self) -> Option<CoinUnit> {
         self.final_supply
     }
-
-    pub fn min_tx_relay_fee_per_byte(&self) -> Amount {
-        self.min_tx_relay_fee_per_byte
-    }
 }
 
 impl AsRef<ChainConfig> for ChainConfig {
@@ -596,8 +591,6 @@ const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * CoinUnit::ATOMS_PER_COIN);
-// 10^-7 of a coin
-const DEFAULT_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(10_000);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");

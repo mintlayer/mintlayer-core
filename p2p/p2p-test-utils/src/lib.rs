@@ -28,7 +28,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::MempoolHandle;
+use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use utils::atomics::SeqCstAtomicU64;
@@ -55,9 +55,11 @@ pub fn start_subsystems(
         time_getter.clone(),
     )
     .unwrap();
+    let mempool_config = Arc::new(MempoolConfig::new());
     start_subsystems_generic(
         chainstate,
         chain_config,
+        mempool_config,
         time_getter,
         tracing::Span::current(),
     )
@@ -66,6 +68,7 @@ pub fn start_subsystems(
 pub fn start_subsystems_generic(
     chainstate: ChainstateSubsystem,
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     time_getter: TimeGetter,
     tracing_span: tracing::Span,
 ) -> (
@@ -79,7 +82,12 @@ pub fn start_subsystems_generic(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(chain_config, chainstate.clone(), time_getter);
+    let mempool = mempool::make_mempool(
+        chain_config,
+        mempool_config,
+        chainstate.clone(),
+        time_getter,
+    );
     let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
 
     let manager_handle = manager.main_in_task_in_span(tracing_span);

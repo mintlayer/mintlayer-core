@@ -53,7 +53,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
-use mempool::MempoolHandle;
+use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
 
@@ -450,6 +450,7 @@ impl TestPeer {
 
 pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
@@ -461,6 +462,7 @@ impl TestNodeBuilder {
     pub fn new(protocol_version: ProtocolVersion) -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
+            mempool_config: Arc::new(MempoolConfig::new()),
             p2p_config: Arc::new(test_p2p_config()),
             chainstate: None,
             time_getter: TimeGetter::default(),
@@ -476,6 +478,11 @@ impl TestNodeBuilder {
 
     pub fn with_chainstate(mut self, chainstate: Box<dyn ChainstateInterface>) -> Self {
         self.chainstate = Some(chainstate);
+        self
+    }
+
+    pub fn with_mempool_config(mut self, mempool_config: Arc<MempoolConfig>) -> Self {
+        self.mempool_config = mempool_config;
         self
     }
 
@@ -497,6 +504,7 @@ impl TestNodeBuilder {
     pub async fn build(self) -> TestNode {
         let TestNodeBuilder {
             chain_config,
+            mempool_config,
             p2p_config,
             chainstate,
             time_getter,
@@ -525,6 +533,7 @@ impl TestNodeBuilder {
 
         let mempool = mempool::make_mempool(
             Arc::clone(&chain_config),
+            mempool_config,
             chainstate.clone(),
             time_getter.clone(),
         );

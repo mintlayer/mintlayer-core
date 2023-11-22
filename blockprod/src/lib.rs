@@ -141,7 +141,7 @@ mod tests {
         random::Rng,
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
-    use mempool::MempoolHandle;
+    use mempool::{MempoolConfig, MempoolHandle};
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
     };
@@ -236,6 +236,7 @@ mod tests {
             chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
             chainstate_config
         };
+        let mempool_config = Arc::new(MempoolConfig::new());
 
         let time_getter = match initial_mock_time {
             Some(mock_time) => mocked_time_getter_seconds(mock_time),
@@ -256,6 +257,7 @@ mod tests {
 
         let mempool = mempool::make_mempool(
             Arc::clone(&chain_config),
+            mempool_config,
             subsystem::Handle::clone(&chainstate),
             time_getter.clone(),
         );

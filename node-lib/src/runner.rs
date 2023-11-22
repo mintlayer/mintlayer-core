@@ -30,7 +30,7 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
 
-use mempool::rpc::MempoolRpcServer;
+use mempool::{rpc::MempoolRpcServer, MempoolConfig};
 
 use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunctionsRpcServer};
 
@@ -89,9 +89,12 @@ async fn initialize(
     )?;
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
+    let mempool_config = Arc::new(MempoolConfig::new());
+
     // Mempool subsystem
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
+        mempool_config,
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );
