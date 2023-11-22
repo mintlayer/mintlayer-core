@@ -173,7 +173,7 @@ async fn add_tx_with_relay_fee_below_minimum() {
         err,
         Error::Policy(MempoolPolicyError::InsufficientFeesToRelay {
             tx_fee: _,
-            relay_fee: _
+            min_relay_fee: _
         })
     ));
 }

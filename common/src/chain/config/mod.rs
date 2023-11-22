@@ -596,8 +596,8 @@ const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * CoinUnit::ATOMS_PER_COIN);
-// FIXME: choose bigger value
-const DEFAULT_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(1);
+// 10^-7 of a coin
+const DEFAULT_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(10_000);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
@@ -701,11 +701,14 @@ pub fn create_regtest() -> ChainConfig {
     Builder::new(ChainType::Regtest).build()
 }
 
-pub fn create_unit_test_config() -> ChainConfig {
+pub fn create_unit_test_config_builder() -> Builder {
     Builder::new(ChainType::Testnet)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(Destination::AnyoneCanSpend)
-        .build()
+}
+
+pub fn create_unit_test_config() -> ChainConfig {
+    create_unit_test_config_builder().build()
 }
 
 /// This function ensure that IgnoreConsensus will never be used in anything other than regtest
