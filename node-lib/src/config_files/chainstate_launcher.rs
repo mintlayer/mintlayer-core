@@ -68,10 +68,15 @@ impl ChainstateLauncherConfigFile {
 }
 
 impl From<ChainstateLauncherConfigFile> for ChainstateLauncherConfig {
-    fn from(c: ChainstateLauncherConfigFile) -> Self {
+    fn from(config_file: ChainstateLauncherConfigFile) -> Self {
+        let ChainstateLauncherConfigFile {
+            storage_backend,
+            chainstate_config,
+        } = config_file;
+
         ChainstateLauncherConfig {
-            storage_backend: c.storage_backend.into(),
-            chainstate_config: c.chainstate_config.into(),
+            storage_backend: storage_backend.into(),
+            chainstate_config: chainstate_config.into(),
         }
     }
 }

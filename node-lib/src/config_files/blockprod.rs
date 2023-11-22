@@ -27,10 +27,15 @@ pub struct BlockProdConfigFile {
 }
 
 impl From<BlockProdConfigFile> for BlockProdConfig {
-    fn from(config: BlockProdConfigFile) -> Self {
+    fn from(config_file: BlockProdConfigFile) -> Self {
+        let BlockProdConfigFile {
+            min_peers_to_produce_blocks,
+            skip_ibd_check,
+        } = config_file;
+
         Self {
-            min_peers_to_produce_blocks: config.min_peers_to_produce_blocks.unwrap_or_default(),
-            skip_ibd_check: config.skip_ibd_check.unwrap_or_default(),
+            min_peers_to_produce_blocks: min_peers_to_produce_blocks.unwrap_or_default(),
+            skip_ibd_check: skip_ibd_check.unwrap_or_default(),
         }
     }
 }

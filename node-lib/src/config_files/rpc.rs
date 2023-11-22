@@ -49,7 +49,7 @@ impl RpcConfigFile {
 
     pub fn with_run_options(
         chain_config: &ChainConfig,
-        config: RpcConfigFile,
+        config_file: RpcConfigFile,
         options: &RunOptions,
     ) -> RpcConfigFile {
         let default_http_rpc_addr = Self::default_bind_address(chain_config);
@@ -60,7 +60,7 @@ impl RpcConfigFile {
             username,
             password,
             cookie_file,
-        } = config;
+        } = config_file;
 
         let http_bind_address = options
             .http_rpc_addr

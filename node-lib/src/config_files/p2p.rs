@@ -89,32 +89,47 @@ pub struct P2pConfigFile {
 }
 
 impl From<P2pConfigFile> for P2pConfig {
-    fn from(c: P2pConfigFile) -> Self {
+    fn from(config_file: P2pConfigFile) -> Self {
+        let P2pConfigFile {
+            bind_addresses,
+            socks5_proxy,
+            disable_noise,
+            boot_nodes,
+            reserved_nodes,
+            max_inbound_connections,
+            ban_threshold,
+            ban_duration,
+            max_clock_diff,
+            outbound_connection_timeout,
+            ping_check_period,
+            ping_timeout,
+            sync_stalling_timeout,
+            node_type,
+        } = config_file;
+
         P2pConfig {
-            bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
-            socks5_proxy: c.socks5_proxy.clone(),
-            disable_noise: c.disable_noise,
-            boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
-            reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
-            ban_threshold: c.ban_threshold.into(),
-            ban_duration: c.ban_duration.map(Duration::from_secs).into(),
-            max_clock_diff: c.max_clock_diff.map(Duration::from_secs).into(),
-            outbound_connection_timeout: c
-                .outbound_connection_timeout
+            bind_addresses: bind_addresses.unwrap_or_default(),
+            socks5_proxy,
+            disable_noise,
+            boot_nodes: boot_nodes.unwrap_or_default(),
+            reserved_nodes: reserved_nodes.unwrap_or_default(),
+            ban_threshold: ban_threshold.into(),
+            ban_duration: ban_duration.map(Duration::from_secs).into(),
+            max_clock_diff: max_clock_diff.map(Duration::from_secs).into(),
+            outbound_connection_timeout: outbound_connection_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
-            ping_check_period: c.ping_check_period.map(Duration::from_secs).into(),
-            ping_timeout: c.ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
-            node_type: c.node_type.map(Into::into).into(),
+            ping_check_period: ping_check_period.map(Duration::from_secs).into(),
+            ping_timeout: ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
+            node_type: node_type.map(Into::into).into(),
 
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
-            sync_stalling_timeout: c
-                .sync_stalling_timeout
+            sync_stalling_timeout: sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             peer_manager_config: PeerManagerConfig {
-                max_inbound_connections: c.max_inbound_connections.into(),
+                max_inbound_connections: max_inbound_connections.into(),
 
                 preserved_inbound_count_address_group: Default::default(),
                 preserved_inbound_count_ping: Default::default(),

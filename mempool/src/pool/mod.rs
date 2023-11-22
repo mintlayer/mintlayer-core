@@ -528,7 +528,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
         let min_relay_fee = self.get_minimum_relay_fee(tx.transaction())?;
-        log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, min_relay_fee);
+        log::debug!("tx_fee: {:?}, min_relay_fee: {:?}", tx_fee, min_relay_fee);
         ensure!(
             tx_fee >= min_relay_fee,
             MempoolPolicyError::InsufficientFeesToRelay {
@@ -635,7 +635,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
         let min_relay_fee = self.get_minimum_relay_fee(tx.transaction())?;
         log::debug!(
-            "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
+            "conflict fees: {:?}, additional fee: {:?}, min relay fee {:?}",
             total_conflict_fees,
             additional_fees,
             min_relay_fee

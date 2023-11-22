@@ -24,6 +24,7 @@ pub use self::{
 mod blockprod;
 mod chainstate;
 mod chainstate_launcher;
+mod mempool;
 mod p2p;
 mod rpc;
 
@@ -37,7 +38,8 @@ use crate::RunOptions;
 
 use self::{
     blockprod::BlockProdConfigFile, chainstate::ChainstateConfigFile,
-    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile,
+    chainstate_launcher::ChainstateLauncherConfigFile, mempool::MempoolConfigFile,
+    p2p::P2pConfigFile,
 };
 
 /// The node configuration.
@@ -47,6 +49,7 @@ pub struct NodeConfigFile {
     // Subsystems configurations.
     pub blockprod: Option<BlockProdConfigFile>,
     pub chainstate: Option<ChainstateLauncherConfigFile>,
+    pub mempool: Option<MempoolConfigFile>,
     pub p2p: Option<P2pConfigFile>,
     pub rpc: Option<RpcConfigFile>,
 }
@@ -56,6 +59,7 @@ impl NodeConfigFile {
         Ok(Self {
             blockprod: None,
             chainstate: None,
+            mempool: None,
             p2p: None,
             rpc: None,
         })
@@ -84,18 +88,21 @@ impl NodeConfigFile {
         let NodeConfigFile {
             blockprod,
             chainstate,
+            mempool,
             p2p,
             rpc,
         } = toml::from_str(&config_as_str).context("Failed to parse config")?;
 
         let blockprod = blockprod_config(blockprod.unwrap_or_default(), options);
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
+        let mempool = MempoolConfigFile::with_run_options(mempool.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
         let rpc = RpcConfigFile::with_run_options(chain_config, rpc.unwrap_or_default(), options);
 
         Ok(Self {
             blockprod: Some(blockprod),
             chainstate: Some(chainstate),
+            mempool: Some(mempool),
             p2p: Some(p2p),
             rpc: Some(rpc),
         })

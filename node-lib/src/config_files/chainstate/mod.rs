@@ -37,12 +37,19 @@ pub struct ChainstateConfigFile {
 }
 
 impl From<ChainstateConfigFile> for ChainstateConfig {
-    fn from(c: ChainstateConfigFile) -> Self {
+    fn from(config_file: ChainstateConfigFile) -> Self {
+        let ChainstateConfigFile {
+            max_db_commit_attempts,
+            max_orphan_blocks,
+            min_max_bootstrap_import_buffer_sizes,
+            max_tip_age,
+        } = config_file;
+
         ChainstateConfig {
-            max_db_commit_attempts: c.max_db_commit_attempts.into(),
-            max_orphan_blocks: c.max_orphan_blocks.into(),
-            min_max_bootstrap_import_buffer_sizes: c.min_max_bootstrap_import_buffer_sizes.into(),
-            max_tip_age: c.max_tip_age.map(Duration::from_secs).into(),
+            max_db_commit_attempts: max_db_commit_attempts.into(),
+            max_orphan_blocks: max_orphan_blocks.into(),
+            min_max_bootstrap_import_buffer_sizes: min_max_bootstrap_import_buffer_sizes.into(),
+            max_tip_age: max_tip_age.map(Duration::from_secs).into(),
         }
     }
 }
