@@ -69,11 +69,10 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     //
     // create a pool at height 1
@@ -205,11 +204,10 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     //
     // create delegation

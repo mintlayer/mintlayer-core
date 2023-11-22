@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    utils::{get_target_block_time, pos_mine, produce_kernel_signature},
+    utils::{pos_mine, produce_kernel_signature},
     TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
@@ -203,11 +203,8 @@ impl<'f> PoSBlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
-        let target_block_time = get_target_block_time(
-            self.framework.chainstate.get_chain_config(),
-            self.framework.best_block_index().block_height().next_height(),
-        );
-        self.framework.progress_time_seconds_since_epoch(target_block_time.get());
+        let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
+        self.framework.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
         (
             Block::new_from_header(signed_header, block_body).unwrap(),

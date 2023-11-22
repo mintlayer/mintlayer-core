@@ -14,9 +14,7 @@
 // limitations under the License.
 
 use crate::chain::config::ChainType;
-use crate::chain::pos::{
-    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0, DEFAULT_TARGET_BLOCK_TIME,
-};
+use crate::chain::pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0};
 use crate::chain::pow::limit;
 use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
 use crate::primitives::per_thousand::PerThousand;
@@ -120,8 +118,7 @@ impl NetUpgrades<ConsensusUpgrade> {
     }
 
     pub fn regtest_with_pos() -> Self {
-        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+        let target_limit = (Uint256::MAX / Uint256::from_u64(120))
             .expect("Target block time cannot be zero as per NonZeroU64");
 
         Self::initialize(vec![
@@ -132,7 +129,6 @@ impl NetUpgrades<ConsensusUpgrade> {
                     initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                     config: PoSChainConfig::new(
                         target_limit,
-                        target_block_time,
                         DEFAULT_MATURITY_BLOCK_COUNT_V0,
                         DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                         PerThousand::new(1).expect("must be valid"),

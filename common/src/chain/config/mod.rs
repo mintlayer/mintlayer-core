@@ -358,8 +358,8 @@ impl ChainConfig {
 
     /// The target time-distance between blocks
     #[must_use]
-    pub fn target_block_spacing(&self) -> &Duration {
-        &self.target_block_spacing
+    pub fn target_block_spacing(&self) -> Duration {
+        self.target_block_spacing
     }
 
     /// Block subsidy vs block height table

@@ -23,10 +23,7 @@ use crate::{
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder, ChainType, EmissionScheduleTabular,
         },
-        pos::{
-            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0,
-            DEFAULT_TARGET_BLOCK_TIME,
-        },
+        pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0},
         pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
         PoSConsensusVersion,
     },
@@ -175,8 +172,8 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
     }
 
     if let Some(upgrade_height) = chain_pos_netupgrades_v0_to_v1 {
-        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+        let target_block_time = super::DEFAULT_TARGET_BLOCK_SPACING.as_secs();
+        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time))
             .expect("Target block time cannot be zero as per NonZeroU64");
 
         builder = builder
@@ -193,7 +190,6 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                             ),
                             config: PoSChainConfig::new(
                                 target_limit,
-                                target_block_time,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
@@ -207,7 +203,6 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
                                 target_limit,
-                                target_block_time,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),

@@ -69,24 +69,25 @@ fn calculate_new_target(
     pos_config: &PoSChainConfig,
     prev_target: &Uint256,
     actual_block_time: u64,
+    target_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
+    ensure!(
+        target_block_time > 0,
+        ConsensusPoSError::InvalidTargetBlockTime
+    );
+
     let actual_block_time = if actual_block_time == 0 {
         Uint512::ONE
     } else {
         Uint512::from_u64(actual_block_time)
     };
 
-    let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
-    ensure!(
-        target_block_time > Uint512::ZERO,
-        ConsensusPoSError::InvalidTargetBlockTime
-    );
     let prev_target: Uint512 = (*prev_target).into();
 
     let new_target = {
         let numerator =
             (prev_target * actual_block_time).expect("Source types are smaller than these types");
-        let denominator = target_block_time;
+        let denominator = Uint512::from_u64(target_block_time);
         (numerator / denominator).expect("Target block time is not zero given its type")
     };
 
@@ -217,12 +218,17 @@ where
     let average_block_time =
         calculate_average_block_time(pos_config, prev_block_index, get_ancestor)?;
 
-    calculate_new_target(pos_config, &prev_target, average_block_time)
+    calculate_new_target(
+        pos_config,
+        &prev_target,
+        average_block_time,
+        chain_config.target_block_spacing().as_secs(),
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{num::NonZeroU64, sync::Arc};
+    use std::sync::Arc;
 
     use chainstate_types::{
         BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError, PropertyQueryError,
@@ -388,31 +394,33 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn calculate_new_target_test(#[case] seed: Seed) {
+        let target_block_time = 120;
         let mut rng = make_seedable_rng(seed);
         let config = PoSChainConfigBuilder::new_for_unit_test().build();
         {
             // average block time <= target block time
             let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = config.target_block_time().get() / rng.gen_range(1..10);
+            let average_block_time = target_block_time / rng.gen_range(1..10);
             let new_target =
-                calculate_new_target(&config, &prev_target, average_block_time).unwrap();
+                calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
+                    .unwrap();
             assert!(new_target <= Compact::from(prev_target));
         }
         {
             // average block time >= target block time
             let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = config.target_block_time().get() * rng.gen_range(1..10);
+            let average_block_time = target_block_time * rng.gen_range(1..10);
             let new_target =
-                calculate_new_target(&config, &prev_target, average_block_time).unwrap();
+                calculate_new_target(&config, &prev_target, average_block_time, target_block_time)
+                    .unwrap();
             assert!(new_target >= Compact::from(prev_target));
         }
     }
 
     #[test]
     fn calculate_new_target_swing_limit() {
-        let target_block_time = NonZeroU64::new(100).unwrap();
+        let target_block_time = 100;
         let config = PoSChainConfigBuilder::new_for_unit_test()
-            .targe_block_time(target_block_time)
             .block_count_to_average_for_blocktime(2)
             .difficulty_change_limit(PerThousand::new(100).unwrap())
             .build();
@@ -424,7 +432,8 @@ mod tests {
             let expected_target = Uint256::from_u64(110); // only 10% times bigger
 
             let new_target =
-                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+                calculate_new_target(&config, &prev_target, actual_block_time, target_block_time)
+                    .unwrap();
             assert_eq!(new_target, Compact::from(expected_target));
         }
 
@@ -435,7 +444,8 @@ mod tests {
             let expected_target = Uint256::from_u64(90); // only 10% times smaller
 
             let new_target =
-                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+                calculate_new_target(&config, &prev_target, actual_block_time, target_block_time)
+                    .unwrap();
             assert_eq!(new_target, Compact::from(expected_target));
         }
     }
@@ -449,9 +459,11 @@ mod tests {
             .targe_limit(Uint256::ZERO)
             .block_count_to_average_for_blocktime(2)
             .build();
+        let target_block_time = 120;
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
-            calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
+            calculate_new_target(&config, &prev_target, target_block_time, target_block_time)
+                .unwrap();
 
         assert_eq!(new_target, Compact::from(config.target_limit()));
     }
@@ -460,11 +472,12 @@ mod tests {
     fn calculate_new_target_with_overflow() {
         let config = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(Uint256::ONE)
-            .targe_block_time(NonZeroU64::new(1).unwrap())
             .block_count_to_average_for_blocktime(2)
             .build();
+        let target_block_time = 1;
         let prev_target = Uint256::MAX;
-        let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
+        let new_target =
+            calculate_new_target(&config, &prev_target, u64::MAX, target_block_time).unwrap();
 
         assert_eq!(new_target, Compact::from(config.target_limit()));
     }
@@ -675,12 +688,10 @@ mod tests {
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
         let pos_config_1 = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit_1)
-            .targe_block_time(NonZeroU64::new(10).unwrap())
             .block_count_to_average_for_blocktime(2)
             .build();
         let pos_config_2 = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit_2)
-            .targe_block_time(NonZeroU64::new(20).unwrap())
             .block_count_to_average_for_blocktime(5)
             .build();
         let upgrades = vec![
@@ -826,7 +837,6 @@ mod tests {
         let target_limit = Uint256::from_u64(rng.gen::<u64>());
         let pos_config = PoSChainConfigBuilder::new_for_unit_test()
             .targe_limit(target_limit)
-            .targe_block_time(NonZeroU64::new(10).unwrap())
             .block_count_to_average_for_blocktime(3)
             .build();
         let upgrades = vec![

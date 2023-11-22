@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, str::FromStr};
+use std::str::FromStr;
 
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
@@ -32,10 +32,6 @@ pub mod config_builder;
 pub const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
 pub const DEFAULT_MATURITY_BLOCK_COUNT_V0: BlockCount = BlockCount::new(2000);
 pub const DEFAULT_MATURITY_BLOCK_COUNT_V1: BlockCount = BlockCount::new(7200);
-pub const DEFAULT_TARGET_BLOCK_TIME: NonZeroU64 = match NonZeroU64::new(2 * 60) {
-    Some(v) => v,
-    None => panic!("cannot be 0"),
-};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}

@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU64;
-
 use crate::{
     primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
@@ -24,7 +22,6 @@ use super::{config::PoSChainConfig, PoSConsensusVersion};
 
 pub struct PoSChainConfigBuilder {
     target_limit: Uint256,
-    target_block_time: NonZeroU64,
     staking_pool_spend_maturity_block_count: BlockCount,
     block_count_to_average_for_blocktime: usize,
     difficulty_change_limit: PerThousand,
@@ -35,7 +32,6 @@ impl PoSChainConfigBuilder {
     pub fn new_for_unit_test() -> Self {
         Self {
             target_limit: Uint256::MAX,
-            target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
             staking_pool_spend_maturity_block_count: super::DEFAULT_MATURITY_BLOCK_COUNT_V0,
             block_count_to_average_for_blocktime: super::DEFAULT_BLOCK_COUNT_TO_AVERAGE,
             difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
@@ -45,11 +41,6 @@ impl PoSChainConfigBuilder {
 
     pub fn targe_limit(mut self, value: Uint256) -> Self {
         self.target_limit = value;
-        self
-    }
-
-    pub fn targe_block_time(mut self, value: NonZeroU64) -> Self {
-        self.target_block_time = value;
         self
     }
 
@@ -76,7 +67,6 @@ impl PoSChainConfigBuilder {
     pub fn build(self) -> PoSChainConfig {
         PoSChainConfig::new(
             self.target_limit,
-            self.target_block_time,
             self.staking_pool_spend_maturity_block_count,
             self.block_count_to_average_for_blocktime,
             self.difficulty_change_limit,
