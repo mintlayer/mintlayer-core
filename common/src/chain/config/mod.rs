@@ -694,14 +694,11 @@ pub fn create_regtest() -> ChainConfig {
     Builder::new(ChainType::Regtest).build()
 }
 
-pub fn create_unit_test_config_builder() -> Builder {
+pub fn create_unit_test_config() -> ChainConfig {
     Builder::new(ChainType::Testnet)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(Destination::AnyoneCanSpend)
-}
-
-pub fn create_unit_test_config() -> ChainConfig {
-    create_unit_test_config_builder().build()
+        .build()
 }
 
 /// This function ensure that IgnoreConsensus will never be used in anything other than regtest

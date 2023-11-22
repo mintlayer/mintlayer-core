@@ -28,7 +28,7 @@ async fn test_replace_tx(
         original_fee,
         replacement_fee
     );
-    let tf = TestFramework::builder(rng).with_chain_config(create_chain_config()).build();
+    let tf = TestFramework::builder(rng).build();
     let genesis = tf.genesis();
 
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
@@ -81,9 +81,7 @@ async fn test_replace_tx(
 #[ignore = "RBF not implemented"]
 async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
@@ -177,9 +175,7 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
 #[ignore = "RBF not implemented"]
 async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
@@ -232,9 +228,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
 #[ignore = "RBF not implemented"]
 async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(

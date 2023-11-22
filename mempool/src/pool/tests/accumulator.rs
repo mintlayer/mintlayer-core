@@ -27,9 +27,7 @@ const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
 #[case(Seed::from_entropy())]
 fn fill_accumulator(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
     let size_limit = rng.gen_range(10_000..=200_000);
 
@@ -87,9 +85,7 @@ fn fill_accumulator(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_order_respects_deps(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
 
     let tx0 = make_tx(&mut rng, &[(genesis_id.into(), 0)], &[900_000_000_000]);
@@ -131,9 +127,7 @@ async fn transaction_order_respects_deps(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transaction_graph_respects_deps(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
     let time = tf.genesis().timestamp();
 
@@ -186,9 +180,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate());
 
@@ -282,11 +274,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
 
 fn timelock_secs_after_genesis(n: u64) -> OutputTimeLock {
     let mut rng = make_seedable_rng(Seed::from_u64(0));
-    let t0 = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build()
-        .genesis()
-        .timestamp();
+    let t0 = TestFramework::builder(&mut rng).build().genesis().timestamp();
     OutputTimeLock::UntilTime(t0.add_int_seconds(n).unwrap())
 }
 
@@ -336,9 +324,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     let in_accumulator_at1 = (expected & 0b0001) != 0;
 
     let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng)
-        .with_chain_config(create_chain_config())
-        .build();
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis_id = tf.genesis().get_id();
 
     let genesis_time = tf.genesis().timestamp();
