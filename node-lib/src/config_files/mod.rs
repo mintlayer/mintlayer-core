@@ -45,6 +45,7 @@ use self::{
 /// The node configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct NodeConfigFile {
     // Subsystems configurations.
     pub blockprod: Option<BlockProdConfigFile>,

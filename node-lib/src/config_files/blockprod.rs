@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 /// The rpc subsystem configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct BlockProdConfigFile {
     /// Minimum number of connected peers to enable block production.
     pub min_peers_to_produce_blocks: Option<usize>,

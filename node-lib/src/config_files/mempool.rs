@@ -23,6 +23,7 @@ use crate::RunOptions;
 /// Mempool configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct MempoolConfigFile {
     /// Minimum transaction relay fee per byte.
     pub min_tx_relay_fee_per_byte: Option<u64>,

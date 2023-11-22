@@ -131,7 +131,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn add_tx_with_relay_fee_below_minimum() {
+async fn add_tx_with_fee_below_minimum() {
     let min_relay_fee_per_byte = Amount::from_atoms(123);
     let mut mempool = setup_with_min_tx_relay_fee(min_relay_fee_per_byte);
 

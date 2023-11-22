@@ -56,6 +56,7 @@ impl FromStr for NodeTypeConfigFile {
 /// The p2p subsystem configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
     pub bind_addresses: Option<Vec<String>>,

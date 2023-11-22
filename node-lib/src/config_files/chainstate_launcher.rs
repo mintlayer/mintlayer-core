@@ -51,6 +51,12 @@ impl std::str::FromStr for StorageBackendConfigFile {
 /// Storage configuration
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+// TODO: without `#[serde(deny_unknown_fields)]` it's very easy to miss mistakes in the config file,
+// especially due to the hyphen/underscore discrepancy between command line options and config
+// file keys. E.g. for the config file key `max_orphan_blocks` the corresponding command line option
+// is `--max-orphan-blocks`.
+// But `serde(deny_unknown_fields)` and `serde(flatten)` don't work well together. Perhaps it's
+// better to get rid of `flatten` then?
 pub struct ChainstateLauncherConfigFile {
     /// Storage backend to use
     #[serde(default)]

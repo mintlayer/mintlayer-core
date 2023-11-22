@@ -24,6 +24,7 @@ use super::DEFAULT_HTTP_RPC_ENABLED;
 /// The rpc subsystem configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct RpcConfigFile {
     /// Address to bind http RPC to
     pub http_bind_address: Option<SocketAddr>,
