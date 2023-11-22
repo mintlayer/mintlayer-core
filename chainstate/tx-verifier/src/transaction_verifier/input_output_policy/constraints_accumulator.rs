@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    num::NonZeroU64,
+};
 
 use common::{
     chain::{
@@ -31,8 +34,6 @@ use crate::{transaction_verifier::amounts_map::CoinOrTokenId, Fee};
 
 use super::IOPolicyError;
 
-type BlockCount = u64;
-
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
 /// all outputs are timelocked when the pool is decommissioned `ConstrainedValueAccumulator` gives a way
@@ -40,7 +41,7 @@ type BlockCount = u64;
 /// using other valid inputs and outputs in the same tx.
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: BTreeMap<CoinOrTokenId, Amount>,
-    timelock_constrained: BTreeMap<BlockCount, Amount>,
+    timelock_constrained: BTreeMap<NonZeroU64, Amount>,
 }
 
 impl ConstrainedValueAccumulator {
@@ -63,16 +64,14 @@ impl ConstrainedValueAccumulator {
             .cloned()
             .unwrap_or(Amount::ZERO);
 
-        let maturity_distance: BlockCount = chain_config
-            .staking_pool_spend_maturity_distance(block_height)
-            .to_int()
-            .try_into()
-            .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
+        let maturity_distance = chain_config.staking_pool_spend_maturity_block_count(block_height);
 
         let timelocked_change = self
             .timelock_constrained
             .into_iter()
-            .filter_map(|(lock, amount)| (lock <= maturity_distance).then_some(amount))
+            .filter_map(|(lock, amount)| {
+                (lock.get() <= maturity_distance.to_int()).then_some(amount)
+            })
             .sum::<Option<Amount>>()
             .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
 
@@ -230,18 +229,28 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let maturity_distance: BlockCount = chain_config
-                    .staking_pool_spend_maturity_distance(block_height)
-                    .to_int()
-                    .try_into()
-                    .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
                 let pledged_amount = pledge_amount_getter(*pool_id)?
                     .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
+                let maturity_distance =
+                    chain_config.staking_pool_spend_maturity_block_count(block_height);
 
-                let balance =
-                    self.timelock_constrained.entry(maturity_distance).or_insert(Amount::ZERO);
-                *balance = (*balance + pledged_amount)
-                    .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                match NonZeroU64::new(maturity_distance.to_int()) {
+                    Some(maturity_distance) => {
+                        let balance = self
+                            .timelock_constrained
+                            .entry(maturity_distance)
+                            .or_insert(Amount::ZERO);
+                        *balance = (*balance + pledged_amount)
+                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                    }
+                    None => {
+                        insert_or_increase(
+                            &mut self.unconstrained_value,
+                            CoinOrTokenId::Coin,
+                            pledged_amount,
+                        )?;
+                    }
+                }
             }
         };
 
@@ -267,16 +276,26 @@ impl ConstrainedValueAccumulator {
                     IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
                 );
 
-                let maturity_distance: BlockCount = chain_config
-                    .staking_pool_spend_maturity_distance(block_height)
-                    .to_int()
-                    .try_into()
-                    .map_err(|_| IOPolicyError::NegativeMaturityDistance)?;
+                let maturity_distance =
+                    chain_config.staking_pool_spend_maturity_block_count(block_height);
 
-                let balance =
-                    self.timelock_constrained.entry(maturity_distance).or_insert(Amount::ZERO);
-                *balance = (*balance + *spend_amount)
-                    .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                match NonZeroU64::new(maturity_distance.to_int()) {
+                    Some(maturity_distance) => {
+                        let balance = self
+                            .timelock_constrained
+                            .entry(maturity_distance)
+                            .or_insert(Amount::ZERO);
+                        *balance = (*balance + *spend_amount)
+                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                    }
+                    None => {
+                        insert_or_increase(
+                            &mut self.unconstrained_value,
+                            CoinOrTokenId::Coin,
+                            *spend_amount,
+                        )?;
+                    }
+                }
             }
         };
 
@@ -465,48 +484,62 @@ impl ConstrainedValueAccumulator {
             }
             OutputTimeLock::ForBlockCount(block_count) => {
                 // find the range that can be satisfied with the current timelock
-                let mut constraint_range_iter = self
-                    .timelock_constrained
-                    .range_mut((
-                        std::ops::Bound::Unbounded,
-                        std::ops::Bound::Included(block_count),
-                    ))
-                    .rev()
-                    .peekable();
+                match NonZeroU64::new(*block_count) {
+                    Some(block_count) => {
+                        let mut constraint_range_iter = self
+                            .timelock_constrained
+                            .range_mut((
+                                std::ops::Bound::Unbounded,
+                                std::ops::Bound::Included(block_count),
+                            ))
+                            .rev()
+                            .peekable();
 
-                // iterate over the range until current output coins are completely used
-                // or all suitable constraints are satisfied
-                let mut output_coins = locked_coins;
-                while output_coins > Amount::ZERO {
-                    match constraint_range_iter.peek_mut() {
-                        Some((_, constrained_coins)) => {
-                            if output_coins > **constrained_coins {
-                                // satisfy current constraint completely and move on to the next one
-                                output_coins =
-                                    (output_coins - **constrained_coins).expect("cannot fail");
-                                **constrained_coins = Amount::ZERO;
-                                constraint_range_iter.next();
-                            } else {
-                                // satisfy current constraint partially and exit the loop
-                                **constrained_coins =
-                                    (**constrained_coins - output_coins).expect("cannot fail");
-                                output_coins = Amount::ZERO;
-                            }
+                        // iterate over the range until current output coins are completely used
+                        // or all suitable constraints are satisfied
+                        let mut output_coins = locked_coins;
+                        while output_coins > Amount::ZERO {
+                            match constraint_range_iter.peek_mut() {
+                                Some((_, constrained_coins)) => {
+                                    if output_coins > **constrained_coins {
+                                        // satisfy current constraint completely and move on to the next one
+                                        output_coins = (output_coins - **constrained_coins)
+                                            .expect("cannot fail");
+                                        **constrained_coins = Amount::ZERO;
+                                        constraint_range_iter.next();
+                                    } else {
+                                        // satisfy current constraint partially and exit the loop
+                                        **constrained_coins = (**constrained_coins - output_coins)
+                                            .expect("cannot fail");
+                                        output_coins = Amount::ZERO;
+                                    }
+                                }
+                                None => {
+                                    // if the output cannot satisfy any constraints then use it as unconstrained
+                                    decrease_or(
+                                        &mut self.unconstrained_value,
+                                        CoinOrTokenId::Coin,
+                                        locked_coins,
+                                        IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                                            CoinOrTokenId::Coin,
+                                        ),
+                                    )?;
+                                    output_coins = Amount::ZERO;
+                                }
+                            };
                         }
-                        None => {
-                            // if the output cannot satisfy any constraints then use it as unconstrained
-                            decrease_or(
-                                &mut self.unconstrained_value,
+                    }
+                    None => {
+                        decrease_or(
+                            &mut self.unconstrained_value,
+                            CoinOrTokenId::Coin,
+                            locked_coins,
+                            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
                                 CoinOrTokenId::Coin,
-                                locked_coins,
-                                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                                    CoinOrTokenId::Coin,
-                                ),
-                            )?;
-                            output_coins = Amount::ZERO;
-                        }
-                    };
-                }
+                            ),
+                        )?;
+                    }
+                };
             }
         };
 

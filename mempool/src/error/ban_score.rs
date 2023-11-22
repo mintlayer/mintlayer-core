@@ -363,7 +363,6 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::TokenIdNotFound => 0,
             IOPolicyError::DelegationBalanceNotFound(_) => 0,
             IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
-            IOPolicyError::NegativeMaturityDistance => 100,
         }
     }
 }

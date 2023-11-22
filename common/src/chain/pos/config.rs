@@ -16,7 +16,7 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    primitives::{per_thousand::PerThousand, BlockDistance},
+    primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
 };
 
@@ -29,7 +29,7 @@ pub struct PoSChainConfig {
     /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
     target_block_time: NonZeroU64,
     /// The distance required to pass to allow spending the decommission pool and spending delegation share
-    staking_pool_spend_maturity_distance: BlockDistance,
+    staking_pool_spend_maturity_block_count: BlockCount,
     /// Max number of blocks required to calculate average block time. Min is 2
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
@@ -42,7 +42,7 @@ impl PoSChainConfig {
     pub fn new(
         target_limit: Uint256,
         target_block_time: NonZeroU64,
-        staking_pool_spend_maturity_distance: BlockDistance,
+        staking_pool_spend_maturity_block_count: BlockCount,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
         consensus_version: PoSConsensusVersion,
@@ -52,7 +52,7 @@ impl PoSChainConfig {
         Self {
             target_limit,
             target_block_time,
-            staking_pool_spend_maturity_distance,
+            staking_pool_spend_maturity_block_count,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
             consensus_version,
@@ -67,8 +67,8 @@ impl PoSChainConfig {
         self.target_block_time
     }
 
-    pub fn staking_pool_spend_maturity_distance(&self) -> BlockDistance {
-        self.staking_pool_spend_maturity_distance
+    pub fn staking_pool_spend_maturity_block_count(&self) -> BlockCount {
+        self.staking_pool_spend_maturity_block_count
     }
 
     pub fn block_count_to_average_for_blocktime(&self) -> usize {

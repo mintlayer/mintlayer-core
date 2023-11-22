@@ -31,7 +31,6 @@ use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::{
     signed_transaction::SignedTransaction, stakelock::StakePoolData, Transaction, UtxoOutPoint,
 };
-use common::primitives::BlockDistance;
 use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
@@ -40,7 +39,9 @@ use common::{
         timelock::OutputTimeLock,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, PoolId, TxInput, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
+    primitives::{
+        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Compact, Id, Idable, H256,
+    },
     Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
@@ -63,7 +64,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
-            .empty_consensus_reward_maturity_distance(50.into())
+            .empty_consensus_reward_maturity_block_count(BlockCount::new(50))
             .build();
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
@@ -152,7 +153,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             ))
         );
 
-        // Case 5: reward is locked for an invalid number
+        // Case 5: reward is locked for u64::MAX
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::LockThenTransfer(
@@ -163,30 +164,18 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .add_test_transaction_from_best_block(&mut rng)
             .build();
 
-        let block_id = block.get_id();
-        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
-        assert_eq!(
-            tf.process_block(block, BlockSource::Local).unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::BlockRewardMaturityError(
-                    OutputMaturityError::InvalidOutputMaturityDistanceValue(outpoint, u64::MAX)
-                )
-            ))
-        );
+        tf.process_block(block, BlockSource::Local).unwrap();
 
         // Case 6: reward is locked for less than the required number of blocks
-        let reward_lock_distance: i64 = tf
-            .chainstate
-            .get_chain_config()
-            .empty_consensus_reward_maturity_distance()
-            .into();
+        let reward_lock_distance =
+            tf.chainstate.get_chain_config().empty_consensus_reward_maturity_block_count();
 
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
                 destination.clone(),
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
+                OutputTimeLock::ForBlockCount(reward_lock_distance.to_int() - 1),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -199,8 +188,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 CheckBlockError::BlockRewardMaturityError(
                     OutputMaturityError::InvalidOutputMaturityDistance(
                         outpoint,
-                        BlockDistance::new(reward_lock_distance - 1),
-                        BlockDistance::new(reward_lock_distance)
+                        BlockCount::new(reward_lock_distance.to_int() - 1),
+                        reward_lock_distance
                     )
                 )
             ))
@@ -234,18 +223,15 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         ));
 
         // Case 8: the correct, working case
-        let reward_lock_distance: i64 = tf
-            .chainstate
-            .get_chain_config()
-            .empty_consensus_reward_maturity_distance()
-            .into();
+        let reward_lock_distance =
+            tf.chainstate.get_chain_config().empty_consensus_reward_maturity_block_count();
 
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::LockThenTransfer(
                 coins,
                 destination,
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -697,12 +683,11 @@ fn consensus_type(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let reward_lock_distance: i64 = tf
+    let reward_lock_distance = tf
         .chainstate
         .get_chain_config()
         .get_proof_of_work_config()
-        .reward_maturity_distance()
-        .into();
+        .reward_maturity_distance();
 
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
@@ -747,7 +732,7 @@ fn consensus_type(#[case] seed: Seed) {
             .with_reward(vec![TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
                 Destination::PublicKey(pub_key),
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -817,12 +802,11 @@ fn consensus_type(#[case] seed: Seed) {
         ))
     ));
 
-    let reward_lock_distance: i64 = tf
+    let reward_lock_distance = tf
         .chainstate
         .get_chain_config()
         .get_proof_of_work_config()
-        .reward_maturity_distance()
-        .into();
+        .reward_maturity_distance();
 
     // Mining should work
     for i in 15..20 {
@@ -834,7 +818,7 @@ fn consensus_type(#[case] seed: Seed) {
             .with_reward(vec![TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
                 Destination::PublicKey(pub_key),
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -883,12 +867,11 @@ fn pow(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let reward_lock_distance: i64 = tf
+    let reward_lock_distance = tf
         .chainstate
         .get_chain_config()
         .get_proof_of_work_config()
-        .reward_maturity_distance()
-        .into();
+        .reward_maturity_distance();
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
@@ -898,7 +881,7 @@ fn pow(#[case] seed: Seed) {
         .with_reward(vec![TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(10)),
             Destination::PublicKey(pub_key),
-            OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+            OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
         )])
         .add_test_transaction_from_best_block(&mut rng)
         .build();
@@ -959,12 +942,11 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let reward_lock_distance: i64 = tf
+    let reward_lock_distance = tf
         .chainstate
         .get_chain_config()
         .get_proof_of_work_config()
-        .reward_maturity_distance()
-        .into();
+        .reward_maturity_distance();
 
     let block_reward_output_count = rng.gen::<usize>() % 20;
     let expected_block_reward = (0..block_reward_output_count)
@@ -974,7 +956,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount),
                 Destination::PublicKey(pub_key),
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )
         })
         .collect::<Vec<_>>();

@@ -18,7 +18,7 @@ use thiserror::Error;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::block::Block,
-    primitives::{BlockDistance, BlockHeight, Compact, Id},
+    primitives::{BlockHeight, Compact, Id},
 };
 
 /// A proof of work consensus error.
@@ -44,6 +44,4 @@ pub enum ConsensusPoWError {
     PoSInputDataProvided,
     #[error("No input data was provided for PoW block generation")]
     NoInputDataProvided,
-    #[error("Block reward maturity value {0} is invalid")]
-    InvalidBlockRewardMaturityDistance(BlockDistance),
 }

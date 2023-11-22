@@ -198,6 +198,47 @@ impl From<DistanceIntType> for BlockDistance {
     }
 }
 
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialOrd,
+    Ord,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct BlockCount(#[codec(compact)] u64);
+
+impl BlockCount {
+    pub const fn new(count: u64) -> Self {
+        Self(count)
+    }
+
+    pub fn to_int(&self) -> u64 {
+        self.0
+    }
+}
+
+impl Add<BlockCount> for BlockCount {
+    type Output = Option<BlockCount>;
+
+    fn add(self, other: BlockCount) -> Option<BlockCount> {
+        Some(BlockCount(self.0.checked_add(other.0)?))
+    }
+}
+
+impl Sub<BlockCount> for BlockCount {
+    type Output = Option<BlockCount>;
+
+    fn sub(self, other: BlockCount) -> Option<BlockCount> {
+        Some(BlockCount(self.0.checked_sub(other.0)?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

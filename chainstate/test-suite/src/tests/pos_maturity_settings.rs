@@ -23,7 +23,7 @@ use common::{
         timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
         NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Idable},
     Uint256,
 };
 use crypto::{
@@ -49,7 +49,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(100))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(100))
                     .build(),
             },
         ),
@@ -58,7 +58,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             ConsensusUpgrade::PoS {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(50))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(50))
                     .build(),
             },
         ),
@@ -184,7 +184,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(100))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(100))
                     .build(),
             },
         ),
@@ -194,7 +194,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
                     // decrease maturity setting
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(50))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(50))
                     .build(),
             },
         ),

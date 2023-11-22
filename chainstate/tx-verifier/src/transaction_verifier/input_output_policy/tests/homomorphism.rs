@@ -61,7 +61,7 @@ fn combine_accumulators(#[case] seed: Seed) {
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int() as u64;
+        chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(1));
     let block_height = BlockHeight::new(1);
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
@@ -131,7 +131,7 @@ fn combine_accumulators(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance + random_additional_distance,
+                        required_maturity_distance.to_int() + random_additional_distance,
                     ),
                 )
             });
@@ -185,7 +185,7 @@ fn combine_accumulators(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(atoms)),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(
-                    required_maturity_distance + random_additional_distance,
+                    required_maturity_distance.to_int() + random_additional_distance,
                 ),
             )
         });

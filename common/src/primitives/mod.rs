@@ -31,6 +31,6 @@ pub mod version_tag;
 pub use amount::Amount;
 pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
-pub use height::{BlockDistance, BlockHeight};
+pub use height::{BlockCount, BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
 pub use version_tag::VersionTag;

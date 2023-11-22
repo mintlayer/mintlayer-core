@@ -23,8 +23,8 @@ use crate::{
         },
         get_initial_randomness,
         pos::{
-            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE_V0,
-            DEFAULT_MATURITY_DISTANCE_V1, DEFAULT_TARGET_BLOCK_TIME,
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0,
+            DEFAULT_MATURITY_BLOCK_COUNT_V1, DEFAULT_TARGET_BLOCK_TIME,
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
@@ -33,8 +33,8 @@ use crate::{
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockDistance, BlockHeight,
-        Id, Idable, H256,
+        id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
+        BlockHeight, Id, Idable, H256,
     },
     Uint256,
 };
@@ -91,7 +91,7 @@ impl ChainType {
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                DEFAULT_MATURITY_DISTANCE_V0,
+                                DEFAULT_MATURITY_BLOCK_COUNT_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V0,
@@ -105,7 +105,7 @@ impl ChainType {
                             config: PoSChainConfig::new(
                                 target_limit,
                                 target_block_time,
-                                DEFAULT_MATURITY_DISTANCE_V1,
+                                DEFAULT_MATURITY_BLOCK_COUNT_V1,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V1,
@@ -208,7 +208,7 @@ pub struct Builder {
     token_max_description_len: usize,
     token_min_hash_len: usize,
     token_max_hash_len: usize,
-    empty_consensus_reward_maturity_distance: BlockDistance,
+    empty_consensus_reward_maturity_block_count: BlockCount,
     max_classic_multisig_public_keys_count: usize,
     min_stake_pool_pledge: Amount,
 }
@@ -257,7 +257,7 @@ impl Builder {
             token_max_description_len: super::TOKEN_MAX_DESCRIPTION_LEN,
             token_min_hash_len: super::TOKEN_MIN_HASH_LEN,
             token_max_hash_len: super::TOKEN_MAX_HASH_LEN,
-            empty_consensus_reward_maturity_distance: BlockDistance::new(0),
+            empty_consensus_reward_maturity_block_count: BlockCount::new(0),
             max_classic_multisig_public_keys_count: super::MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT,
             min_stake_pool_pledge: super::MIN_STAKE_POOL_PLEDGE,
         }
@@ -311,7 +311,7 @@ impl Builder {
             token_max_description_len,
             token_min_hash_len,
             token_max_hash_len,
-            empty_consensus_reward_maturity_distance,
+            empty_consensus_reward_maturity_block_count,
             max_classic_multisig_public_keys_count,
             min_stake_pool_pledge,
         } = self;
@@ -395,7 +395,7 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
-            empty_consensus_reward_maturity_distance,
+            empty_consensus_reward_maturity_block_count,
             token_max_name_len,
             token_max_description_len,
             token_min_hash_len,
@@ -436,7 +436,7 @@ impl Builder {
     builder_method!(max_depth_for_reorg: BlockDistance);
     builder_method!(consensus_upgrades: NetUpgrades<ConsensusUpgrade>);
     builder_method!(chainstate_upgrades: NetUpgrades<ChainstateUpgrade>);
-    builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
+    builder_method!(empty_consensus_reward_maturity_block_count: BlockCount);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
 

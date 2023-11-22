@@ -76,8 +76,6 @@ pub enum IOPolicyError {
     TokenIssuanceInputMustBeTransactionUtxo,
     #[error("Balance not found for delegation `{0}`")]
     DelegationBalanceNotFound(DelegationId),
-    #[error("Negative maturity distance")]
-    NegativeMaturityDistance,
 }
 
 pub fn check_reward_inputs_outputs_policy(

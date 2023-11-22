@@ -65,17 +65,8 @@ where
     let consensus_data = ConsensusData::PoW(Box::new(PoWData::new(work_required, 0)));
 
     let time_lock = {
-        let block_distance = chain_config.get_proof_of_work_config().reward_maturity_distance();
-
-        let reward_maturity_distance_i64: i64 = block_distance
-            .try_into()
-            .map_err(|_| ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance))?;
-
-        let reward_maturity_distance_u64: u64 = reward_maturity_distance_i64
-            .try_into()
-            .map_err(|_| ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance))?;
-
-        OutputTimeLock::ForBlockCount(reward_maturity_distance_u64)
+        let block_count = chain_config.get_proof_of_work_config().reward_maturity_distance();
+        OutputTimeLock::ForBlockCount(block_count.to_int())
     };
 
     let block_reward = BlockReward::new(vec![TxOutput::LockThenTransfer(

@@ -425,10 +425,9 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(2));
+            chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(2));
         let maturity_distance = rng.gen_range(
-            required_maturity_distance.to_int() as u64
-                ..(required_maturity_distance.to_int() as u64 * 2),
+            required_maturity_distance.to_int()..(required_maturity_distance.to_int() * 2),
         );
 
         let decomission_outputs =
@@ -510,10 +509,9 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(2));
+            chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(2));
         let maturity_distance = rng.gen_range(
-            required_maturity_distance.to_int() as u64
-                ..(required_maturity_distance.to_int() as u64 * 2),
+            required_maturity_distance.to_int()..(required_maturity_distance.to_int() * 2),
         );
 
         let spend_share_outputs =

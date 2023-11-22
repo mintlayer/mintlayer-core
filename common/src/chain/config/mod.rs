@@ -37,6 +37,7 @@ use crate::chain::{GenBlock, Genesis};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
+use crate::primitives::BlockCount;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 
@@ -224,7 +225,7 @@ pub struct ChainConfig {
     token_max_description_len: usize,
     token_min_hash_len: usize,
     token_max_hash_len: usize,
-    empty_consensus_reward_maturity_distance: BlockDistance,
+    empty_consensus_reward_maturity_block_count: BlockCount,
     max_classic_multisig_public_keys_count: usize,
     min_stake_pool_pledge: Amount,
 }
@@ -560,8 +561,8 @@ impl ChainConfig {
 
     /// The minimum number of blocks required for a block reward to mature
     #[must_use]
-    pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
-        self.empty_consensus_reward_maturity_distance
+    pub fn empty_consensus_reward_maturity_block_count(&self) -> BlockCount {
+        self.empty_consensus_reward_maturity_block_count
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
@@ -572,13 +573,13 @@ impl ChainConfig {
 
     /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
     #[must_use]
-    pub fn staking_pool_spend_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
+    pub fn staking_pool_spend_maturity_block_count(&self, block_height: BlockHeight) -> BlockCount {
         match self.consensus_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
-                self.empty_consensus_reward_maturity_distance
+                self.empty_consensus_reward_maturity_block_count
             }
             RequiredConsensus::PoS(status) => {
-                status.get_chain_config().staking_pool_spend_maturity_distance()
+                status.get_chain_config().staking_pool_spend_maturity_block_count()
             }
         }
     }

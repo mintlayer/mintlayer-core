@@ -161,7 +161,6 @@ impl BanScore for OutputMaturityError {
         match self {
             OutputMaturityError::InvalidOutputMaturitySettingType(_) => 100,
             OutputMaturityError::InvalidOutputMaturityDistance(_, _, _) => 100,
-            OutputMaturityError::InvalidOutputMaturityDistanceValue(_, _) => 100,
         }
     }
 }
@@ -306,7 +305,6 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
-            ConsensusPoWError::InvalidBlockRewardMaturityDistance(_) => 0,
         }
     }
 }
@@ -495,7 +493,6 @@ impl BanScore for IOPolicyError {
             IOPolicyError::TokenIdNotFound => 0,
             IOPolicyError::DelegationBalanceNotFound(_) => 0,
             IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
-            IOPolicyError::NegativeMaturityDistance => 100,
         }
     }
 }

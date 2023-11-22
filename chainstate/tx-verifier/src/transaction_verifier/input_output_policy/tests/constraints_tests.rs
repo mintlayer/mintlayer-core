@@ -21,7 +21,7 @@ use common::{
         timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
         NetUpgrades, PoSChainConfigBuilder, PoolId, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockCount, H256},
 };
 use crypto::{
     random::{CryptoRng, Rng, SliceRandom},
@@ -86,7 +86,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         .build();
     let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(block_height);
+        chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -109,7 +109,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let outputs = vec![TxOutput::LockThenTransfer(
         OutputValue::Coin(Amount::from_atoms(staked_atoms - fee_atoms)),
         Destination::AnyoneCanSpend,
-        OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+        OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
     )];
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
@@ -149,7 +149,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         .build();
     let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(block_height);
+        chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let delegation_id = DelegationId::new(H256::zero());
     let delegated_atoms = rng.gen_range(100..1000);
@@ -168,7 +168,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let outputs = vec![TxOutput::LockThenTransfer(
         OutputValue::Coin(Amount::from_atoms(delegated_atoms - fee_atoms)),
         Destination::AnyoneCanSpend,
-        OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+        OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
     )];
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
@@ -313,7 +313,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         .build();
     let block_height = BlockHeight::new(1);
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(block_height);
+        chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(100..1000);
@@ -349,12 +349,12 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
         ),
         TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(10)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64 - 1),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() - 1),
         ),
         TxOutput::Transfer(
             OutputValue::Coin(less_than_staked_amount),
@@ -389,12 +389,12 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
         ),
         TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(10)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
         ),
         TxOutput::Transfer(
             OutputValue::Coin(less_than_staked_amount),
@@ -441,7 +441,9 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         ConsensusUpgrade::PoS {
             initial_difficulty: None,
             config: PoSChainConfigBuilder::new_for_unit_test()
-                .staking_pool_spend_maturity_distance(required_spend_share_maturity.into())
+                .staking_pool_spend_maturity_block_count(BlockCount::new(
+                    required_spend_share_maturity,
+                ))
                 .build(),
         },
     )];
@@ -495,7 +497,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
             OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
             Destination::AnyoneCanSpend,
             OutputTimeLock::ForBlockCount(
-                required_decommission_maturity as u64 + required_spend_share_maturity as u64 - 1,
+                required_decommission_maturity + required_spend_share_maturity - 1,
             ),
         ),
         TxOutput::Transfer(
@@ -519,7 +521,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
             OutputValue::Coin(Amount::from_atoms(staked_atoms + delegated_atoms)),
             Destination::AnyoneCanSpend,
             OutputTimeLock::ForBlockCount(
-                required_decommission_maturity as u64 + required_spend_share_maturity as u64,
+                required_decommission_maturity + required_spend_share_maturity,
             ),
         ),
         TxOutput::Transfer(
@@ -606,7 +608,9 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         OutputValue::Coin(overspent_amount),
         Destination::AnyoneCanSpend,
         OutputTimeLock::ForBlockCount(
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int() as u64,
+            chain_config
+                .staking_pool_spend_maturity_block_count(BlockHeight::new(1))
+                .to_int(),
         ),
     )];
 
@@ -641,7 +645,9 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         OutputValue::Coin(delegation_balance),
         Destination::AnyoneCanSpend,
         OutputTimeLock::ForBlockCount(
-            chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int() as u64,
+            chain_config
+                .staking_pool_spend_maturity_block_count(BlockHeight::new(1))
+                .to_int(),
         ),
     )];
 
@@ -677,7 +683,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int() as u64;
+        chain_config.staking_pool_spend_maturity_block_count(BlockHeight::new(1));
 
     let mut rng = make_seedable_rng(seed);
     let number_of_inputs = rng.gen_range(0..10);
@@ -708,7 +714,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         let mut outputs = random_input_utxos(
             &mut rng,
             transferred_atoms,
-            0..(required_maturity_distance + 100),
+            0..(required_maturity_distance.to_int() + 100),
         )
         .into_iter()
         .chain(std::iter::once(decommission_pool_utxo.clone()))
@@ -728,7 +734,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance + random_additional_value,
+                        required_maturity_distance.to_int() + random_additional_value,
                     ),
                 )
             })
@@ -738,7 +744,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             let mut outputs = random_input_utxos(
                 &mut rng,
                 transferred_atoms + random_additional_value,
-                0..required_maturity_distance,
+                0..required_maturity_distance.to_int(),
             )
             .into_iter()
             .chain(timelocked_outputs.into_iter())
@@ -785,7 +791,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance + random_additional_distance,
+                        required_maturity_distance.to_int() + random_additional_distance,
                     ),
                 )
             })
@@ -826,8 +832,9 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
-    let required_maturity_distance =
-        chain_config.staking_pool_spend_maturity_distance(BlockHeight::new(1)).to_int() as u64;
+    let required_maturity_distance = chain_config
+        .staking_pool_spend_maturity_block_count(BlockHeight::new(1))
+        .to_int();
 
     let mut rng = make_seedable_rng(seed);
     let number_of_outputs = rng.gen_range(0..10);

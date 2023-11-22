@@ -51,7 +51,7 @@ use common::{
         GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
         RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
 };
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
@@ -1516,7 +1516,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
             ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(50))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(50))
                     .build(),
             },
         ),
@@ -1526,7 +1526,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
                     // decommission maturity increased
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(100))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(100))
                     .build(),
             },
         ),
