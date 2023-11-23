@@ -15,13 +15,15 @@
 
 use common::{
     chain::{
-        block::ConsensusData,
+        block::{BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
+use constraints_accumulator::ConstrainedValueAccumulator;
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
@@ -31,7 +33,7 @@ use crate::{
     Fee,
 };
 
-use super::{amounts_map::CoinOrTokenId, error::ConnectTransactionError};
+use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
 
 mod constraints_accumulator;
 mod purposes_check;
@@ -82,17 +84,70 @@ pub enum IOPolicyError {
     DelegationBalanceNotFound(DelegationId),
 }
 
+pub fn calculate_tokens_burned_in_outputs(
+    tx: &Transaction,
+    token_id: &TokenId,
+) -> Result<Amount, ConnectTransactionError> {
+    tx.outputs()
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Burn(output_value) => match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                OutputValue::TokenV1(id, amount) => (id == token_id).then_some(*amount),
+            },
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => None,
+        })
+        .sum::<Option<Amount>>()
+        .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
+}
+
 pub fn check_reward_inputs_outputs_policy(
-    block: &WithId<Block>,
+    chain_config: &ChainConfig,
     utxo_view: &impl utxo::UtxosView,
+    block_reward_transactable: BlockRewardTransactable,
+    block_id: Id<Block>,
+    block_height: BlockHeight,
+    consensus_data: &ConsensusData,
+    total_fees: Fee,
 ) -> Result<(), ConnectTransactionError> {
-    let reward = block.block_reward_transactable();
-    match block.consensus_data() {
-        ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
+    let block_subsidy_at_height = Subsidy(chain_config.block_subsidy_at_height(&block_height));
+
+    purposes_check::check_reward_inputs_outputs_purposes(
+        &block_reward_transactable,
+        utxo_view,
+        block_id,
+    )?;
+
+    match consensus_data {
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new_for_block_reward(
+                total_fees,
+                block_subsidy_at_height,
+            )
+            .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+
+            if let Some(outputs) = block_reward_transactable.outputs() {
+                constraints_accumulator
+                    .process_outputs(chain_config, block_height, outputs)
+                    .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+            }
+
+            constraints_accumulator
+                .consume(chain_config, block_height)
+                .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+        }
         ConsensusData::PoS(_) => {
-            match reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
-                SpendStakeError::NoBlockRewardOutputs,
-            ))? {
+            match block_reward_transactable.outputs().ok_or(
+                ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs),
+            )? {
                 [] => {
                     return Err(ConnectTransactionError::SpendStakeError(
                         SpendStakeError::NoBlockRewardOutputs,
@@ -107,8 +162,7 @@ pub fn check_reward_inputs_outputs_policy(
             };
         }
     };
-
-    purposes_check::check_reward_inputs_outputs_purposes(&reward, utxo_view, block.get_id())
+    Ok(())
 }
 
 pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
@@ -171,7 +225,7 @@ where
     let issuance_token_id_getter =
         |tx_id| issuance_token_id_getter(tx_id).map_err(|_| IOPolicyError::TokenIdQueryFailed);
 
-    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
+    let mut constraints_accumulator = ConstrainedValueAccumulator::new();
 
     constraints_accumulator
         .process_inputs(

@@ -29,9 +29,9 @@ use thiserror::Error;
 use crate::timelock_check;
 
 use super::{
-    amounts_map::CoinOrTokenId, input_output_policy::IOPolicyError,
+    input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
-    storage::TransactionVerifierStorageError,
+    storage::TransactionVerifierStorageError, CoinOrTokenId,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -30,7 +30,10 @@ use common::{
 };
 use utils::ensure;
 
-use crate::{transaction_verifier::amounts_map::CoinOrTokenId, Fee};
+use crate::{
+    transaction_verifier::{CoinOrTokenId, Subsidy},
+    Fee,
+};
 
 use super::IOPolicyError;
 
@@ -50,6 +53,14 @@ impl ConstrainedValueAccumulator {
             unconstrained_value: Default::default(),
             timelock_constrained: Default::default(),
         }
+    }
+
+    pub fn new_for_block_reward(total_fee: Fee, subsidy: Subsidy) -> Option<Self> {
+        let initial_value = (total_fee.0 + subsidy.0)?;
+        Some(Self {
+            unconstrained_value: BTreeMap::from_iter([(CoinOrTokenId::Coin, initial_value)]),
+            timelock_constrained: Default::default(),
+        })
     }
 
     /// Return accumulated coins that are left

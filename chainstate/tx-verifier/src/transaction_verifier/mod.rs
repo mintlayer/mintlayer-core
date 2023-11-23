@@ -20,7 +20,6 @@ mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
 mod tokens_accounting_undo_cache;
-mod transferred_amount_check;
 mod utxos_undo_cache;
 
 pub mod error;
@@ -29,9 +28,6 @@ pub mod hierarchy;
 pub mod signature_destination_getter;
 pub mod storage;
 pub mod timelock_check;
-
-mod amounts_map;
-pub use amounts_map::CoinOrTokenId;
 
 mod tx_source;
 use tokens_accounting::{
@@ -57,7 +53,6 @@ use self::{
     tokens_accounting_undo_cache::{
         TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
     },
-    transferred_amount_check::check_transferred_amount_in_reward,
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
@@ -88,6 +83,12 @@ pub struct Fee(pub Amount);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
 
 /// The change that a block has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]
@@ -234,18 +235,14 @@ where
         total_fees: Fee,
         block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
-        input_output_policy::check_reward_inputs_outputs_policy(block, &self.utxo_cache)?;
-
-        let block_subsidy_at_height =
-            Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
-        check_transferred_amount_in_reward(
+        input_output_policy::check_reward_inputs_outputs_policy(
+            self.chain_config.as_ref(),
             &self.utxo_cache,
-            &self.pos_accounting_adapter.accounting_delta(),
-            &block.block_reward_transactable(),
+            block.block_reward_transactable(),
             block.get_id(),
+            block_height,
             block.consensus_data(),
             total_fees,
-            block_subsidy_at_height,
         )
     }
 
@@ -620,7 +617,7 @@ where
                             .and_then(|_| {
                                 // actual amount to unmint is determined by the number of burned tokens in the outputs
                                 let total_burned =
-                                    transferred_amount_check::calculate_tokens_burned_in_outputs(
+                                    input_output_policy::calculate_tokens_burned_in_outputs(
                                         tx, token_id,
                                     )?;
                                 Ok((total_burned > Amount::ZERO).then_some(total_burned))
