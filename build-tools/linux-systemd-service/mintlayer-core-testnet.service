@@ -1,0 +1,37 @@
+[Unit]
+Description=Mintlayer Testnet Daemon
+After=syslog.target network-online.target
+
+# RULES for picking a user:
+#  1. DO NOT use root
+#  2. DO NOT use a user that has root access through sudo, doas, or similar
+[Service]
+User=mintlayeruser
+
+# Type is simple because the node-daemon is blocking
+Type=simple
+
+# Path of the source code OR executable
+WorkingDirectory=/home/mintlayeruser/mintlayer-core
+
+# Use this if you want the node to be built from source
+ExecStart=cargo run -j 1 --release --bin node-daemon -- testnet
+# If you're using an executable and didn't clone the source, comment the line above, and uncomment below
+#ExecStart=node-daemon testnet
+
+Environment="RUST_BACKTRACE=full"
+# Change `info` to `debug` for deeper logs
+Environment="RUST_LOG=info"
+# Only if compiling from source: Add debug info when building
+Environment="RUSTFLAGS=-g"
+
+# always restart when server is killed for any reason, and wait 60 seconds before retrying
+Restart=always
+RestartSec=60s
+
+# Log files stored in /var/log/
+StandardOutput=append:/var/log/mintlayer-core-testnet-stdout.log
+StandardError=append:/var/log/mintlayer-core-testnet-stderr.log
+
+[Install]
+WantedBy=multi-user.target
