@@ -90,8 +90,7 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)
@@ -182,8 +181,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)
@@ -722,8 +720,7 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
-            connection_count_limits: Default::default(),
+            peer_manager_config: Default::default(),
         });
 
         let initial_blocks = make_new_blocks(
@@ -826,8 +823,7 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
-            connection_count_limits: Default::default(),
+            peer_manager_config: Default::default(),
         });
 
         let initial_blocks = make_new_blocks(
@@ -927,8 +923,7 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
             allow_discover_private_ips: Default::default(),
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
-            enable_block_relay_peers: Default::default(),
-            connection_count_limits: Default::default(),
+            peer_manager_config: Default::default(),
         });
 
         let initial_blocks = make_new_blocks(

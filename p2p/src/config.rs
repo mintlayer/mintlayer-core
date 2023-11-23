@@ -21,7 +21,7 @@ use utils::make_config_setting;
 
 use crate::{
     net::types::services::{Service, Services},
-    peer_manager::ConnectionCountLimits,
+    peer_manager::PeerManagerConfig,
     protocol::ProtocolConfig,
 };
 
@@ -34,7 +34,6 @@ make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(25));
-make_config_setting!(BlockRelayPeers, bool, true);
 make_config_setting!(PeerHandshakeTimeout, Duration, Duration::from_secs(10));
 
 /// A node type.
@@ -104,10 +103,8 @@ pub struct P2pConfig {
     pub user_agent: UserAgent,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
-    /// Enable/disable block relay peers (only used in unit tests)
-    pub enable_block_relay_peers: BlockRelayPeers,
-    /// Various limits for connection counts; these should only be overridden in tests.
-    pub connection_count_limits: ConnectionCountLimits,
+    /// Various limits used internally by the peer manager; these should only be overridden in tests.
+    pub peer_manager_config: PeerManagerConfig,
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,
 }

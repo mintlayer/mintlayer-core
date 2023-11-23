@@ -21,7 +21,7 @@ use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
-use super::{address_groups::AddressGroup, peer_context::PeerContext, ConnectionCountLimits};
+use super::{address_groups::AddressGroup, peer_context::PeerContext, PeerManagerConfig};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
@@ -30,6 +30,17 @@ make_config_setting!(PreservedInboundCountAddressGroup, usize, 4);
 make_config_setting!(PreservedInboundCountPing, usize, 8);
 make_config_setting!(PreservedInboundCountNewBlocks, usize, 8);
 make_config_setting!(PreservedInboundCountNewTransactions, usize, 4);
+
+make_config_setting!(
+    OutboundBlockRelayConnectionMinAge,
+    Duration,
+    Duration::from_secs(120)
+);
+make_config_setting!(
+    OutboundFullRelayConnectionMinAge,
+    Duration,
+    Duration::from_secs(120)
+);
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
@@ -82,15 +93,6 @@ impl EvictionCandidate {
             last_tx_time: peer.last_tx_time,
         }
     }
-}
-
-// Only consider inbound connections for eviction (attackers have no control over outbound connections)
-fn filter_peer_role(
-    mut candidates: Vec<EvictionCandidate>,
-    peer_role: PeerRole,
-) -> Vec<EvictionCandidate> {
-    candidates.retain(|peer| peer.peer_role == peer_role);
-    candidates
 }
 
 fn filter_old_peers(
@@ -176,19 +178,20 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 #[must_use]
 pub fn select_for_eviction_inbound(
     candidates: Vec<EvictionCandidate>,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
-    let candidates = filter_peer_role(candidates, PeerRole::Inbound);
+    debug_assert!(candidates.iter().all(|c| c.peer_role == PeerRole::Inbound));
+
     let candidates =
-        filter_address_group(candidates, *limits.preserved_inbound_count_address_group);
-    let candidates = filter_fast_ping(candidates, *limits.preserved_inbound_count_ping);
+        filter_address_group(candidates, *config.preserved_inbound_count_address_group);
+    let candidates = filter_fast_ping(candidates, *config.preserved_inbound_count_ping);
     let candidates =
-        filter_by_last_tip_block_time(candidates, *limits.preserved_inbound_count_new_blocks);
+        filter_by_last_tip_block_time(candidates, *config.preserved_inbound_count_new_blocks);
     let candidates = filter_by_last_transaction_time(
         candidates,
-        *limits.preserved_inbound_count_new_transactions,
+        *config.preserved_inbound_count_new_transactions,
     );
 
     find_group_most_connections(candidates)
@@ -197,13 +200,47 @@ pub fn select_for_eviction_inbound(
 #[must_use]
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
-    limits: &ConnectionCountLimits,
+    config: &PeerManagerConfig,
 ) -> Option<PeerId> {
-    let candidates = filter_peer_role(candidates, PeerRole::OutboundBlockRelay);
+    select_for_eviction_outbound(
+        candidates,
+        PeerRole::OutboundBlockRelay,
+        *config.outbound_block_relay_connection_min_age,
+        *config.outbound_block_relay_count,
+    )
+}
 
-    // Give peers some time to have a chance to send blocks
-    let mut candidates = filter_old_peers(candidates, Duration::from_secs(120));
-    if candidates.len() < *limits.outbound_block_relay_count {
+#[must_use]
+pub fn select_for_eviction_full_relay(
+    candidates: Vec<EvictionCandidate>,
+    config: &PeerManagerConfig,
+) -> Option<PeerId> {
+    // TODO: in bitcoin they protect full relay peers from eviction if there are no other
+    // connection to their network (counting outbound-full-relay and manual peers). We should
+    // probably do the same.
+    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
+    select_for_eviction_outbound(
+        candidates,
+        PeerRole::OutboundFullRelay,
+        *config.outbound_full_relay_connection_min_age,
+        *config.outbound_full_relay_count,
+    )
+}
+
+fn select_for_eviction_outbound(
+    candidates: Vec<EvictionCandidate>,
+    peer_role: PeerRole,
+    min_age: Duration,
+    max_count: usize,
+) -> Option<PeerId> {
+    debug_assert!(candidates.iter().all(|c| c.peer_role == peer_role));
+
+    // Give peers some time to have a chance to send blocks.
+    // TODO: in bitcoin, in addition to checking MINIMUM_CONNECT_TIME, they also check whether
+    // there are blocks in-flight with this peer; we should consider doing it too.
+    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
+    let mut candidates = filter_old_peers(candidates, min_age);
+    if candidates.len() <= max_count {
         return None;
     }
 

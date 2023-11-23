@@ -54,6 +54,69 @@ pub fn get_preferred_protocol_version_for_tests() -> SupportedProtocolVersion {
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
 
 impl<T: TransportSocket> DefaultNetworkingService<T> {
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn start_generic(
+        transport: <Self as NetworkingService>::Transport,
+        socket: <T as TransportSocket>::Listener,
+        chain_config: Arc<common::chain::ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
+        shutdown: Arc<SeqCstAtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
+        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+        protocol_version: ProtocolVersion,
+        tracing_span: tracing::Span,
+    ) -> crate::Result<(
+        <Self as NetworkingService>::ConnectivityHandle,
+        <Self as NetworkingService>::MessagingHandle,
+        <Self as NetworkingService>::SyncingEventReceiver,
+        JoinHandle<()>,
+    )> {
+        let (cmd_sender, cmd_receiver) = mpsc::unbounded_channel();
+        let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
+        let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
+        let local_addresses = socket.local_addresses().expect("to have bind address available");
+
+        let backend = Backend::<T>::new(
+            transport,
+            socket,
+            chain_config,
+            Arc::clone(&p2p_config),
+            time_getter.clone(),
+            cmd_receiver,
+            conn_event_sender,
+            syncing_event_sender,
+            Arc::clone(&shutdown),
+            shutdown_receiver,
+            subscribers_receiver,
+            protocol_version,
+        );
+        let backend_task = logging::spawn_in_span(
+            async move {
+                match backend.run().await {
+                    Ok(never) => match never {},
+                    Err(P2pError::ChannelClosed) if shutdown.load() => {
+                        log::info!("Backend is shut down");
+                    }
+                    Err(e) => {
+                        shutdown.store(true);
+                        log::error!("Failed to run backend: {e}");
+                    }
+                }
+            },
+            tracing_span,
+        );
+
+        Ok((
+            ConnectivityHandle::new(local_addresses, cmd_sender.clone(), conn_event_receiver),
+            MessagingHandle::new(cmd_sender),
+            SyncingEventReceiver {
+                syncing_event_receiver,
+            },
+            backend_task,
+        ))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn start_with_version(
         transport: <Self as NetworkingService>::Transport,
@@ -71,47 +134,19 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         <Self as NetworkingService>::SyncingEventReceiver,
         JoinHandle<()>,
     )> {
-        let (cmd_sender, cmd_receiver) = mpsc::unbounded_channel();
-        let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
-        let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let socket = transport.bind(bind_addresses).await?;
-        let local_addresses = socket.local_addresses().expect("to have bind address available");
-
-        let backend = Backend::<T>::new(
+        Self::start_generic(
             transport,
             socket,
             chain_config,
-            Arc::clone(&p2p_config),
-            time_getter.clone(),
-            cmd_receiver,
-            conn_event_sender,
-            syncing_event_sender,
-            Arc::clone(&shutdown),
+            p2p_config,
+            time_getter,
+            shutdown,
             shutdown_receiver,
             subscribers_receiver,
             protocol_version,
-        );
-        let backend_task = logging::spawn_in_current_span(async move {
-            match backend.run().await {
-                Ok(never) => match never {},
-                Err(P2pError::ChannelClosed) if shutdown.load() => {
-                    log::info!("Backend is shut down");
-                }
-                Err(e) => {
-                    shutdown.store(true);
-                    log::error!("Failed to run backend: {e}");
-                }
-            }
-        });
-
-        Ok((
-            ConnectivityHandle::new(local_addresses, cmd_sender.clone(), conn_event_receiver),
-            MessagingHandle::new(cmd_sender),
-            SyncingEventReceiver {
-                syncing_event_receiver,
-            },
-            backend_task,
-        ))
+            tracing::Span::current(),
+        )
     }
 }
 

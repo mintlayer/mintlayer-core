@@ -181,6 +181,18 @@ impl Manager {
         ));
         ManagerJoinHandle { handle }
     }
+
+    /// Runs the application in a separate task.
+    ///
+    /// This does the same as `main_in_task` but uses the specified tracing span instead of
+    /// the current one.
+    pub fn main_in_task_in_span(self, tracing_span: tracing::Span) -> ManagerJoinHandle {
+        let handle = Some(logging::spawn_in_span(
+            async move { self.main().await },
+            tracing_span,
+        ));
+        ManagerJoinHandle { handle }
+    }
 }
 
 /// Information about each subsystem stored by the manager

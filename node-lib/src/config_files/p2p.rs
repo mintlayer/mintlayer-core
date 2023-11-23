@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use p2p::{
     config::{NodeType, P2pConfig},
-    peer_manager::ConnectionCountLimits,
+    peer_manager::PeerManagerConfig,
     types::ip_or_socket_address::IpOrSocketAddress,
 };
 
@@ -113,8 +113,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
-            enable_block_relay_peers: Default::default(),
-            connection_count_limits: ConnectionCountLimits {
+            peer_manager_config: PeerManagerConfig {
                 max_inbound_connections: c.max_inbound_connections.into(),
 
                 preserved_inbound_count_address_group: Default::default(),
@@ -123,7 +122,15 @@ impl From<P2pConfigFile> for P2pConfig {
                 preserved_inbound_count_new_transactions: Default::default(),
 
                 outbound_full_relay_count: Default::default(),
+                outbound_full_relay_extra_count: Default::default(),
                 outbound_block_relay_count: Default::default(),
+                outbound_block_relay_extra_count: Default::default(),
+
+                outbound_block_relay_connection_min_age: Default::default(),
+                outbound_full_relay_connection_min_age: Default::default(),
+
+                stale_tip_time_diff: Default::default(),
+                main_loop_tick_interval: Default::default(),
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),

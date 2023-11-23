@@ -138,11 +138,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.addresses.keys()
     }
 
-    /// Selects peer addresses for outbound connections (except reserved).
+    /// Selects peer addresses for outbound connections, excluding reserved ones.
     /// Only one outbound connection is allowed per address group.
-    pub fn select_new_outbound_addresses(
+    pub fn select_new_non_reserved_outbound_addresses(
         &self,
-        automatic_outbound: &BTreeSet<SocketAddress>,
+        cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         count: usize,
     ) -> Vec<SocketAddress> {
         if count == 0 {
@@ -151,19 +151,12 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let now = self.time_getter.get_time();
 
-        // Only consider outbound connections, as inbound connections are open to attackers.
-        // Manual and reserved outbound peers are ignored.
-        let outbound_groups = automatic_outbound
-            .iter()
-            .map(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
-            .collect::<BTreeSet<_>>();
-
         let mut selected = self
             .addresses
             .iter()
             .filter_map(|(addr, address_data)| {
                 if address_data.connect_now(now)
-                    && !outbound_groups
+                    && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
@@ -186,7 +179,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(
         &self,
-        pending_outbound: &BTreeSet<SocketAddress>,
+        cur_pending_outbound_conn_addresses: &BTreeSet<SocketAddress>,
     ) -> Vec<SocketAddress> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
@@ -196,7 +189,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
+                if address_data.connect_now(now)
+                    && !cur_pending_outbound_conn_addresses.contains(addr)
+                {
                     Some(*addr)
                 } else {
                     None

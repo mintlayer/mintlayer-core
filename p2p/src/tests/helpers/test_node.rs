@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
-use p2p_test_utils::SHORT_TIMEOUT;
+use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
@@ -35,7 +35,11 @@ use crate::{
     config::P2pConfig,
     error::P2pError,
     net::{
-        default_backend::{transport::TransportSocket, DefaultNetworkingService},
+        default_backend::{
+            transport::{TransportListener, TransportSocket},
+            DefaultNetworkingService,
+        },
+        types::PeerRole,
         ConnectivityService,
     },
     peer_manager::{
@@ -48,7 +52,7 @@ use crate::{
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::chain::ChainConfig;
 use utils::atomics::SeqCstAtomicBool;
 
 use super::{PeerManagerNotification, PeerManagerObserver, TestDnsSeed, TestPeersInfo};
@@ -60,6 +64,8 @@ pub struct TestNode<Transport>
 where
     Transport: TransportSocket,
 {
+    time_getter: P2pBasicTestTimeGetter,
+    p2p_config: Arc<P2pConfig>,
     peer_mgr_event_sender: mpsc::UnboundedSender<PeerManagerEvent>,
     local_address: SocketAddress,
     shutdown: Arc<SeqCstAtomicBool>,
@@ -92,27 +98,53 @@ where
     Transport: TransportSocket,
 {
     pub async fn start(
-        time_getter: TimeGetter,
+        time_getter: P2pBasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         transport: Transport,
         bind_address: SocketAddress,
         protocol_version: ProtocolVersion,
+        node_name: Option<&str>,
     ) -> Self {
+        let socket = transport.bind(vec![bind_address]).await.unwrap();
+        let local_address = socket.local_addresses().unwrap()[0];
+
+        let tracing_span = if let Some(node_name) = node_name {
+            tracing::debug_span!(
+                parent: &tracing::Span::current(),
+                "",
+                node = node_name,
+                addr = ?local_address.socket_addr()
+            )
+        } else {
+            tracing::Span::current()
+        };
+
+        let _tracing_span_guard = tracing_span.enter();
+
+        // TODO: if one of the tasks that is spawned below panics, it won't cause the current test
+        // to fail. In fact, some tests (e.g. new_full_relay_connections_on_stale_tip) will
+        // continue running until the timeout kicks in, unable to make any progress.
+        // Moreover, nothing informative will be printed to the log or console, making the failure
+        // rather cryptic.
+        // We need a mechanism that would cause immediate test failure when a panic occurs
+        // inside a task/separate thread.
+
         let chainstate = make_chainstate(
             Arc::clone(&chain_config),
             ChainstateConfig::new(),
             chainstate_storage::inmemory::Store::new_empty().unwrap(),
             DefaultTransactionVerificationStrategy::new(),
             None,
-            time_getter.clone(),
+            time_getter.get_time_getter(),
         )
         .unwrap();
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
-            p2p_test_utils::start_subsystems_with_chainstate(
+            p2p_test_utils::start_subsystems_generic(
                 chainstate,
                 Arc::clone(&chain_config),
-                time_getter.clone(),
+                time_getter.get_time_getter(),
+                tracing_span.clone(),
             );
 
         let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
@@ -121,18 +153,18 @@ where
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
         let (conn_handle, messaging_handle, syncing_event_receiver, backend_join_handle) =
-            DefaultNetworkingService::<Transport>::start_with_version(
+            DefaultNetworkingService::<Transport>::start_generic(
                 transport,
-                vec![bind_address],
+                socket,
                 Arc::clone(&chain_config),
                 Arc::clone(&p2p_config),
-                time_getter.clone(),
+                time_getter.get_time_getter(),
                 Arc::clone(&shutdown),
                 backend_shutdown_receiver,
                 subscribers_receiver,
                 protocol_version,
+                tracing_span.clone(),
             )
-            .await
             .unwrap();
 
         let local_address = conn_handle.local_addresses()[0];
@@ -147,21 +179,24 @@ where
             Arc::clone(&p2p_config),
             conn_handle,
             peer_mgr_event_receiver,
-            time_getter.clone(),
+            time_getter.get_time_getter(),
             peerdb_inmemory_store(),
             Some(peer_mgr_observer),
             Box::new(TestDnsSeed::new(dns_seed_addresses.clone())),
         )
         .unwrap();
-        let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
-            let mut peer_mgr = peer_mgr;
-            let err = match peer_mgr.run_without_consuming_self().await {
-                Err(err) => err,
-                Ok(never) => match never {},
-            };
+        let peer_mgr_join_handle = logging::spawn_in_span(
+            async move {
+                let mut peer_mgr = peer_mgr;
+                let err = match peer_mgr.run_without_consuming_self().await {
+                    Err(err) => err,
+                    Ok(never) => match never {},
+                };
 
-            (peer_mgr, err)
-        });
+                (peer_mgr, err)
+            },
+            tracing_span.clone(),
+        );
 
         let sync_mgr = SyncManager::<DefaultNetworkingService<Transport>>::new(
             Arc::clone(&chain_config),
@@ -171,16 +206,21 @@ where
             chainstate.clone(),
             mempool,
             peer_mgr_event_sender.clone(),
-            time_getter.clone(),
+            time_getter.get_time_getter(),
         );
-        let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
-            match sync_mgr.run().await {
-                Err(err) => err,
-                Ok(never) => match never {},
-            }
-        });
+        let sync_mgr_join_handle = logging::spawn_in_span(
+            async move {
+                match sync_mgr.run().await {
+                    Err(err) => err,
+                    Ok(never) => match never {},
+                }
+            },
+            tracing_span.clone(),
+        );
 
         TestNode {
+            time_getter,
+            p2p_config,
             peer_mgr_event_sender,
             local_address,
             shutdown,
@@ -195,6 +235,14 @@ where
             chainstate,
             dns_seed_addresses,
         }
+    }
+
+    pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
+        &self.time_getter
+    }
+
+    pub fn p2p_config(&self) -> &P2pConfig {
+        &self.p2p_config
     }
 
     pub fn local_address(&self) -> &SocketAddress {
@@ -250,6 +298,10 @@ where
         }
     }
 
+    pub fn try_recv_peer_mgr_notification(&mut self) -> Option<PeerManagerNotification> {
+        self.peer_mgr_notification_receiver.try_recv().ok()
+    }
+
     pub async fn get_peers_info(&self) -> TestPeersInfo {
         let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
 
@@ -264,6 +316,67 @@ where
             .unwrap();
 
         response_receiver.recv().await.unwrap()
+    }
+
+    pub async fn assert_connected_to(&self, expected_connections: &[(SocketAddress, PeerRole)]) {
+        let peers_info = self.get_peers_info().await;
+        assert_eq!(peers_info.info.len(), expected_connections.len());
+
+        for (addr, role) in expected_connections {
+            let peer_info = peers_info.info.get(addr).unwrap();
+            assert_eq!(peer_info.role, *role);
+        }
+    }
+
+    // Assert that the number of outbound full/block relay connections is at least
+    // outbound_xxx_relay_count.
+    // Still, the number shouldn't exceed outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
+    pub async fn assert_outbound_conn_count_maximums_reached(&self) {
+        let peer_mgr_config = &self.p2p_config.peer_manager_config;
+
+        let peers_info = self.get_peers_info().await;
+        let outbound_full_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
+        let outbound_block_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
+
+        assert!(outbound_full_relay_peers_count >= *peer_mgr_config.outbound_full_relay_count);
+        assert!(
+            outbound_full_relay_peers_count
+                <= *peer_mgr_config.outbound_full_relay_count
+                    + *peer_mgr_config.outbound_full_relay_extra_count
+        );
+
+        assert!(outbound_block_relay_peers_count >= *peer_mgr_config.outbound_block_relay_count);
+        assert!(
+            outbound_block_relay_peers_count
+                <= *peer_mgr_config.outbound_block_relay_count
+                    + *peer_mgr_config.outbound_block_relay_extra_count
+        );
+    }
+
+    // Assert that the number of outbound full/block relay connections doesn't exceed
+    // outbound_xxx_relay_count + outbound_xxx_relay_extra_count.
+    pub async fn assert_outbound_conn_count_within_limits(&self) {
+        let peer_mgr_config = &self.p2p_config.peer_manager_config;
+
+        let peers_info = self.get_peers_info().await;
+        let outbound_full_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
+        let outbound_block_relay_peers_count =
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
+
+        assert!(
+            outbound_full_relay_peers_count
+                <= *peer_mgr_config.outbound_full_relay_count
+                    + *peer_mgr_config.outbound_full_relay_extra_count
+        );
+
+        assert!(
+            outbound_block_relay_peers_count
+                <= *peer_mgr_config.outbound_block_relay_count
+                    + *peer_mgr_config.outbound_block_relay_extra_count
+        );
     }
 
     pub fn set_dns_seed_addresses(&self, addresses: Vec<SocketAddress>) {

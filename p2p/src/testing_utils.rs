@@ -251,8 +251,7 @@ pub fn test_p2p_config() -> P2pConfig {
         allow_discover_private_ips: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        enable_block_relay_peers: Default::default(),
-        connection_count_limits: Default::default(),
+        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     }
 }

@@ -18,3 +18,4 @@ utils = { path = "../../utils" }
 
 portpicker.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tracing.workspace = true

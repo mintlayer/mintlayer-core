@@ -26,12 +26,9 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage},
-    net::{
-        default_backend::{
-            transport::TransportSocket,
-            types::{BackendEvent, PeerEvent},
-        },
-        types::Role,
+    net::default_backend::{
+        transport::TransportSocket,
+        types::{BackendEvent, PeerEvent},
     },
     protocol::{choose_common_protocol_version, ProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -49,18 +46,6 @@ pub enum ConnectionInfo {
         handshake_nonce: HandshakeNonce,
         local_services_override: Option<Services>,
     },
-}
-
-impl From<ConnectionInfo> for Role {
-    fn from(role: ConnectionInfo) -> Self {
-        match role {
-            ConnectionInfo::Inbound => Role::Inbound,
-            ConnectionInfo::Outbound {
-                handshake_nonce: _,
-                local_services_override: _,
-            } => Role::Outbound,
-        }
-    }
 }
 
 pub struct Peer<T: TransportSocket> {
@@ -152,8 +137,9 @@ where
         // given by the span of the acceptable time interval: `handshake_timeout + 2 * tolerance`.
 
         let max_offset = *p2p_config.max_clock_diff;
-        let accepted_peer_time_start = (local_time_start - max_offset)
-            .expect("Local clock minus a small offset should not underflow");
+        // Note: in tests max_clock_diff can be very large, e.g. larger than local_time_start's
+        // duration since epoch, so use saturating subtraction here.
+        let accepted_peer_time_start = local_time_start.saturating_duration_sub(max_offset);
         let accepted_peer_time_end = (local_time_end + max_offset)
             .expect("Local time plus a small offset should not overflow");
         let accepted_peer_time = accepted_peer_time_start..=accepted_peer_time_end;

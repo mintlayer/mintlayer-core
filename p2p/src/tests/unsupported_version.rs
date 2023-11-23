@@ -41,12 +41,13 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
-        time_getter.get_time_getter(),
+        time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 
@@ -118,12 +119,13 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
-        time_getter.get_time_getter(),
+        time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 
@@ -187,12 +189,13 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
-        time_getter.get_time_getter(),
+        time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
+        None,
     )
     .await;
 
