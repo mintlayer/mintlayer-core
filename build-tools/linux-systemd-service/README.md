@@ -43,7 +43,9 @@ Consider checking out these stories:
 3. Edit the following in the service file:
 
     A. The `user` to whatever user should run mintlayer daemon. NEVER use root or a user with root access.
+
     B. The `WorkingDirectory`; either point to the source code that you want to use to run, or the directory of the executable
+
     C. The ExecStart; If you want to run the executable manually, write the path of the executable of mintlayer daemon
 
 4. Copy that file to the directory `/etc/systemd/system/` (you need root access for that). The file will end up being in: `/etc/systemd/system/mintlayer-core-testnet.service`
