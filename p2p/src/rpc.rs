@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::SignedTransaction;
-use mempool::tx_options::TxOptionsOverrides;
+use mempool::rpc::TxWithOptions;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
     socket_address::SocketAddress,
 };
-use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use rpc::RpcResult;
@@ -68,11 +66,7 @@ trait P2pRpc {
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(
-        &self,
-        tx: HexEncoded<SignedTransaction>,
-        options: TxOptionsOverrides,
-    ) -> RpcResult<()>;
+    async fn submit_transaction(&self, tx: TxWithOptions) -> RpcResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -127,14 +121,9 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn submit_transaction(
-        &self,
-        tx: HexEncoded<SignedTransaction>,
-        options: TxOptionsOverrides,
-    ) -> RpcResult<()> {
-        let res = self
-            .call_async_mut(move |this| this.submit_transaction(tx.take(), options))
-            .await;
+    async fn submit_transaction(&self, tx: TxWithOptions) -> RpcResult<()> {
+        let (tx, options) = tx.into_tx_and_overrides();
+        let res = self.call_async_mut(move |this| this.submit_transaction(tx, options)).await;
         rpc::handle_result(res)
     }
 }

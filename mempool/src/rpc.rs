@@ -19,11 +19,14 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
-use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
-use crate::{FeeRate, MempoolMaxSize, TxStatus};
+use crate::{
+    tx_options::{TxOptions, TxOptionsOverrides},
+    tx_origin::{LocalTxOrigin, TxOrigin},
+    FeeRate, MempoolMaxSize, TxStatus,
+};
 
 use rpc::RpcResult;
 
@@ -32,6 +35,41 @@ pub struct GetTxResponse {
     id: Id<Transaction>,
     status: TxStatus,
     transaction: HexEncoded<SignedTransaction>,
+}
+
+/// Transaction and possibly some processing options
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum TxWithOptions {
+    TxOnly(HexEncoded<SignedTransaction>),
+    WithOptions {
+        tx: HexEncoded<SignedTransaction>,
+        #[serde(default)]
+        options: TxOptionsOverrides,
+    },
+}
+
+impl TxWithOptions {
+    /// Get the finalized transaction and options
+    pub fn into_tx_and_options(self, origin: TxOrigin) -> (SignedTransaction, TxOptions) {
+        let (tx, overrides) = self.into_tx_and_overrides();
+        let options = TxOptions::default_for(origin).with_overrides(overrides);
+        (tx, options)
+    }
+
+    pub fn into_tx_and_overrides(self) -> (SignedTransaction, TxOptionsOverrides) {
+        let (tx, overrides) = match self {
+            TxWithOptions::TxOnly(tx) => (tx, TxOptionsOverrides::default()),
+            TxWithOptions::WithOptions { tx, options } => (tx, options),
+        };
+        (tx.take(), overrides)
+    }
+}
+
+impl From<SignedTransaction> for TxWithOptions {
+    fn from(tx: SignedTransaction) -> Self {
+        Self::TxOnly(tx.into())
+    }
 }
 
 #[rpc::rpc(server, client, namespace = "mempool")]
@@ -50,11 +88,7 @@ trait MempoolRpc {
     async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(
-        &self,
-        tx: HexEncoded<SignedTransaction>,
-        options: TxOptionsOverrides,
-    ) -> RpcResult<()>;
+    async fn submit_transaction(&self, tx: TxWithOptions) -> RpcResult<()>;
 
     #[method(name = "local_best_block_id")]
     async fn local_best_block_id(&self) -> RpcResult<Id<GenBlock>>;
@@ -113,15 +147,11 @@ impl MempoolRpcServer for super::MempoolHandle {
         }))
     }
 
-    async fn submit_transaction(
-        &self,
-        tx: HexEncoded<SignedTransaction>,
-        options: TxOptionsOverrides,
-    ) -> rpc::RpcResult<()> {
+    async fn submit_transaction(&self, tx: TxWithOptions) -> rpc::RpcResult<()> {
         let origin = LocalTxOrigin::Mempool;
-        let options = TxOptions::default_for(origin.into()).with_overrides(options);
+        let (tx, options) = tx.into_tx_and_options(origin.into());
         let res = self
-            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options))
+            .call_mut(move |m| m.add_transaction_local(tx, origin, options))
             .await
             .log_err();
         rpc::handle_result(res)
