@@ -93,9 +93,9 @@ pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
 
 #[macro_export]
 macro_rules! assert_matches_return_val {
-    ($in:expr, $pattern:pat, $out:expr) => {
+    ($in:expr, $pattern:pat $(if $guard:expr)?, $out:expr) => {
         match $in {
-            $pattern => $out,
+            $pattern $(if $guard)? => $out,
             _ => {
                 panic!(
                     "Assertion failed: expression {} doesn't match pattern {}",
@@ -109,8 +109,8 @@ macro_rules! assert_matches_return_val {
 
 #[macro_export]
 macro_rules! assert_matches {
-    ($in:expr, $pattern:pat) => {
-        $crate::assert_matches_return_val!($in, $pattern, ())
+    ($in:expr, $pattern:pat $(if $guard:expr)?) => {
+        $crate::assert_matches_return_val!($in, $pattern $(if $guard)?, ())
     };
 }
 

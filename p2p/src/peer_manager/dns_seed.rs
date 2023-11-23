@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::chain::{config::ChainType, ChainConfig};
+use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p_types::socket_address::SocketAddress;
@@ -42,30 +42,21 @@ impl DefaultDnsSeed {
     }
 }
 
-/// Hardcoded seed DNS hostnames
-// TODO: Replace with actual values
-const DNS_SEEDS_MAINNET: [&str; 0] = [];
-const DNS_SEEDS_TESTNET: [&str; 1] = ["testnet-seed.mintlayer.org"];
-
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
 
 #[async_trait]
 impl DnsSeed for DefaultDnsSeed {
     async fn obtain_addresses(&self) -> Vec<SocketAddress> {
-        let dns_seed = match self.chain_config.chain_type() {
-            ChainType::Mainnet => DNS_SEEDS_MAINNET.as_slice(),
-            ChainType::Testnet => DNS_SEEDS_TESTNET.as_slice(),
-            ChainType::Regtest | ChainType::Signet => &[],
-        };
+        let dns_seeds = self.chain_config.dns_seeds();
 
-        if dns_seed.is_empty() {
+        if dns_seeds.is_empty() {
             return Vec::new();
         }
 
-        log::debug!("Resolve DNS seed...");
+        log::debug!("Resolving DNS seeds...");
         let results = futures::future::join_all(
-            dns_seed
+            dns_seeds
                 .iter()
                 .map(|host| tokio::net::lookup_host((*host, self.chain_config.p2p_port()))),
         )
@@ -90,7 +81,7 @@ impl DnsSeed for DefaultDnsSeed {
                     });
                 }
                 Err(err) => {
-                    log::error!("resolve DNS seed failed: {err}");
+                    log::error!("Resolving DNS seed failed: {err}");
                 }
             }
         }

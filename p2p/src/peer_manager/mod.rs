@@ -265,6 +265,8 @@ where
     last_dns_query_time: Option<Time>,
     /// Last time ping check was performed.
     last_ping_check_time: Option<Time>,
+    /// If true, we've already loaded the predefined addresses into peerdb.
+    predefined_addresses_already_loaded: bool,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -341,6 +343,7 @@ where
             last_heartbeat_time: None,
             last_dns_query_time: None,
             last_ping_check_time: None,
+            predefined_addresses_already_loaded: false,
         })
     }
 
@@ -1653,6 +1656,35 @@ where
         }
     }
 
+    /// Load predefined addresses into peerdb if needed, i.e. if the db is empty and we've already
+    /// queried the dns seed.
+    ///
+    /// Return true if peerdb has been updated.
+    fn load_predefined_addresses_if_needed(&mut self) -> bool {
+        if self.predefined_addresses_already_loaded {
+            return false;
+        }
+
+        if self.chain_config.predefined_peer_addresses().is_empty() {
+            self.predefined_addresses_already_loaded = true;
+            return false;
+        }
+
+        let peerdb_is_empty = self.peerdb.known_addresses().next().is_none();
+
+        if peerdb_is_empty && self.last_dns_query_time.is_some() {
+            log::debug!("Loading predefined addresses into peerdb");
+
+            for addr in self.chain_config.predefined_peer_addresses() {
+                self.peerdb.peer_discovered(SocketAddress::new(*addr));
+            }
+            self.predefined_addresses_already_loaded = true;
+            return true;
+        }
+
+        false
+    }
+
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has these main responsibilities:
@@ -1753,6 +1785,10 @@ where
             // Query dns seed
             if self.dns_seed_query_needed() {
                 self.query_dns_seed().await;
+                early_heartbeat_needed = true;
+            }
+
+            if self.load_predefined_addresses_if_needed() {
                 early_heartbeat_needed = true;
             }
 

@@ -220,7 +220,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         });
     }
 
-    /// Add new peer addresses
+    /// Add a new peer address
     pub fn peer_discovered(&mut self, address: SocketAddress) {
         if let Entry::Vacant(entry) = self.addresses.entry(address) {
             log::debug!("new address discovered: {}", address.to_string());
