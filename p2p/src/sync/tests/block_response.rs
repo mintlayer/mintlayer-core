@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
 
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
@@ -29,7 +33,9 @@ use test_utils::random::{shuffle_until_different, Seed};
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
-    sync::tests::helpers::{make_new_blocks, make_new_top_blocks_return_headers, TestNode},
+    sync::tests::helpers::{
+        make_new_blocks, make_new_top_blocks_return_headers, PeerManagerEventDesc, TestNode,
+    },
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -217,7 +223,19 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
 
                 if shuffled_index == expected_index {
                     expected_indices.pop_front();
-                    node.assert_no_peer_manager_event().await;
+
+                    let expected_block_id = blocks[shuffled_index].get_id();
+                    node.receive_peer_manager_events(BTreeSet::from_iter(
+                        [
+                            PeerManagerEventDesc::NewTipReceived {
+                                peer_id: peer.get_id(),
+                                block_id: expected_block_id,
+                            },
+                            PeerManagerEventDesc::NewChainstateTip(expected_block_id),
+                        ]
+                        .into_iter(),
+                    ))
+                    .await;
                 } else {
                     let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
                     assert_eq!(peer.get_id(), adjusted_peer);
