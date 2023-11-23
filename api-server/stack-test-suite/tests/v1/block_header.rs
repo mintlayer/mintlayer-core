@@ -36,7 +36,7 @@ async fn block_not_found() {
     )
     .await;
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();

@@ -33,7 +33,7 @@ async fn invalid_height() {
 async fn height_zero() {
     let (task, response) = spawn_webserver("/api/v1/chain/0").await;
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -50,7 +50,7 @@ async fn height_zero() {
 async fn height_past_tip() {
     let (task, response) = spawn_webserver("/api/v1/chain/1337").await;
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();

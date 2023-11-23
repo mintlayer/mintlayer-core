@@ -16,7 +16,8 @@
 use crate::{
     api::json_helpers::{amount_to_json, tx_to_json},
     error::{
-        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerServerError,
+        ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerNotFoundError,
+        ApiServerWebServerServerError,
     },
 };
 use api_server_common::storage::storage_api::{
@@ -94,8 +95,8 @@ async fn get_block(
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(ApiServerWebServerError::ClientError(
-            ApiServerWebServerClientError::BlockNotFound,
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::BlockNotFound,
         ))
 }
 
@@ -218,8 +219,8 @@ pub async fn chain_at_height<T: ApiServerStorage>(
 
     match block_id {
         Some(block_id) => Ok(Json(block_id)),
-        None => Err(ApiServerWebServerError::ClientError(
-            ApiServerWebServerClientError::NoBlockAtHeight,
+        None => Err(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::NoBlockAtHeight,
         )),
     }
 }
@@ -281,8 +282,8 @@ async fn get_transaction(
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(ApiServerWebServerError::ClientError(
-            ApiServerWebServerClientError::TransactionNotFound,
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TransactionNotFound,
         ))
 }
 
@@ -317,7 +318,6 @@ pub async fn transaction<T: ApiServerStorage>(
     })))
 }
 
-#[allow(clippy::unused_async)]
 pub async fn transaction_merkle_path<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
@@ -332,8 +332,8 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
             (block, transaction.transaction().clone())
         }
         (None, _) => {
-            return Err(ApiServerWebServerError::ClientError(
-                ApiServerWebServerClientError::TransactionNotPartOfBlock,
+            return Err(ApiServerWebServerError::NotFound(
+                ApiServerWebServerNotFoundError::TransactionNotPartOfBlock,
             ))
         }
     };
@@ -406,8 +406,8 @@ pub async fn address<T: ApiServerStorage>(
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(ApiServerWebServerError::ClientError(
-            ApiServerWebServerClientError::AddressNotFound,
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::AddressNotFound,
         ))?;
 
     let transaction_history = state
