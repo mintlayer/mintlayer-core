@@ -52,7 +52,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         self.log.debug("Encoded tx3 {}: {}".format(tx3_id, tx3))
 
         # Submit the first transaction
-        node.mempool_submit_transaction(tx1)
+        node.mempool_submit_transaction(tx1, {})
         assert node.mempool_contains_tx(tx1_id)
         assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
@@ -75,8 +75,8 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # Submit the other two transactions
-        node.mempool_submit_transaction(tx2)
-        node.mempool_submit_transaction(tx3)
+        node.mempool_submit_transaction(tx2, {})
+        node.mempool_submit_transaction(tx3, {})
         assert not node.mempool_contains_tx(tx1_id)
         assert node.mempool_contains_tx(tx2_id)
         assert node.mempool_contains_tx(tx3_id)

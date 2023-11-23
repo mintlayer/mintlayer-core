@@ -69,7 +69,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         self.log.debug("Encoded tx1 {}: {}".format(tx1_id, tx1))
 
         # The transaction should be rejected because of IBD
-        assert_raises_rpc_error(None, IBD_ERR, node.mempool_submit_transaction, tx1)
+        assert_raises_rpc_error(None, IBD_ERR, node.mempool_submit_transaction, tx1, {})
         assert not node.mempool_contains_tx(tx1_id)
 
         # Produce a block but wait over a day to submit it
@@ -78,7 +78,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         self.submit_block(block1)
 
         # The transaction should still be rejected because of IBD
-        assert_raises_rpc_error(None, IBD_ERR, node.mempool_submit_transaction, tx1)
+        assert_raises_rpc_error(None, IBD_ERR, node.mempool_submit_transaction, tx1, {})
         assert not node.mempool_contains_tx(tx1_id)
 
         # Produce a block but don't wait too long before submission
@@ -89,7 +89,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         self.log.debug("Chain info 2: {}".format(node.chainstate_info()))
 
         # The transaction should now be accepted
-        node.mempool_submit_transaction(tx1)
+        node.mempool_submit_transaction(tx1, {})
         assert node.mempool_contains_tx(tx1_id)
 
 if __name__ == '__main__':

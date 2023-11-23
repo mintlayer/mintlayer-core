@@ -65,7 +65,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
         self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
-        assert_raises_rpc_error(None, "Transaction has no inputs", node.mempool_submit_transaction, encoded_tx)
+        assert_raises_rpc_error(None, "Transaction has no inputs", node.mempool_submit_transaction, encoded_tx, {})
         assert not node.mempool_contains_tx(tx_id)
 
         # Submit a valid transaction
@@ -93,7 +93,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
         self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
-        node.mempool_submit_transaction(encoded_tx)
+        node.mempool_submit_transaction(encoded_tx, {})
         assert node.mempool_contains_tx(tx_id)
 
 

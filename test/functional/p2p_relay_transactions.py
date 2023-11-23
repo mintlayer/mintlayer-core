@@ -60,7 +60,7 @@ class RelayTransactions(BitcoinTestFramework):
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
 
-        assert_raises_rpc_error(None, "Transaction has no inputs", self.nodes[0].p2p_submit_transaction, encoded_tx)
+        assert_raises_rpc_error(None, "Transaction has no inputs", self.nodes[0].p2p_submit_transaction, encoded_tx, {})
         assert not self.nodes[0].mempool_contains_tx(tx_id)
         assert not self.nodes[1].mempool_contains_tx(tx_id)
 
@@ -89,7 +89,7 @@ class RelayTransactions(BitcoinTestFramework):
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
 
-        self.nodes[0].p2p_submit_transaction(encoded_tx)
+        self.nodes[0].p2p_submit_transaction(encoded_tx, {})
         assert self.nodes[0].mempool_contains_tx(tx_id)
         self.assert_mempool_contains_tx(1, tx_id)
 

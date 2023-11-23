@@ -184,7 +184,8 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
     async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
+        let options = mempool::tx_options::TxOptionsOverrides::default();
+        let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into(), options)
             .await
             .map_err(NodeRpcError::ResponseError)?;
         Ok(status)

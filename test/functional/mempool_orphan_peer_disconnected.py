@@ -48,8 +48,8 @@ class MempoolOrphanFromDisconnectedPeerTest(BitcoinTestFramework):
         (tx2, tx2_id) = make_tx([ tx_input(tx1_id) ], [ 900_000 ] )
 
         # Submit two transactions that build on top of each other but only propagate the second one
-        node0.mempool_submit_transaction(tx1)
-        node0.p2p_submit_transaction(tx2)
+        node0.mempool_submit_transaction(tx1, {})
+        node0.p2p_submit_transaction(tx2, {})
 
         # Check the node gets the orphan transaction
         self.wait_until(lambda: node1.mempool_contains_orphan_tx(tx2_id), timeout = 5)

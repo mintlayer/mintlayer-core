@@ -268,7 +268,8 @@ pub fn generate_transaction_graph(
         );
 
         let origin = RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
-        let entry = TxEntry::new(tx, time, origin);
+        let options = crate::TxOptions::default_for(origin);
+        let entry = TxEntry::new(tx, time, origin, options);
         TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
     })
 }

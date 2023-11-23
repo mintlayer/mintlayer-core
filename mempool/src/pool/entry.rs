@@ -21,7 +21,7 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use super::{Fee, Time, TxOrigin};
+use super::{Fee, Time, TxOptions, TxOrigin};
 use crate::tx_origin::IsOrigin;
 
 /// A dependency of a transaction on a previous account state.
@@ -104,11 +104,17 @@ pub struct TxEntry<O = TxOrigin> {
     creation_time: Time,
     encoded_size: usize,
     origin: O,
+    options: TxOptions,
 }
 
 impl<O: IsOrigin> TxEntry<O> {
     /// Create a new mempool transaction entry
-    pub fn new(transaction: SignedTransaction, creation_time: Time, origin: O) -> Self {
+    pub fn new(
+        transaction: SignedTransaction,
+        creation_time: Time,
+        origin: O,
+        options: TxOptions,
+    ) -> Self {
         let tx_id = transaction.transaction().get_id();
         let encoded_size = serialization::Encode::encoded_size(&transaction);
         Self {
@@ -117,6 +123,7 @@ impl<O: IsOrigin> TxEntry<O> {
             creation_time,
             encoded_size,
             origin,
+            options,
         }
     }
 
@@ -143,6 +150,11 @@ impl<O: IsOrigin> TxEntry<O> {
     /// Where we got this transaction
     pub fn origin(&self) -> O {
         self.origin
+    }
+
+    /// Get transaction processing options
+    pub fn options(&self) -> &TxOptions {
+        &self.options
     }
 
     /// Dependency graph edges this entry requires
@@ -179,6 +191,7 @@ impl<O: IsOrigin> TxEntry<O> {
                     creation_time,
                     encoded_size,
                     origin: _,
+                    options,
                 } = self;
 
                 Ok(TxEntry {
@@ -187,6 +200,7 @@ impl<O: IsOrigin> TxEntry<O> {
                     creation_time,
                     encoded_size,
                     origin,
+                    options,
                 })
             }
             Err(err) => Err((self, err)),

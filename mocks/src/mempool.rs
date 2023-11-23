@@ -26,7 +26,7 @@ use mempool::{
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, TxStatus,
+    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
 
 mockall::mock! {
@@ -36,13 +36,15 @@ mockall::mock! {
         fn add_transaction_local(
             &mut self,
             tx: SignedTransaction,
-            origin: LocalTxOrigin
+            origin: LocalTxOrigin,
+            options: TxOptions,
         ) -> Result<(), Error>;
 
         fn add_transaction_remote(
             &mut self,
             tx: SignedTransaction,
             origin: RemoteTxOrigin,
+            options: TxOptions,
         ) -> Result<TxStatus, Error>;
 
         fn get_all(&self) -> Vec<SignedTransaction>;

@@ -491,9 +491,13 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
         let tx1_id = tx1.transaction().get_id();
         txs.insert(tx1_id, tx1.clone());
 
+        let origin = RemoteTxOrigin::new(peer_id);
+        let options0 = mempool::TxOptions::default_for(origin.into());
+        let options1 = options0.clone();
+
         let res = node
             .mempool()
-            .call_mut(move |m| m.add_transaction_remote(tx1, RemoteTxOrigin::new(peer_id)))
+            .call_mut(move |m| m.add_transaction_remote(tx1, origin, options0))
             .await
             .unwrap();
         assert_eq!(res, Ok(mempool::TxStatus::InOrphanPool));
@@ -504,7 +508,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         let res = node
             .mempool()
-            .call_mut(move |m| m.add_transaction_remote(tx0, RemoteTxOrigin::new(peer_id)))
+            .call_mut(move |m| m.add_transaction_remote(tx0, origin, options1))
             .await
             .unwrap();
         assert_eq!(res, Ok(mempool::TxStatus::InMempool));

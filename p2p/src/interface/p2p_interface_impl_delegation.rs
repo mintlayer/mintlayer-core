@@ -19,6 +19,7 @@ use std::{
 };
 
 use common::chain::SignedTransaction;
+use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
     socket_address::SocketAddress,
@@ -70,8 +71,12 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().remove_reserved_node(addr).await
     }
 
-    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
-        self.deref_mut().submit_transaction(tx).await
+    async fn submit_transaction(
+        &mut self,
+        tx: SignedTransaction,
+        options: TxOptionsOverrides,
+    ) -> crate::Result<()> {
+        self.deref_mut().submit_transaction(tx, options).await
     }
 
     fn subscribe_to_events(

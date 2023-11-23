@@ -20,6 +20,7 @@ use common::{
 
 use crate::{
     error::{Error, MempoolBanScore},
+    tx_options::TxRelayPolicy,
     tx_origin::TxOrigin,
 };
 
@@ -28,24 +29,31 @@ use crate::{
 pub struct TransactionProcessed {
     tx_id: Id<Transaction>,
     origin: TxOrigin,
+    relay_policy: TxRelayPolicy,
     result: crate::Result<()>,
 }
 
 impl TransactionProcessed {
-    fn new(tx_id: Id<Transaction>, origin: TxOrigin, result: crate::Result<()>) -> Self {
+    fn new(
+        tx_id: Id<Transaction>,
+        origin: TxOrigin,
+        relay_policy: TxRelayPolicy,
+        result: crate::Result<()>,
+    ) -> Self {
         Self {
             tx_id,
             origin,
+            relay_policy,
             result,
         }
     }
 
-    pub fn accepted(tx_id: Id<Transaction>, origin: TxOrigin) -> Self {
-        Self::new(tx_id, origin, Ok(()))
+    pub fn accepted(tx_id: Id<Transaction>, relay_policy: TxRelayPolicy, origin: TxOrigin) -> Self {
+        Self::new(tx_id, origin, relay_policy, Ok(()))
     }
 
     pub fn rejected(tx_id: Id<Transaction>, err: Error, origin: TxOrigin) -> Self {
-        Self::new(tx_id, origin, Err(err))
+        Self::new(tx_id, origin, TxRelayPolicy::DontRelay, Err(err))
     }
 
     pub fn result(&self) -> &crate::Result<()> {
@@ -66,6 +74,10 @@ impl TransactionProcessed {
 
     pub fn origin(&self) -> TxOrigin {
         self.origin
+    }
+
+    pub fn relay_policy(&self) -> TxRelayPolicy {
+        self.relay_policy
     }
 }
 

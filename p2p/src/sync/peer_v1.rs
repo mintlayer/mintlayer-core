@@ -34,7 +34,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::MempoolHandle;
+use mempool::{MempoolHandle, TxOptions};
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
@@ -891,10 +891,11 @@ where
 
         if let Some(transaction) = tx {
             let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
+            let options = TxOptions::default_for(origin.into());
             let txid = transaction.transaction().get_id();
             let tx_status = self
                 .mempool_handle
-                .call_mut(move |m| m.add_transaction_remote(transaction, origin))
+                .call_mut(move |m| m.add_transaction_remote(transaction, origin, options))
                 .await??;
             match tx_status {
                 mempool::TxStatus::InMempool => {

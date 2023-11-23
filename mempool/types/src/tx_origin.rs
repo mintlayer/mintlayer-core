@@ -25,16 +25,6 @@ pub enum TxOrigin {
     Remote(RemoteTxOrigin),
 }
 
-impl TxOrigin {
-    /// Should this transaction be passed on to peers once accepted?
-    pub fn should_propagate(self) -> bool {
-        match self {
-            Self::Local(origin) => origin.should_propagate(),
-            Self::Remote(origin) => origin.should_propagate(),
-        }
-    }
-}
-
 impl From<LocalTxOrigin> for TxOrigin {
     fn from(value: LocalTxOrigin) -> Self {
         Self::Local(value)
@@ -60,16 +50,6 @@ pub enum LocalTxOrigin {
     PastBlock,
 }
 
-impl LocalTxOrigin {
-    pub fn should_propagate(self) -> bool {
-        match self {
-            LocalTxOrigin::Mempool => false,
-            LocalTxOrigin::P2p => true,
-            LocalTxOrigin::PastBlock => false,
-        }
-    }
-}
-
 /// Transaction was received from a peer.
 ///
 /// If it eventually turns out to be valid, it should be propagated further to other peers.
@@ -80,10 +60,6 @@ pub struct RemoteTxOrigin(PeerId);
 impl RemoteTxOrigin {
     pub const fn new(peer_id: PeerId) -> Self {
         Self(peer_id)
-    }
-
-    pub fn should_propagate(self) -> bool {
-        true
     }
 
     pub const fn peer_id(self) -> PeerId {

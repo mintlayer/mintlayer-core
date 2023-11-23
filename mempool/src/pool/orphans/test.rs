@@ -82,11 +82,13 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Duration::from_secs(rng.gen());
     let origin = random_peer_origin(rng);
+    let options = crate::TxOptions::default_for(origin.into());
 
     TxEntry::new(
         transaction,
         Time::from_duration_since_epoch(insertion_time),
         origin,
+        options,
     )
 }
 

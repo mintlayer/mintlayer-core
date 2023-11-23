@@ -19,7 +19,7 @@ use crate::{
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, TxStatus,
+    FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
 use common::{
     chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
@@ -127,8 +127,15 @@ impl MempoolInterface for MempoolImpl {
         &mut self,
         tx: SignedTransaction,
         origin: LocalTxOrigin,
+        options: TxOptions,
     ) -> Result<(), Error> {
-        let status = self.mempool.add_transaction(tx, origin.into(), &mut self.work_queue)?;
+        let status = self.mempool.add_transaction_with_options(
+            tx,
+            origin.into(),
+            options,
+            &mut self.work_queue,
+        )?;
+
         // TODO The following assertion could be avoided by parametrizing the above
         // `add_transaction` by the origin type and have the return type depend on it.
         assert_eq!(status, TxStatus::InMempool);
@@ -139,8 +146,10 @@ impl MempoolInterface for MempoolImpl {
         &mut self,
         tx: SignedTransaction,
         origin: RemoteTxOrigin,
+        options: TxOptions,
     ) -> Result<TxStatus, Error> {
-        self.mempool.add_transaction(tx, origin.into(), &mut self.work_queue)
+        self.mempool
+            .add_transaction_with_options(tx, origin.into(), options, &mut self.work_queue)
     }
 
     fn get_all(&self) -> Vec<SignedTransaction> {

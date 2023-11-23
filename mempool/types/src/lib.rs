@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod tx_options;
 pub mod tx_origin;
 mod tx_status;
 
+pub use tx_options::TxOptions;
 pub use tx_status::TxStatus;
