@@ -28,7 +28,7 @@ use common::{
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
-    MempoolConfig,
+    FeeRate, MempoolConfig,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use serialization::Encode;
@@ -454,7 +454,7 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
 
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let min_fee_per_byte = Amount::from_atoms(1000);
+        let min_fee_rate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
         let new_block_reward_amount = Amount::from_atoms(1_000_000);
 
         let new_block_reward = vec![TxOutput::LockThenTransfer(
@@ -471,7 +471,7 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
 
         let p2p_config = Arc::new(test_p2p_config());
         let mempool_config = Arc::new(MempoolConfig {
-            min_tx_relay_fee_per_byte: min_fee_per_byte.into(),
+            min_tx_relay_fee_rate: min_fee_rate.into(),
         });
         let mut node = TestNode::builder(protocol_version)
             .with_p2p_config(Arc::clone(&p2p_config))
@@ -485,18 +485,18 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
         let estimated_tx_size =
             transaction_with_amount(block1_id.into(), new_block_reward_amount.into_atoms())
                 .encoded_size();
-        let min_tx_fee = (min_fee_per_byte * estimated_tx_size as u128).unwrap();
+        let min_tx_fee = min_fee_rate.compute_fee(estimated_tx_size).unwrap().into_atoms();
 
         // tx1's fee is below the minimum
         let tx1 = transaction_with_amount(
             block1_id.into(),
-            (new_block_reward_amount - (min_tx_fee / 2).unwrap()).unwrap().into_atoms(),
+            new_block_reward_amount.into_atoms() - min_tx_fee / 2,
         );
         let tx1_id = tx1.transaction().get_id();
         // tx2's fee is exactly the minimal one.
         let tx2 = transaction_with_amount(
             block2_id.into(),
-            (new_block_reward_amount - min_tx_fee).unwrap().into_atoms(),
+            new_block_reward_amount.into_atoms() - min_tx_fee,
         );
         let tx2_id = tx2.transaction().get_id();
 

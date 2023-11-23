@@ -18,6 +18,8 @@ use std::time::Duration;
 use common::primitives::{Amount, BlockDistance};
 use utils::make_config_setting;
 
+use crate::FeeRate;
+
 /// Mempool size configuration
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub struct MempoolMaxSize(usize);
@@ -71,12 +73,16 @@ pub const FUTURE_TIMELOCK_TOLERANCE: Duration = Duration::from_secs(5 * 60);
 
 pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);
 
-// 10^-7 of a coin
-make_config_setting!(MinTxRelayFeePerByte, Amount, Amount::from_atoms(10_000));
+// 10^-4 of a coin per 1000 bytes
+make_config_setting!(
+    MinTxRelayFeeRate,
+    FeeRate,
+    FeeRate::from_amount_per_kb(Amount::from_atoms(10_000_000))
+);
 
 #[derive(Debug, Clone, Default)]
 pub struct MempoolConfig {
-    pub min_tx_relay_fee_per_byte: MinTxRelayFeePerByte,
+    pub min_tx_relay_fee_rate: MinTxRelayFeeRate,
 }
 
 impl MempoolConfig {

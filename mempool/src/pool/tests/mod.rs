@@ -47,11 +47,11 @@ const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 /// Max tip age of about 100 years, useful to avoid the IBD state during testing
 const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365 * 24 * 60 * 60));
 
-const TEST_MIN_TX_RELAY_FEE_PER_BYTE: Amount = Amount::from_atoms(1);
+const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
 
 fn create_mempool_config() -> MempoolConfig {
     MempoolConfig {
-        min_tx_relay_fee_per_byte: TEST_MIN_TX_RELAY_FEE_PER_BYTE.into(),
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
     }
 }
 
@@ -95,7 +95,7 @@ impl<M> Mempool<M> {
 }
 
 fn get_relay_fee_from_tx_size(tx_size: usize) -> Amount {
-    (TEST_MIN_TX_RELAY_FEE_PER_BYTE * tx_size.try_into().unwrap()).unwrap()
+    TEST_MIN_TX_RELAY_FEE_RATE.compute_fee(tx_size).unwrap().into()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -131,9 +131,9 @@ async fn add_single_tx() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn add_tx_with_fee_below_minimum() {
-    let min_relay_fee_per_byte = Amount::from_atoms(123);
-    let mut mempool = setup_with_min_tx_relay_fee(min_relay_fee_per_byte);
+async fn add_tx_with_fee_rate_below_minimum() {
+    let min_relay_fee_rate = FeeRate::from_amount_per_kb(Amount::from_atoms(123));
+    let mut mempool = setup_with_min_tx_relay_fee_rate(min_relay_fee_rate);
 
     async fn make_tx(
         mempool: &Mempool<StoreMemoryUsageEstimator>,
@@ -155,12 +155,13 @@ async fn add_tx_with_fee_below_minimum() {
     }
 
     let estimated_tx_size = make_tx(&mempool, Amount::ZERO.into()).await.encoded_size();
+    let min_relay_fee = min_relay_fee_rate.compute_fee(estimated_tx_size).unwrap();
 
-    let min_relay_fee: Fee = (min_relay_fee_per_byte * estimated_tx_size as u128).unwrap().into();
-    let tx_relay_fee = (min_relay_fee - Amount::from_atoms(1).into()).unwrap();
-    let tx = make_tx(&mempool, tx_relay_fee).await;
+    // Tx1's fee is below the minimum, so it must be rejected.
+    let tx1_relay_fee = (min_relay_fee - Amount::from_atoms(1).into()).unwrap();
+    let tx1 = make_tx(&mempool, tx1_relay_fee).await;
 
-    let err = mempool.add_transaction_test(tx).unwrap_err();
+    let err = mempool.add_transaction_test(tx1).unwrap_err();
     assert!(matches!(
         err,
         Error::Policy(MempoolPolicyError::InsufficientFeesToRelay {
@@ -168,6 +169,11 @@ async fn add_tx_with_fee_below_minimum() {
             min_relay_fee: _
         })
     ));
+
+    // Tx2's fee is exactly the minimum, so it must be accepted.
+    let tx2 = make_tx(&mempool, min_relay_fee).await;
+    let tx_status = mempool.add_transaction_test(tx2).unwrap();
+    assert_eq!(tx_status, TxStatus::InMempool);
 }
 
 #[rstest]
@@ -270,11 +276,11 @@ fn setup() -> Mempool<StoreMemoryUsageEstimator> {
     )
 }
 
-fn setup_with_min_tx_relay_fee(fee: Amount) -> Mempool<StoreMemoryUsageEstimator> {
+fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let mempool_config = Arc::new(MempoolConfig {
-        min_tx_relay_fee_per_byte: fee.into(),
+        min_tx_relay_fee_rate: fee_rate.into(),
     });
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     Mempool::new(

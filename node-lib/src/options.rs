@@ -183,9 +183,9 @@ pub struct RunOptions {
     #[clap(long)]
     pub rpc_cookie_file: Option<String>,
 
-    /// Minimum transaction relay fee per byte.
+    /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
     #[clap(long)]
-    pub min_tx_relay_fee_per_byte: Option<u64>,
+    pub min_tx_relay_fee_rate: Option<u64>,
 }
 
 impl Options {

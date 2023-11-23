@@ -31,7 +31,12 @@ pub struct FeeRate {
 }
 
 impl FeeRate {
+    // TODO: remove this, use the more descriptive from_amount_per_kb instead.
     pub const fn new(amount_per_kb: Amount) -> Self {
+        Self { amount_per_kb }
+    }
+
+    pub const fn from_amount_per_kb(amount_per_kb: Amount) -> Self {
         Self { amount_per_kb }
     }
 

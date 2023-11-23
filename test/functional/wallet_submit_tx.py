@@ -41,10 +41,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        relay_fee = random.randint(1, 100_000_000)
+        relay_fee_rate = random.randint(1, 100_000_000)
         self.extra_args = [[
             "--blockprod-min-peers-to-produce-blocks=0",
-            f"--min-tx-relay-fee-per-byte={relay_fee}",
+            f"--min-tx-relay-fee-rate={relay_fee_rate}",
         ]]
 
     def setup_network(self):

@@ -62,8 +62,7 @@ impl MempoolBanScore for MempoolPolicyError {
 
             // Sending transactions with a fee below the minimum should not be punished.
             MempoolPolicyError::InsufficientFeesToRelay { .. } => 0,
-            // TODO: should this be 0 as well?
-            MempoolPolicyError::InsufficientFeesToRelayRBF => 100,
+            MempoolPolicyError::InsufficientFeesToRelayRBF => 0,
 
             // Rolling fee may be out of sync
             MempoolPolicyError::RollingFeeThresholdNotMet { .. } => 0,

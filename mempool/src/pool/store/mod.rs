@@ -90,7 +90,7 @@ pub struct MempoolStore {
     // first.
     // The descendant score of an entry is defined as:
     //  max(fee/size of entry's tx, fee/size with all descendants).
-    //  TODO if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
+    //  TODO if we wish to follow Bitcoin Core, "size" is not simply the encoded size, but
     // rather a value that takes into account witness and sigop data (see CTxMemPoolEntry::GetTxSize).
     pub txs_by_descendant_score: TrackedTxIdMultiMap<DescendantScore>,
 

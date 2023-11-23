@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use common::primitives::Amount;
-use mempool::MempoolConfig;
+use mempool::{FeeRate, MempoolConfig};
 
 use crate::RunOptions;
 
@@ -25,8 +25,8 @@ use crate::RunOptions;
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct MempoolConfigFile {
-    /// Minimum transaction relay fee per byte.
-    pub min_tx_relay_fee_per_byte: Option<u64>,
+    /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
+    pub min_tx_relay_fee_rate: Option<u64>,
 }
 
 impl MempoolConfigFile {
@@ -36,14 +36,13 @@ impl MempoolConfigFile {
 
     pub fn with_run_options(config: MempoolConfigFile, options: &RunOptions) -> MempoolConfigFile {
         let MempoolConfigFile {
-            min_tx_relay_fee_per_byte,
+            min_tx_relay_fee_rate,
         } = config;
 
-        let min_tx_relay_fee_per_byte =
-            min_tx_relay_fee_per_byte.or(options.min_tx_relay_fee_per_byte);
+        let min_tx_relay_fee_rate = min_tx_relay_fee_rate.or(options.min_tx_relay_fee_rate);
 
         MempoolConfigFile {
-            min_tx_relay_fee_per_byte,
+            min_tx_relay_fee_rate,
         }
     }
 }
@@ -51,12 +50,12 @@ impl MempoolConfigFile {
 impl From<MempoolConfigFile> for MempoolConfig {
     fn from(config_file: MempoolConfigFile) -> Self {
         let MempoolConfigFile {
-            min_tx_relay_fee_per_byte,
+            min_tx_relay_fee_rate,
         } = config_file;
 
         Self {
-            min_tx_relay_fee_per_byte: min_tx_relay_fee_per_byte
-                .map(|val| Amount::from_atoms(val.into()))
+            min_tx_relay_fee_rate: min_tx_relay_fee_rate
+                .map(|val| FeeRate::from_amount_per_kb(Amount::from_atoms(val.into())))
                 .into(),
         }
     }

@@ -518,11 +518,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn get_minimum_relay_fee(&self, tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
-        let size =
-            tx.encoded_size().try_into().map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
-        let min_fee = (*self.mempool_config.min_tx_relay_fee_per_byte * size)
-            .ok_or(MempoolPolicyError::RelayFeeOverflow)?;
-        Ok(min_fee.into())
+        self.mempool_config.min_tx_relay_fee_rate.compute_fee(tx.encoded_size())
     }
 
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
@@ -1055,11 +1051,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
-            .and_then(|feerate| {
-                (*self.mempool_config.min_tx_relay_fee_per_byte * 1000)
-                    .ok_or(MempoolPolicyError::FeeOverflow)
-                    .map(|min_relay_fee| std::cmp::max(feerate, FeeRate::new(min_relay_fee)))
-            })
+            // TODO: should INCREMENTAL_RELAY_FEE_RATE also be taken into account here?
+            .map(|feerate| std::cmp::max(feerate, *self.mempool_config.min_tx_relay_fee_rate))
     }
 
     pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {
