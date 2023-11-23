@@ -26,19 +26,30 @@ use thiserror::Error;
 pub enum ApiServerWebServerError {
     #[error("Client error: {0}")]
     ClientError(#[from] ApiServerWebServerClientError),
+    #[error("Not found error: {0}")]
+    NotFound(#[from] ApiServerWebServerNotFoundError),
     #[error("Server error: {0}")]
     ServerError(#[from] ApiServerWebServerServerError),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
-pub enum ApiServerWebServerClientError {
+pub enum ApiServerWebServerNotFoundError {
     #[error("Address not found")]
     AddressNotFound,
-    #[error("Bad request")]
-    BadRequest,
     #[error("Block not found")]
     BlockNotFound,
+    #[error("No block found at supplied height")]
+    NoBlockAtHeight,
+    #[error("Transaction not found")]
+    TransactionNotFound,
+    #[error("Transaction not part of any block")]
+    TransactionNotPartOfBlock,
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum ApiServerWebServerClientError {
+    #[error("Bad request")]
+    BadRequest,
     #[error("Invalid block height")]
     InvalidBlockHeight,
     #[error("Invalid block Id")]
@@ -47,12 +58,6 @@ pub enum ApiServerWebServerClientError {
     InvalidAddress,
     #[error("Invalid transaction Id")]
     InvalidTransactionId,
-    #[error("No block found at supplied height")]
-    NoBlockAtHeight,
-    #[error("Transaction not found")]
-    TransactionNotFound,
-    #[error("Transaction not part of any block")]
-    TransactionNotPartOfBlock,
 }
 
 #[allow(dead_code)]
@@ -76,6 +81,7 @@ impl IntoResponse for ApiServerWebServerError {
             ApiServerWebServerError::ClientError(error) => {
                 (StatusCode::BAD_REQUEST, error.to_string())
             }
+            ApiServerWebServerError::NotFound(error) => (StatusCode::NOT_FOUND, error.to_string()),
             ApiServerWebServerError::ServerError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }

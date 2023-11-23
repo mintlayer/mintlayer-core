@@ -149,7 +149,7 @@ async fn get_block_failed(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -250,7 +250,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();

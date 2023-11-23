@@ -34,7 +34,7 @@ async fn block_not_found() {
     let (task, response) = spawn_webserver(
     "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/transaction-ids").await;
 
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 404);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
