@@ -46,9 +46,10 @@ Consider checking out these stories:
 
     B. The `WorkingDirectory`; either point to the source code that you want to use to run, or the directory of the executable
 
-    C. The ExecStart; If you want to run the executable manually, write the path of the executable of mintlayer daemon
+    C. The `ExecStart`; If you want to run the executable manually, write the path of the executable of mintlayer daemon
 
 4. Copy that file to the directory `/etc/systemd/system/` (you need root access for that). The file will end up being in: `/etc/systemd/system/mintlayer-core-testnet.service`
+5. Make sure the file is owned by root by running: `chown root:root /etc/systemd/system/mintlayer-core-testnet.service`
 5. Reload systemd services with: `sudo systemctl daemon-reload`
 6. Enable the mintlayer daemon service with: `sudo systemctl enable mintlayer-core-testnet`
 7. Start the service with: `sudo systemctl start mintlayer-core-testnet`
