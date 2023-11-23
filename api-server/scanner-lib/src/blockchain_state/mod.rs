@@ -218,23 +218,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     match output_value {
                         OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
                         OutputValue::Coin(amount) => {
-                            let current_balance = db_tx
-                                .get_address_balance(address.get())
-                                .await
-                                .expect("Unable to get balance")
-                                .unwrap_or(Amount::ZERO);
-
-                            let new_amount =
-                                current_balance.add(*amount).expect("Balance should not overflow");
-
-                            db_tx
-                                .set_address_balance_at_height(
-                                    address.get(),
-                                    new_amount,
-                                    block_height,
-                                )
-                                .await
-                                .expect("Unable to update balance")
+                            increase_address_amount(db_tx, &address, amount, block_height).await;
                         }
                     }
                 }
@@ -249,24 +233,22 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
 }
 
 async fn calculate_fees<T: ApiServerStorageWrite>(
-    chain_config: Arc<ChainConfig>,
+    chain_config: &ChainConfig,
     db_tx: &mut T,
     block: &Block,
     block_height: BlockHeight,
 ) -> Result<Fee, ApiServerStorageError> {
     let mut total_fees = AccumulatedFee::new();
     for tx in block.transactions() {
-        let fee = tx_fees(&chain_config, block_height, tx, db_tx).await?;
+        let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
         total_fees = total_fees.combine(fee).expect("no overflow");
     }
 
-    Ok(total_fees
-        .map_into_block_fees(&chain_config, block_height)
-        .expect("no overflow"))
+    Ok(total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow"))
 }
 
 async fn tx_fees<T: ApiServerStorageWrite>(
-    chain_config: &Arc<ChainConfig>,
+    chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &SignedTransaction,
     db_tx: &mut T,
@@ -356,7 +338,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
         ConsensusData::PoS(pos_data) => {
             let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
 
-            let total_fees = calculate_fees(chain_config, db_tx, block, block_height).await?;
+            let total_fees = calculate_fees(&chain_config, db_tx, block, block_height).await?;
 
             let total_reward =
                 (block_subsidy + total_fees.0).expect("Block subsidy and fees should not overflow");
@@ -408,7 +390,10 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                     db_tx
                         .set_delegation_at_height(delegation_id, &delegation, block_height)
                         .await?;
-                    // TODO: update address balance
+                    let address =
+                        Address::<Destination>::new(&chain_config, delegation.spend_destination())
+                            .expect("Unable to encode address");
+                    increase_address_amount(db_tx, &address, &rewards, block_height).await;
                 }
 
                 (total_delegations_reward - total_delegation_reward_distributed)
@@ -494,6 +479,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
                             .await
                             .expect("Unable to update delegation");
+                        let address = Address::<Destination>::new(
+                            &chain_config,
+                            delegation.spend_destination(),
+                        )
+                        .expect("Unable to encode address");
+                        decrease_address_amount(db_tx, address, amount, block_height).await;
                     }
                 }
             }
@@ -583,29 +574,18 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 address_transactions
                                     .entry(address.clone())
                                     .or_default()
-                                    .insert(transaction_id);
+                                    .insert(tx_id);
 
                                 match output_value {
                                     OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
                                     OutputValue::Coin(amount) => {
-                                        let current_balance = db_tx
-                                            .get_address_balance(address.get())
-                                            .await
-                                            .expect("Unable to get balance")
-                                            .unwrap_or(Amount::ZERO);
-
-                                        let new_amount = current_balance
-                                            .sub(*amount)
-                                            .expect("Balance should not underflow");
-
-                                        db_tx
-                                            .set_address_balance_at_height(
-                                                address.get(),
-                                                new_amount,
-                                                block_height,
-                                            )
-                                            .await
-                                            .expect("Unable to update balance")
+                                        decrease_address_amount(
+                                            db_tx,
+                                            address,
+                                            amount,
+                                            block_height,
+                                        )
+                                        .await;
                                     }
                                 }
                             }
@@ -684,6 +664,11 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to update pool balance");
                 set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+                let address =
+                    Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
+                        .expect("Unable to encode address");
+                increase_address_amount(db_tx, &address, &stake_pool_data.value(), block_height)
+                    .await;
             }
             | TxOutput::DelegateStaking(amount, delegation_id) => {
                 // Update delegation pledge
@@ -704,10 +689,11 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
                         .expect("Unable to encode address");
-                address_transactions.entry(address).or_default().insert(transaction_id);
+                increase_address_amount(db_tx, &address, amount, block_height).await;
+
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
                 set_utxo(transaction_id, idx, output, db_tx, block_height).await;
-                // TODO: update address amount?
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
@@ -720,23 +706,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     match output_value {
                         OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
                         OutputValue::Coin(amount) => {
-                            let current_balance = db_tx
-                                .get_address_balance(address.get())
-                                .await
-                                .expect("Unable to get balance")
-                                .unwrap_or(Amount::ZERO);
-
-                            let new_amount =
-                                current_balance.add(*amount).expect("Balance should not overflow");
-
-                            db_tx
-                                .set_address_balance_at_height(
-                                    address.get(),
-                                    new_amount,
-                                    block_height,
-                                )
-                                .await
-                                .expect("Unable to update balance")
+                            increase_address_amount(db_tx, &address, amount, block_height).await;
                         }
                     }
                     set_utxo(transaction_id, idx, output, db_tx, block_height).await;
@@ -764,6 +734,46 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     }
 
     Ok(())
+}
+
+async fn increase_address_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: &Address<Destination>,
+    amount: &Amount,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_balance(address.get())
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .await
+        .expect("Unable to update balance")
+}
+
+async fn decrease_address_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: Address<Destination>,
+    amount: &Amount,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_balance(address.get())
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .await
+        .expect("Unable to update balance")
 }
 
 async fn set_utxo<T: ApiServerStorageWrite>(
