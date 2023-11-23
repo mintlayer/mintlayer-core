@@ -35,7 +35,7 @@ use crate::{
     Fee,
 };
 
-use super::IOPolicyError;
+use super::{consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator, IOPolicyError};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -64,32 +64,11 @@ impl ConstrainedValueAccumulator {
     }
 
     /// Return accumulated coins that are left
-    pub fn consume(
-        self,
-        chain_config: &ChainConfig,
-        block_height: BlockHeight,
-    ) -> Result<Fee, IOPolicyError> {
-        let unconstrained_change = self
-            .unconstrained_value
-            .get(&CoinOrTokenId::Coin)
-            .cloned()
-            .unwrap_or(Amount::ZERO);
-
-        let maturity_distance = chain_config.staking_pool_spend_maturity_block_count(block_height);
-
-        let timelocked_change = self
-            .timelock_constrained
-            .into_iter()
-            .filter_map(|(lock, amount)| {
-                (lock.get() <= maturity_distance.to_int()).then_some(amount)
-            })
-            .sum::<Option<Amount>>()
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-
-        let fee = (unconstrained_change + timelocked_change)
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-
-        Ok(Fee(fee))
+    pub fn consume(self) -> ConsumedConstrainedValueAccumulator {
+        ConsumedConstrainedValueAccumulator::from_values(
+            self.unconstrained_value,
+            self.timelock_constrained,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

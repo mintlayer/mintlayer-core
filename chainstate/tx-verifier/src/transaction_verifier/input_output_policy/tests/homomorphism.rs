@@ -48,9 +48,9 @@ fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128
 // Create 2 transactions. The first decommissions the pool and transfer some amount.
 // The second one spends share from delegation and also transfers some amount.
 // Actual amounts and the number of inputs/outputs used is random.
-// Calculate fees for both transactions using a single ConstrainedValueAccumulator.
-// Then calculate fees again but using separate accumulators per tx.
-// The resulting fees must be equal.
+// Process both transactions using a single ConstrainedValueAccumulator.
+// Then process them again but using separate accumulators per tx.
+// The resulting objects must be equal.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -228,7 +228,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
             .unwrap();
 
-        constraints_accumulator.consume(&chain_config, block_height).unwrap()
+        constraints_accumulator.consume()
     };
 
     let fee2 = {
@@ -250,7 +250,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             .process_outputs(&chain_config, block_height, decommission_tx.outputs())
             .unwrap();
 
-        let fee1 = constraints_accumulator_1.consume(&chain_config, block_height).unwrap();
+        let mut fee1 = constraints_accumulator_1.consume();
 
         let mut constraints_accumulator_2 =
             constraints_accumulator::ConstrainedValueAccumulator::new();
@@ -270,11 +270,15 @@ fn combine_accumulators(#[case] seed: Seed) {
             .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
             .unwrap();
 
-        let fee2 = constraints_accumulator_2.consume(&chain_config, block_height).unwrap();
+        let fee2 = constraints_accumulator_2.consume();
 
-        Fee((fee1.0 + fee2.0).unwrap())
+        fee1.combine(fee2).unwrap();
+        fee1
     };
 
     assert_eq!(fee1, fee2);
-    assert_eq!(fee1, expected_fee);
+    assert_eq!(
+        fee1.calculate_fee(&chain_config, block_height).unwrap(),
+        expected_fee
+    );
 }

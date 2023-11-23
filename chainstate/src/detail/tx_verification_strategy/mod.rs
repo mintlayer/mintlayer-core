@@ -30,6 +30,7 @@ use tx_verifier::{
         TransactionVerifier,
     },
 };
+use utils::shallow_clone::ShallowClone;
 use utxo::UtxosView;
 
 // TODO: replace with trait_alias when stabilized
@@ -64,7 +65,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     where
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
-        C: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig> + ShallowClone,
         A: PoSAccountingView,
         T: TokensAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A, T>,

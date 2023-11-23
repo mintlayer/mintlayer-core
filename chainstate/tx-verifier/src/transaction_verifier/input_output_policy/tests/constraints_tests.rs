@@ -131,7 +131,10 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        constraints_accumulator.consume(&chain_config, block_height).unwrap(),
+        constraints_accumulator
+            .consume()
+            .calculate_fee(&chain_config, block_height)
+            .unwrap(),
         Fee(Amount::from_atoms(fee_atoms))
     );
 }
@@ -190,7 +193,10 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        constraints_accumulator.consume(&chain_config, block_height).unwrap(),
+        constraints_accumulator
+            .consume()
+            .calculate_fee(&chain_config, block_height)
+            .unwrap(),
         Fee(Amount::from_atoms(fee_atoms))
     );
 }
@@ -549,7 +555,10 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(
-        constraints_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
+        constraints_accumulator
+            .consume()
+            .calculate_fee(&chain_config, BlockHeight::new(1))
+            .unwrap(),
         Fee(Amount::ZERO)
     );
 }

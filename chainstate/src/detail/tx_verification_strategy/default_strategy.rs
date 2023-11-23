@@ -18,18 +18,18 @@ use crate::TransactionVerifierMakerFn;
 use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
-    primitives::{id::WithId, Amount, Idable},
+    primitives::{id::WithId, Idable},
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
-        error::ConnectTransactionError, storage::TransactionVerifierStorageRef, Fee,
-        TransactionSourceForConnect, TransactionVerifier,
+        error::ConnectTransactionError, storage::TransactionVerifierStorageRef,
+        ConsumedConstrainedValueAccumulator, TransactionSourceForConnect, TransactionVerifier,
     },
     TransactionSource,
 };
-use utils::tap_error_log::LogError;
+use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
 use utxo::UtxosView;
 
 pub struct DefaultTransactionVerificationStrategy {}
@@ -57,7 +57,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         median_time_past: BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
-        C: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
@@ -65,37 +65,40 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(Amount::from_atoms(0), |total, tx| {
-                let fee = tx_verifier
-                    .connect_transaction(
-                        &TransactionSourceForConnect::Chain {
-                            new_block_index: block_index,
-                        },
-                        tx,
-                        &median_time_past,
-                    )
-                    .log_err()?;
-                (total + fee.0).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                })
-            })
-            .log_err()?;
-
-        tx_verifier
-            .check_block_reward(block, Fee(total_fees), block_index.block_height())
-            .log_err()?;
-
-        tx_verifier
-            .connect_block_reward(
-                block_index,
-                block.block_reward_transactable(),
-                Fee(total_fees),
+            .try_fold(
+                ConsumedConstrainedValueAccumulator::new(),
+                |mut total, tx| {
+                    let fee = tx_verifier
+                        .connect_transaction(
+                            &TransactionSourceForConnect::Chain {
+                                new_block_index: block_index,
+                            },
+                            tx,
+                            &median_time_past,
+                        )
+                        .log_err()?;
+                    total.combine(fee).map_err(|_| {
+                        ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                    })?;
+                    Ok::<ConsumedConstrainedValueAccumulator, ConnectTransactionError>(total)
+                },
             )
+            .log_err()?;
+        let total_fees = total_fees
+            .calculate_fee(chain_config.as_ref(), block_index.block_height())
+            .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
+
+        tx_verifier
+            .check_block_reward(block, total_fees, block_index.block_height())
+            .log_err()?;
+
+        tx_verifier
+            .connect_block_reward(block_index, block.block_reward_transactable(), total_fees)
             .log_err()?;
 
         tx_verifier.set_best_block(block.get_id().into());

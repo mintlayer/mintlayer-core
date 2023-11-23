@@ -36,7 +36,10 @@ use crate::{
 use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
 
 mod constraints_accumulator;
+mod consumed_constraints_accumulator;
 mod purposes_check;
+
+pub use consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IOPolicyError {
@@ -54,6 +57,8 @@ pub enum IOPolicyError {
     ProduceBlockInTx,
     #[error("Attempted to provide multiple account command inputs in a single tx")]
     MultipleAccountCommands,
+    #[error("Amount overflow")]
+    AmountOverflow,
     #[error("Coin or token overflow {0:?}")]
     CoinOrTokenOverflow(CoinOrTokenId),
     #[error("Attempt to print money {0:?}")]
@@ -128,21 +133,18 @@ pub fn check_reward_inputs_outputs_policy(
 
     match consensus_data {
         ConsensusData::None | ConsensusData::PoW(_) => {
-            let mut constraints_accumulator = ConstrainedValueAccumulator::new_for_block_reward(
-                total_fees,
-                block_subsidy_at_height,
-            )
-            .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
-
             if let Some(outputs) = block_reward_transactable.outputs() {
+                let mut constraints_accumulator =
+                    ConstrainedValueAccumulator::new_for_block_reward(
+                        total_fees,
+                        block_subsidy_at_height,
+                    )
+                    .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+
                 constraints_accumulator
                     .process_outputs(chain_config, block_height, outputs)
                     .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
             }
-
-            constraints_accumulator
-                .consume(chain_config, block_height)
-                .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
         }
         ConsensusData::PoS(_) => {
             match block_reward_transactable.outputs().ok_or(
@@ -172,7 +174,7 @@ pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<Fee, ConnectTransactionError>
+) -> Result<ConsumedConstrainedValueAccumulator, ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
         Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
@@ -243,9 +245,7 @@ where
         .process_outputs(chain_config, block_height, tx.outputs())
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    constraints_accumulator
-        .consume(chain_config, block_height)
-        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))
+    Ok(constraints_accumulator.consume())
 }
 
 fn check_issuance_fee_burn_v0(

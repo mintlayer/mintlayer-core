@@ -392,6 +392,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
             let result = match res {
                 Ok(fee) => {
+                    let fee = fee
+                        .calculate_fee(self.chain_config.as_ref(), current_best.block_height())
+                        .map_err(|e| {
+                            TxValidationError::TxValidation(
+                                chainstate::ConnectTransactionError::IOPolicyError(
+                                    e,
+                                    (*transaction.tx_id()).into(),
+                                ),
+                            )
+                        })?;
                     let transaction = TxEntryWithFee::new(transaction, fee.into());
                     let delta = tx_verifier.consume()?;
                     VerificationOutcome::Valid { transaction, delta }
