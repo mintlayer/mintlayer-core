@@ -105,6 +105,10 @@ pub struct Utxo {
 }
 
 impl Utxo {
+    pub fn new(output: TxOutput) -> Self {
+        Self { output }
+    }
+
     pub fn output(&self) -> &TxOutput {
         &self.output
     }
@@ -251,6 +255,18 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_utxo_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

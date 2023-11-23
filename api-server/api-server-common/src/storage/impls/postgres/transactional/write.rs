@@ -179,6 +179,28 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 
         Ok(())
     }
+
+    async fn set_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_utxo_at_height(outpoint, utxo, block_height).await?;
+
+        Ok(())
+    }
+
+    async fn del_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_utxo_above_height(block_height).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]

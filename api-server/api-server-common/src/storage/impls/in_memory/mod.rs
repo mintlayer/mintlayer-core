@@ -43,7 +43,7 @@ struct ApiServerInMemoryStorage {
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
-    utxo_table: BTreeMap<UtxoOutPoint, Utxo>,
+    utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -199,7 +199,11 @@ impl ApiServerInMemoryStorage {
     }
 
     fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<Utxo>, ApiServerStorageError> {
-        Ok(self.utxo_table.get(&outpoint).cloned())
+        Ok(self
+            .utxo_table
+            .get(&outpoint)
+            .and_then(|by_height| by_height.values().last())
+            .cloned())
     }
 }
 
@@ -365,6 +369,28 @@ impl ApiServerInMemoryStorage {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.pool_data_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn set_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.utxo_table.entry(outpoint).or_default().insert(block_height, utxo);
+        Ok(())
+    }
+
+    fn del_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.utxo_table.retain(|_, v| {
             v.retain(|k, _| k <= &block_height);
             !v.is_empty()
         });

@@ -387,6 +387,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml_utxo (
+                    outpoint bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    utxo bytea NOT NULL,
+                    PRIMARY KEY (outpoint, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml_block_aux_data (
                     block_id bytea PRIMARY KEY,
                     aux_data bytea NOT NULL
@@ -928,6 +938,42 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         })?;
 
         Ok(Some(utxo))
+    }
+
+    pub async fn set_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_utxo (outpoint, utxo, block_height) VALUES ($1, $2, $3)
+                    ON CONFLICT (outpoint, block_height) DO UPDATE
+                    SET utxo = $2;",
+                &[&outpoint.encode(), &utxo.encode(), &height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute("DELETE FROM ml_utxo WHERE block_height > $1;", &[&height])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
     }
 
     pub async fn get_block_aux_data(

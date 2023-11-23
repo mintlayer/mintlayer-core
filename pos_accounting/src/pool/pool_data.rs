@@ -65,6 +65,11 @@ impl PoolData {
     pub fn cost_per_block(&self) -> Amount {
         self.cost_per_block
     }
+
+    pub fn decommission_pool(mut self) -> Self {
+        self.pledge_amount = Amount::ZERO;
+        self
+    }
 }
 
 impl From<StakePoolData> for PoolData {
