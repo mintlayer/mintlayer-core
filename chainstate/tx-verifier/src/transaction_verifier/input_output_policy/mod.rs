@@ -15,17 +15,21 @@
 
 use common::{
     chain::{
-        block::BlockRewardTransactable,
+        block::ConsensusData,
+        signature::Signable,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
 
-use crate::{error::TokensError, Fee};
+use crate::{
+    error::{SpendStakeError, TokensError},
+    Fee,
+};
 
 use super::{amounts_map::CoinOrTokenId, error::ConnectTransactionError};
 
@@ -79,11 +83,32 @@ pub enum IOPolicyError {
 }
 
 pub fn check_reward_inputs_outputs_policy(
-    reward: &BlockRewardTransactable,
+    block: &WithId<Block>,
     utxo_view: &impl utxo::UtxosView,
-    block_id: Id<Block>,
 ) -> Result<(), ConnectTransactionError> {
-    purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view, block_id)
+    let reward = block.block_reward_transactable();
+    match block.consensus_data() {
+        ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
+        ConsensusData::PoS(_) => {
+            match reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
+                SpendStakeError::NoBlockRewardOutputs,
+            ))? {
+                [] => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::NoBlockRewardOutputs,
+                    ))
+                }
+                [_] => { /* ok */ }
+                _ => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::MultipleBlockRewardOutputs,
+                    ))
+                }
+            };
+        }
+    };
+
+    purposes_check::check_reward_inputs_outputs_purposes(&reward, utxo_view, block.get_id())
 }
 
 pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(

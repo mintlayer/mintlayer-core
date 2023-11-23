@@ -48,7 +48,7 @@ pub use input_output_policy::IOPolicyError;
 use std::collections::BTreeMap;
 
 use self::{
-    error::{ConnectTransactionError, SpendStakeError, TokensError},
+    error::{ConnectTransactionError, TokensError},
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     pos_accounting_undo_cache::{PoSAccountingBlockUndoCache, PoSAccountingBlockUndoEntry},
     signature_destination_getter::SignatureDestinationGetter,
@@ -71,14 +71,13 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
-use consensus::ConsensusPoSError;
 use pos_accounting::{
     PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView, PoolData,
+    PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -229,118 +228,13 @@ where
         }
     }
 
-    fn get_pool_data_from_output_in_reward(
-        &self,
-        output: &TxOutput,
-        block_id: Id<Block>,
-    ) -> Result<PoolData, ConnectTransactionError> {
-        match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidOutputTypeInReward,
-                block_id.into(),
-            )),
-            TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
-            TxOutput::ProduceBlockFromStake(_, pool_id) => self
-                .pos_accounting_adapter
-                .accounting_delta()
-                .get_pool_data(*pool_id)?
-                .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
-        }
-    }
-
-    fn get_pool_id_from_output_in_reward(
-        &self,
-        output: &TxOutput,
-        block_id: Id<Block>,
-    ) -> Result<PoolId, ConnectTransactionError> {
-        match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidOutputTypeInReward,
-                block_id.into(),
-            )),
-            TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
-            TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
-        }
-    }
-
-    fn check_stake_outputs_in_reward(
-        &self,
-        block: &WithId<Block>,
-    ) -> Result<(), ConnectTransactionError> {
-        match block.consensus_data() {
-            ConsensusData::None | ConsensusData::PoW(_) => Ok(()),
-            ConsensusData::PoS(_) => {
-                let block_reward_transactable = block.block_reward_transactable();
-
-                let kernel_output = consensus::get_kernel_output(
-                    block_reward_transactable.inputs().ok_or(
-                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                    )?,
-                    &self.utxo_cache,
-                )
-                .map_err(SpendStakeError::ConsensusPoSError)?;
-
-                let reward_output = match block_reward_transactable
-                    .outputs()
-                    .ok_or(SpendStakeError::NoBlockRewardOutputs)?
-                {
-                    [] => Err(SpendStakeError::NoBlockRewardOutputs),
-                    [output] => Ok(output),
-                    _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
-                }?;
-
-                let kernel_pool_id =
-                    self.get_pool_id_from_output_in_reward(&kernel_output, block.get_id())?;
-                let reward_pool_id =
-                    self.get_pool_id_from_output_in_reward(reward_output, block.get_id())?;
-
-                ensure!(
-                    kernel_pool_id == reward_pool_id,
-                    SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
-                );
-
-                let kernel_pool_data =
-                    self.get_pool_data_from_output_in_reward(&kernel_output, block.get_id())?;
-                let reward_pool_data =
-                    self.get_pool_data_from_output_in_reward(reward_output, block.get_id())?;
-
-                ensure!(
-                    kernel_pool_data == reward_pool_data,
-                    SpendStakeError::StakePoolDataMismatch
-                );
-
-                Ok(())
-            }
-        }
-    }
-
     pub fn check_block_reward(
         &self,
         block: &WithId<Block>,
         total_fees: Fee,
         block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
-        input_output_policy::check_reward_inputs_outputs_policy(
-            &block.block_reward_transactable(),
-            &self.utxo_cache,
-            block.get_id(),
-        )?;
-
-        self.check_stake_outputs_in_reward(block)?;
+        input_output_policy::check_reward_inputs_outputs_policy(block, &self.utxo_cache)?;
 
         let block_subsidy_at_height =
             Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
