@@ -1055,7 +1055,11 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
-            .map(|feerate| std::cmp::max(feerate, INCREMENTAL_RELAY_FEE_RATE))
+            .and_then(|feerate| {
+                (*self.mempool_config.min_tx_relay_fee_per_byte * 1000)
+                    .ok_or(MempoolPolicyError::FeeOverflow)
+                    .map(|min_relay_fee| std::cmp::max(feerate, FeeRate::new(min_relay_fee)))
+            })
     }
 
     pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {

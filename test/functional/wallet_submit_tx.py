@@ -41,8 +41,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+        relay_fee = random.randint(1, 100_000_000)
         self.extra_args = [[
             "--blockprod-min-peers-to-produce-blocks=0",
+            f"--min-tx-relay-fee-per-byte={relay_fee}",
         ]]
 
     def setup_network(self):
@@ -91,7 +93,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
-            coins_to_send = random.randint(10, 100)
+            coins_to_send = random.randint(2, 100)
             output = {
                     'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
@@ -135,6 +137,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_equal(output, encoded_tx)
 
             assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
+
+            address = await wallet.new_address()
+            output = await wallet.send_to_address(address, 1)
+            assert_in("The transaction was submitted successfully", output)
 
 
 if __name__ == '__main__':

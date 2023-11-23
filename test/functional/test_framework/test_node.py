@@ -224,8 +224,26 @@ class TestNode():
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
 
-        cmd = self.args + extra_args
-        self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
+        # Create a dictionary to store the arguments
+        arg_dict = {}
+
+        # Process args list
+        for arg in self.args:
+            if '=' in arg:
+                name, value = arg.split('=')
+                arg_dict[name] = value
+            else:
+                arg_dict[arg] = None
+
+        # Update with values from extra_args, overriding duplicates
+        for arg in extra_args:
+            if '=' in arg:
+                name, value = arg.split('=')
+                arg_dict[name] = value
+            else:
+                arg_dict[arg] = None
+        cmd = [f"{name}={value}" if value is not None else name for name, value in arg_dict.items()]
+        self.log.debug("Starting node with command: {}".format(" ".join(cmd)))
         self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True
