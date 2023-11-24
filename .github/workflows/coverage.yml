@@ -14,7 +14,7 @@ env:
 
 jobs:
   coverage:
-    runs-on: debian-bookworm
+    runs-on: debian-latest
 
     strategy:
       matrix:
