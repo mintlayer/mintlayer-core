@@ -101,7 +101,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             assert_in("No transaction found", await wallet.get_transaction(tx_id))
 
-            node.mempool_submit_transaction(encoded_tx)
+            node.mempool_submit_transaction(encoded_tx, {})
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1

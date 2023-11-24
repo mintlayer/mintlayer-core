@@ -77,11 +77,11 @@ class MempoolTimelockedTxTest(BitcoinTestFramework):
         self.log.debug("Encoded tx3 {}: {}".format(tx3_id, tx3))
 
         # Submit the transactions
-        node.mempool_submit_transaction(tx0)
-        node.mempool_submit_transaction(tx1)
-        node.mempool_submit_transaction(tx3)
+        node.mempool_submit_transaction(tx0, {})
+        node.mempool_submit_transaction(tx1, {})
+        node.mempool_submit_transaction(tx3, {})
         # Cannot submit tx2 yet, it spends and unconfirmed time-locked output
-        assert_raises_rpc_error(None, "Timelock rules violated", node.mempool_submit_transaction, tx2)
+        assert_raises_rpc_error(None, "Timelock rules violated", node.mempool_submit_transaction, tx2, {})
 
         assert node.mempool_contains_tx(tx0_id)
         assert node.mempool_contains_tx(tx1_id)
@@ -96,7 +96,7 @@ class MempoolTimelockedTxTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # We can now submit tx2
-        node.mempool_submit_transaction(tx2)
+        node.mempool_submit_transaction(tx2, {})
         assert not node.mempool_contains_tx(tx0_id)
         assert node.mempool_contains_tx(tx1_id)
         assert node.mempool_contains_tx(tx2_id)

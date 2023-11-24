@@ -121,7 +121,7 @@ class WalletAddressGenerator(BitcoinTestFramework):
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
-            node.mempool_submit_transaction(encoded_tx)
+            node.mempool_submit_transaction(encoded_tx, {})
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1

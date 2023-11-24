@@ -18,7 +18,7 @@ use crate::{
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolMaxSize, TxStatus,
+    FeeRate, MempoolMaxSize, TxOptions, TxStatus,
 };
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -32,6 +32,7 @@ pub trait MempoolInterface: Send + Sync {
         &mut self,
         tx: SignedTransaction,
         origin: RemoteTxOrigin,
+        options: TxOptions,
     ) -> Result<TxStatus, Error>;
 
     /// Add a local transaction
@@ -39,6 +40,7 @@ pub trait MempoolInterface: Send + Sync {
         &mut self,
         tx: SignedTransaction,
         origin: LocalTxOrigin,
+        options: TxOptions,
     ) -> Result<(), Error>;
 
     /// Get all transactions from mempool

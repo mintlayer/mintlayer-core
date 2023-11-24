@@ -79,7 +79,7 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                     utxo = tx_input(utxo_id, utxo_index)
                     (tx, tx_id) = make_tx([utxo], [100])
 
-                    node.mempool_submit_transaction(tx)
+                    node.mempool_submit_transaction(tx, {})
 
                     if include_mempool:
                         missing_transactions.append(tx_id)
@@ -108,7 +108,7 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                         (tx, tx_id) = make_tx([utxo], [100])
 
                         missing_transactions.append(tx_id)
-                        node.mempool_submit_transaction(tx)
+                        node.mempool_submit_transaction(tx, {})
                         assert(node.mempool_contains_tx(tx_id))
 
                         transaction_ids.append(tx_id)
@@ -126,7 +126,7 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                         (tx, tx_id) = make_tx([utxo], [100])
 
                         missing_transactions.append(tx_id)
-                        node.mempool_submit_transaction(tx)
+                        node.mempool_submit_transaction(tx, {})
                         assert(node.mempool_contains_tx(tx_id))
 
                         packing_strategy = "FillSpaceFromMempool"

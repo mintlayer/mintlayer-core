@@ -114,7 +114,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
-            node.mempool_submit_transaction(encoded_tx)
+            node.mempool_submit_transaction(encoded_tx, {})
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1
@@ -137,7 +137,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             transactions = node.test_functions_generate_transactions(tx_id, 25, total - 300, 300)
             for idx, encoded_tx in enumerate(transactions):
                 self.log.info(f"submitting tx {idx}")
-                node.mempool_submit_transaction(encoded_tx)
+                node.mempool_submit_transaction(encoded_tx, {})
 
             # try to send 9 out of 10 to itself, 1 coin should not be enough to pay the high fee
             address = await wallet.new_address()

@@ -322,11 +322,15 @@ where
 
         match tx_proc_event.result() {
             Ok(()) => {
-                if origin.should_propagate() {
-                    log::info!("Broadcasting transaction {tx_id} originating in {origin}");
-                    self.send_local_event(&LocalEvent::MempoolNewTx(tx_id));
-                } else {
-                    log::trace!("Not propagating transaction {tx_id} originating in {origin}");
+                use mempool::tx_options::TxRelayPolicy;
+                match tx_proc_event.relay_policy() {
+                    TxRelayPolicy::DoRelay => {
+                        log::info!("Broadcasting transaction {tx_id} originating in {origin}");
+                        self.send_local_event(&LocalEvent::MempoolNewTx(tx_id));
+                    }
+                    TxRelayPolicy::DontRelay => {
+                        log::trace!("Not propagating transaction {tx_id} originating in {origin}");
+                    }
                 }
             }
             Err(_) => match origin {

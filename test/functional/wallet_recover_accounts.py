@@ -101,7 +101,7 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
-            node.mempool_submit_transaction(encoded_tx)
+            node.mempool_submit_transaction(encoded_tx, {})
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1

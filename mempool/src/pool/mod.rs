@@ -55,6 +55,7 @@ use crate::{
     },
     event::{self, MempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
+    tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
     TxStatus,
 };
@@ -856,14 +857,39 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
 // Mempool Interface and Event Reactions
 impl<M: MemoryUsageEstimator> Mempool<M> {
+    /// Add a transaction to mempool
     pub fn add_transaction(
         &mut self,
         tx: SignedTransaction,
         origin: TxOrigin,
         work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
+        let options = TxOptions::default_for(origin);
+        self.add_transaction_with_options(tx, origin, options, work_queue)
+    }
+
+    /// Add a transaction to mempool with custom options
+    pub fn add_transaction_with_options(
+        &mut self,
+        tx: SignedTransaction,
+        origin: TxOrigin,
+        options: TxOptions,
+        work_queue: &mut WorkQueue,
+    ) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
-        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time, origin), work_queue)
+        let entry = TxEntry::new(tx, creation_time, origin, options);
+
+        match entry.options().trust_policy() {
+            TxTrustPolicy::Trusted => {
+                log::warn!(concat!(
+                    "Trusted mempool processing policy not yet implemented, ",
+                    "transaction will go through all the standard checks",
+                ))
+            }
+            TxTrustPolicy::Untrusted => (),
+        }
+
+        self.add_transaction_and_descendants(entry, work_queue)
     }
 
     /// Add given transaction entry and potentially its descendants sourced from the orphan pool
@@ -899,6 +925,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let tx_id = *tx.tx_id();
         let origin = tx.origin();
+        let relay_policy = tx.options().relay_policy();
 
         match self.validate_transaction(tx) {
             Ok(ValidationOutcome::Valid {
@@ -913,7 +940,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 self.finalize_tx(transaction)?;
                 self.store.assert_valid();
 
-                let event = event::TransactionProcessed::accepted(tx_id, origin);
+                let event = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
                 self.events_controller.broadcast(event.into());
 
                 Ok(TxStatus::InMempool)
