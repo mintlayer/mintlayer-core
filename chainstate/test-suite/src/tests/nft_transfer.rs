@@ -121,7 +121,9 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(random_token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(random_token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -236,7 +238,9 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
@@ -377,7 +381,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
+                OutputValue::Coin(token_min_issuance_fee),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -388,7 +392,9 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(first_token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(first_token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
@@ -549,7 +555,9 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))

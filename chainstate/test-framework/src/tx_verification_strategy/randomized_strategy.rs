@@ -28,7 +28,7 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, ConsumedConstrainedValueAccumulator,
+        storage::TransactionVerifierStorageRef, ConstrainedValueAccumulator,
         TransactionSourceForConnect, TransactionVerifier, TransactionVerifierDelta,
     },
     TransactionSource,
@@ -144,7 +144,7 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
-        let mut total_fees = ConsumedConstrainedValueAccumulator::new();
+        let mut total_fees = ConstrainedValueAccumulator::new();
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().gen::<bool>() {
@@ -184,7 +184,7 @@ impl RandomizedTransactionVerificationStrategy {
         }
 
         let total_fees = total_fees
-            .calculate_fee(chain_config.as_ref(), block_index.block_height())
+            .consume(chain_config.as_ref(), block_index.block_height())
             .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
 
         tx_verifier
@@ -206,11 +206,7 @@ impl RandomizedTransactionVerificationStrategy {
         median_time_past: &BlockTimestamp,
         mut tx_num: usize,
     ) -> Result<
-        (
-            TransactionVerifierDelta,
-            ConsumedConstrainedValueAccumulator,
-            usize,
-        ),
+        (TransactionVerifierDelta, ConstrainedValueAccumulator, usize),
         ConnectTransactionError,
     >
     where
@@ -222,7 +218,7 @@ impl RandomizedTransactionVerificationStrategy {
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
-        let mut total_fees = ConsumedConstrainedValueAccumulator::new();
+        let mut total_fees = ConstrainedValueAccumulator::new();
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent

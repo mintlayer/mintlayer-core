@@ -26,7 +26,7 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, ConsumedConstrainedValueAccumulator,
+        storage::TransactionVerifierStorageRef, ConstrainedValueAccumulator,
         TransactionSourceForConnect, TransactionVerifier,
     },
     TransactionSource,
@@ -75,31 +75,28 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(
-                ConsumedConstrainedValueAccumulator::new(),
-                |mut total, tx| {
-                    let mut tx_verifier = base_tx_verifier.derive_child();
-                    let fee = tx_verifier
-                        .connect_transaction(
-                            &TransactionSourceForConnect::Chain {
-                                new_block_index: block_index,
-                            },
-                            tx,
-                            &median_time_past,
-                        )
-                        .log_err()?;
-                    let consumed_cache = tx_verifier.consume()?;
-                    flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
+            .try_fold(ConstrainedValueAccumulator::new(), |mut total, tx| {
+                let mut tx_verifier = base_tx_verifier.derive_child();
+                let fee = tx_verifier
+                    .connect_transaction(
+                        &TransactionSourceForConnect::Chain {
+                            new_block_index: block_index,
+                        },
+                        tx,
+                        &median_time_past,
+                    )
+                    .log_err()?;
+                let consumed_cache = tx_verifier.consume()?;
+                flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
-                    total.combine(fee).map_err(|_| {
-                        ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                    })?;
-                    Ok::<ConsumedConstrainedValueAccumulator, ConnectTransactionError>(total)
-                },
-            )
+                total.combine(fee).map_err(|_| {
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                })?;
+                Ok::<ConstrainedValueAccumulator, ConnectTransactionError>(total)
+            })
             .log_err()?;
         let total_fees = total_fees
-            .calculate_fee(chain_config.as_ref(), block_index.block_height())
+            .consume(chain_config.as_ref(), block_index.block_height())
             .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
 
         base_tx_verifier

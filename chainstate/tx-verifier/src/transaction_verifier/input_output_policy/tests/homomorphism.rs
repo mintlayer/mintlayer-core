@@ -195,90 +195,95 @@ fn combine_accumulators(#[case] seed: Seed) {
     };
 
     let fee1 = {
-        let mut constraints_accumulator =
-            constraints_accumulator::ConstrainedValueAccumulator::new();
+        let inputs = decommission_tx
+            .inputs()
+            .iter()
+            .chain(spend_share_tx.inputs().iter())
+            .cloned()
+            .collect::<Vec<TxInput>>();
+        let inputs_utxos = decommission_tx_inputs_utxos
+            .iter()
+            .chain(spend_share_inputs_utxos.iter())
+            .cloned()
+            .collect::<Vec<Option<TxOutput>>>();
+        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            pledge_getter,
+            delegation_balance_getter,
+            issuance_token_id_getter,
+            &inputs,
+            &inputs_utxos,
+        )
+        .unwrap();
 
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                block_height,
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                decommission_tx.inputs(),
-                &decommission_tx_inputs_utxos,
-            )
-            .unwrap();
-        constraints_accumulator
-            .process_outputs(&chain_config, block_height, decommission_tx.outputs())
-            .unwrap();
+        let outputs = decommission_tx
+            .outputs()
+            .iter()
+            .chain(spend_share_tx.outputs())
+            .cloned()
+            .collect::<Vec<TxOutput>>();
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
-        constraints_accumulator
-            .process_inputs(
-                &chain_config,
-                block_height,
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                spend_share_tx.inputs(),
-                &spend_share_inputs_utxos,
-            )
-            .unwrap();
-        constraints_accumulator
-            .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
-            .unwrap();
-
-        constraints_accumulator.consume()
+        inputs_accumulator.subtract(outputs_accumulator).unwrap();
+        inputs_accumulator
     };
 
     let fee2 = {
-        let mut constraints_accumulator_1 =
-            constraints_accumulator::ConstrainedValueAccumulator::new();
+        let mut decommission_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            pledge_getter,
+            delegation_balance_getter,
+            issuance_token_id_getter,
+            decommission_tx.inputs(),
+            &decommission_tx_inputs_utxos,
+        )
+        .unwrap();
 
-        constraints_accumulator_1
-            .process_inputs(
-                &chain_config,
-                block_height,
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                decommission_tx.inputs(),
-                &decommission_tx_inputs_utxos,
-            )
+        let decommission_outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
+            &chain_config,
+            block_height,
+            decommission_tx.outputs(),
+        )
+        .unwrap();
+
+        //let mut fee1 = constraints_accumulator_1.consume();
+
+        let mut spend_share_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            pledge_getter,
+            delegation_balance_getter,
+            issuance_token_id_getter,
+            spend_share_tx.inputs(),
+            &spend_share_inputs_utxos,
+        )
+        .unwrap();
+
+        let spend_share_outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
+            &chain_config,
+            block_height,
+            spend_share_tx.outputs(),
+        )
+        .unwrap();
+
+        decommission_inputs_accumulator
+            .subtract(decommission_outputs_accumulator)
             .unwrap();
-        constraints_accumulator_1
-            .process_outputs(&chain_config, block_height, decommission_tx.outputs())
+        spend_share_inputs_accumulator
+            .subtract(spend_share_outputs_accumulator)
             .unwrap();
 
-        let mut fee1 = constraints_accumulator_1.consume();
-
-        let mut constraints_accumulator_2 =
-            constraints_accumulator::ConstrainedValueAccumulator::new();
-
-        constraints_accumulator_2
-            .process_inputs(
-                &chain_config,
-                block_height,
-                pledge_getter,
-                delegation_balance_getter,
-                issuance_token_id_getter,
-                spend_share_tx.inputs(),
-                &spend_share_inputs_utxos,
-            )
-            .unwrap();
-        constraints_accumulator_2
-            .process_outputs(&chain_config, block_height, spend_share_tx.outputs())
-            .unwrap();
-
-        let fee2 = constraints_accumulator_2.consume();
-
-        fee1.combine(fee2).unwrap();
-        fee1
+        decommission_inputs_accumulator.combine(spend_share_inputs_accumulator).unwrap();
+        decommission_inputs_accumulator
     };
 
     assert_eq!(fee1, fee2);
     assert_eq!(
-        fee1.calculate_fee(&chain_config, block_height).unwrap(),
+        fee1.consume(&chain_config, block_height).unwrap(),
         expected_fee
     );
 }

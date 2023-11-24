@@ -35,11 +35,8 @@ use crate::{
 
 use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
 
-mod constraints_accumulator;
-mod consumed_constraints_accumulator;
+pub mod constraints_accumulator;
 mod purposes_check;
-
-pub use consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IOPolicyError {
@@ -134,15 +131,18 @@ pub fn check_reward_inputs_outputs_policy(
     match consensus_data {
         ConsensusData::None | ConsensusData::PoW(_) => {
             if let Some(outputs) = block_reward_transactable.outputs() {
-                let mut constraints_accumulator =
-                    ConstrainedValueAccumulator::new_for_block_reward(
-                        total_fees,
-                        block_subsidy_at_height,
-                    )
-                    .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+                let mut inputs_accumulator = ConstrainedValueAccumulator::from_block_reward(
+                    total_fees,
+                    block_subsidy_at_height,
+                )
+                .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
-                constraints_accumulator
-                    .process_outputs(chain_config, block_height, outputs)
+                let outputs_accumulator =
+                    ConstrainedValueAccumulator::from_outputs(chain_config, block_height, outputs)
+                        .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+
+                inputs_accumulator
+                    .subtract(outputs_accumulator)
                     .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
             }
         }
@@ -174,7 +174,7 @@ pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<ConsumedConstrainedValueAccumulator, ConnectTransactionError>
+) -> Result<ConstrainedValueAccumulator, ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
         Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
@@ -227,25 +227,26 @@ where
     let issuance_token_id_getter =
         |tx_id| issuance_token_id_getter(tx_id).map_err(|_| IOPolicyError::TokenIdQueryFailed);
 
-    let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        chain_config,
+        block_height,
+        pledge_getter,
+        delegation_balance_getter,
+        issuance_token_id_getter,
+        tx.inputs(),
+        &inputs_utxos,
+    )
+    .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    constraints_accumulator
-        .process_inputs(
-            chain_config,
-            block_height,
-            pledge_getter,
-            delegation_balance_getter,
-            issuance_token_id_getter,
-            tx.inputs(),
-            &inputs_utxos,
-        )
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
+            .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    inputs_accumulator
+        .subtract(outputs_accumulator)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    constraints_accumulator
-        .process_outputs(chain_config, block_height, tx.outputs())
-        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
-
-    Ok(constraints_accumulator.consume())
+    Ok(inputs_accumulator)
 }
 
 fn check_issuance_fee_burn_v0(

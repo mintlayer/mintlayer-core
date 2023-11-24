@@ -350,7 +350,9 @@ fn stake_pool_overspend(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
                     tx_id.into()
                 )
             ))

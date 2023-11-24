@@ -26,6 +26,7 @@ use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -254,7 +255,9 @@ fn data_deposit_insufficient_fee(
 
             let expected_err = Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin,
+                    ),
                     tx_id.into(),
                 )),
             ));

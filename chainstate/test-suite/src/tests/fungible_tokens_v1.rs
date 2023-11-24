@@ -619,7 +619,9 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
                     tx_id.into()
                 )
             ))
@@ -813,7 +815,9 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -1562,7 +1566,9 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(_)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(_)
+                    ),
                     _
                 )
             ))
@@ -1573,7 +1579,9 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(_)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(_)
+                    ),
                     _
                 )
             ))
@@ -1621,7 +1629,9 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -1653,7 +1663,9 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -2047,7 +2059,9 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -2911,7 +2925,9 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -4013,7 +4029,9 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToViolateFeeRequirements,
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin
+                    ),
                     tx_id.into()
                 ))
             ))

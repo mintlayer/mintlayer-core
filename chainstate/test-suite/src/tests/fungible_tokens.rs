@@ -505,7 +505,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(_),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_),
                     _
                 ))
             ))
@@ -534,7 +534,9 @@ fn token_transfer_test(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(random_token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(random_token_id)
+                    ),
                     tx_id.into()
                 )
             ))
@@ -928,7 +930,9 @@ fn burn_tokens(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
@@ -1426,7 +1430,9 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
@@ -1532,7 +1538,9 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
@@ -1684,7 +1692,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
+                OutputValue::Coin(token_min_issuance_fee),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -1695,7 +1703,9 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::TokenId(first_token_id)),
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::TokenId(first_token_id)
+                    ),
                     tx_id.into()
                 ))
             ))
