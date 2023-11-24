@@ -14,7 +14,7 @@ env:
 
 jobs:
   coverage:
-    runs-on: debian-latest
+    runs-on: debian-12
 
     strategy:
       matrix:
