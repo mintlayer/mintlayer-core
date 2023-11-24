@@ -8,8 +8,8 @@ on:
 
 name: Static code checks
 jobs:
-  clippy_check_ubuntu:
-    name: Static code checks
+  all_checks:
+    name: Run all checks
     runs-on: ubuntu-latest
     steps:
       - id: skip-check
