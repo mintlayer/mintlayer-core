@@ -1,11 +1,11 @@
-FROM rust:1.73
+FROM rust:1.74
 
 WORKDIR /src/
 
 RUN apt-get update && \
     apt-get install -y \
-        ca-certificates libgtk-3-dev \
-        nmap procps net-tools iputils-ping dnsutils \
+    ca-certificates libgtk-3-dev \
+    nmap procps net-tools iputils-ping dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
