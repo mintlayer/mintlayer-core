@@ -36,7 +36,7 @@ jobs:
         run: python3 build-tools/workspace-partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partition }} | xargs -I {} sh -c 'CARGO_INCREMENTAL=0 RUST_BACKTRACE=full RUST_LOG=debug RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTDOCFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTUP_TOOLCHAIN=nightly-2023-11-01 cargo test'
 
       - name: Collect coverage data with grcov
-        run: grcov . --output-type lcov --binary-path target/debug/ -o grcov-report-${{ matrix.partition }}
+        run: grcov . --source-dir . --output-type lcov --branch --ignore-not-existing --binary-path ./target/debug/ -o grcov-report-${{ matrix.partition }}
 
       - uses: actions/upload-artifact@v2
         with:
