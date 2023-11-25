@@ -1,4 +1,4 @@
-name: Wasm build and test with Node.js
+name: Wasm build and test
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-  build:
+  build_and_test_with_nodejs:
     runs-on: ubuntu-latest
 
     strategy:
