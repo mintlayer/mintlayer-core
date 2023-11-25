@@ -24,10 +24,10 @@ ls -1a grcov-report-* | sed 's/^/-a /' | tr '\n' ' ' | xargs lcov -o grcov-repor
 
 4. Now we need to generate the html report. Go to the source code's root dir (and note where you put that grcov-report.info file)
 
-5. run the following command:
+5. run the following command (from the source code directory, necessarily):
 
-```bash
-genhtml --exclude /rustc/* --exclude */.cargo/registry/* --exclude */.cargo/git/* --exclude /cargo/registry/* --exclude "*target/*" -o grcov-report --ignore-errors unmapped /path/to/grcov-report.info
+```
+genhtml --exclude /rustc/* --exclude /rust/* --exclude */.cargo/registry/* --exclude */.cargo/git/* --exclude /cargo/registry/* --exclude "*target/*" -o grcov-report --ignore-errors unmapped --ignore-errors unused ~/Desktop/Temp/cov/grcov-report.info
 ```
 
 6. Now you can open the `grcov-report/index.html` file in your browser and see the report.

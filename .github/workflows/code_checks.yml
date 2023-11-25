@@ -8,8 +8,8 @@ on:
 
 name: Static code checks
 jobs:
-  clippy_check_ubuntu:
-    name: Clippy
+  all_checks:
+    name: Run all checks
     runs-on: ubuntu-latest
     steps:
       - id: skip-check
@@ -20,70 +20,12 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -yqq --no-install-recommends build-essential libgtk-3-dev python3 python3-toml
       - uses: actions/checkout@v1
-      - run: rustup component add clippy
 
-      # Checks enabled everywhere, including tests, benchmarks
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: >
-            --all-features --workspace --all-targets --
-            -D warnings
-            -A clippy::unnecessary_literal_unwrap
-            -A clippy::new_without_default
-            -A unknown_lints
-            -W clippy::implicit_saturating_sub
-            -W clippy::implicit_clone
-            -W clippy::map_unwrap_or
-            -W clippy::unnested_or_patterns
-            -W clippy::manual_assert
-            -W clippy::unused_async
-            -W clippy::mut_mut
-            -W clippy::todo
-
-      # Checks that only apply to production code
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: >
-            --all-features --workspace --lib --bins --examples --
-            -A clippy::all
-            -D clippy::float_arithmetic
-            -W clippy::unwrap_used
-            -W clippy::dbg_macro
-            -W clippy::items_after_statements
-            -W clippy::fallible_impl_from
-            -W clippy::string_slice
-
-  codegrep:
-    name: Grep code for issues
-    runs-on: ubuntu-latest
-    steps:
-      - id: skip-check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
-        with:
-          concurrent_skipping: "same_content_newer"
-          skip_after_successful_duplicate: "true"
-      - uses: actions/checkout@v1
-      - run: pip install -r ./build-tools/codecheck/requirements.txt
-      - run: ./build-tools/codecheck/codecheck.py
-
-  cargo_deny_checks:
-    name: Cargo deny check licenses and advisories
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        checks:
-          - advisories
-          - licenses
-
-    steps:
-      - id: skip-check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
-        with:
-          concurrent_skipping: "same_content_newer"
-          skip_after_successful_duplicate: "true"
-      - uses: actions/checkout@v3
-      - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check ${{ matrix.checks }}
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Install rust clippy
+        run: rustup component add clippy
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+      - name: Run checks
+        run: ./do_checks.sh

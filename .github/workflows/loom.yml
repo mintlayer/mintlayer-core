@@ -3,7 +3,7 @@ name: Permutation testing
 on:
   push:
     branches:
-      - '**' # target all branches
+      - "**" # target all branches
   pull_request:
     branches:
       - master
@@ -15,7 +15,6 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-
   test_loom:
     runs-on: ubuntu-latest
     steps:
@@ -25,12 +24,8 @@ jobs:
           concurrent_skipping: "same_content_newer"
           skip_after_successful_duplicate: "true"
       - uses: actions/checkout@v2
-      - name: Install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          default: true
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
         with:
