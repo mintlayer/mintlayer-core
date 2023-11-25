@@ -14,7 +14,7 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-  build_and_test_with_nodejs:
+  wasm_with_nodejs:
     runs-on: ubuntu-latest
 
     strategy:
