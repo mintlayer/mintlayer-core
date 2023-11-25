@@ -32,9 +32,7 @@ pub struct ApiServerInMemoryStorageTransactionalRo<'t> {
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
-    async fn new(
-        storage: &'t TransactionalApiServerInMemoryStorage,
-    ) -> ApiServerInMemoryStorageTransactionalRo<'t> {
+    async fn new(storage: &'t TransactionalApiServerInMemoryStorage) -> Self {
         Self {
             transaction: storage.tx_ro().await,
         }
@@ -54,9 +52,7 @@ pub struct ApiServerInMemoryStorageTransactionalRw<'t> {
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
-    async fn new(
-        storage: &'t mut TransactionalApiServerInMemoryStorage,
-    ) -> ApiServerInMemoryStorageTransactionalRw<'t> {
+    async fn new(storage: &'t mut TransactionalApiServerInMemoryStorage) -> Self {
         let transaction = storage.tx_rw().await;
         let initial_data_before_tx = transaction.clone();
         Self {

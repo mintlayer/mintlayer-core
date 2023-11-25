@@ -121,7 +121,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         tx_verification_strategy: &'a V,
         db_tx: S,
         time_getter: &'a TimeGetter,
-    ) -> ChainstateRef<'a, S, V> {
+    ) -> Self {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,
@@ -137,7 +137,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         tx_verification_strategy: &'a V,
         db_tx: S,
         time_getter: &'a TimeGetter,
-    ) -> ChainstateRef<'a, S, V> {
+    ) -> Self {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,

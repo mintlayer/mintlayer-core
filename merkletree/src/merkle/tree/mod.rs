@@ -221,7 +221,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
             .expect("Should never fail since the index is transitively valid")
     }
 
-    pub fn parent(&self) -> Option<Node<'a, T, H>> {
+    pub fn parent(&self) -> Option<Self> {
         let pos = self.into_position().parent()?;
 
         Some(Node {
@@ -234,7 +234,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     /// The idea is simply: If it's even, then the odd next to it is the one.
     ///                     If it's odd, then the even before it is the one.
     /// This can only be None for the root node.
-    pub fn sibling(&self) -> Option<Node<'a, T, H>> {
+    pub fn sibling(&self) -> Option<Self> {
         let absolute_index = self.into_position().sibling()?;
         Some(Node {
             tree_ref: self.tree_ref,
