@@ -102,11 +102,12 @@ impl Delegation {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
     output: TxOutput,
+    spent: bool,
 }
 
 impl Utxo {
-    pub fn new(output: TxOutput) -> Self {
-        Self { output }
+    pub fn new(output: TxOutput, spent: bool) -> Self {
+        Self { output, spent }
     }
 
     pub fn output(&self) -> &TxOutput {
@@ -115,6 +116,10 @@ impl Utxo {
 
     pub fn into_output(self) -> TxOutput {
         self.output
+    }
+
+    pub fn spent(&self) -> bool {
+        self.spent
     }
 }
 
@@ -177,6 +182,11 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
         -> Result<Option<Utxo>, ApiServerStorageError>;
+
+    async fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -263,6 +273,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
+        address: &str,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 

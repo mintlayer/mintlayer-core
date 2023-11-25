@@ -63,7 +63,9 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
-    let router = router.route("/address/:address", get(address));
+    let router = router
+        .route("/address/:address", get(address))
+        .route("/address/:address/available-utxos", get(address_utxos));
 
     let router = router
         .route("/pool/:id", get(pool))
@@ -387,7 +389,6 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 // address/
 //
 
-#[allow(clippy::unused_async)]
 pub async fn address<T: ApiServerStorage>(
     Path(address): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
@@ -445,6 +446,40 @@ pub async fn address<T: ApiServerStorage>(
     //         "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
     //     })}).collect::<Vec<_>>(),
     // })))
+}
+
+pub async fn address_utxos<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+    let utxos = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_address_available_utxos(&address.to_string())
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                json!({
+                "outpoint": utxo.0,
+                "utxo": txoutput_to_json(&utxo.1, &state.chain_config)})
+            })
+            .collect::<Vec<_>>(),
+    ))
 }
 
 //

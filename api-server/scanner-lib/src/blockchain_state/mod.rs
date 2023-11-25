@@ -503,6 +503,17 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .clone(),
                     };
 
+                    set_utxo(
+                        outpoint.source_id(),
+                        outpoint.output_index() as usize,
+                        &utxo,
+                        db_tx,
+                        block_height,
+                        true,
+                        &chain_config,
+                    )
+                    .await;
+
                     match utxo {
                         TxOutput::Burn(_)
                         | TxOutput::Transfer(_, _)
@@ -534,9 +545,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         .expect("Transaction should exist")
                         .1;
 
-                    match &input_transaction.transaction().outputs()
-                        [outpoint.output_index() as usize]
-                    {
+                    let output = &input_transaction.transaction().outputs()
+                        [outpoint.output_index() as usize];
+
+                    set_utxo(
+                        outpoint.source_id(),
+                        outpoint.output_index() as usize,
+                        output,
+                        db_tx,
+                        block_height,
+                        true,
+                        &chain_config,
+                    )
+                    .await;
+
+                    match output {
                         TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::Burn(_)
@@ -627,12 +650,18 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
     for (idx, output) in outputs.iter().enumerate() {
         match output {
-            TxOutput::Burn(_)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => {}
-            TxOutput::IssueNft(_, _, _) => {
-                set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+            TxOutput::Burn(_) | TxOutput::DataDeposit(_) | TxOutput::IssueFungibleToken(_) => {}
+            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::IssueNft(_, _, _) => {
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
             }
             TxOutput::CreateDelegationId(destination, pool_id) => {
                 if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
@@ -645,7 +674,16 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         )
                         .await
                         .expect("Unable to set delegation data");
-                    set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
                 }
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
@@ -663,7 +701,16 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)
                     .await
                     .expect("Unable to update pool balance");
-                set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
                 let address =
                     Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
                         .expect("Unable to encode address");
@@ -693,7 +740,16 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
-                set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
@@ -709,7 +765,16 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                             increase_address_amount(db_tx, &address, amount, block_height).await;
                         }
                     }
-                    set_utxo(transaction_id, idx, output, db_tx, block_height).await;
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
                 }
                 Destination::AnyoneCanSpend
                 | Destination::ClassicMultisig(_)
@@ -777,16 +842,37 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
 }
 
 async fn set_utxo<T: ApiServerStorageWrite>(
-    transaction_id: Id<Transaction>,
+    outpoint_source_id: OutPointSourceId,
     idx: usize,
     output: &TxOutput,
     db_tx: &mut T,
     block_height: BlockHeight,
+    spent: bool,
+    chain_config: &ChainConfig,
 ) {
-    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
-    let utxo = Utxo::new(output.clone());
-    db_tx
-        .set_utxo_at_height(outpoint, utxo, block_height)
-        .await
-        .expect("Unable to set utxo");
+    let outpoint = UtxoOutPoint::new(outpoint_source_id, idx as u32);
+    let utxo = Utxo::new(output.clone(), spent);
+    if let Some(destination) = get_tx_output_destination(output) {
+        let address = Address::<Destination>::new(chain_config, destination)
+            .expect("Unable to encode destination");
+        db_tx
+            .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+            .await
+            .expect("Unable to set utxo");
+    }
+}
+
+fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+    match txo {
+        TxOutput::Transfer(_, d)
+        | TxOutput::LockThenTransfer(_, d, _)
+        | TxOutput::CreateDelegationId(d, _)
+        | TxOutput::IssueNft(_, _, d)
+        | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
+        TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+        TxOutput::IssueFungibleToken(_)
+        | TxOutput::Burn(_)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_) => None,
+    }
 }

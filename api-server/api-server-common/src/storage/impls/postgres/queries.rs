@@ -22,7 +22,7 @@ use serialization::{DecodeAll, Encode};
 use common::{
     chain::{
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, UtxoOutPoint,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -389,7 +389,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml_utxo (
                     outpoint bytea NOT NULL,
-                    block_height bigint NOT NULL,
+                    block_height bigint,
+                    spent BOOLEAN NOT NULL,
+                    address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     PRIMARY KEY (outpoint, block_height)
                 );",
@@ -940,21 +942,65 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(utxo))
     }
 
+    pub async fn get_address_available_utxos(
+        &mut self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"SELECT outpoint, utxo
+                FROM (
+                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                    FROM ml_utxo
+                    WHERE address = $1 
+                )
+                WHERE newest = 1 AND spent = false;"#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let outpoint: Vec<u8> = row.get(0);
+                let utxo: Vec<u8> = row.get(1);
+
+                let outpoint = UtxoOutPoint::decode_all(&mut outpoint.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Outpoint for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+
+                let utxo = Utxo::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+                Ok((outpoint, utxo.into_output()))
+            })
+            .collect()
+    }
+
     pub async fn set_utxo_at_height(
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
+        address: &str,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let spent = utxo.spent();
 
         self.tx
             .execute(
-                "INSERT INTO ml_utxo (outpoint, utxo, block_height) VALUES ($1, $2, $3)
+                "INSERT INTO ml_utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2;",
-                &[&outpoint.encode(), &utxo.encode(), &height],
+                &[&outpoint.encode(), &utxo.encode(), &spent, &address, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

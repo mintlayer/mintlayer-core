@@ -21,7 +21,7 @@ use crate::storage::storage_api::{
 use common::{
     chain::{
         Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
-        UtxoOutPoint,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -44,6 +44,7 @@ struct ApiServerInMemoryStorage {
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
+    address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -60,6 +61,7 @@ impl ApiServerInMemoryStorage {
             pool_data_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
+            address_utxos: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
@@ -204,6 +206,30 @@ impl ApiServerInMemoryStorage {
             .get(&outpoint)
             .and_then(|by_height| by_height.values().last())
             .cloned())
+    }
+
+    fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let result = self.address_utxos.get(address).map_or(vec![], |outpoints| {
+            outpoints
+                .iter()
+                .filter_map(|outpoint| {
+                    let utxo =
+                        self.get_utxo(outpoint.clone()).expect("no error").expect("must exist");
+                    (!utxo.spent()).then_some((
+                        outpoint.clone(),
+                        self.get_utxo(outpoint.clone())
+                            .expect("no error")
+                            .expect("must exist")
+                            .output()
+                            .clone(),
+                    ))
+                })
+                .collect()
+        });
+        Ok(result)
     }
 }
 
@@ -380,9 +406,11 @@ impl ApiServerInMemoryStorage {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
+        address: &str,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.utxo_table.entry(outpoint).or_default().insert(block_height, utxo);
+        self.utxo_table.entry(outpoint.clone()).or_default().insert(block_height, utxo);
+        self.address_utxos.entry(address.into()).or_default().insert(outpoint);
         Ok(())
     }
 
@@ -390,8 +418,14 @@ impl ApiServerInMemoryStorage {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.utxo_table.retain(|_, v| {
+        self.utxo_table.retain(|outpoint, v| {
             v.retain(|k, _| k <= &block_height);
+            if v.is_empty() {
+                self.address_utxos.retain(|_, v| {
+                    v.remove(outpoint);
+                    !v.is_empty()
+                });
+            }
             !v.is_empty()
         });
 

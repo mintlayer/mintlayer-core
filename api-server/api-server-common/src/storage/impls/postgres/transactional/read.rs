@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::GenBlock,
+    chain::{GenBlock, TxOutput},
     primitives::{BlockHeight, Id},
 };
 
@@ -172,6 +172,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_utxo(outpoint).await?;
+
+        Ok(res)
+    }
+
+    async fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_available_utxos(address).await?;
 
         Ok(res)
     }

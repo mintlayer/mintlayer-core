@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{
     chain::{
         Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
-        UtxoOutPoint,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -143,9 +143,10 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         &mut self,
         outpoint: UtxoOutPoint,
         utxo: Utxo,
+        address: &str,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_utxo_at_height(outpoint, utxo, block_height)
+        self.transaction.set_utxo_at_height(outpoint, utxo, address, block_height)
     }
 
     async fn del_utxo_above_height(
@@ -242,5 +243,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         outpoint: UtxoOutPoint,
     ) -> Result<Option<Utxo>, ApiServerStorageError> {
         self.transaction.get_utxo(outpoint)
+    }
+
+    async fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        self.transaction.get_address_available_utxos(address)
     }
 }
