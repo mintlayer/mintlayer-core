@@ -8,8 +8,7 @@ on:
 
 name: Static code checks
 jobs:
-  all_checks:
-    name: Run all checks
+  static_checks:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
