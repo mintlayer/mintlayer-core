@@ -18,7 +18,7 @@ async-trait.workspace = true
 base64.workspace = true
 http.workspace = true
 hyper.workspace = true
-jsonrpsee = { workspace = true, features = ["full"] }
+jsonrpsee = { workspace = true, features = ["server", "server-core", "http-client"] }
 thiserror.workspace = true
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["auth", "set-header"] }
