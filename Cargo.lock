@@ -900,7 +900,7 @@ dependencies = [
  "crypto",
  "derive_more",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "jsonrpsee",
  "logging",
  "mockall",
@@ -946,7 +946,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "mockall",
  "num-traits",
  "parity-scale-codec",
@@ -971,7 +971,7 @@ dependencies = [
  "consensus",
  "crypto",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "pos_accounting",
  "rstest",
@@ -998,7 +998,7 @@ dependencies = [
  "crypto",
  "expect-test",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "pos_accounting",
  "rstest",
@@ -1236,7 +1236,7 @@ dependencies = [
  "fixed-hash",
  "generic-array",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "lazy_static",
  "logging",
  "merkletree",
@@ -1269,7 +1269,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "num",
  "parity-scale-codec",
@@ -3012,6 +3012,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3240,9 +3249,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.26.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc22eff61b133b115c6e8c74e818c628d6d5e7a502afea6f64dee076dd94326"
+checksum = "cf4e226dcd58b4be396f7bd3c20da8fdee2911400705297ba7d2d7cc2c30f716"
 dependencies = [
  "cc",
  "pkg-config",
@@ -3538,7 +3547,7 @@ version = "0.2.0"
 dependencies = [
  "blake2",
  "fixed-hash",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "parity-scale-codec",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -4308,7 +4317,7 @@ dependencies = [
  "enum-iterator",
  "futures",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "jsonrpsee",
  "logging",
  "mempool",
@@ -5106,9 +5115,9 @@ dependencies = [
 
 [[package]]
 name = "reedline"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7dc1d1d369c194cf79acc204397aca1fecc4248df3e1c1eabb15e5ef2d16991"
+checksum = "d0a093a20a6c473247c2e9971aaf4cedf9041bcd3f444dc7fad667d3b6b7a5fd"
 dependencies = [
  "chrono",
  "crossbeam",
@@ -5365,12 +5374,12 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "549b9d036d571d42e6e85d1c1425e2ac83491075078ca9a15be021c56b1641f2"
+checksum = "a78046161564f5e7cd9008aff3b2990b3850dc8e0349119b98e8f251e099f24d"
 dependencies = [
  "bitflags 2.4.1",
- "fallible-iterator 0.2.0",
+ "fallible-iterator 0.3.0",
  "fallible-streaming-iterator",
  "hashlink",
  "libsqlite3-sys",
@@ -5780,7 +5789,7 @@ dependencies = [
 name = "serialization-tagged-derive"
 version = "0.2.0"
 dependencies = [
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "proc-macro2",
  "quote",
  "syn 2.0.38",
@@ -6126,7 +6135,7 @@ dependencies = [
 name = "storage-core"
 version = "0.2.0"
 dependencies = [
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "thiserror",
  "utils",
@@ -6413,7 +6422,7 @@ dependencies = [
  "common",
  "crypto",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "rand_chacha 0.3.1",
  "rstest",
@@ -6983,7 +6992,7 @@ dependencies = [
  "consensus",
  "crypto",
  "fallible-iterator 0.3.0",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "mockall",
  "pos_accounting",
  "replace_with",
@@ -7008,7 +7017,7 @@ dependencies = [
 name = "typename-derive"
 version = "0.2.0"
 dependencies = [
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "quote",
  "syn 2.0.38",
 ]
@@ -7166,7 +7175,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "parity-scale-codec",
  "rstest",
@@ -7264,7 +7273,7 @@ dependencies = [
  "consensus",
  "crypto",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "logging",
  "mempool",
  "parity-scale-codec",
@@ -7416,7 +7425,7 @@ dependencies = [
  "common",
  "crypto",
  "hex",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "parity-scale-codec",
  "rstest",
  "serialization",
