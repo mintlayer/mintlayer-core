@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::helpers::make_trial;
 use crate::make_test;
@@ -23,7 +23,7 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw, Delegation,
+        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
     },
 };
 use crypto::{
@@ -34,9 +34,11 @@ use crypto::{
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
-        block::timestamp::BlockTimestamp, Block, DelegationId, Destination, OutPointSourceId,
-        PoolId, SignedTransaction, Transaction, TxInput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, output_value::OutputValue, Block, DelegationId,
+        Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -236,6 +238,108 @@ where
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting address available utxos
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+        let test_framework = TestFramework::builder(&mut rng).build();
+        let chain_config = test_framework.chain_config().clone();
+
+        let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let bob_destination = Destination::Address(PublicKeyHash::from(&bob_pk));
+        let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+
+        let tx = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+        assert!(tx.is_empty());
+
+        drop(db_tx);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
+        let outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(random_tx_id),
+            rng.gen::<u32>(),
+        );
+        let output = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+            bob_destination.clone(),
+        );
+
+        let utxo = Utxo::new(output.clone(), false);
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+
+        // set one and get it
+        {
+            db_tx
+                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.get(), block_height)
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+        }
+
+        // set another one and retrieve both
+        {
+            let random_tx_id: Id<Transaction> =
+                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let outpoint2 = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(random_tx_id),
+                rng.gen::<u32>(),
+            );
+            let output2 = TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                bob_destination,
+            );
+
+            let utxo = Utxo::new(output2.clone(), false);
+            let block_height = BlockHeight::new(rng.gen_range(1..100));
+            db_tx
+                .set_utxo_at_height(
+                    outpoint2.clone(),
+                    utxo.clone(),
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            let mut expected_utxos =
+                BTreeMap::from_iter([(outpoint, output), (outpoint2.clone(), output2.clone())]);
+            assert_eq!(bob_utxos.len(), 2);
+
+            for (outpoint, output) in bob_utxos {
+                let expected = expected_utxos.get(&outpoint).unwrap();
+                assert_eq!(&output, expected);
+            }
+
+            // set the new one to spent
+            let utxo = Utxo::new(output2.clone(), true);
+            expected_utxos.remove(&outpoint2);
+            db_tx
+                .set_utxo_at_height(
+                    outpoint2,
+                    utxo,
+                    bob_address.get(),
+                    block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            assert_eq!(bob_utxos.len(), 1);
+
+            for (outpoint, output) in bob_utxos {
+                let expected = expected_utxos.get(&outpoint).unwrap();
+                assert_eq!(&output, expected);
+            }
+        }
 
         db_tx.commit().await.unwrap();
     }

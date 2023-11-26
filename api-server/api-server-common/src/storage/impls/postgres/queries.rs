@@ -953,7 +953,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
                     FROM ml_utxo
-                    WHERE address = $1 
+                    WHERE address = $1
                 )
                 WHERE newest = 1 AND spent = false;"#,
                 &[&address],
