@@ -47,6 +47,14 @@ const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 /// Max tip age of about 100 years, useful to avoid the IBD state during testing
 const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365 * 24 * 60 * 60));
 
+const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
+
+fn create_mempool_config() -> MempoolConfig {
+    MempoolConfig {
+        min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
+    }
+}
+
 #[test]
 fn dummy_size() {
     logging::init_logging();
@@ -86,8 +94,8 @@ impl<M> Mempool<M> {
     }
 }
 
-fn get_relay_fee_from_tx_size(tx_size: usize) -> u128 {
-    u128::try_from(tx_size * RELAY_FEE_PER_BYTE).expect("relay fee overflow")
+fn get_relay_fee_from_tx_size(tx_size: usize) -> Amount {
+    TEST_MIN_TX_RELAY_FEE_RATE.compute_fee(tx_size).unwrap().into()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -98,7 +106,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 
     let flags = 0;
     let input = TxInput::from_utxo(outpoint_source_id, 0);
-    let relay_fee: Fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
+    let relay_fee: Fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE).into();
     let tx = tx_spend_input(
         &mempool,
         input,
@@ -120,6 +128,52 @@ async fn add_single_tx() -> anyhow::Result<()> {
     assert_eq!(all_txs, Vec::<SignedTransaction>::new());
     mempool.store.assert_valid();
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn add_tx_with_fee_rate_below_minimum() {
+    let min_relay_fee_rate = FeeRate::from_amount_per_kb(Amount::from_atoms(123));
+    let mut mempool = setup_with_min_tx_relay_fee_rate(min_relay_fee_rate);
+
+    async fn make_tx(
+        mempool: &Mempool<StoreMemoryUsageEstimator>,
+        relay_fee: Fee,
+    ) -> SignedTransaction {
+        let outpoint_source_id = mempool.chain_config.genesis_block_id().into();
+        let flags = 0;
+        let input = TxInput::from_utxo(outpoint_source_id, 0);
+
+        tx_spend_input(
+            mempool,
+            input,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            relay_fee,
+            flags,
+        )
+        .await
+        .unwrap()
+    }
+
+    let estimated_tx_size = make_tx(&mempool, Amount::ZERO.into()).await.encoded_size();
+    let min_relay_fee = min_relay_fee_rate.compute_fee(estimated_tx_size).unwrap();
+
+    // Tx1's fee is below the minimum, so it must be rejected.
+    let tx1_relay_fee = (min_relay_fee - Amount::from_atoms(1).into()).unwrap();
+    let tx1 = make_tx(&mempool, tx1_relay_fee).await;
+
+    let err = mempool.add_transaction_test(tx1).unwrap_err();
+    assert!(matches!(
+        err,
+        Error::Policy(MempoolPolicyError::InsufficientFeesToRelay {
+            tx_fee: _,
+            min_relay_fee: _
+        })
+    ));
+
+    // Tx2's fee is exactly the minimum, so it must be accepted.
+    let tx2 = make_tx(&mempool, min_relay_fee).await;
+    let tx_status = mempool.add_transaction_test(tx2).unwrap();
+    assert_eq!(tx_status, TxStatus::InMempool);
 }
 
 #[rstest]
@@ -210,10 +264,28 @@ pub fn start_chainstate_with_config(
 
 fn setup() -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let mempool_config = Arc::new(create_mempool_config());
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     Mempool::new(
-        config,
+        chain_config,
+        mempool_config,
+        chainstate_interface,
+        Default::default(),
+        StoreMemoryUsageEstimator,
+    )
+}
+
+fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> Mempool<StoreMemoryUsageEstimator> {
+    logging::init_logging();
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let mempool_config = Arc::new(MempoolConfig {
+        min_tx_relay_fee_rate: fee_rate.into(),
+    });
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
+    Mempool::new(
+        chain_config,
+        mempool_config,
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -224,10 +296,12 @@ fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
-        config,
+        chain_config,
+        mempool_config,
         chainstate_handle,
         Default::default(),
         StoreMemoryUsageEstimator,
@@ -418,7 +492,7 @@ async fn tx_spend_input<M>(
     flags: u128,
 ) -> anyhow::Result<SignedTransaction> {
     let fee = fee.into().map_or_else(
-        || Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into(),
+        || get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into(),
         std::convert::identity,
     );
     tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags).await
@@ -853,7 +927,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     mempool.add_transaction_test(replaced_tx)?.assert_in_mempool();
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let replacement_fee: Fee = Amount::from_atoms(100 + relay_fee).into();
+    let replacement_fee: Fee = (Amount::from_atoms(100) + relay_fee).unwrap().into();
     let incoming_tx = tx_spend_several_inputs(
         &mempool,
         &[input1, input2],
@@ -913,7 +987,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
-    let config = Arc::clone(chainstate.get_chain_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_interface = start_chainstate(chainstate);
 
     let num_inputs = 1;
@@ -923,7 +998,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("parent_id: {}", parent_id.to_hash());
     log::debug!("before adding parent");
     let mut mempool = Mempool::new(
-        Arc::clone(&config),
+        Arc::clone(&chain_config),
+        mempool_config,
         chainstate_interface,
         mock_clock,
         mock_usage,
@@ -946,9 +1022,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let child_0_id = child_0.transaction().get_id();
     log::debug!("child_0_id {}", child_0_id.to_hash());
 
-    let big_fee: Fee = Amount::from_atoms(
-        get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100,
-    )
+    let big_fee: Fee = (get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs))
+        + Amount::from_atoms(100))
+    .unwrap()
     .into();
     let child_1 = tx_spend_input(
         &mempool,
@@ -980,7 +1056,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             )?)
         .unwrap()
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3629)));
+    assert_eq!(
+        rolling_fee,
+        FeeRate::from_amount_per_kb(Amount::from_atoms(3629))
+    );
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -1150,7 +1229,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction_test(another_dummy)?.assert_in_mempool();
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        FeeRate::new(Amount::from_atoms(0))
+        FeeRate::from_amount_per_kb(Amount::from_atoms(0))
     );
 
     mempool.store.assert_valid();
@@ -1264,8 +1343,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let flags = 0;
 
-    let tx_b_fee: Fee =
-        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_b_fee: Fee = get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into();
     let tx_a_fee: Fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
@@ -1417,8 +1495,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let flags = 0;
 
-    let tx_b_fee: Fee =
-        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_b_fee: Fee = get_relay_fee_from_tx_size(estimate_tx_size(1, 2)).into();
     let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
@@ -1524,10 +1601,17 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chainstate = tf.chainstate();
-    let config = Arc::clone(chainstate.get_chain_config());
+    let chain_config = Arc::clone(chainstate.get_chain_config());
+    let mempool_config = Arc::new(create_mempool_config());
     let chainstate_handle = start_chainstate(chainstate);
 
-    let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);
+    let mut mempool = Mempool::new(
+        chain_config,
+        mempool_config,
+        chainstate_handle,
+        Default::default(),
+        mock_usage,
+    );
 
     let tx = TransactionBuilder::new()
         .add_input(
@@ -1664,7 +1748,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
                 &mempool,
                 TxInput::from_utxo(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
                 empty_witness(&mut rng),
-                Fee::new(Amount::from_atoms(fee + u128::try_from(i).unwrap())),
+                Fee::new((fee + Amount::from_atoms(i as u128)).unwrap()),
                 flags,
             )
             .await?,

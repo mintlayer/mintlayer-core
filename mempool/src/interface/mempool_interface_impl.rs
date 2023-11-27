@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::{
+    config::MempoolConfig,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
@@ -37,6 +38,7 @@ type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 /// Contains all the information required to spin up the mempool subsystem
 pub struct MempoolInit {
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 }
@@ -44,11 +46,13 @@ pub struct MempoolInit {
 impl MempoolInit {
     fn new(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         chainstate_handle: chainstate::ChainstateHandle,
         time_getter: TimeGetter,
     ) -> Self {
         Self {
             chain_config,
+            mempool_config,
             chainstate_handle,
             time_getter,
         }
@@ -61,6 +65,7 @@ impl MempoolInit {
         log::info!("Starting mempool");
         let mempool = Mempool::new(
             self.chain_config,
+            self.mempool_config,
             self.chainstate_handle,
             self.time_getter,
             StoreMemoryUsageEstimator,
@@ -238,8 +243,9 @@ impl subsystem::Subsystem for MempoolImpl {
 /// Mempool constructor
 pub fn make_mempool(
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 ) -> MempoolInit {
-    MempoolInit::new(chain_config, chainstate_handle, time_getter)
+    MempoolInit::new(chain_config, mempool_config, chainstate_handle, time_getter)
 }

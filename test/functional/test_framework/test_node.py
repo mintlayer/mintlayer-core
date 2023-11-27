@@ -102,16 +102,21 @@ class TestNode():
         # For functional tests, we don't want to fail when blocks are too old
         max_tip_age = 60 * 60 * 24 * 365 * 100
 
+        # Note: some tests depend on this value being relatively small; they'll fail if the
+        # current default value is used.
+        min_tx_relay_fee_rate = 1000
+
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
         self.args = [
             self.binary,
-            "--datadir={}".format(datadir),
+            f"--datadir={datadir}",
             "regtest",
-            "--http-rpc-addr={}".format(rpc_address),
-            "--p2p-addr={}".format(p2p_addr),
-            "--max-tip-age={}".format(max_tip_age),
+            f"--http-rpc-addr={rpc_address}",
+            f"--p2p-addr={p2p_addr}",
+            f"--max-tip-age={max_tip_age}",
+            f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
             #"-X",
             #"-logtimemicros",
             #"-debug",
@@ -220,8 +225,26 @@ class TestNode():
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
 
-        cmd = self.args + extra_args
-        self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
+        # Create a dictionary to store the arguments
+        arg_dict = {}
+
+        # Process args list
+        for arg in self.args:
+            if '=' in arg:
+                name, value = arg.split('=')
+                arg_dict[name] = value
+            else:
+                arg_dict[arg] = None
+
+        # Update with values from extra_args, overriding duplicates
+        for arg in extra_args:
+            if '=' in arg:
+                name, value = arg.split('=')
+                arg_dict[name] = value
+            else:
+                arg_dict[arg] = None
+        cmd = [f"{name}={value}" if value is not None else name for name, value in arg_dict.items()]
+        self.log.debug("Starting node with command: {}".format(" ".join(cmd)))
         self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True

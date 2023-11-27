@@ -77,14 +77,9 @@ mod work_queue;
 
 pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
-fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
-    let fee = u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE)
-        .map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
-    Ok(Amount::from_atoms(fee).into())
-}
-
 pub struct Mempool<M> {
     chain_config: Arc<ChainConfig>,
+    mempool_config: Arc<MempoolConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: MempoolMaxSize,
@@ -106,6 +101,7 @@ impl<M> std::fmt::Debug for Mempool<M> {
 impl<M> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
+        mempool_config: Arc<MempoolConfig>,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
@@ -119,6 +115,7 @@ impl<M> Mempool<M> {
         log::trace!("Creating mempool object");
         Self {
             chain_config,
+            mempool_config,
             store: MempoolStore::new(),
             chainstate_handle,
             max_size: MempoolMaxSize::default(),
@@ -196,7 +193,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
         if !rolling_fee_rate.block_since_last_rolling_fee_bump()
-            || rolling_fee_rate.rolling_minimum_fee_rate() == FeeRate::new(Amount::from_atoms(0))
+            || rolling_fee_rate.rolling_minimum_fee_rate()
+                == FeeRate::from_amount_per_kb(Amount::from_atoms(0))
         {
             return rolling_fee_rate.rolling_minimum_fee_rate();
         } else if self.clock.get_time()
@@ -229,7 +227,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).set_rolling_minimum_fee_rate(FeeRate::new(Amount::from_atoms(0)));
+        (*rolling_fee_rate)
+            .set_rolling_minimum_fee_rate(FeeRate::from_amount_per_kb(Amount::from_atoms(0)));
     }
 
     fn decay_rolling_fee_rate(&self) {
@@ -520,13 +519,20 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         res
     }
 
+    fn get_minimum_relay_fee(&self, tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
+        self.mempool_config.min_tx_relay_fee_rate.compute_fee(tx.encoded_size())
+    }
+
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
-        let relay_fee = get_relay_fee(tx.transaction())?;
-        log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
+        let min_relay_fee = self.get_minimum_relay_fee(tx.transaction())?;
+        log::debug!("tx_fee: {:?}, min_relay_fee: {:?}", tx_fee, min_relay_fee);
         ensure!(
-            tx_fee >= relay_fee,
-            MempoolPolicyError::InsufficientFeesToRelay { tx_fee, relay_fee }
+            tx_fee >= min_relay_fee,
+            MempoolPolicyError::InsufficientFeesToRelay {
+                tx_fee,
+                min_relay_fee
+            }
         );
         Ok(())
     }
@@ -625,15 +631,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
             (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx.transaction())?;
+        let min_relay_fee = self.get_minimum_relay_fee(tx.transaction())?;
         log::debug!(
-            "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
+            "conflict fees: {:?}, additional fee: {:?}, min relay fee {:?}",
             total_conflict_fees,
             additional_fees,
-            relay_fee
+            min_relay_fee
         );
         ensure!(
-            additional_fees >= relay_fee,
+            additional_fees >= min_relay_fee,
             MempoolPolicyError::InsufficientFeesToRelayRBF
         );
         Ok(())
@@ -1039,7 +1045,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     (Amount::from_atoms(score.into_atoms()) * 1000)
                         .ok_or(MempoolPolicyError::FeeOverflow)
                         .map(|amount| {
-                            let feerate = FeeRate::new(amount);
+                            let feerate = FeeRate::from_amount_per_kb(amount);
                             std::cmp::max(
                                 feerate,
                                 self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
@@ -1047,7 +1053,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
-            .map(|feerate| std::cmp::max(feerate, INCREMENTAL_RELAY_FEE_RATE))
+            .map(|feerate| std::cmp::max(feerate, *self.mempool_config.min_tx_relay_fee_rate))
     }
 
     pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {

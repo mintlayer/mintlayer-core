@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{Idable, H256},
 };
-use mempool::MempoolHandle;
+use mempool::{MempoolConfig, MempoolHandle};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
 use p2p::P2pHandle;
 use rpc::RpcAuthData;
@@ -70,6 +70,7 @@ pub async fn start_subsystems(
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     };
+    let mempool_config = Arc::new(MempoolConfig::new());
 
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
@@ -85,6 +86,7 @@ pub async fn start_subsystems(
 
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
+        mempool_config,
         chainstate_handle.clone(),
         Default::default(),
     );

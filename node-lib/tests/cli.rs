@@ -110,6 +110,7 @@ fn read_config_override_values() {
     let rpc_username = "username";
     let rpc_password = "password";
     let rpc_cookie_file = "cookie_file";
+    let min_tx_relay_fee_rate = 321;
 
     let options = RunOptions {
         blockprod_min_peers_to_produce_blocks: Some(blockprod_min_peers_to_produce_blocks),
@@ -138,6 +139,7 @@ fn read_config_override_values() {
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
         clean_data: Some(false),
+        min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
@@ -162,6 +164,11 @@ fn read_config_override_values() {
     assert_eq!(
         config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
         Some(max_tip_age)
+    );
+
+    assert_eq!(
+        config.mempool.unwrap().min_tx_relay_fee_rate,
+        Some(min_tx_relay_fee_rate)
     );
 
     assert_eq!(

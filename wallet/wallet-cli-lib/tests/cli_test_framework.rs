@@ -40,7 +40,7 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
-use mempool::rpc::MempoolRpcServer;
+use mempool::{rpc::MempoolRpcServer, MempoolConfig};
 use p2p::rpc::P2pRpcServer;
 use rpc::rpc_creds::RpcCreds;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
@@ -193,6 +193,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
         chainstate_config
     };
+    let mempool_config = Arc::new(MempoolConfig::new());
 
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
@@ -208,6 +209,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
 
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
+        mempool_config,
         chainstate.clone(),
         Default::default(),
     );

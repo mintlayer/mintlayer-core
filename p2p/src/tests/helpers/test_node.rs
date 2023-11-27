@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
+use mempool::MempoolConfig;
 use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
@@ -131,10 +132,14 @@ where
             time_getter.get_time_getter(),
         )
         .unwrap();
+
+        let mempool_config = Arc::new(MempoolConfig::new());
+
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
             p2p_test_utils::start_subsystems_generic(
                 chainstate,
                 Arc::clone(&chain_config),
+                mempool_config,
                 time_getter.get_time_getter(),
                 tracing_span.clone(),
             );

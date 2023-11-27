@@ -60,9 +60,9 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. } => 0,
             MempoolPolicyError::AdditionalFeesUnderflow => 0,
 
-            // The peer should not pass transactions not meeting the minimal fee threshold
-            MempoolPolicyError::InsufficientFeesToRelay { .. } => 100,
-            MempoolPolicyError::InsufficientFeesToRelayRBF => 100,
+            // Sending transactions with a fee below the minimum should not be punished.
+            MempoolPolicyError::InsufficientFeesToRelay { .. } => 0,
+            MempoolPolicyError::InsufficientFeesToRelayRBF => 0,
 
             // Rolling fee may be out of sync
             MempoolPolicyError::RollingFeeThresholdNotMet { .. } => 0,

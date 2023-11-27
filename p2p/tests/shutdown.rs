@@ -17,6 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::chain::config::create_mainnet;
+use mempool::MempoolConfig;
 use storage_inmemory::InMemory;
 
 use p2p::{
@@ -51,9 +52,11 @@ async fn shutdown_timeout() {
     )
     .unwrap();
     let chainstate = manager.add_subsystem("shutdown-test-chainstate", chainstate);
+    let mempool_config = Arc::new(MempoolConfig::new());
 
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
+        mempool_config,
         chainstate.clone(),
         Default::default(),
     );

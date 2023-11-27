@@ -15,7 +15,10 @@
 
 use std::time::Duration;
 
-use common::primitives::BlockDistance;
+use common::primitives::{Amount, BlockDistance};
+use utils::make_config_setting;
+
+use crate::FeeRate;
 
 /// Mempool size configuration
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
@@ -52,9 +55,6 @@ pub const ROLLING_FEE_BASE_HALFLIFE: Duration = Duration::new(60 * 60 * 12, 1);
 
 pub const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
 
-// TODO this should really be taken from some global node settings
-pub const RELAY_FEE_PER_BYTE: usize = 1;
-
 pub const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
 
 pub const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
@@ -72,3 +72,21 @@ pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;
 pub const FUTURE_TIMELOCK_TOLERANCE: Duration = Duration::from_secs(5 * 60);
 
 pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);
+
+// 10^-3 of a coin per 1000 bytes
+make_config_setting!(
+    MinTxRelayFeeRate,
+    FeeRate,
+    FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
+);
+
+#[derive(Debug, Clone, Default)]
+pub struct MempoolConfig {
+    pub min_tx_relay_fee_rate: MinTxRelayFeeRate,
+}
+
+impl MempoolConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}

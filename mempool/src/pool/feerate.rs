@@ -22,8 +22,10 @@ use crate::error::MempoolPolicyError;
 
 use super::fee::Fee;
 
-pub const INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
-pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
+pub const INCREMENTAL_RELAY_FEE_RATE: FeeRate =
+    FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
+pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate =
+    FeeRate::from_amount_per_kb(Amount::from_atoms(500));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct FeeRate {
@@ -31,7 +33,7 @@ pub struct FeeRate {
 }
 
 impl FeeRate {
-    pub const fn new(amount_per_kb: Amount) -> Self {
+    pub const fn from_amount_per_kb(amount_per_kb: Amount) -> Self {
         Self { amount_per_kb }
     }
 
@@ -63,7 +65,7 @@ impl FeeRate {
 impl std::ops::Add for FeeRate {
     type Output = Option<Self>;
     fn add(self, other: Self) -> Self::Output {
-        (self.amount_per_kb + other.amount_per_kb).map(FeeRate::new)
+        (self.amount_per_kb + other.amount_per_kb).map(FeeRate::from_amount_per_kb)
     }
 }
 

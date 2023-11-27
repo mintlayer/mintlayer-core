@@ -13,23 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use chainstate::ban_score::BanScore;
-use chainstate_test_framework::TestFramework;
+use chainstate::{ban_score::BanScore, BlockSource};
+use chainstate_test_framework::{anyonecanspend_address, TestFramework};
 use common::{
     chain::{
         config::create_unit_test_config, output_value::OutputValue,
-        signature::inputsig::InputWitness, GenBlock, OutPointSourceId, SignedTransaction,
-        Transaction, TxInput, TxOutput,
+        signature::inputsig::InputWitness, timelock::OutputTimeLock, GenBlock, OutPointSourceId,
+        SignedTransaction, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     tx_origin::RemoteTxOrigin,
+    FeeRate, MempoolConfig,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use serialization::Encode;
 use test_utils::random::Seed;
 
 use crate::{
@@ -39,7 +41,7 @@ use crate::{
     protocol::{ProtocolConfig, SupportedProtocolVersion},
     sync::{
         peer_v2::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
-        tests::helpers::{SyncManagerNotification, TestNode},
+        tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
     },
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -433,6 +435,113 @@ async fn valid_transaction(#[case] seed: Seed) {
 
         // There should be no `NewTransaction` message because the transaction is already known
         node.assert_no_sync_message().await;
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+// Check that a transaction with a fee below the minimum doesn't get into the mempool but
+// the peer is still not punished for it.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let min_fee_rate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
+        let new_block_reward_amount = Amount::from_atoms(1_000_000);
+
+        let new_block_reward = vec![TxOutput::LockThenTransfer(
+            OutputValue::Coin(new_block_reward_amount),
+            anyonecanspend_address(),
+            OutputTimeLock::ForBlockCount(0),
+        )];
+        let block1 = tf.make_block_builder().with_reward(new_block_reward.clone()).build();
+        let block1_id = block1.get_id();
+        tf.process_block(block1, BlockSource::Local).unwrap();
+        let block2 = tf.make_block_builder().with_reward(new_block_reward.clone()).build();
+        let block2_id = block2.get_id();
+        tf.process_block(block2, BlockSource::Local).unwrap();
+
+        let p2p_config = Arc::new(test_p2p_config());
+        let mempool_config = Arc::new(MempoolConfig {
+            min_tx_relay_fee_rate: min_fee_rate.into(),
+        });
+        let mut node = TestNode::builder(protocol_version)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_mempool_config(mempool_config)
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        let estimated_tx_size =
+            transaction_with_amount(block1_id.into(), new_block_reward_amount.into_atoms())
+                .encoded_size();
+        let min_tx_fee = min_fee_rate.compute_fee(estimated_tx_size).unwrap().into_atoms();
+
+        // tx1's fee is below the minimum
+        let tx1 = transaction_with_amount(
+            block1_id.into(),
+            new_block_reward_amount.into_atoms() - min_tx_fee / 2,
+        );
+        let tx1_id = tx1.transaction().get_id();
+        // tx2's fee is exactly the minimal one.
+        let tx2 = transaction_with_amount(
+            block2_id.into(),
+            new_block_reward_amount.into_atoms() - min_tx_fee,
+        );
+        let tx2_id = tx2.transaction().get_id();
+
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx1_id))
+            .await;
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
+            .await;
+
+        let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+        assert_eq!(peer.get_id(), sent_to);
+        assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx1_id));
+        let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+        assert_eq!(peer.get_id(), sent_to);
+        assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx2_id));
+
+        peer.send_transaction_sync_message(TransactionSyncMessage::TransactionResponse(
+            TransactionResponse::Found(tx1.clone()),
+        ))
+        .await;
+        peer.send_transaction_sync_message(TransactionSyncMessage::TransactionResponse(
+            TransactionResponse::Found(tx2.clone()),
+        ))
+        .await;
+
+        // Wait for tx2 to be propagated; both of the txs will have been handled by this moment.
+        node.receive_peer_manager_events(BTreeSet::from_iter(
+            [PeerManagerEventDesc::NewValidTransactionReceived {
+                peer_id: peer.get_id(),
+                txid: tx2_id,
+            }]
+            .into_iter(),
+        ))
+        .await;
+
+        let tx1_in_mempool =
+            node.mempool().call(move |m| m.contains_transaction(&tx1_id)).await.unwrap();
+        let tx2_in_mempool =
+            node.mempool().call(move |m| m.contains_transaction(&tx2_id)).await.unwrap();
+
+        assert!(!tx1_in_mempool);
+        assert!(tx2_in_mempool);
+
+        node.assert_no_sync_message().await;
+        // Expect no other peer manager events, such as the propagation of tx1 or peer banning.
+        node.assert_no_peer_manager_event().await;
 
         node.join_subsystem_manager().await;
     })
