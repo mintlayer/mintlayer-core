@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
 
 use crate::{
     chain::{
@@ -174,6 +174,8 @@ pub struct Builder {
     bip44_coin_type: ChildNumber,
     magic_bytes: [u8; 4],
     p2p_port: u16,
+    dns_seeds: Vec<&'static str>,
+    predefined_peer_addresses: Vec<SocketAddr>,
     default_rpc_port: u16,
     max_future_block_time_offset: Duration,
     software_version: SemVer,
@@ -221,6 +223,8 @@ impl Builder {
             coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
+            dns_seeds: chain_type.dns_seeds(),
+            predefined_peer_addresses: chain_type.predefined_peer_addresses(),
             default_rpc_port: chain_type.default_rpc_port(),
             software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
                 .expect("invalid CARGO_PKG_VERSION value"),
@@ -275,6 +279,8 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
+            dns_seeds,
+            predefined_peer_addresses,
             default_rpc_port,
             software_version,
             max_block_header_size,
@@ -358,6 +364,8 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
+            dns_seeds,
+            predefined_peer_addresses,
             default_rpc_port,
             software_version,
             max_block_header_size,
@@ -414,6 +422,8 @@ impl Builder {
     builder_method!(bip44_coin_type: ChildNumber);
     builder_method!(magic_bytes: [u8; 4]);
     builder_method!(p2p_port: u16);
+    builder_method!(dns_seeds: Vec<&'static str>);
+    builder_method!(predefined_peer_addresses: Vec<SocketAddr>);
     builder_method!(max_future_block_time_offset: Duration);
     builder_method!(software_version: SemVer);
     builder_method!(target_block_spacing: Duration);

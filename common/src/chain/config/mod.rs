@@ -24,6 +24,8 @@ use crypto::vrf::VRFPublicKey;
 use emission_schedule::CoinUnit;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
+use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
+
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
@@ -37,9 +39,6 @@ use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use std::num::NonZeroU64;
-use std::sync::Arc;
-use std::time::Duration;
 
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
@@ -112,6 +111,26 @@ impl ChainType {
         }
     }
 
+    fn dns_seeds(&self) -> Vec<&'static str> {
+        match self {
+            // TODO: Specify actual values
+            ChainType::Mainnet => Vec::new(),
+            ChainType::Testnet => vec!["testnet-seed.mintlayer.org"],
+            ChainType::Regtest => Vec::new(),
+            ChainType::Signet => Vec::new(),
+        }
+    }
+
+    fn predefined_peer_addresses(&self) -> Vec<SocketAddr> {
+        match self {
+            // TODO: Specify actual values
+            ChainType::Mainnet => Vec::new(),
+            ChainType::Testnet => Vec::new(),
+            ChainType::Regtest => Vec::new(),
+            ChainType::Signet => Vec::new(),
+        }
+    }
+
     const fn default_rpc_port(&self) -> u16 {
         match self {
             ChainType::Mainnet => 3030,
@@ -171,6 +190,8 @@ pub struct ChainConfig {
     chainstate_upgrades: NetUpgrades<ChainstateUpgrade>,
     magic_bytes: [u8; 4],
     p2p_port: u16,
+    dns_seeds: Vec<&'static str>,
+    predefined_peer_addresses: Vec<SocketAddr>,
     default_rpc_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
@@ -283,6 +304,18 @@ impl ChainConfig {
     #[must_use]
     pub fn p2p_port(&self) -> u16 {
         self.p2p_port
+    }
+
+    /// The list of addresses of dns seeds.
+    #[must_use]
+    pub fn dns_seeds(&self) -> &[&str] {
+        &self.dns_seeds
+    }
+
+    /// The list of predefined peer addresses.
+    #[must_use]
+    pub fn predefined_peer_addresses(&self) -> &[SocketAddr] {
+        &self.predefined_peer_addresses
     }
 
     /// The default port that the rpc server will listen on
@@ -694,11 +727,14 @@ pub fn create_regtest() -> ChainConfig {
     Builder::new(ChainType::Regtest).build()
 }
 
-pub fn create_unit_test_config() -> ChainConfig {
+pub fn create_unit_test_config_builder() -> Builder {
     Builder::new(ChainType::Testnet)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(Destination::AnyoneCanSpend)
-        .build()
+}
+
+pub fn create_unit_test_config() -> ChainConfig {
+    create_unit_test_config_builder().build()
 }
 
 /// This function ensure that IgnoreConsensus will never be used in anything other than regtest
