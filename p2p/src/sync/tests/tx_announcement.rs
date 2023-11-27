@@ -38,7 +38,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{TransactionResponse, TransactionSyncMessage},
-    protocol::{ProtocolConfig, SupportedProtocolVersion},
+    protocol::ProtocolConfig,
     sync::{
         peer_v2::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
         tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
@@ -275,47 +275,33 @@ async fn too_many_announcements(#[case] seed: Seed) {
         peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
             .await;
 
-        if protocol_version == SupportedProtocolVersion::V1.into() {
-            // In V1 the peer is punished for this.
-            let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
-            assert_eq!(peer.get_id(), adjusted_peer);
-            assert_eq!(
-                score,
-                P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0))
-                    .ban_score()
-            );
-            node.assert_no_sync_message().await;
-        } else {
-            // In V2 the peer is not punished.
-            node.assert_no_peer_manager_event().await;
-            // Still, the node shouldn't react to this announcement.
-            node.assert_no_sync_message().await;
+        // The peer should not be punished.
+        node.assert_no_peer_manager_event().await;
+        // Still, the node shouldn't react to this announcement.
+        node.assert_no_sync_message().await;
 
-            // Advance time to make the previously ignored tx request expire.
-            logging::log::debug!("Advancing current time");
-            time_getter.advance_time(REQUESTED_TX_EXPIRY_PERIOD + Duration::from_secs(1));
+        // Advance time to make the previously ignored tx request expire.
+        logging::log::debug!("Advancing current time");
+        time_getter.advance_time(REQUESTED_TX_EXPIRY_PERIOD + Duration::from_secs(1));
 
-            // Make sure that the Peer task has an opportunity to handle expired requests.
-            node.clear_notifications().await;
-            node.wait_for_notification(
-                SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
-                    peer_id: peer.get_id(),
-                },
-            )
+        // Make sure that the Peer task has an opportunity to handle expired requests.
+        node.clear_notifications().await;
+        node.wait_for_notification(SyncManagerNotification::NewTxSyncManagerMainLoopIteration {
+            peer_id: peer.get_id(),
+        })
+        .await;
+
+        // Announce the same tx
+        peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
             .await;
 
-            // Announce the same tx
-            peer.send_transaction_sync_message(TransactionSyncMessage::NewTransaction(tx2_id))
-                .await;
+        // Still no punishment
+        node.assert_no_peer_manager_event().await;
 
-            // Still no punishment
-            node.assert_no_peer_manager_event().await;
-
-            // Now the request is sent.
-            let (sent_to, message) = node.get_sent_transaction_sync_message().await;
-            assert_eq!(sent_to, peer.get_id());
-            assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx2_id));
-        }
+        // Now the request is sent.
+        let (sent_to, message) = node.get_sent_transaction_sync_message().await;
+        assert_eq!(sent_to, peer.get_id());
+        assert_eq!(message, TransactionSyncMessage::TransactionRequest(tx2_id));
 
         node.join_subsystem_manager().await;
     })
@@ -366,23 +352,10 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         ))
         .await;
 
-        if protocol_version == SupportedProtocolVersion::V1.into() {
-            let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
-            assert_eq!(peer.get_id(), adjusted_peer);
-            assert_eq!(
-                score,
-                P2pError::ProtocolError(ProtocolError::DuplicatedTransactionAnnouncement(
-                    tx.transaction().get_id()
-                ))
-                .ban_score()
-            );
-            node.assert_no_sync_message().await;
-        } else {
-            // In V2 the peer is not punished for sending duplicate announcements.
-            node.assert_no_peer_manager_event().await;
-            // Still, the node shouldn't react to this announcement.
-            node.assert_no_sync_message().await;
-        }
+        // The peer should not be punished for sending duplicate announcements.
+        node.assert_no_peer_manager_event().await;
+        // Still, the node shouldn't react to this announcement.
+        node.assert_no_sync_message().await;
 
         node.join_subsystem_manager().await;
     })

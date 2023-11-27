@@ -23,8 +23,6 @@ use test_utils::random::Seed;
 
 use crate::{
     message::{BlockSyncMessage, HeaderList},
-    protocol::ProtocolVersion,
-    protocol::SupportedProtocolVersion,
     sync::tests::helpers::TestNode,
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
@@ -47,37 +45,35 @@ async fn connect_peer() {
 
 // Check that the attempt to connect the peer twice results in an error.
 #[tracing::instrument]
-#[rstest::rstest]
-#[trace]
-#[case(SupportedProtocolVersion::V1.into())]
-#[case(SupportedProtocolVersion::V2.into())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Registered duplicated peer"]
-async fn connect_peer_twice(#[case] protocol_version: ProtocolVersion) {
-    let mut node = TestNode::start(protocol_version).await;
+async fn connect_peer_twice() {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut node = TestNode::start(protocol_version).await;
 
-    let peer_id = PeerId::new();
-    let _ = node.connect_peer(peer_id, protocol_version).await;
+        let peer_id = PeerId::new();
+        let _ = node.connect_peer(peer_id, protocol_version).await;
 
-    let _ = node.try_connect_peer(peer_id, protocol_version);
+        let _ = node.try_connect_peer(peer_id, protocol_version);
 
-    node.resume_panic().await;
+        node.resume_panic().await;
+    })
+    .await;
 }
 
 #[tracing::instrument]
-#[rstest::rstest]
-#[trace]
-#[case(SupportedProtocolVersion::V1.into())]
-#[case(SupportedProtocolVersion::V2.into())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Unregistering unknown peer:"]
-async fn disconnect_nonexistent_peer(#[case] protocol_version: ProtocolVersion) {
-    let mut node = TestNode::start(protocol_version).await;
+async fn disconnect_nonexistent_peer() {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut node = TestNode::start(protocol_version).await;
 
-    let peer = PeerId::new();
-    node.disconnect_peer(peer);
+        let peer = PeerId::new();
+        node.disconnect_peer(peer);
 
-    node.resume_panic().await;
+        node.resume_panic().await;
+    })
+    .await;
 }
 
 #[tracing::instrument]

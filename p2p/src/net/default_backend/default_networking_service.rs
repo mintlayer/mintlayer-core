@@ -46,7 +46,7 @@ const PREFERRED_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVe
 // Some tests do need this value though in order to check the correct version selection.
 // So we make it available for them via a function with a test-specific name and under cfg(test).
 #[cfg(test)]
-pub fn get_preferred_protocol_version_for_tests() -> SupportedProtocolVersion {
+pub const fn get_preferred_protocol_version_for_tests() -> SupportedProtocolVersion {
     PREFERRED_PROTOCOL_VERSION
 }
 

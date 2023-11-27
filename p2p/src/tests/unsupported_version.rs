@@ -94,16 +94,19 @@ where
     );
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_tcp() {
     run_with_timeout(unsupported_version_outgoing::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_channels() {
     run_with_timeout(unsupported_version_outgoing::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_outgoing_noise() {
     run_with_timeout(unsupported_version_outgoing::<TestTransportNoise>()).await;
@@ -162,16 +165,19 @@ where
     );
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_tcp() {
     run_with_timeout(unsupported_version_incoming::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_channels() {
     run_with_timeout(unsupported_version_incoming::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_incoming_noise() {
     run_with_timeout(unsupported_version_incoming::<TestTransportNoise>()).await;
@@ -265,16 +271,19 @@ where
     test_node.join().await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_tcp() {
     run_with_timeout(unsupported_version_two_peers::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_channels() {
     run_with_timeout(unsupported_version_two_peers::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unsupported_version_two_peers_noise() {
     run_with_timeout(unsupported_version_two_peers::<TestTransportNoise>()).await;

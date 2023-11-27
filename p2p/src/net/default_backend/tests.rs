@@ -15,6 +15,7 @@
 
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
+use enum_iterator::all;
 use tokio::{io::AsyncWriteExt, sync::oneshot, time::timeout};
 
 use common::time_getter::TimeGetter;
@@ -36,6 +37,13 @@ use crate::{
         TestTransportTcp,
     },
 };
+
+// The current "preferred" version.
+const CURRENT_PROTOCOL_VERSION: ProtocolVersion =
+    get_preferred_protocol_version_for_tests().into_raw_version();
+// The next version after the current one.
+const NEXT_PROTOCOL_VERSION: ProtocolVersion =
+    ProtocolVersion::new(CURRENT_PROTOCOL_VERSION.inner() + 1);
 
 async fn connect_to_remote_impl<A, T>(
     remote_protocol_version: ProtocolVersion,
@@ -106,17 +114,9 @@ where
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
-    connect_to_remote_impl::<A, T>(
-        SupportedProtocolVersion::V1.into(),
-        SupportedProtocolVersion::V1.into(),
-    )
-    .await;
+    connect_to_remote_impl::<A, T>(CURRENT_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION).await;
 
-    connect_to_remote_impl::<A, T>(
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V2.into(),
-    )
-    .await;
+    connect_to_remote_impl::<A, T>(NEXT_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION).await;
 }
 
 #[tracing::instrument]
@@ -204,17 +204,9 @@ where
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket,
 {
-    accept_incoming_impl::<A, T>(
-        SupportedProtocolVersion::V1.into(),
-        SupportedProtocolVersion::V1.into(),
-    )
-    .await;
+    accept_incoming_impl::<A, T>(CURRENT_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION).await;
 
-    accept_incoming_impl::<A, T>(
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V2.into(),
-    )
-    .await;
+    accept_incoming_impl::<A, T>(NEXT_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION).await;
 }
 
 #[tracing::instrument]
@@ -465,7 +457,7 @@ async fn invalid_outbound_peer_connect_noise() {
 }
 
 // This test checks common protocol version selection when the nodes are explicitly told
-// which version numbers to announce to each other. It doest't use CURRENT_PROTOCOL_VERSION
+// which version numbers to announce to each other. It doest't use PREFERRED_PROTOCOL_VERSION
 // in any way and therefore doesn't check which version will be selected in a real-world
 // scenario (this is checked by connect_to_remote/accept_incoming tests above).
 async fn general_protocol_version_selection_impl<A, T>(
@@ -557,23 +549,30 @@ where
     T: TransportSocket + Debug,
 {
     general_protocol_version_selection_impl::<A, T>(
-        SupportedProtocolVersion::V1.into(),
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V1.into(),
+        CURRENT_PROTOCOL_VERSION,
+        NEXT_PROTOCOL_VERSION,
+        CURRENT_PROTOCOL_VERSION,
     )
     .await;
     general_protocol_version_selection_impl::<A, T>(
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V1.into(),
-        SupportedProtocolVersion::V1.into(),
+        NEXT_PROTOCOL_VERSION,
+        CURRENT_PROTOCOL_VERSION,
+        CURRENT_PROTOCOL_VERSION,
     )
     .await;
-    general_protocol_version_selection_impl::<A, T>(
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V2.into(),
-        SupportedProtocolVersion::V2.into(),
-    )
-    .await;
+
+    let next_version_supported = all::<SupportedProtocolVersion>()
+        .any(|ver| ver.into_raw_version() == NEXT_PROTOCOL_VERSION);
+    // This part won't work if NEXT_PROTOCOL_VERSION is not inside SupportedProtocolVersion.
+    if next_version_supported {
+        log::debug!("NEXT_PROTOCOL_VERSION is supported; performing an additional check");
+        general_protocol_version_selection_impl::<A, T>(
+            NEXT_PROTOCOL_VERSION,
+            NEXT_PROTOCOL_VERSION,
+            NEXT_PROTOCOL_VERSION,
+        )
+        .await;
+    }
 }
 
 #[tracing::instrument]

@@ -31,11 +31,11 @@ use crate::error::{P2pError, ProtocolError};
 pub struct ProtocolVersion(u32);
 
 impl ProtocolVersion {
-    pub fn new(value: u32) -> Self {
+    pub const fn new(value: u32) -> Self {
         Self(value)
     }
 
-    pub fn inner(&self) -> u32 {
+    pub const fn inner(&self) -> u32 {
         self.0
     }
 }
@@ -43,13 +43,18 @@ impl ProtocolVersion {
 /// The validated network protocol version.
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq, Eq, PartialOrd, Ord, Sequence)]
 pub enum SupportedProtocolVersion {
-    V1 = 1,
     V2 = 2,
+}
+
+impl SupportedProtocolVersion {
+    pub const fn into_raw_version(&self) -> ProtocolVersion {
+        ProtocolVersion::new(*self as u32)
+    }
 }
 
 impl From<SupportedProtocolVersion> for ProtocolVersion {
     fn from(value: SupportedProtocolVersion) -> Self {
-        ProtocolVersion::new(value as u32)
+        value.into_raw_version()
     }
 }
 

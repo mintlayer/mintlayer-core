@@ -27,9 +27,8 @@ use test_utils::random::Seed;
 use crate::{
     config::P2pConfig,
     error::ProtocolError,
-    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
-    protocol::{ProtocolConfig, ProtocolVersion},
-    sync::tests::helpers::{make_new_blocks, TestNode},
+    message::{BlockSyncMessage, HeaderList, HeaderListRequest},
+    sync::tests::helpers::TestNode,
     testing_utils::for_each_protocol_version,
     types::peer_id::PeerId,
     P2pError,
@@ -125,177 +124,69 @@ async fn valid_request(#[case] seed: Seed) {
     .await;
 }
 
-// If the peer ignores our header requests, but asks us for blocks at the same time, we
-// should not disconnect it (we assume it's in IBD).
-#[tracing::instrument(skip(seed))]
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy(), ProtocolVersion::new(1))]
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
-    #[case] seed: Seed,
-    #[case] protocol_version: ProtocolVersion,
-) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-    let time_getter = P2pBasicTestTimeGetter::new();
+async fn respond_with_empty_header_list_when_in_ibd() {
+    for_each_protocol_version(|protocol_version| async move {
+        let time_getter = P2pBasicTestTimeGetter::new();
 
-    const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
-    const DELAY: Duration = Duration::from_millis(400);
+        const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
 
-    let chain_config = Arc::new(create_unit_test_config());
-    let p2p_config = Arc::new(P2pConfig {
-        protocol_config: ProtocolConfig {
-            // Note: max_request_blocks_count doesn't really matter here. But we'll be sending
-            // one block at a time, so it's better to pretend that we do that because of the limit
-            // (just in case it becomes important in the future, like it is for msg_header_count_limit).
-            max_request_blocks_count: 1.into(),
+        let chain_config = Arc::new(create_unit_test_config());
+        let p2p_config = Arc::new(P2pConfig {
+            sync_stalling_timeout: STALLING_TIMEOUT.into(),
 
-            msg_header_count_limit: Default::default(),
-            msg_max_locator_count: Default::default(),
-            max_message_size: Default::default(),
-            max_peer_tx_announcements: Default::default(),
-            max_singular_unconnected_headers: Default::default(),
-        },
-        sync_stalling_timeout: STALLING_TIMEOUT.into(),
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            ban_threshold: Default::default(),
+            ban_duration: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            peer_handshake_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            peer_manager_config: Default::default(),
+            protocol_config: Default::default(),
+        });
 
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        peer_manager_config: Default::default(),
-    });
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(chain_config)
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time_getter.get_time_getter())
+            .build()
+            .await;
 
-    let blocks = make_new_blocks(
-        &chain_config,
-        None,
-        &time_getter.get_time_getter(),
-        3,
-        &mut rng,
-    );
-    let headers = blocks.iter().map(|b| b.header().clone()).collect();
+        // Node must be in Initial Download State
+        assert!(node
+            .chainstate()
+            .call(|chainstate| chainstate.is_initial_block_download())
+            .await
+            .unwrap());
 
-    let mut node = TestNode::builder(protocol_version)
-        .with_chain_config(chain_config)
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_time_getter(time_getter.get_time_getter())
-        .with_blocks(blocks.clone())
-        .build()
-        .await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-    // Simulate the peer sending HeaderListRequest too.
-    let locator = node.get_locator_from_height(0.into()).await;
-    peer.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
-        locator,
-    )))
-    .await;
-
-    // The node should send the header list.
-    assert_eq!(
-        node.get_sent_block_sync_message().await.1,
-        BlockSyncMessage::HeaderList(HeaderList::new(headers)),
-    );
-
-    // Now send each block after a delay.
-    for block in blocks.into_iter() {
-        time_getter.advance_time(DELAY);
-        peer.send_block_sync_message(BlockSyncMessage::BlockListRequest(BlockListRequest::new(
-            vec![block.get_id()],
+        // Simulate the peer sending HeaderListRequest.
+        let locator = node.get_locator_from_height(0.into()).await;
+        peer.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
+            locator,
         )))
         .await;
 
-        // Eventually, the total time passed will become bigger than the timeout. Still, the peer
-        // shouldn't be disconnected because it's been asking for blocks.
-        // Just in case, check that there were no peer manager events at all, not just disconnects.
-        // Also, do it on every iteration to make the test fail faster.
-        node.assert_no_peer_manager_event().await;
-
-        // The node should send the block.
+        // The node should send an empty header list.
         assert_eq!(
             node.get_sent_block_sync_message().await.1,
-            BlockSyncMessage::BlockResponse(BlockResponse::new(block)),
+            BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())),
         );
-    }
 
-    node.assert_no_error().await;
-    node.assert_no_peer_manager_event().await;
-    node.join_subsystem_manager().await;
-}
-
-#[rstest::rstest]
-#[trace]
-#[case(ProtocolVersion::new(2))]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: ProtocolVersion) {
-    let time_getter = P2pBasicTestTimeGetter::new();
-
-    const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
-
-    let chain_config = Arc::new(create_unit_test_config());
-    let p2p_config = Arc::new(P2pConfig {
-        sync_stalling_timeout: STALLING_TIMEOUT.into(),
-
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        peer_handshake_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        peer_manager_config: Default::default(),
-        protocol_config: Default::default(),
-    });
-
-    let mut node = TestNode::builder(protocol_version)
-        .with_chain_config(chain_config)
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_time_getter(time_getter.get_time_getter())
-        .build()
-        .await;
-
-    // Node must be in Initial Download State
-    assert!(node
-        .chainstate()
-        .call(|chainstate| chainstate.is_initial_block_download())
-        .await
-        .unwrap());
-
-    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
-
-    // Simulate the peer sending HeaderListRequest.
-    let locator = node.get_locator_from_height(0.into()).await;
-    peer.send_block_sync_message(BlockSyncMessage::HeaderListRequest(HeaderListRequest::new(
-        locator,
-    )))
+        node.assert_no_error().await;
+        node.assert_no_peer_manager_event().await;
+        node.join_subsystem_manager().await;
+    })
     .await;
-
-    // The node should send an empty header list.
-    assert_eq!(
-        node.get_sent_block_sync_message().await.1,
-        BlockSyncMessage::HeaderList(HeaderList::new(Vec::new())),
-    );
-
-    node.assert_no_error().await;
-    node.assert_no_peer_manager_event().await;
-    node.join_subsystem_manager().await;
 }

@@ -110,16 +110,19 @@ where
     assert_eq!(peer_score, expected_score);
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_tcp() {
     run_with_timeout(unexpected_handshake_message::<TestTransportTcp>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_channels() {
     run_with_timeout(unexpected_handshake_message::<TestTransportChannel>()).await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unexpected_handshake_message_noise() {
     run_with_timeout(unexpected_handshake_message::<TestTransportNoise>()).await;

@@ -80,7 +80,7 @@ from test_framework.mintlayer import (
 
 logger = logging.getLogger("TestFramework.p2p")
 
-P2P_NETWORK_PROTOCOL = 1
+P2P_NETWORK_PROTOCOL = 2
 
 # The P2P user agent string that this test framework sends in its `handshake` message
 P2P_USER_AGENT = "PythonTesterP2P"
