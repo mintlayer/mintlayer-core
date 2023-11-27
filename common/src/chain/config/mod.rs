@@ -44,6 +44,7 @@ use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
+use super::tokens::TokenIssuanceVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
 
@@ -738,6 +739,13 @@ pub fn create_regtest() -> ChainConfig {
 pub fn create_unit_test_config_builder() -> Builder {
     Builder::new(ChainType::Testnet)
         .consensus_upgrades(NetUpgrades::unit_tests())
+        .chainstate_upgrades(
+            NetUpgrades::initialize(vec![(
+                BlockHeight::zero(),
+                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+            )])
+            .unwrap(),
+        )
         .genesis_unittest(Destination::AnyoneCanSpend)
 }
 

@@ -17,8 +17,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        output_value::OutputValue,
-        tokens::{make_token_id, TokenAuxiliaryData, TokenData, TokenId},
+        tokens::{make_token_id, TokenAuxiliaryData, TokenId},
         Block, Transaction, TxOutput,
     },
     primitives::{Id, Idable, H256},
@@ -219,16 +218,10 @@ impl TokenIssuanceCache {
 
 fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
     outputs.iter().any(|output| match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            match v {
-                OutputValue::TokenV0(data) => match data.as_ref() {
-                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
-                    TokenData::TokenTransfer(_) => false,
-                },
-                OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
-            }
-        }
-        TxOutput::CreateStakePool(_, _)
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)

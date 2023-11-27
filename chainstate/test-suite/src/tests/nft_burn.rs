@@ -37,194 +37,6 @@ use tx_verifier::transaction_verifier::CoinOrTokenId;
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn nft_burn_invalid_amount(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-
-        let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_issuance_fee();
-
-        // Issuance
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(genesis_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Transfer(
-                random_nft_issuance(chain_config, &mut rng).into(),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .build();
-        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
-
-        let block = tf.block(*block_index.block_id());
-        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
-
-        // Burn more NFT than we have
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(rng.gen_range(2..123)),
-                }
-                .into(),
-            ))
-            .build();
-        let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
-
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                        CoinOrTokenId::TokenId(token_id)
-                    ),
-                    tx_id.into()
-                ))
-            ))
-        );
-
-        // Burn zero NFT
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(0),
-                        }
-                        .into(),
-                    ))
-                    .build(),
-            )
-            .build_and_process();
-
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::TransferZeroTokens(_, _))
-                ))
-            ))
-        ));
-    })
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn nft_burn_valid_case(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-
-        let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_issuance_fee();
-
-        // Issuance
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(genesis_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Transfer(
-                random_nft_issuance(chain_config, &mut rng).into(),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .build();
-        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
-
-        let block = tf.block(*block_index.block_id());
-        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
-
-        // Burn
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(issuance_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                }
-                .into(),
-            ))
-            .build();
-        let first_burn_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
-        let block = tf.block(*block_index.block_id());
-        assert!(tf
-            .outputs_from_genblock(block.get_id().into())
-            .contains_key(&first_burn_outpoint_id));
-
-        // Try to transfer burned tokens
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(first_burn_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
-            )
-            .build_and_process();
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
-                    first_burn_outpoint_id,
-                    0
-                ))
-            ))
-        );
-    })
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 fn no_v0_issuance_after_v1(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -243,7 +55,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -256,7 +68,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(
                 random_nft_issuance(tf.chain_config(), &mut rng).into(),
             ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
 

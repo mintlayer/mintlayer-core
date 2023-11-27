@@ -142,7 +142,7 @@ pub fn check_reward_inputs_outputs_policy(
                 .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
                 let outputs_accumulator =
-                    ConstrainedValueAccumulator::from_outputs(chain_config, block_height, outputs)
+                    ConstrainedValueAccumulator::from_outputs(chain_config, outputs)
                         .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
 
                 inputs_accumulator
@@ -171,18 +171,13 @@ pub fn check_reward_inputs_outputs_policy(
     Ok(())
 }
 
-pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
+pub fn check_tx_inputs_outputs_policy(
     tx: &Transaction,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
-    issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<AccumulatedFee, ConnectTransactionError>
-where
-    IssuanceTokenIdGetterFunc:
-        Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
-{
+) -> Result<AccumulatedFee, ConnectTransactionError> {
     let inputs_utxos = collect_inputs_utxos(&utxo_view, tx.inputs())?;
 
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
@@ -228,23 +223,18 @@ where
             .map_err(|_| pos_accounting::Error::ViewFail)?)
     };
 
-    let issuance_token_id_getter =
-        |tx_id| issuance_token_id_getter(tx_id).map_err(|_| IOPolicyError::TokenIdQueryFailed);
-
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         tx.inputs(),
         &inputs_utxos,
     )
     .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
-            .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+    let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs())
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     let consumed_accumulator = inputs_accumulator
         .satisfy_with(outputs_accumulator)

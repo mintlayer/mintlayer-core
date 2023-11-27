@@ -76,7 +76,7 @@ use pos_accounting::{
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
-// TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
+// TODO: We can move it to mod common, because in chain config we have `token_issuance_fee`
 //       that essentially belongs to this type, but return Amount
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
@@ -803,13 +803,6 @@ where
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         })?;
 
-        let issuance_token_id_getter =
-            |tx_id: Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
-                // issuance transactions are unique, so we use them to get the token id
-                self.get_token_id_from_issuance_tx(tx_id)
-                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-            };
-
         // check for attempted money printing and invalid inputs/outputs combinations
         let fee = input_output_policy::check_tx_inputs_outputs_policy(
             tx.transaction(),
@@ -817,7 +810,6 @@ where
             tx_source.expected_block_height(),
             &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
-            issuance_token_id_getter,
         )?;
 
         // check timelocks of the outputs and make sure there's no premature spending

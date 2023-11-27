@@ -58,7 +58,6 @@ use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
     median_time::calculate_median_time_past,
-    tokens::check_tokens_data,
     transaction_verifier::{error::TokensError, flush::flush_to_storage},
     tx_verification_strategy::TransactionVerificationStrategy,
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
@@ -759,15 +758,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        let prev_block_id = block.prev_block_id();
-        let current_height = self
-            .get_gen_block_index(&prev_block_id)?
-            .ok_or(CheckBlockTransactionsError::PropertyQueryError(
-                PropertyQueryError::PrevBlockIndexNotFound(prev_block_id),
-            ))?
-            .block_height()
-            .next_height();
-
         for tx in block.transactions() {
             // We can't issue multiple tokens in a single tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());
@@ -785,41 +775,25 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             tx.outputs()
                 .iter()
                 .try_for_each(|output| match output {
-                    TxOutput::Transfer(v, _)
-                    | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => {
-                        if let Some(token_data) = v.token_data() {
-                            check_tokens_data(
-                                self.chain_config,
-                                token_data,
-                                tx.transaction(),
-                                block.get_id(),
-                                current_height,
-                            )?;
-                        }
-                        Ok(())
+                    TxOutput::IssueFungibleToken(issuance) => {
+                        check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
+                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                        })
                     }
-                    TxOutput::IssueFungibleToken(issuance) => check_tokens_issuance(
-                        self.chain_config,
-                        current_height,
-                        issuance,
-                    )
-                    .map_err(|e| {
-                        TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
-                    }),
                     TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                        NftIssuance::V0(data) => {
-                            check_nft_issuance_data(self.chain_config, current_height, data)
-                                .map_err(|e| {
-                                    TokensError::IssueError(
-                                        e,
-                                        tx.transaction().get_id(),
-                                        block.get_id(),
-                                    )
-                                })
-                        }
+                        NftIssuance::V0(data) => check_nft_issuance_data(self.chain_config, data)
+                            .map_err(|e| {
+                                TokensError::IssueError(
+                                    e,
+                                    tx.transaction().get_id(),
+                                    block.get_id(),
+                                )
+                            }),
                     },
-                    TxOutput::CreateStakePool(_, _)
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)

@@ -30,9 +30,9 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{TokenData, TokenTransfer},
-        Destination, GenBlock, OutPointSourceId, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        tokens::TokenIssuance,
+        AccountCommand, AccountNonce, Destination, GenBlock, OutPointSourceId, SignedTransaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
@@ -44,7 +44,7 @@ use crypto::{
 use pos_accounting::PoSAccountingStorageRead;
 use rstest::rstest;
 use test_utils::{
-    nft_utils::random_token_issuance,
+    nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
 };
 use tx_verifier::transaction_verifier::CoinOrTokenId;
@@ -161,13 +161,9 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 pool_id,
                 Box::new(stake_pool_data),
             ))
-            .add_output(TxOutput::Transfer(
-                random_token_issuance(tf.chainstate.get_chain_config(), &mut rng).into(),
-                anyonecanspend_address(),
-            ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
-            )))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+            ))))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -181,14 +177,13 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
+fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        // create a tx with coins utxo and token issuance utxo
-        let token_issuance_data = random_token_issuance(tf.chainstate.get_chain_config(), &mut rng);
-        let amount_to_issue = token_issuance_data.amount_to_issue;
+        // create a tx with coins utxo and token issuance
+        let amount_to_mint = Amount::from_atoms(100);
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_stake =
@@ -201,17 +196,17 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::Transfer(
-                token_issuance_data.into(),
-                anyonecanspend_address(),
-            ))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+            ))))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_stake),
                 anyonecanspend_address(),
             ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
-            )))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_supply_change_fee()),
+                Destination::AnyoneCanSpend,
+            ))
             .build();
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::tokens::make_token_id(tx0.transaction().inputs()).unwrap();
@@ -219,25 +214,28 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
-        let outpoint0 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx0_id), 0);
+        let outpoint0 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx0_id), 1);
         let pool_id = pos_accounting::make_pool_id(&outpoint0);
 
         // stake pool with coin input and transfer tokens with token input
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(OutPointSourceId::Transaction(tx0_id), 0),
-                empty_witness(&mut rng),
-            )
-            .add_input(
                 TxInput::from_utxo(OutPointSourceId::Transaction(tx0_id), 1),
                 empty_witness(&mut rng),
             )
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx0_id), 2),
+                empty_witness(&mut rng),
+            )
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::MintTokens(token_id, amount_to_mint),
+                ),
+                InputWitness::NoSignature(None),
+            )
             .add_output(TxOutput::Transfer(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: amount_to_issue,
-                })
-                .into(),
+                OutputValue::TokenV1(token_id, amount_to_mint),
                 anyonecanspend_address(),
             ))
             .add_output(TxOutput::CreateStakePool(

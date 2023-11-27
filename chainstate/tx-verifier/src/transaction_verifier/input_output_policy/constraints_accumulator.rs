@@ -17,13 +17,10 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 
 use common::{
     chain::{
-        output_value::OutputValue,
-        timelock::OutputTimeLock,
-        tokens::{TokenData, TokenId, TokenIssuanceVersion},
-        AccountCommand, AccountSpending, ChainConfig, DelegationId, PoolId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
+        ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight},
 };
 use utils::ensure;
 
@@ -61,19 +58,17 @@ impl ConstrainedValueAccumulator {
         })
     }
 
-    pub fn from_inputs<PledgeAmountGetterFn, DelegationBalanceGetterFn, IssuanceTokenIdGetterFn>(
+    pub fn from_inputs<PledgeAmountGetterFn, DelegationBalanceGetterFn>(
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         pledge_amount_getter: PledgeAmountGetterFn,
         delegation_balance_getter: DelegationBalanceGetterFn,
-        issuance_token_id_getter: IssuanceTokenIdGetterFn,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
     ) -> Result<Self, IOPolicyError>
     where
         PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
         DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, IOPolicyError>,
-        IssuanceTokenIdGetterFn: Fn(Id<Transaction>) -> Result<Option<TokenId>, IOPolicyError>,
     {
         ensure!(
             inputs.len() == inputs_utxos.len(),
@@ -93,7 +88,6 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         &pledge_amount_getter,
-                        &issuance_token_id_getter,
                         outpoint.clone(),
                         input_utxo,
                     )?;
@@ -126,18 +120,16 @@ impl ConstrainedValueAccumulator {
         Ok(accumulator)
     }
 
-    fn process_input_utxo<PledgeAmountGetterFn, IssuanceTokenIdGetterFn>(
+    fn process_input_utxo<PledgeAmountGetterFn>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         pledge_amount_getter: &PledgeAmountGetterFn,
-        issuance_token_id_getter: &IssuanceTokenIdGetterFn,
         outpoint: UtxoOutPoint,
         input_utxo: &TxOutput,
     ) -> Result<(), IOPolicyError>
     where
         PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
-        IssuanceTokenIdGetterFn: Fn(Id<Transaction>) -> Result<Option<TokenId>, IOPolicyError>,
     {
         match input_utxo {
             TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
@@ -147,39 +139,7 @@ impl ConstrainedValueAccumulator {
                         CoinOrTokenId::Coin,
                         *amount,
                     )?,
-                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                        TokenData::TokenTransfer(transfer) => insert_or_increase(
-                            &mut self.unconstrained_value,
-                            CoinOrTokenId::TokenId(transfer.token_id),
-                            transfer.amount,
-                        )?,
-                        TokenData::TokenIssuance(issuance) => {
-                            let issuance_tx_id =
-                                outpoint.source_id().get_tx_id().cloned().ok_or(
-                                    IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo,
-                                )?;
-                            let token_id = issuance_token_id_getter(issuance_tx_id)?
-                                .ok_or(IOPolicyError::TokenIdNotFound)?;
-                            insert_or_increase(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::TokenId(token_id),
-                                issuance.amount_to_issue,
-                            )?;
-                        }
-                        TokenData::NftIssuance(_) => {
-                            let issuance_tx_id =
-                                outpoint.source_id().get_tx_id().cloned().ok_or(
-                                    IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo,
-                                )?;
-                            let token_id = issuance_token_id_getter(issuance_tx_id)?
-                                .ok_or(IOPolicyError::TokenIdNotFound)?;
-                            insert_or_increase(
-                                &mut self.unconstrained_value,
-                                CoinOrTokenId::TokenId(token_id),
-                                Amount::from_atoms(1),
-                            )?;
-                        }
-                    },
+                    OutputValue::TokenV0(_) => { /* ignore */ }
                     OutputValue::TokenV1(token_id, amount) => insert_or_increase(
                         &mut self.unconstrained_value,
                         CoinOrTokenId::TokenId(*token_id),
@@ -305,7 +265,6 @@ impl ConstrainedValueAccumulator {
 
     pub fn from_outputs(
         chain_config: &ChainConfig,
-        block_height: BlockHeight,
         outputs: &[TxOutput],
     ) -> Result<Self, IOPolicyError> {
         let mut accumulator = Self::new();
@@ -318,47 +277,7 @@ impl ConstrainedValueAccumulator {
                         CoinOrTokenId::Coin,
                         *amount,
                     )?,
-                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                        TokenData::TokenTransfer(transfer) => insert_or_increase(
-                            &mut accumulator.unconstrained_value,
-                            CoinOrTokenId::TokenId(transfer.token_id),
-                            transfer.amount,
-                        )?,
-                        TokenData::TokenIssuance(_) => {
-                            let latest_token_version = chain_config
-                                .chainstate_upgrades()
-                                .version_at_height(block_height)
-                                .1
-                                .token_issuance_version();
-                            match latest_token_version {
-                                TokenIssuanceVersion::V0 => { /* do nothing */ }
-                                TokenIssuanceVersion::V1 => {
-                                    insert_or_increase(
-                                        &mut accumulator.unconstrained_value,
-                                        CoinOrTokenId::Coin,
-                                        chain_config.fungible_token_issuance_fee(),
-                                    )?;
-                                }
-                            }
-                        }
-                        TokenData::NftIssuance(_) => {
-                            let latest_token_version = chain_config
-                                .chainstate_upgrades()
-                                .version_at_height(block_height)
-                                .1
-                                .token_issuance_version();
-                            match latest_token_version {
-                                TokenIssuanceVersion::V0 => { /* do nothing */ }
-                                TokenIssuanceVersion::V1 => {
-                                    insert_or_increase(
-                                        &mut accumulator.unconstrained_value,
-                                        CoinOrTokenId::Coin,
-                                        chain_config.nft_issuance_fee(),
-                                    )?;
-                                }
-                            }
-                        }
-                    },
+                    OutputValue::TokenV0(_) => { /* ignore */ }
                     OutputValue::TokenV1(token_id, amount) => insert_or_increase(
                         &mut accumulator.unconstrained_value,
                         CoinOrTokenId::TokenId(*token_id),
@@ -382,28 +301,7 @@ impl ConstrainedValueAccumulator {
                     OutputValue::Coin(coins) => {
                         accumulator.process_output_timelock(timelock, *coins)?;
                     }
-                    OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                        TokenData::TokenTransfer(transfer) => insert_or_increase(
-                            &mut accumulator.unconstrained_value,
-                            CoinOrTokenId::TokenId(transfer.token_id),
-                            transfer.amount,
-                        )?,
-                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                            let latest_token_version = chain_config
-                                .chainstate_upgrades()
-                                .version_at_height(block_height)
-                                .1
-                                .token_issuance_version();
-                            match latest_token_version {
-                                TokenIssuanceVersion::V0 => { /* do nothing */ }
-                                TokenIssuanceVersion::V1 => insert_or_increase(
-                                    &mut accumulator.unconstrained_value,
-                                    CoinOrTokenId::Coin,
-                                    chain_config.fungible_token_issuance_fee(),
-                                )?,
-                            }
-                        }
-                    },
+                    OutputValue::TokenV0(_) => { /* ignore */ }
                     OutputValue::TokenV1(token_id, amount) => insert_or_increase(
                         &mut accumulator.unconstrained_value,
                         CoinOrTokenId::TokenId(*token_id),
