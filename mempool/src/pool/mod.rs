@@ -1051,7 +1051,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
-            // TODO: should INCREMENTAL_RELAY_FEE_RATE also be taken into account here?
             .map(|feerate| std::cmp::max(feerate, *self.mempool_config.min_tx_relay_fee_rate))
     }
 

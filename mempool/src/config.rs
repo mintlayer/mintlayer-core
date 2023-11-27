@@ -73,11 +73,11 @@ pub const FUTURE_TIMELOCK_TOLERANCE: Duration = Duration::from_secs(5 * 60);
 
 pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);
 
-// 10^-4 of a coin per 1000 bytes
+// 10^-3 of a coin per 1000 bytes
 make_config_setting!(
     MinTxRelayFeeRate,
     FeeRate,
-    FeeRate::from_amount_per_kb(Amount::from_atoms(10_000_000))
+    FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
 );
 
 #[derive(Debug, Clone, Default)]
