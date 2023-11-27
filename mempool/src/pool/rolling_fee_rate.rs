@@ -31,7 +31,7 @@ impl RollingFeeRate {
     pub fn new(creation_time: Time) -> Self {
         Self {
             block_since_last_rolling_fee_bump: false,
-            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
+            rolling_minimum_fee_rate: FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
             last_rolling_fee_update: creation_time,
         }
     }
@@ -49,7 +49,7 @@ impl RollingFeeRate {
         let time_diff = (current_time - self.last_rolling_fee_update)
             .expect("Mempool rolling feerate time invariant broken (future before past)");
         let divisor = (time_diff.as_secs() as f64 / (halflife.as_secs() as f64)).exp2();
-        self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
+        self.rolling_minimum_fee_rate = FeeRate::from_amount_per_kb(Amount::from_atoms(
             (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
         ));
 

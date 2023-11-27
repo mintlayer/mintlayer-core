@@ -193,7 +193,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
         if !rolling_fee_rate.block_since_last_rolling_fee_bump()
-            || rolling_fee_rate.rolling_minimum_fee_rate() == FeeRate::new(Amount::from_atoms(0))
+            || rolling_fee_rate.rolling_minimum_fee_rate()
+                == FeeRate::from_amount_per_kb(Amount::from_atoms(0))
         {
             return rolling_fee_rate.rolling_minimum_fee_rate();
         } else if self.clock.get_time()
@@ -226,7 +227,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).set_rolling_minimum_fee_rate(FeeRate::new(Amount::from_atoms(0)));
+        (*rolling_fee_rate)
+            .set_rolling_minimum_fee_rate(FeeRate::from_amount_per_kb(Amount::from_atoms(0)));
     }
 
     fn decay_rolling_fee_rate(&self) {
@@ -1043,7 +1045,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     (Amount::from_atoms(score.into_atoms()) * 1000)
                         .ok_or(MempoolPolicyError::FeeOverflow)
                         .map(|amount| {
-                            let feerate = FeeRate::new(amount);
+                            let feerate = FeeRate::from_amount_per_kb(amount);
                             std::cmp::max(
                                 feerate,
                                 self.rolling_fee_rate.read().rolling_minimum_fee_rate(),

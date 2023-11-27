@@ -805,8 +805,8 @@ fn wallet_accounts_creation() {
                 Destination::PublicKey(acc1_pk),
             )],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -963,8 +963,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output.clone()],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         ),
         Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
@@ -979,8 +979,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
                 vec![],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
     } else {
@@ -1007,8 +1007,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
                 vec![],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
     }
@@ -1033,8 +1033,8 @@ fn wallet_get_transaction(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [gen_random_transfer(&mut rng, Amount::from_atoms(1))],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1119,7 +1119,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         .map(|_| gen_random_transfer(&mut rng, amount_to_transfer))
         .collect();
 
-    let feerate = FeeRate::new(Amount::from_atoms(1000));
+    let feerate = FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
     let transaction = wallet
         .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, vec![], feerate, feerate)
         .unwrap();
@@ -1198,8 +1198,8 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [TxOutput::Burn(OutputValue::Coin(burn_amount))],
                 vec![missing_utxo.clone()],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap_err();
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
@@ -1223,8 +1223,8 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::Burn(OutputValue::Coin(burn_amount))],
             selected_utxos.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1257,8 +1257,8 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [TxOutput::Burn(OutputValue::Coin(burn_amount))],
                 selected_utxos.clone(),
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap_err();
 
@@ -1297,8 +1297,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
             None,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
@@ -1336,7 +1336,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             pool_id,
             pool_amount,
-            FeeRate::new(Amount::from_atoms(0)),
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
 
@@ -1389,8 +1389,8 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
     let result = wallet.create_stake_pool_tx(
         DEFAULT_ACCOUNT_INDEX,
         None,
-        FeeRate::new(Amount::ZERO),
-        FeeRate::new(Amount::ZERO),
+        FeeRate::from_amount_per_kb(Amount::ZERO),
+        FeeRate::from_amount_per_kb(Amount::ZERO),
         StakePoolDataArguments {
             amount: not_enough,
             margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
@@ -1431,8 +1431,8 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::DelegateStaking(delegation_amount, unknown_delegation_id)],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1460,8 +1460,8 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
                 unknown_pool_id,
             )
             .unwrap()],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1513,8 +1513,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
             None,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
@@ -1553,8 +1553,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             vec![make_create_delegation_output(chain_config.as_ref(), address.clone(), pool_id)
                 .unwrap()],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1583,8 +1583,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1603,7 +1603,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             delegation_id,
             Amount::from_atoms(2),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -1629,7 +1629,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             delegation_id,
             Amount::from_atoms(1),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(delegation_tx2.clone(), &WalletEventsNoOp).unwrap();
@@ -1698,7 +1698,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             Amount::from_atoms(1),
             delegation_id,
             Amount::from_atoms(1),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(delegation_tx3, &WalletEventsNoOp).unwrap();
@@ -1767,8 +1767,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
                 TokenIssuance::V1(token_issuance.clone()),
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
 
@@ -1796,8 +1796,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 &unconfirmed_token_info,
                 token_amount_to_issue,
                 address2,
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
 
@@ -1821,8 +1821,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                     media_uri: DataOrNoVec::from(None),
                     media_hash: "123456".as_bytes().to_vec(),
                 },
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
         (issued_token_id, vec![token_issuance_transaction])
@@ -1862,8 +1862,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet
@@ -1910,8 +1910,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .err()
         .unwrap();
@@ -1971,8 +1971,8 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
                 address2.decode_object(&chain_config).unwrap(),
             )],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2027,8 +2027,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
             TokenIssuance::V1(token_issuance.clone()),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2063,8 +2063,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             &unconfirmed_token_info,
             amount_to_mint,
             address2,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2078,8 +2078,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             IsTokenUnfreezable::Yes,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2105,8 +2105,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .unfreeze_token(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2173,8 +2173,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             IsTokenUnfreezable::No,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2190,8 +2190,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2223,8 +2223,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             IsTokenUnfreezable::No,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotFreezeAlreadyFrozenToken);
@@ -2234,8 +2234,8 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .unfreeze_token(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotUnfreezeToken);
@@ -2309,8 +2309,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
             TokenIssuance::V1(token_issuance.clone()),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2360,8 +2360,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2380,8 +2380,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             &unconfirmed_token_info,
             token_amount_to_mint_more_than_maximum,
             address2.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
 
@@ -2456,8 +2456,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
@@ -2472,8 +2472,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2513,8 +2513,8 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Fixed"));
@@ -2555,8 +2555,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
             TokenIssuance::V1(token_issuance.clone()),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2607,8 +2607,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2645,8 +2645,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
@@ -2661,8 +2661,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet
@@ -2701,8 +2701,8 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Unlimited"));
@@ -2743,8 +2743,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
             TokenIssuance::V1(token_issuance.clone()),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2795,8 +2795,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -2832,8 +2832,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
@@ -2848,8 +2848,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2886,8 +2886,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
 
@@ -2924,8 +2924,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             &unconfirmed_token_info,
             token_amount_to_mint,
             address2.clone(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
@@ -2934,8 +2934,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
             token_amount_to_unmint,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
@@ -2944,8 +2944,8 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             &unconfirmed_token_info,
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(err, WalletError::CannotLockTokenSupply("Locked"));
@@ -3021,8 +3021,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet
@@ -3147,8 +3147,8 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output],
                 vec![],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3237,8 +3237,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output, change_output],
                 vec![],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
 
@@ -3271,8 +3271,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3309,8 +3309,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
@@ -3334,8 +3334,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             [new_output],
             vec![],
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3417,8 +3417,8 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [new_output, change_output],
                 vec![],
-                FeeRate::new(Amount::ZERO),
-                FeeRate::new(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();

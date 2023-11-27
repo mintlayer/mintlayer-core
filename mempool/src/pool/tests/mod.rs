@@ -1056,7 +1056,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             )?)
         .unwrap()
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3629)));
+    assert_eq!(
+        rolling_fee,
+        FeeRate::from_amount_per_kb(Amount::from_atoms(3629))
+    );
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -1226,7 +1229,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction_test(another_dummy)?.assert_in_mempool();
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        FeeRate::new(Amount::from_atoms(0))
+        FeeRate::from_amount_per_kb(Amount::from_atoms(0))
     );
 
     mempool.store.assert_valid();

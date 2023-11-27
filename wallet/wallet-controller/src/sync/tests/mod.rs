@@ -340,7 +340,7 @@ impl NodeInterface for MockNode {
     }
 
     async fn mempool_get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
-        Ok(FeeRate::new(Amount::ZERO))
+        Ok(FeeRate::from_amount_per_kb(Amount::ZERO))
     }
 }
 
