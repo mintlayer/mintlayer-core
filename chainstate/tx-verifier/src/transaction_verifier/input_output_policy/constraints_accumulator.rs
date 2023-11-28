@@ -461,12 +461,19 @@ impl ConstrainedValueAccumulator {
         }
 
         for (timelock, locked_coins) in other.timelock_constrained {
+            // if the output cannot satisfy any constraints then use it falls back to unconstrained
             let mut constraint_range_iter = self
-                .timelock_constrained
-                .range_mut((
-                    std::ops::Bound::Unbounded,
-                    std::ops::Bound::Included(timelock),
-                ))
+                .unconstrained_value
+                .get_mut(&CoinOrTokenId::Coin)
+                .into_iter()
+                .chain(
+                    self.timelock_constrained
+                        .range_mut((
+                            std::ops::Bound::Unbounded,
+                            std::ops::Bound::Included(timelock),
+                        ))
+                        .map(|(_, v)| v),
+                )
                 .rev()
                 .peekable();
 
@@ -474,34 +481,23 @@ impl ConstrainedValueAccumulator {
             // or all suitable constraints are satisfied
             let mut output_coins = locked_coins;
             while output_coins > Amount::ZERO {
-                match constraint_range_iter.peek_mut() {
-                    Some((_, constrained_coins)) => {
-                        if output_coins > **constrained_coins {
-                            // satisfy current constraint completely and move on to the next one
-                            output_coins =
-                                (output_coins - **constrained_coins).expect("cannot fail");
-                            **constrained_coins = Amount::ZERO;
-                            constraint_range_iter.next();
-                        } else {
-                            // satisfy current constraint partially and exit the loop
-                            **constrained_coins =
-                                (**constrained_coins - output_coins).expect("cannot fail");
-                            output_coins = Amount::ZERO;
-                        }
-                    }
-                    None => {
-                        // if the output cannot satisfy any constraints then use it as unconstrained
-                        decrease_or(
-                            &mut self.unconstrained_value,
-                            CoinOrTokenId::Coin,
-                            locked_coins,
-                            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                                CoinOrTokenId::Coin,
-                            ),
-                        )?;
-                        output_coins = Amount::ZERO;
-                    }
-                };
+                let constrained_coins = constraint_range_iter.peek_mut().ok_or(
+                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                        CoinOrTokenId::Coin,
+                    ),
+                )?;
+
+                if output_coins > **constrained_coins {
+                    // satisfy current constraint completely and move on to the next one
+                    output_coins = (output_coins - **constrained_coins).expect("cannot fail");
+                    **constrained_coins = Amount::ZERO;
+                    constraint_range_iter.next();
+                } else {
+                    // satisfy current constraint partially and exit the loop
+                    **constrained_coins =
+                        (**constrained_coins - output_coins).expect("cannot fail");
+                    output_coins = Amount::ZERO;
+                }
             }
         }
 
