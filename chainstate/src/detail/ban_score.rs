@@ -161,7 +161,6 @@ impl BanScore for OutputMaturityError {
         match self {
             OutputMaturityError::InvalidOutputMaturitySettingType(_) => 100,
             OutputMaturityError::InvalidOutputMaturityDistance(_, _, _) => 100,
-            OutputMaturityError::InvalidOutputMaturityDistanceValue(_, _) => 100,
         }
     }
 }
@@ -250,7 +249,7 @@ impl BanScore for TokensError {
             TokensError::StorageError(_) => 0,
             TokensError::IssueError(_, _, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
-            TokensError::CoinOrTokenOverflow => 100,
+            TokensError::CoinOrTokenOverflow(_) => 100,
             TokensError::InsufficientTokenFees(_) => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
@@ -306,7 +305,6 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
-            ConsensusPoWError::InvalidBlockRewardMaturityDistance(_) => 0,
         }
     }
 }
@@ -481,16 +479,21 @@ impl BanScore for IOPolicyError {
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::CoinOrTokenOverflow(_) => 100,
+            IOPolicyError::AttemptToPrintMoney(_) => 100,
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 100,
-            IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::SpendingNonSpendableOutput(_) => 100,
             IOPolicyError::AttemptToViolateFeeRequirements => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
+            IOPolicyError::TokenIdQueryFailed => 0,
+            IOPolicyError::TokenIdNotFound => 0,
+            IOPolicyError::DelegationBalanceNotFound(_) => 0,
+            IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }

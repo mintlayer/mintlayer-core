@@ -22,7 +22,7 @@ use super::helpers::pos::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
-    CheckBlockError, ConnectTransactionError, SpendStakeError,
+    CheckBlockError, ConnectTransactionError, IOPolicyError, SpendStakeError,
 };
 use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
@@ -51,7 +51,7 @@ use common::{
         GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
         RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
 };
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
@@ -1516,7 +1516,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
             ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test()
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(50))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(50))
                     .build(),
             },
         ),
@@ -1526,7 +1526,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
                     // decommission maturity increased
-                    .staking_pool_spend_maturity_distance(BlockDistance::new(100))
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(100))
                     .build(),
             },
         ),
@@ -1887,6 +1887,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(2000),
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
 
         let res = tf
             .make_pos_block_builder(&mut rng)
@@ -1899,9 +1900,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(
-                    delegation_balance,
-                    delegation_balance_overspend
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::AttemptToPrintMoney(
+                        tx_verifier::transaction_verifier::CoinOrTokenId::Coin
+                    ),
+                    tx_id.into()
                 )
             ))
         );

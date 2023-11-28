@@ -19,7 +19,7 @@ use chainstate::{
 use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
-    primitives::{id::WithId, Amount, Idable},
+    primitives::{id::WithId, Idable},
 };
 use crypto::random::{Rng, RngCore};
 use pos_accounting::PoSAccountingView;
@@ -28,12 +28,12 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, Fee, TransactionSourceForConnect,
+        storage::TransactionVerifierStorageRef, AccumulatedFee, TransactionSourceForConnect,
         TransactionVerifier, TransactionVerifierDelta,
     },
     TransactionSource,
 };
-use utils::tap_error_log::LogError;
+use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
 use utxo::UtxosView;
 
 ///
@@ -73,7 +73,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         median_time_past: BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
-        C: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
@@ -124,7 +124,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 
 impl RandomizedTransactionVerificationStrategy {
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn connect_with_base<C: AsRef<ChainConfig>, S, M, U, A, T>(
+    fn connect_with_base<C, S, M, U, A, T>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -134,6 +134,7 @@ impl RandomizedTransactionVerificationStrategy {
         median_time_past: &BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
+        C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
@@ -141,9 +142,9 @@ impl RandomizedTransactionVerificationStrategy {
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
-        let mut total_fees = Amount::ZERO;
+        let mut total_fees = AccumulatedFee::new();
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().gen::<bool>() {
@@ -156,7 +157,7 @@ impl RandomizedTransactionVerificationStrategy {
                     tx_num,
                 )?;
 
-                total_fees = (total_fees + fee).ok_or_else(|| {
+                total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
 
@@ -166,27 +167,32 @@ impl RandomizedTransactionVerificationStrategy {
             } else {
                 // connect transactable using current verifier
 
-                tx_verifier.connect_transaction(
+                let fee = tx_verifier.connect_transaction(
                     &TransactionSourceForConnect::Chain {
                         new_block_index: block_index,
                     },
                     &block.transactions()[tx_num],
                     median_time_past,
                 )?;
+
+                total_fees = total_fees.combine(fee).map_err(|_| {
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                })?;
+
                 tx_num += 1;
             }
         }
 
+        let total_fees = total_fees
+            .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
+            .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
+
         tx_verifier
-            .check_block_reward(block, Fee(total_fees), block_index.block_height())
+            .check_block_reward(block, total_fees, block_index.block_height())
             .log_err()?;
 
         tx_verifier
-            .connect_block_reward(
-                block_index,
-                block.block_reward_transactable(),
-                Fee(total_fees),
-            )
+            .connect_block_reward(block_index, block.block_reward_transactable(), total_fees)
             .log_err()?;
 
         Ok(tx_verifier)
@@ -199,7 +205,7 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
         mut tx_num: usize,
-    ) -> Result<(TransactionVerifierDelta, Amount, usize), ConnectTransactionError>
+    ) -> Result<(TransactionVerifierDelta, AccumulatedFee, usize), ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         U: UtxosView,
@@ -209,7 +215,7 @@ impl RandomizedTransactionVerificationStrategy {
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
-        let mut total_fees = Amount::ZERO;
+        let mut total_fees = AccumulatedFee::new();
         while tx_num < block.transactions().len() {
             if self.rng.lock().unwrap().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
@@ -224,7 +230,7 @@ impl RandomizedTransactionVerificationStrategy {
                     median_time_past,
                 )?;
 
-                total_fees = (total_fees + fee.0).ok_or_else(|| {
+                total_fees = total_fees.combine(fee).map_err(|_| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
                 tx_num += 1;

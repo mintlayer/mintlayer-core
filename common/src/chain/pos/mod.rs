@@ -20,7 +20,7 @@ use typename::TypeName;
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    primitives::{BlockDistance, Id, H256},
+    primitives::{BlockCount, Id, H256},
     Uint256,
 };
 
@@ -30,8 +30,8 @@ pub mod config;
 pub mod config_builder;
 
 pub const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
-pub const DEFAULT_MATURITY_DISTANCE_V0: BlockDistance = BlockDistance::new(2000);
-pub const DEFAULT_MATURITY_DISTANCE_V1: BlockDistance = BlockDistance::new(7200);
+pub const DEFAULT_MATURITY_BLOCK_COUNT_V0: BlockCount = BlockCount::new(2000);
+pub const DEFAULT_MATURITY_BLOCK_COUNT_V1: BlockCount = BlockCount::new(7200);
 pub const DEFAULT_TARGET_BLOCK_TIME: NonZeroU64 = match NonZeroU64::new(2 * 60) {
     Some(v) => v,
     None => panic!("cannot be 0"),

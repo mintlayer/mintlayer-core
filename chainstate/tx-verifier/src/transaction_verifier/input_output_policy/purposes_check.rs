@@ -45,7 +45,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 }
             })?;
 
-            let inputs_utxos = super::get_inputs_utxos(&utxo_view, inputs)?;
+            let inputs_utxos = super::collect_inputs_utxos(&utxo_view, inputs)?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
@@ -67,7 +67,8 @@ pub fn check_reward_inputs_outputs_purposes(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
-                    TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
+                    TxOutput::CreateStakePool(input_pool_id, _)
+                    | TxOutput::ProduceBlockFromStake(_, input_pool_id) => {
                         let outputs =
                             reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::NoBlockRewardOutputs,
@@ -91,7 +92,18 @@ pub fn check_reward_inputs_outputs_purposes(
                                         block_id.into(),
                                     ))
                                 }
-                                TxOutput::ProduceBlockFromStake(..) => Ok(()),
+                                TxOutput::ProduceBlockFromStake(_, output_pool_id) => {
+                                    ensure!(
+                                        input_pool_id == output_pool_id,
+                                        ConnectTransactionError::SpendStakeError(
+                                            SpendStakeError::StakePoolIdMismatch(
+                                                *input_pool_id,
+                                                *output_pool_id
+                                            )
+                                        )
+                                    );
+                                    Ok(())
+                                }
                             },
                             _ => Err(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::MultipleBlockRewardOutputs,

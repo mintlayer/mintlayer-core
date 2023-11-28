@@ -32,12 +32,6 @@ use super::{
 pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
 pub type CachedTokenIndexOp = CachedOperation<TokenId>;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum CoinOrTokenId {
-    Coin,
-    TokenId(TokenId),
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConsumedTokenIssuanceCache {
     pub data: BTreeMap<TokenId, CachedAuxDataOp>,

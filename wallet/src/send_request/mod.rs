@@ -116,13 +116,13 @@ pub fn make_address_output_from_delegation(
     current_block_height: BlockHeight,
 ) -> WalletResult<TxOutput> {
     let destination = address.decode_object(chain_config)?;
-    let num_blocks_to_lock: i64 =
-        chain_config.staking_pool_spend_maturity_distance(current_block_height).into();
+    let num_blocks_to_lock =
+        chain_config.staking_pool_spend_maturity_block_count(current_block_height);
 
     Ok(TxOutput::LockThenTransfer(
         OutputValue::Coin(amount),
         destination,
-        ForBlockCount(num_blocks_to_lock as u64),
+        ForBlockCount(num_blocks_to_lock.to_int()),
     ))
 }
 
@@ -132,13 +132,13 @@ pub fn make_decomission_stake_pool_output(
     amount: Amount,
     current_block_height: BlockHeight,
 ) -> WalletResult<TxOutput> {
-    let num_blocks_to_lock: i64 =
-        chain_config.staking_pool_spend_maturity_distance(current_block_height).into();
+    let num_blocks_to_lock =
+        chain_config.staking_pool_spend_maturity_block_count(current_block_height);
 
     Ok(TxOutput::LockThenTransfer(
         OutputValue::Coin(amount),
         destination,
-        ForBlockCount(num_blocks_to_lock as u64),
+        ForBlockCount(num_blocks_to_lock.to_int()),
     ))
 }
 

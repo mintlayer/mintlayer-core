@@ -32,8 +32,10 @@ use utxo::{Utxo, UtxosDBInMemoryImpl};
 use super::*;
 
 mod constraints_tests;
+mod homomorphism;
 mod outputs_utils;
 mod purpose_tests;
+mod reward_tests;
 
 fn get_random_inputs_combination(
     rng: &mut impl Rng,

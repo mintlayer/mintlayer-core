@@ -19,19 +19,19 @@ use chainstate::{
 use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
-    primitives::{id::WithId, Amount, Idable},
+    primitives::{id::WithId, Idable},
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, Fee, TransactionSourceForConnect,
+        storage::TransactionVerifierStorageRef, AccumulatedFee, TransactionSourceForConnect,
         TransactionVerifier,
     },
     TransactionSource,
 };
-use utils::tap_error_log::LogError;
+use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
 use utxo::UtxosView;
 
 /// Strategy that creates separate instances of TransactionVerifier on every tx, flushing the
@@ -62,7 +62,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         median_time_past: BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
-        C: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
@@ -70,12 +70,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
 
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(Amount::from_atoms(0), |total, tx| {
+            .try_fold(AccumulatedFee::new(), |total, tx| {
                 let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
                     .connect_transaction(
@@ -89,22 +89,21 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
-                (total + fee.0).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                })
+                total
+                    .combine(fee)
+                    .map_err(|_| ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()))
             })
             .log_err()?;
+        let total_fees = total_fees
+            .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
+            .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
 
         base_tx_verifier
-            .check_block_reward(block, Fee(total_fees), block_index.block_height())
+            .check_block_reward(block, total_fees, block_index.block_height())
             .log_err()?;
 
         base_tx_verifier
-            .connect_block_reward(
-                block_index,
-                block.block_reward_transactable(),
-                Fee(total_fees),
-            )
+            .connect_block_reward(block_index, block.block_reward_transactable(), total_fees)
             .log_err()?;
 
         base_tx_verifier.set_best_block(block.get_id().into());

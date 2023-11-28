@@ -16,7 +16,7 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    primitives::{per_thousand::PerThousand, BlockDistance},
+    primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
 };
 
@@ -25,7 +25,7 @@ use super::{config::PoSChainConfig, PoSConsensusVersion};
 pub struct PoSChainConfigBuilder {
     target_limit: Uint256,
     target_block_time: NonZeroU64,
-    staking_pool_spend_maturity_distance: BlockDistance,
+    staking_pool_spend_maturity_block_count: BlockCount,
     block_count_to_average_for_blocktime: usize,
     difficulty_change_limit: PerThousand,
     consensus_version: PoSConsensusVersion,
@@ -36,7 +36,7 @@ impl PoSChainConfigBuilder {
         Self {
             target_limit: Uint256::MAX,
             target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-            staking_pool_spend_maturity_distance: super::DEFAULT_MATURITY_DISTANCE_V0,
+            staking_pool_spend_maturity_block_count: super::DEFAULT_MATURITY_BLOCK_COUNT_V0,
             block_count_to_average_for_blocktime: super::DEFAULT_BLOCK_COUNT_TO_AVERAGE,
             difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
             consensus_version: PoSConsensusVersion::V1,
@@ -53,8 +53,8 @@ impl PoSChainConfigBuilder {
         self
     }
 
-    pub fn staking_pool_spend_maturity_distance(mut self, value: BlockDistance) -> Self {
-        self.staking_pool_spend_maturity_distance = value;
+    pub fn staking_pool_spend_maturity_block_count(mut self, value: BlockCount) -> Self {
+        self.staking_pool_spend_maturity_block_count = value;
         self
     }
 
@@ -77,7 +77,7 @@ impl PoSChainConfigBuilder {
         PoSChainConfig::new(
             self.target_limit,
             self.target_block_time,
-            self.staking_pool_spend_maturity_distance,
+            self.staking_pool_spend_maturity_block_count,
             self.block_count_to_average_for_blocktime,
             self.difficulty_change_limit,
             self.consensus_version,

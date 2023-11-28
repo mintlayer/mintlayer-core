@@ -13,20 +13,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use accumulated_fee::AccumulatedFee;
 use common::{
     chain::{
-        block::BlockRewardTransactable, Block, ChainConfig, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        block::{BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
+        signature::Signable,
+        tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
+        Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
+use constraints_accumulator::ConstrainedValueAccumulator;
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
 
-use super::error::ConnectTransactionError;
+use crate::{
+    error::{SpendStakeError, TokensError},
+    Fee,
+};
 
-mod constraints_accumulator;
+use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
+
+pub mod accumulated_fee;
+pub mod constraints_accumulator;
 mod purposes_check;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -47,16 +60,18 @@ pub enum IOPolicyError {
     MultipleAccountCommands,
     #[error("Amount overflow")]
     AmountOverflow,
-    #[error("Attempt to print money or violate timelock constraints")]
-    AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Coin or token overflow {0:?}")]
+    CoinOrTokenOverflow(CoinOrTokenId),
+    #[error("Attempt to print money {0:?}")]
+    AttemptToPrintMoney(CoinOrTokenId),
+    #[error("Attempt to print money or violate timelock constraints {0:?}")]
+    AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId),
     #[error("Attempt to violate operations fee requirements")]
     AttemptToViolateFeeRequirements,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
     InputsAndInputsUtxosLengthMismatch(usize, usize),
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
-    #[error("Error while calculating block height; possibly an overflow")]
-    BlockHeightArithmeticError,
     #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
@@ -65,29 +80,126 @@ pub enum IOPolicyError {
     SpendingNonSpendableOutput(UtxoOutPoint),
     #[error("Attempt to use account input in block reward")]
     AttemptToUseAccountInputInReward,
+    #[error("Failed to query token id for tx")]
+    TokenIdQueryFailed,
+    #[error("Token id not found for tx")]
+    TokenIdNotFound,
+    #[error("Token issuance must come from transaction utxo")]
+    TokenIssuanceInputMustBeTransactionUtxo,
+    #[error("Balance not found for delegation `{0}`")]
+    DelegationBalanceNotFound(DelegationId),
+}
+
+pub fn calculate_tokens_burned_in_outputs(
+    tx: &Transaction,
+    token_id: &TokenId,
+) -> Result<Amount, ConnectTransactionError> {
+    tx.outputs()
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Burn(output_value) => match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                OutputValue::TokenV1(id, amount) => (id == token_id).then_some(*amount),
+            },
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => None,
+        })
+        .sum::<Option<Amount>>()
+        .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
 }
 
 pub fn check_reward_inputs_outputs_policy(
-    reward: &BlockRewardTransactable,
+    chain_config: &ChainConfig,
     utxo_view: &impl utxo::UtxosView,
+    block_reward_transactable: BlockRewardTransactable,
     block_id: Id<Block>,
+    block_height: BlockHeight,
+    consensus_data: &ConsensusData,
+    total_fees: Fee,
 ) -> Result<(), ConnectTransactionError> {
-    purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view, block_id)
+    let block_subsidy_at_height = Subsidy(chain_config.block_subsidy_at_height(&block_height));
+
+    purposes_check::check_reward_inputs_outputs_purposes(
+        &block_reward_transactable,
+        utxo_view,
+        block_id,
+    )?;
+
+    match consensus_data {
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            if let Some(outputs) = block_reward_transactable.outputs() {
+                let inputs_accumulator = ConstrainedValueAccumulator::from_block_reward(
+                    total_fees,
+                    block_subsidy_at_height,
+                )
+                .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+
+                let outputs_accumulator =
+                    ConstrainedValueAccumulator::from_outputs(chain_config, block_height, outputs)
+                        .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+
+                inputs_accumulator
+                    .satisfy_with(outputs_accumulator)
+                    .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+            }
+        }
+        ConsensusData::PoS(_) => {
+            match block_reward_transactable.outputs().ok_or(
+                ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs),
+            )? {
+                [] => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::NoBlockRewardOutputs,
+                    ))
+                }
+                [_] => { /* ok */ }
+                _ => {
+                    return Err(ConnectTransactionError::SpendStakeError(
+                        SpendStakeError::MultipleBlockRewardOutputs,
+                    ))
+                }
+            };
+        }
+    };
+    Ok(())
 }
 
-pub fn check_tx_inputs_outputs_policy(
+pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     tx: &Transaction,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
-    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
+    issuance_token_id_getter: IssuanceTokenIdGetterFunc,
+) -> Result<AccumulatedFee, ConnectTransactionError>
+where
+    IssuanceTokenIdGetterFunc:
+        Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
+{
+    let inputs_utxos = collect_inputs_utxos(&utxo_view, tx.inputs())?;
 
     purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
+    // For TokenIssuanceVersion::V0 it is required to provide explicit Burn outputs as token issuance fee.
+    let latest_token_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .token_issuance_version();
+    match latest_token_version {
+        TokenIssuanceVersion::V0 => {
+            check_issuance_fee_burn_v0(chain_config, tx)?;
+        }
+        TokenIssuanceVersion::V1 => { /* do nothing */ }
+    }
 
     let inputs_utxos = tx
         .inputs()
@@ -110,25 +222,74 @@ pub fn check_tx_inputs_outputs_policy(
             .map(|pool_data| pool_data.pledge_amount()))
     };
 
-    constraints_accumulator
-        .process_inputs(
-            chain_config,
-            block_height,
-            pledge_getter,
-            tx.inputs(),
-            &inputs_utxos,
-        )
+    let delegation_balance_getter = |delegation_id: DelegationId| {
+        Ok(pos_accounting_view
+            .get_delegation_balance(delegation_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?)
+    };
+
+    let issuance_token_id_getter =
+        |tx_id| issuance_token_id_getter(tx_id).map_err(|_| IOPolicyError::TokenIdQueryFailed);
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        chain_config,
+        block_height,
+        pledge_getter,
+        delegation_balance_getter,
+        issuance_token_id_getter,
+        tx.inputs(),
+        &inputs_utxos,
+    )
+    .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
+            .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    let consumed_accumulator = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
         .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    constraints_accumulator
-        .process_outputs(chain_config, tx.outputs())
-        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+    Ok(consumed_accumulator)
+}
+
+fn check_issuance_fee_burn_v0(
+    chain_config: &ChainConfig,
+    tx: &Transaction,
+) -> Result<(), ConnectTransactionError> {
+    // Check if the fee is enough for issuance
+    let issuance_count = get_tokens_issuance_count(tx.outputs());
+    if issuance_count > 0 {
+        let total_burned = tx
+            .outputs()
+            .iter()
+            .filter_map(|output| match output {
+                TxOutput::Burn(v) => v.coin_amount(),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::DelegateStaking(_, _) => None,
+            })
+            .sum::<Option<Amount>>()
+            .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
+
+        if total_burned < chain_config.token_min_issuance_fee() {
+            return Err(ConnectTransactionError::TokensError(
+                TokensError::InsufficientTokenFees(tx.get_id()),
+            ));
+        }
+    }
 
     Ok(())
 }
 
 // TODO: use FallibleIterator to avoid manually collecting to a Result
-fn get_inputs_utxos(
+fn collect_inputs_utxos(
     utxo_view: &impl utxo::UtxosView,
     inputs: &[TxInput],
 ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
@@ -148,6 +309,17 @@ fn get_inputs_utxos(
                 ))
         })
         .collect::<Result<Vec<_>, _>>()
+}
+
+fn insert_or_increase<K: Ord>(
+    collection: &mut BTreeMap<K, Amount>,
+    key: K,
+    amount: Amount,
+) -> Result<(), IOPolicyError> {
+    let value = collection.entry(key).or_insert(Amount::ZERO);
+    *value = (*value + amount).ok_or(IOPolicyError::AmountOverflow)?;
+
+    Ok(())
 }
 
 #[cfg(test)]

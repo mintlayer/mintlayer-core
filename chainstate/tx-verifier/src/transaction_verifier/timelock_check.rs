@@ -19,7 +19,7 @@ use common::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
         ChainConfig, GenBlock, TxInput, UtxoOutPoint,
     },
-    primitives::{BlockDistance, BlockHeight, Id},
+    primitives::{BlockCount, BlockDistance, BlockHeight, Id},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -34,10 +34,8 @@ use super::{
 pub enum OutputMaturityError {
     #[error("Maturity setting type for the output {0:?} is invalid")]
     InvalidOutputMaturitySettingType(UtxoOutPoint),
-    #[error("Maturity setting for the output {0:?} is too short: {1} < {2}")]
-    InvalidOutputMaturityDistance(UtxoOutPoint, BlockDistance, BlockDistance),
-    #[error("Maturity setting value for the output {0:?} is invalid: {1}")]
-    InvalidOutputMaturityDistanceValue(UtxoOutPoint, u64),
+    #[error("Maturity setting for the output {0:?} is too short: {1:?} < {2:?}")]
+    InvalidOutputMaturityDistance(UtxoOutPoint, BlockCount, BlockCount),
 }
 
 pub fn check_timelock(
@@ -174,15 +172,12 @@ where
 
 pub fn check_output_maturity_setting(
     timelock: &OutputTimeLock,
-    required: BlockDistance,
+    required: BlockCount,
     outpoint: UtxoOutPoint,
 ) -> Result<(), OutputMaturityError> {
     match timelock {
         OutputTimeLock::ForBlockCount(c) => {
-            let cs: i64 = (*c).try_into().map_err(|_| {
-                OutputMaturityError::InvalidOutputMaturityDistanceValue(outpoint.clone(), *c)
-            })?;
-            let given = BlockDistance::new(cs);
+            let given = BlockCount::new(*c);
             ensure!(
                 given >= required,
                 OutputMaturityError::InvalidOutputMaturityDistance(outpoint, given, required)

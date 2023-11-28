@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod amounts_map;
 mod input_output_policy;
 mod pos_accounting_delta_adapter;
 mod pos_accounting_undo_cache;
@@ -21,7 +20,6 @@ mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
 mod tokens_accounting_undo_cache;
-mod transferred_amount_check;
 mod utxos_undo_cache;
 
 pub mod error;
@@ -41,12 +39,12 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
-pub use input_output_policy::IOPolicyError;
+pub use input_output_policy::{accumulated_fee::AccumulatedFee, IOPolicyError};
 
 use std::collections::BTreeMap;
 
 use self::{
-    error::{ConnectTransactionError, SpendStakeError, TokensError},
+    error::{ConnectTransactionError, TokensError},
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
     pos_accounting_undo_cache::{PoSAccountingBlockUndoCache, PoSAccountingBlockUndoEntry},
     signature_destination_getter::SignatureDestinationGetter,
@@ -54,9 +52,6 @@ use self::{
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     tokens_accounting_undo_cache::{
         TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
-    },
-    transferred_amount_check::{
-        check_transferred_amount_in_reward, check_transferred_amounts_and_get_fee,
     },
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
@@ -71,14 +66,13 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
-use consensus::ConsensusPoSError;
 use pos_accounting::{
     PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView, PoolData,
+    PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -89,6 +83,12 @@ pub struct Fee(pub Amount);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
 
 /// The change that a block has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]
@@ -229,105 +229,6 @@ where
         }
     }
 
-    fn get_pool_data_from_output_in_reward(
-        &self,
-        output: &TxOutput,
-        block_id: Id<Block>,
-    ) -> Result<PoolData, ConnectTransactionError> {
-        match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidOutputTypeInReward,
-                block_id.into(),
-            )),
-            TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
-            TxOutput::ProduceBlockFromStake(_, pool_id) => self
-                .pos_accounting_adapter
-                .accounting_delta()
-                .get_pool_data(*pool_id)?
-                .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
-        }
-    }
-
-    fn get_pool_id_from_output_in_reward(
-        &self,
-        output: &TxOutput,
-        block_id: Id<Block>,
-    ) -> Result<PoolId, ConnectTransactionError> {
-        match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidOutputTypeInReward,
-                block_id.into(),
-            )),
-            TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
-            TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
-        }
-    }
-
-    fn check_stake_outputs_in_reward(
-        &self,
-        block: &WithId<Block>,
-    ) -> Result<(), ConnectTransactionError> {
-        match block.consensus_data() {
-            ConsensusData::None | ConsensusData::PoW(_) => Ok(()),
-            ConsensusData::PoS(_) => {
-                let block_reward_transactable = block.block_reward_transactable();
-
-                let kernel_output = consensus::get_kernel_output(
-                    block_reward_transactable.inputs().ok_or(
-                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                    )?,
-                    &self.utxo_cache,
-                )
-                .map_err(SpendStakeError::ConsensusPoSError)?;
-
-                let reward_output = match block_reward_transactable
-                    .outputs()
-                    .ok_or(SpendStakeError::NoBlockRewardOutputs)?
-                {
-                    [] => Err(SpendStakeError::NoBlockRewardOutputs),
-                    [output] => Ok(output),
-                    _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
-                }?;
-
-                let kernel_pool_id =
-                    self.get_pool_id_from_output_in_reward(&kernel_output, block.get_id())?;
-                let reward_pool_id =
-                    self.get_pool_id_from_output_in_reward(reward_output, block.get_id())?;
-
-                ensure!(
-                    kernel_pool_id == reward_pool_id,
-                    SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
-                );
-
-                let kernel_pool_data =
-                    self.get_pool_data_from_output_in_reward(&kernel_output, block.get_id())?;
-                let reward_pool_data =
-                    self.get_pool_data_from_output_in_reward(reward_output, block.get_id())?;
-
-                ensure!(
-                    kernel_pool_data == reward_pool_data,
-                    SpendStakeError::StakePoolDataMismatch
-                );
-
-                Ok(())
-            }
-        }
-    }
-
     pub fn check_block_reward(
         &self,
         block: &WithId<Block>,
@@ -335,23 +236,13 @@ where
         block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
         input_output_policy::check_reward_inputs_outputs_policy(
-            &block.block_reward_transactable(),
+            self.chain_config.as_ref(),
             &self.utxo_cache,
+            block.block_reward_transactable(),
             block.get_id(),
-        )?;
-
-        self.check_stake_outputs_in_reward(block)?;
-
-        let block_subsidy_at_height =
-            Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
-        check_transferred_amount_in_reward(
-            &self.utxo_cache,
-            &self.pos_accounting_adapter.accounting_delta(),
-            &block.block_reward_transactable(),
-            block.get_id(),
+            block_height,
             block.consensus_data(),
             total_fees,
-            block_subsidy_at_height,
         )
     }
 
@@ -726,7 +617,7 @@ where
                             .and_then(|_| {
                                 // actual amount to unmint is determined by the number of burned tokens in the outputs
                                 let total_burned =
-                                    transferred_amount_check::calculate_tokens_burned_in_outputs(
+                                    input_output_policy::calculate_tokens_burned_in_outputs(
                                         tx, token_id,
                                     )?;
                                 Ok((total_burned > Amount::ZERO).then_some(total_burned))
@@ -902,33 +793,8 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
-    ) -> Result<Fee, ConnectTransactionError> {
+    ) -> Result<AccumulatedFee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
-
-        let issuance_token_id_getter =
-            |tx_id: &Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
-                // issuance transactions are unique, so we use them to get the token id
-                self.get_token_id_from_issuance_tx(*tx_id)
-                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-            };
-
-        // check for attempted money printing
-        let fee = check_transferred_amounts_and_get_fee(
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            &self.pos_accounting_adapter.accounting_delta(),
-            tx.transaction(),
-            tx_source.expected_block_height(),
-            issuance_token_id_getter,
-        )?;
-
-        input_output_policy::check_tx_inputs_outputs_policy(
-            tx.transaction(),
-            self.chain_config.as_ref(),
-            tx_source.expected_block_height(),
-            &self.pos_accounting_adapter.accounting_delta(),
-            &self.utxo_cache,
-        )?;
 
         // Register tokens if tx has issuance data
         self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
@@ -936,6 +802,23 @@ where
                 .get_token_aux_data(id)
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         })?;
+
+        let issuance_token_id_getter =
+            |tx_id: Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
+                // issuance transactions are unique, so we use them to get the token id
+                self.get_token_id_from_issuance_tx(tx_id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            };
+
+        // check for attempted money printing and invalid inputs/outputs combinations
+        let fee = input_output_policy::check_tx_inputs_outputs_policy(
+            tx.transaction(),
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            &self.pos_accounting_adapter.accounting_delta(),
+            &self.utxo_cache,
+            issuance_token_id_getter,
+        )?;
 
         // check timelocks of the outputs and make sure there's no premature spending
         timelock_check::check_timelocks(

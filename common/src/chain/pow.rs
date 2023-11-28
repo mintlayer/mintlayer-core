@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::chain::config::ChainType;
-use crate::primitives::BlockDistance;
+use crate::primitives::BlockCount;
 use crate::Uint256;
 use std::time::Duration;
 
@@ -29,7 +29,7 @@ pub struct PoWChainConfig {
     /// The lowest possible difficulty
     limit: Uint256,
     /// The distance required to pass to allow spending the block reward
-    reward_maturity_distance: BlockDistance,
+    reward_maturity_distance: BlockCount,
 }
 
 impl PoWChainConfig {
@@ -49,7 +49,7 @@ impl PoWChainConfig {
         self.limit
     }
 
-    pub const fn reward_maturity_distance(&self) -> BlockDistance {
+    pub const fn reward_maturity_distance(&self) -> BlockCount {
         self.reward_maturity_distance
     }
 
@@ -77,7 +77,7 @@ pub struct PoWChainConfigBuilder {
     no_retargeting: Option<bool>,
     allow_min_difficulty_blocks: Option<bool>,
     limit: Option<Uint256>,
-    reward_maturity_distance: Option<BlockDistance>,
+    reward_maturity_distance: Option<BlockCount>,
 }
 
 impl PoWChainConfigBuilder {
@@ -109,7 +109,7 @@ impl PoWChainConfigBuilder {
             // 10 minutes.
             reward_maturity_distance: self
                 .reward_maturity_distance
-                .unwrap_or_else(|| BlockDistance::new(500)),
+                .unwrap_or_else(|| BlockCount::new(500)),
         }
     }
 }

@@ -40,7 +40,7 @@ use common::{
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::Time, BlockCount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -572,12 +572,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .try_for_each(|(index, output)| {
                 let required = match block.consensus_data() {
                     ConsensusData::None => {
-                        self.chain_config.empty_consensus_reward_maturity_distance()
+                        self.chain_config.empty_consensus_reward_maturity_block_count()
                     }
                     ConsensusData::PoW(_) => {
                         self.chain_config.get_proof_of_work_config().reward_maturity_distance()
                     }
-                    ConsensusData::PoS(_) => BlockDistance::new(0),
+                    ConsensusData::PoS(_) => BlockCount::new(0),
                 };
 
                 match block.consensus_data() {
