@@ -160,7 +160,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().fungible_token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let token_id = make_token_id(tx_1.transaction().inputs()).unwrap();

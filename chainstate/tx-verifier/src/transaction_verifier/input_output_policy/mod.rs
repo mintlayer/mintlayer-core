@@ -278,7 +278,7 @@ fn check_issuance_fee_burn_v0(
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
-        if total_burned < chain_config.fungible_token_min_issuance_fee() {
+        if total_burned < chain_config.fungible_token_issuance_fee() {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(tx.get_id()),
             ));

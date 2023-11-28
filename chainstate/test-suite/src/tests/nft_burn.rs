@@ -44,7 +44,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_min_issuance_fee();
+        let token_min_issuance_fee = chain_config.nft_issuance_fee();
 
         // Issuance
         let tx = TransactionBuilder::new()
@@ -139,7 +139,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_min_issuance_fee();
+        let token_min_issuance_fee = chain_config.nft_issuance_fee();
 
         // Issuance
         let tx = TransactionBuilder::new()
@@ -243,7 +243,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let tx = TransactionBuilder::new()
             .add_input(

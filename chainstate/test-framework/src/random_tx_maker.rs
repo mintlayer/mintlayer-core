@@ -101,7 +101,7 @@ impl<'a> RandomTxMaker<'a> {
         let account_inputs = self.select_accounts(rng);
 
         // Spending from a token account requires paying fee. Find sufficient utxo per account input.
-        let fee = self.chainstate.get_chain_config().token_min_supply_change_fee();
+        let fee = self.chainstate.get_chain_config().token_supply_change_fee();
         let fee_inputs = self
             .utxo_set
             .iter()
@@ -322,8 +322,7 @@ impl<'a> RandomTxMaker<'a> {
             match super::get_output_value(input_utxo).unwrap() {
                 OutputValue::Coin(output_value) => {
                     // save output for potential unmint fee
-                    if output_value
-                        >= self.chainstate.get_chain_config().token_min_supply_change_fee()
+                    if output_value >= self.chainstate.get_chain_config().token_supply_change_fee()
                         && fee_input_to_change_supply.is_none()
                         && inputs.len() > 1
                     {
@@ -380,7 +379,7 @@ impl<'a> RandomTxMaker<'a> {
         let switch = rng.gen_range(0..3);
         if switch == 0 && self.token_can_be_issued {
             // issue token v1
-            let min_tx_fee = self.chainstate.get_chain_config().fungible_token_min_issuance_fee();
+            let min_tx_fee = self.chainstate.get_chain_config().fungible_token_issuance_fee();
             if coins >= min_tx_fee {
                 self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();
@@ -397,7 +396,7 @@ impl<'a> RandomTxMaker<'a> {
             }
         } else if switch == 1 && self.token_can_be_issued {
             // issue nft v1
-            let min_tx_fee = self.chainstate.get_chain_config().nft_min_issuance_fee();
+            let min_tx_fee = self.chainstate.get_chain_config().nft_issuance_fee();
             if coins >= min_tx_fee {
                 self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();

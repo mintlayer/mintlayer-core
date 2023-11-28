@@ -213,12 +213,12 @@ pub struct ChainConfig {
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
     data_deposit_max_size: usize,
-    data_deposit_min_fee: Amount,
-    fungible_token_min_issuance_fee: Amount,
-    nft_min_issuance_fee: Amount,
-    token_min_supply_change_fee: Amount,
-    token_min_freeze_fee: Amount,
-    token_min_change_authority_fee: Amount,
+    data_deposit_fee: Amount,
+    fungible_token_issuance_fee: Amount,
+    nft_issuance_fee: Amount,
+    token_supply_change_fee: Amount,
+    token_freeze_fee: Amount,
+    token_change_authority_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
@@ -489,33 +489,33 @@ impl ChainConfig {
     }
 
     /// The fee for depositing data
-    pub fn data_deposit_min_fee(&self) -> Amount {
-        self.data_deposit_min_fee
+    pub fn data_deposit_fee(&self) -> Amount {
+        self.data_deposit_fee
     }
 
     /// The fee for issuing a fungible token
-    pub fn fungible_token_min_issuance_fee(&self) -> Amount {
-        self.fungible_token_min_issuance_fee
+    pub fn fungible_token_issuance_fee(&self) -> Amount {
+        self.fungible_token_issuance_fee
     }
 
     /// The fee for issuing a NFT
-    pub fn nft_min_issuance_fee(&self) -> Amount {
-        self.nft_min_issuance_fee
+    pub fn nft_issuance_fee(&self) -> Amount {
+        self.nft_issuance_fee
     }
 
     /// The fee for changing supply of a token
-    pub fn token_min_supply_change_fee(&self) -> Amount {
-        self.token_min_supply_change_fee
+    pub fn token_supply_change_fee(&self) -> Amount {
+        self.token_supply_change_fee
     }
 
     /// The fee for freezing/unfreezing a token
-    pub fn token_min_freeze_fee(&self) -> Amount {
-        self.token_min_freeze_fee
+    pub fn token_freeze_fee(&self) -> Amount {
+        self.token_freeze_fee
     }
 
     /// The fee for changing authority of a token
-    pub fn token_min_change_authority_fee(&self) -> Amount {
-        self.token_min_change_authority_fee
+    pub fn token_change_authority_fee(&self) -> Amount {
+        self.token_change_authority_fee
     }
 
     /// The maximum length of a URI contained in a token

@@ -586,7 +586,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         };
 
-        let token_min_issuance_fee = tf.chain_config().fungible_token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chain_config().fungible_token_issuance_fee();
 
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
@@ -644,7 +644,7 @@ fn issue_fungible_token_v1(#[case] seed: Seed) {
             .coin_amount()
             .unwrap();
         let expected_fee =
-            Fee((genesis_amount - chain_config.fungible_token_min_issuance_fee()).unwrap());
+            Fee((genesis_amount - chain_config.fungible_token_issuance_fee()).unwrap());
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -694,7 +694,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin((chain_config.token_min_supply_change_fee() * 2).unwrap()),
+                OutputValue::Coin((chain_config.token_supply_change_fee() * 2).unwrap()),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -719,7 +719,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(chain_config.token_min_supply_change_fee()),
+                OutputValue::Coin(chain_config.token_supply_change_fee()),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -748,7 +748,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
             effective_height: BlockHeight::new(1),
         };
 
-        let expected_fee = Fee(chain_config.token_min_supply_change_fee());
+        let expected_fee = Fee(chain_config.token_supply_change_fee());
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()

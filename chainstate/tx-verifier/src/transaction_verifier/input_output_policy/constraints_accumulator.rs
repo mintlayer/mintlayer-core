@@ -289,16 +289,16 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::TokenId(*token_id),
                     *amount,
                 )?;
-                Ok(chain_config.token_min_supply_change_fee())
+                Ok(chain_config.token_supply_change_fee())
             }
             AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
-                Ok(chain_config.token_min_supply_change_fee())
+                Ok(chain_config.token_supply_change_fee())
             }
             AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                Ok(chain_config.token_min_freeze_fee())
+                Ok(chain_config.token_freeze_fee())
             }
             AccountCommand::ChangeTokenAuthority(_, _) => {
-                Ok(chain_config.token_min_change_authority_fee())
+                Ok(chain_config.token_change_authority_fee())
             }
         }
     }
@@ -336,7 +336,7 @@ impl ConstrainedValueAccumulator {
                                     insert_or_increase(
                                         &mut accumulator.unconstrained_value,
                                         CoinOrTokenId::Coin,
-                                        chain_config.fungible_token_min_issuance_fee(),
+                                        chain_config.fungible_token_issuance_fee(),
                                     )?;
                                 }
                             }
@@ -353,7 +353,7 @@ impl ConstrainedValueAccumulator {
                                     insert_or_increase(
                                         &mut accumulator.unconstrained_value,
                                         CoinOrTokenId::Coin,
-                                        chain_config.nft_min_issuance_fee(),
+                                        chain_config.nft_issuance_fee(),
                                     )?;
                                 }
                             }
@@ -399,7 +399,7 @@ impl ConstrainedValueAccumulator {
                                 TokenIssuanceVersion::V1 => insert_or_increase(
                                     &mut accumulator.unconstrained_value,
                                     CoinOrTokenId::Coin,
-                                    chain_config.fungible_token_min_issuance_fee(),
+                                    chain_config.fungible_token_issuance_fee(),
                                 )?,
                             }
                         }
@@ -413,17 +413,17 @@ impl ConstrainedValueAccumulator {
                 TxOutput::DataDeposit(_) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    chain_config.data_deposit_min_fee(),
+                    chain_config.data_deposit_fee(),
                 )?,
                 TxOutput::IssueFungibleToken(_) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    chain_config.fungible_token_min_issuance_fee(),
+                    chain_config.fungible_token_issuance_fee(),
                 )?,
                 TxOutput::IssueNft(_, _, _) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    chain_config.nft_min_issuance_fee(),
+                    chain_config.nft_issuance_fee(),
                 )?,
             };
         }
