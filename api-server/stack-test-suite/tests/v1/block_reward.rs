@@ -15,6 +15,8 @@
 
 use api_web_server::api::json_helpers::txoutput_to_json;
 
+use crate::DummyRPC;
+
 use super::*;
 
 #[tokio::test]
@@ -104,6 +106,7 @@ async fn no_reward(#[case] seed: Seed) {
                 ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
+                    rpc: Arc::new(DummyRPC {}),
                 }
             };
 
@@ -200,6 +203,7 @@ async fn has_reward(#[case] seed: Seed) {
                 ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
+                    rpc: Arc::new(DummyRPC {}),
                 }
             };
 

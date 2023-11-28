@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::DummyRPC;
+
 use super::*;
 
 #[tokio::test]
@@ -240,6 +242,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
@@ -455,6 +458,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 

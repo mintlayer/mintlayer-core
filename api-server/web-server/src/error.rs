@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_server_common::storage::storage_api::ApiServerStorageError;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -21,6 +22,16 @@ use axum::{
 use serde::Serialize;
 use serde_json::json;
 use thiserror::Error;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ApiServerWebServerInitError {
+    #[error("RPC error: {0}")]
+    RpcError(node_comm::rpc_client::NodeRpcError),
+    #[error("Invalid config: {0}")]
+    InvalidConfig(String),
+    #[error("Postgres connection error: {0}")]
+    PostgresConnectionError(ApiServerStorageError),
+}
 
 #[derive(Debug, Error, Serialize)]
 pub enum ApiServerWebServerError {
@@ -64,6 +75,8 @@ pub enum ApiServerWebServerClientError {
     InvalidTransactionId,
     #[error("Invalid pool Id")]
     InvalidPoolId,
+    #[error("Invalid signed transaction")]
+    InvalidSignedTransaction,
 }
 
 #[allow(dead_code)]
@@ -79,6 +92,8 @@ pub enum ApiServerWebServerServerError {
     InternalServerError,
     #[error("Transaction index overflowed")]
     TransactionIndexOverflow,
+    #[error("RPC error: {0}")]
+    RpcError(String),
 }
 
 impl IntoResponse for ApiServerWebServerError {

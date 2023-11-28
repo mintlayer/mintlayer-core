@@ -15,6 +15,8 @@
 
 use api_web_server::api::json_helpers::{tx_to_json, txoutput_to_json};
 
+use crate::DummyRPC;
+
 use super::*;
 
 #[tokio::test]
@@ -168,6 +170,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 

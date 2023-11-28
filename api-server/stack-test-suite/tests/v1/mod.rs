@@ -24,8 +24,9 @@ mod chain_tip;
 mod pool;
 mod transaction;
 mod transaction_merkle_path;
+mod transaction_submit;
 
-use crate::spawn_webserver;
+use crate::{spawn_webserver, DummyRPC};
 use api_blockchain_scanner_lib::{
     blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
 };
@@ -90,6 +91,7 @@ async fn chain_genesis() {
                 ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: Arc::clone(&chain_config),
+                    rpc: Arc::new(DummyRPC {}),
                 }
             };
 

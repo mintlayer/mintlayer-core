@@ -13,8 +13,13 @@ common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
 logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }
+utils = { path = "../../utils" }
+rpc = { path = "../../rpc" }
+node-comm = { path = "../../wallet/wallet-node-client" }
+node-lib = { path = "../../node-lib" }
 
 axum.workspace = true
+async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 hex.workspace = true
 hyper.workspace = true

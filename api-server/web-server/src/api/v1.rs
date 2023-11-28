@@ -19,14 +19,15 @@ use crate::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerNotFoundError,
         ApiServerWebServerServerError,
     },
+    TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, Path, State},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use common::{
@@ -36,6 +37,7 @@ use common::{
 };
 use hex::ToHex;
 use serde_json::json;
+use serialization::hex_encoded::HexEncoded;
 use std::{ops::Sub, str::FromStr, sync::Arc};
 
 use crate::ApiServerWebServerState;
@@ -44,8 +46,12 @@ use super::json_helpers::txoutput_to_json;
 
 pub const API_VERSION: &str = "1.0.0";
 
-pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
-) -> Router<ApiServerWebServerState<Arc<T>>> {
+const TX_BODY_LIMIT: usize = 10240;
+
+pub fn routes<
+    T: ApiServerStorage + Send + Sync + 'static,
+    Rpc: TxSubmitClient + Send + Sync + 'static,
+>() -> Router<ApiServerWebServerState<Arc<T>, Arc<Rpc>>> {
     let router = Router::new();
 
     let router = router
@@ -60,6 +66,10 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
         .route("/block/:id/transaction-ids", get(block_transaction_ids));
 
     let router = router
+        .route(
+            "/transaction",
+            post(submit_transaction).layer(DefaultBodyLimit::max(TX_BODY_LIMIT)),
+        )
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
@@ -80,7 +90,7 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
 
 async fn get_block(
     block_id: &str,
-    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>>,
+    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>, Arc<impl TxSubmitClient>>,
 ) -> Result<Block, ApiServerWebServerError> {
     let block_id: Id<Block> = H256::from_str(block_id)
         .map_err(|_| {
@@ -108,7 +118,7 @@ async fn get_block(
 #[allow(clippy::unused_async)]
 pub async fn block<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
@@ -136,7 +146,7 @@ pub async fn block<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_header<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
@@ -151,7 +161,7 @@ pub async fn block_header<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_reward<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
@@ -166,7 +176,7 @@ pub async fn block_reward<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_transaction_ids<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
@@ -185,7 +195,7 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
 
 #[allow(clippy::unused_async)]
 pub async fn chain_genesis<T: ApiServerStorage>(
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let genesis = state.chain_config.genesis_block();
 
@@ -203,7 +213,7 @@ pub async fn chain_genesis<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn chain_at_height<T: ApiServerStorage>(
     Path(block_height): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block_height = block_height.parse::<BlockHeight>().map_err(|_| {
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidBlockHeight)
@@ -232,7 +242,7 @@ pub async fn chain_at_height<T: ApiServerStorage>(
 
 #[allow(clippy::unused_async)]
 pub async fn chain_tip<T: ApiServerStorage>(
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let best_block = best_block(&state).await?;
 
@@ -243,7 +253,7 @@ pub async fn chain_tip<T: ApiServerStorage>(
 }
 
 async fn best_block<T: ApiServerStorage>(
-    state: &ApiServerWebServerState<Arc<T>>,
+    state: &ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>,
 ) -> Result<(BlockHeight, Id<common::chain::GenBlock>), ApiServerWebServerError> {
     state
         .db
@@ -265,7 +275,7 @@ async fn best_block<T: ApiServerStorage>(
 
 async fn get_transaction(
     transaction_id: &str,
-    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>>,
+    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>, Arc<impl TxSubmitClient>>,
 ) -> Result<(Option<BlockAuxData>, SignedTransaction), ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(transaction_id)
         .map_err(|_| {
@@ -292,10 +302,28 @@ async fn get_transaction(
         ))
 }
 
-#[allow(clippy::unused_async)]
+pub async fn submit_transaction<T: ApiServerStorage>(
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+    body: String,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let tx = HexEncoded::<SignedTransaction>::from_str(&body)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidSignedTransaction,
+            )
+        })?
+        .take();
+
+    state.rpc.submit_tx(tx).await.map_err(|e| {
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::RpcError(e.to_string()))
+    })?;
+
+    Ok(())
+}
+
 pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block, transaction) = get_transaction(&transaction_id, &state).await?;
 
@@ -325,7 +353,7 @@ pub async fn transaction<T: ApiServerStorage>(
 
 pub async fn transaction_merkle_path<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
         (Some(block_data), transaction) => {
@@ -391,7 +419,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 
 pub async fn address<T: ApiServerStorage>(
     Path(address): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
         Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
@@ -450,7 +478,7 @@ pub async fn address<T: ApiServerStorage>(
 
 pub async fn address_utxos<T: ApiServerStorage>(
     Path(address): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
         Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
@@ -488,7 +516,7 @@ pub async fn address_utxos<T: ApiServerStorage>(
 
 pub async fn pool<T: ApiServerStorage>(
     Path(pool_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let pool_id = Address::from_str(&state.chain_config, &pool_id)
         .and_then(|address| address.decode_object(&state.chain_config))
@@ -526,7 +554,7 @@ pub async fn pool<T: ApiServerStorage>(
 
 pub async fn pool_delegations<T: ApiServerStorage>(
     Path(pool_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let pool_id = Address::from_str(&state.chain_config, &pool_id)
         .and_then(|address| address.decode_object(&state.chain_config))
@@ -564,7 +592,7 @@ pub async fn pool_delegations<T: ApiServerStorage>(
 
 pub async fn delegation<T: ApiServerStorage>(
     Path(delegation_id): Path<String>,
-    State(state): State<ApiServerWebServerState<Arc<T>>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let delegation_id = Address::from_str(&state.chain_config, &delegation_id)
         .and_then(|address| address.decode_object(&state.chain_config))

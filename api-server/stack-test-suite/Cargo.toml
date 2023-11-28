@@ -16,6 +16,7 @@ crypto = { path = "../../crypto" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 pos_accounting = {path = '../../pos_accounting'}
+node-comm = { path = "../../wallet/wallet-node-client" }
 
 async-trait.workspace = true
 axum.workspace = true
