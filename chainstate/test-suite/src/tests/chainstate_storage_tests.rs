@@ -132,7 +132,7 @@ fn store_token(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let tx_id = tx.transaction().get_id();
@@ -312,7 +312,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let token_1_id = make_token_id(tx_1.transaction().inputs()).unwrap();
@@ -342,7 +342,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let tx_2_id = tx_2.transaction().get_id();
@@ -452,7 +452,7 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let tx_id = tx.transaction().get_id();

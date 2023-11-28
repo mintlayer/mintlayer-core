@@ -988,8 +988,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
-    let target_block_time =
-        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
+    let target_block_time = tf.chain_config().target_block_spacing();
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
@@ -1032,7 +1031,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time);
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // prepare and process block_3 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_2_reward_outpoint = UtxoOutPoint::new(
@@ -1075,7 +1074,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time);
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // prepare and process block_4 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_3_reward_outpoint = UtxoOutPoint::new(
@@ -1254,10 +1253,9 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .build();
     let initial_randomness = PoSRandomness::new(chain_config.initial_randomness());
 
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     let initially_staked =
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
@@ -1370,8 +1368,6 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (vrf_sk_2, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let target_block_time =
-        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools: first will be decommissioned and the second one will be used
@@ -1385,6 +1381,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         pool_id2,
         staking_sk2,
     ) = setup_test_chain_with_2_staked_pools(&mut rng, vrf_pk_1, vrf_pk_2);
+    let target_block_time = tf.chain_config().target_block_spacing();
 
     let stake_pool_block_id = tf.best_block_id();
 
@@ -1430,7 +1427,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time);
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // prepare and process block_3 with ProduceBlockFromStake -> Decommission
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk2));
@@ -1488,7 +1485,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         .add_transaction(tx)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time);
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     let res_pool_balance =
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id1).unwrap();
@@ -1506,8 +1503,6 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (_, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let target_block_time =
-        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     let upgrades = vec![
         (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
@@ -1538,6 +1533,8 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         setup_test_chain_with_2_staked_pools_with_net_upgrades(
             &mut rng, vrf_pk_1, vrf_pk_2, upgrades,
         );
+    let target_block_time = tf.chain_config().target_block_spacing();
+
     let block_a_id = tf.best_block_id();
     let block_a_height = tf.best_block_index().block_height();
 
@@ -1607,7 +1604,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         .add_transaction(tx)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time);
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // no reorg happened so decommission has no effect on pool2
     assert_eq!(
@@ -1791,10 +1788,9 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         stake_pool_data,
     )
     .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // Process block_1: create delegation and delegate some amount
 

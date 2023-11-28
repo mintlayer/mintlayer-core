@@ -34,7 +34,7 @@ use common::{
         timelock::OutputTimeLock,
         Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -267,10 +267,9 @@ fn long_chain_reorg(#[case] seed: Seed) {
             stake_pool_data,
         )
         .build();
-        let target_block_time =
-            chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+        let target_block_time = chain_config.target_block_spacing();
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-        tf.progress_time_seconds_since_epoch(target_block_time.get());
+        tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
         let common_block_id = tf
             .create_chain_pos(
@@ -317,10 +316,9 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         stake_pool_data,
     )
     .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // produce block `a` at height 1 and create additional pool
     let (stake_pool_data_2, staking_sk_2) =
@@ -414,10 +412,9 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         stake_pool_data,
     )
     .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // produce block `a` at height 1 and create additional pool
     let (stake_pool_data_2, _) =
@@ -504,14 +501,13 @@ fn pos_reorg_simple(#[case] seed: Seed) {
         );
     let chain_config = chain_config_builder.build();
 
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
 
     let mut tf1 = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
     let mut tf2 = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    tf1.progress_time_seconds_since_epoch(target_block_time.get());
-    tf2.progress_time_seconds_since_epoch(target_block_time.get());
+    tf1.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    tf2.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // Block A
     tf1.make_pos_block_builder(&mut rng)

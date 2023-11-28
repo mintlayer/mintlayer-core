@@ -51,7 +51,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -140,7 +140,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -275,7 +275,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             },
         }
         .into();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(genesis_outpoint_id, 0),
@@ -302,7 +302,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let first_token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(first_issuance_outpoint_id.clone(), 0),
@@ -358,7 +358,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
 
         // Try to spend 2 NFTs but use one ID
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
@@ -411,7 +411,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -517,7 +517,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
         let token_id =
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let nft_issuance = random_nft_issuance(tf.chainstate.get_chain_config(), &mut rng);
 

@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU64;
-
 use crate::{framework::BlockOutputs, TestChainstate, TestFramework};
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
@@ -30,9 +28,9 @@ use common::{
         },
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
-        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
+        Block, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -187,15 +185,6 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
         )
     }))
     .collect()
-}
-
-pub fn get_target_block_time(chain_config: &ChainConfig, block_height: BlockHeight) -> NonZeroU64 {
-    match chain_config.consensus_upgrades().consensus_status(block_height) {
-        RequiredConsensus::PoS(status) => status.get_chain_config().target_block_time(),
-        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            unimplemented!()
-        }
-    }
 }
 
 pub fn create_chain_config_with_default_staking_pool(

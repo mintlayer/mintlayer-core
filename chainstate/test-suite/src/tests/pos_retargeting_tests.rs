@@ -24,7 +24,7 @@ use common::{
         signature::inputsig::InputWitness,
         TxInput, TxOutput,
     },
-    primitives::{BlockHeight, Compact},
+    primitives::Compact,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::{
@@ -48,10 +48,9 @@ fn stable_block_time(#[case] seed: Seed) {
     .0
     .build();
 
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     for _i in 0..50 {
         tf.make_pos_block_builder(&mut rng)
@@ -77,10 +76,9 @@ fn invalid_target(#[case] seed: Seed) {
         );
     let chain_config = chain_config_builder.build();
 
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     let invalid_target = Compact(1);
     let transcript = construct_transcript(

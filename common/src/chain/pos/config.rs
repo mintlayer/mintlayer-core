@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU64;
-
 use crate::{
     primitives::{per_thousand::PerThousand, BlockCount},
     Uint256,
@@ -26,8 +24,6 @@ use super::PoSConsensusVersion;
 pub struct PoSChainConfig {
     /// The lowest possible difficulty
     target_limit: Uint256,
-    /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
-    target_block_time: NonZeroU64,
     /// The distance required to pass to allow spending the decommission pool and spending delegation share
     staking_pool_spend_maturity_block_count: BlockCount,
     /// Max number of blocks required to calculate average block time. Min is 2
@@ -41,7 +37,6 @@ pub struct PoSChainConfig {
 impl PoSChainConfig {
     pub fn new(
         target_limit: Uint256,
-        target_block_time: NonZeroU64,
         staking_pool_spend_maturity_block_count: BlockCount,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
@@ -51,7 +46,6 @@ impl PoSChainConfig {
 
         Self {
             target_limit,
-            target_block_time,
             staking_pool_spend_maturity_block_count,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
@@ -61,10 +55,6 @@ impl PoSChainConfig {
 
     pub fn target_limit(&self) -> Uint256 {
         self.target_limit
-    }
-
-    pub fn target_block_time(&self) -> NonZeroU64 {
-        self.target_block_time
     }
 
     pub fn staking_pool_spend_maturity_block_count(&self) -> BlockCount {

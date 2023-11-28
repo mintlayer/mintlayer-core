@@ -53,7 +53,7 @@ fn token_issue_test(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Ticker is too long
         let result = tf
@@ -417,7 +417,7 @@ fn token_transfer_test(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let output_value = TokenIssuanceV0 {
@@ -607,7 +607,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a couple of tokens
         let issuance_value = TokenIssuanceV0 {
@@ -683,7 +683,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let coins_value =
             (get_output_value(&tf.genesis().utxos()[0]).unwrap().coin_amount().unwrap()
@@ -766,7 +766,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(4..u128::MAX - 1));
         let quarter_funds = (total_funds / 4).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
@@ -874,7 +874,7 @@ fn burn_tokens(#[case] seed: Seed) {
         let half_funds = (total_funds / 2).unwrap();
         let quarter_funds = (total_funds / 4).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
@@ -1089,7 +1089,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         }
         .into();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let block_index = tf
             .make_block_builder()
@@ -1373,7 +1373,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
         // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
@@ -1473,7 +1473,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
         // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
@@ -1589,7 +1589,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         }
         .into();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1618,7 +1618,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             block.transactions()[0].transaction().get_id().into();
         let first_token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1669,7 +1669,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
 
         // Try to spend sum of input tokens
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
@@ -1721,7 +1721,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         // Issue a new token
         let issuance_value = TokenIssuanceV0 {
@@ -1942,7 +1942,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
@@ -2013,7 +2013,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -2072,7 +2072,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
 
         let tx_with_issuance = TransactionBuilder::new()
             .add_input(

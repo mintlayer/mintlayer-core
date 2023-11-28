@@ -72,7 +72,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             },
         }
         .into();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         let block_index = tf
             .make_block_builder()
@@ -369,7 +369,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         // Issue a new NFT
         let issuance_value = NftIssuanceV0 {

@@ -1562,7 +1562,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         *amount,
-                        (*fee + chain_config.token_min_supply_change_fee())
+                        (*fee + chain_config.token_supply_change_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1571,7 +1571,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_min_supply_change_fee())
+                        (*fee + chain_config.token_supply_change_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1580,7 +1580,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_min_freeze_fee())
+                        (*fee + chain_config.token_freeze_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1588,7 +1588,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_min_change_authority_fee())
+                        (*fee + chain_config.token_change_authority_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1682,10 +1682,11 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
-                OutputValue::Coin(chain_config.token_min_issuance_fee())
+            TxOutput::IssueFungibleToken(_) => {
+                OutputValue::Coin(chain_config.fungible_token_issuance_fee())
             }
-            TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_min_fee()),
+            TxOutput::IssueNft(_, _, _) => OutputValue::Coin(chain_config.nft_issuance_fee()),
+            TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_fee()),
             TxOutput::CreateDelegationId(_, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(

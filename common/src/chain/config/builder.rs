@@ -24,7 +24,7 @@ use crate::{
         get_initial_randomness,
         pos::{
             DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0,
-            DEFAULT_MATURITY_BLOCK_COUNT_V1, DEFAULT_TARGET_BLOCK_TIME,
+            DEFAULT_MATURITY_BLOCK_COUNT_V1,
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
@@ -60,7 +60,10 @@ impl ChainType {
         }
     }
 
-    fn default_consensus_upgrades(&self) -> NetUpgrades<ConsensusUpgrade> {
+    fn default_consensus_upgrades(
+        &self,
+        target_block_spacing: Duration,
+    ) -> NetUpgrades<ConsensusUpgrade> {
         match self {
             ChainType::Mainnet | ChainType::Regtest => {
                 let pow_config = PoWChainConfig::new(*self);
@@ -76,9 +79,9 @@ impl ChainType {
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
-                let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-                let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-                    .expect("Target block time cannot be zero as per NonZeroU64");
+                let target_limit = (Uint256::MAX
+                    / Uint256::from_u64(target_block_spacing.as_secs()))
+                .expect("Target block time cannot be zero as per NonZeroU64");
 
                 let upgrades = vec![
                     (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
@@ -90,7 +93,6 @@ impl ChainType {
                             ),
                             config: PoSChainConfig::new(
                                 target_limit,
-                                target_block_time,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V0,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
@@ -104,7 +106,6 @@ impl ChainType {
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
                                 target_limit,
-                                target_block_time,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V1,
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
@@ -196,11 +197,12 @@ pub struct Builder {
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     data_deposit_max_size: usize,
-    data_deposit_min_fee: Amount,
-    token_min_issuance_fee: Amount,
-    token_min_supply_change_fee: Amount,
-    token_min_freeze_fee: Amount,
-    token_min_change_authority_fee: Amount,
+    data_deposit_fee: Amount,
+    fungible_token_issuance_fee: Amount,
+    nft_issuance_fee: Amount,
+    token_supply_change_fee: Amount,
+    token_freeze_fee: Amount,
+    token_change_authority_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
@@ -216,6 +218,9 @@ pub struct Builder {
 impl Builder {
     /// A new chain config builder, with given chain type as a basis
     pub fn new(chain_type: ChainType) -> Self {
+        let target_block_spacing = super::DEFAULT_TARGET_BLOCK_SPACING;
+        let consensus_upgrades = chain_type.default_consensus_upgrades(target_block_spacing);
+
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
@@ -239,17 +244,18 @@ impl Builder {
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
             initial_randomness: get_initial_randomness(chain_type),
-            target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
+            target_block_spacing,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
-            consensus_upgrades: chain_type.default_consensus_upgrades(),
+            consensus_upgrades,
             chainstate_upgrades: chain_type.default_chainstate_upgrades(),
             data_deposit_max_size: super::DATA_DEPOSIT_MAX_SIZE,
-            data_deposit_min_fee: super::DATA_DEPOSIT_MIN_FEE,
-            token_min_issuance_fee: super::TOKEN_MIN_ISSUANCE_FEE,
-            token_min_supply_change_fee: super::TOKEN_MIN_SUPPLY_CHANGE_FEE,
-            token_min_freeze_fee: super::TOKEN_MIN_FREEZE_FEE,
-            token_min_change_authority_fee: super::TOKEN_CHANGE_AUTHORITY_FEE,
+            data_deposit_fee: super::DATA_DEPOSIT_MIN_FEE,
+            fungible_token_issuance_fee: super::FUNGIBLE_TOKEN_MIN_ISSUANCE_FEE,
+            nft_issuance_fee: super::NFT_MIN_ISSUANCE_FEE,
+            token_supply_change_fee: super::TOKEN_MIN_SUPPLY_CHANGE_FEE,
+            token_freeze_fee: super::TOKEN_MIN_FREEZE_FEE,
+            token_change_authority_fee: super::TOKEN_CHANGE_AUTHORITY_FEE,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
@@ -299,11 +305,12 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades,
             data_deposit_max_size,
-            data_deposit_min_fee,
-            token_min_issuance_fee,
-            token_min_supply_change_fee,
-            token_min_freeze_fee,
-            token_min_change_authority_fee,
+            data_deposit_fee,
+            fungible_token_issuance_fee,
+            nft_issuance_fee,
+            token_supply_change_fee,
+            token_freeze_fee,
+            token_change_authority_fee,
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
@@ -387,11 +394,12 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades,
             data_deposit_max_size,
-            data_deposit_min_fee,
-            token_min_issuance_fee,
-            token_min_supply_change_fee,
-            token_min_freeze_fee,
-            token_min_change_authority_fee,
+            data_deposit_fee,
+            fungible_token_issuance_fee,
+            nft_issuance_fee,
+            token_supply_change_fee,
+            token_freeze_fee,
+            token_change_authority_fee,
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,

@@ -204,9 +204,9 @@ fn data_deposit_insufficient_fee(
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 
         let data_fee = if expect_success {
-            (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128).unwrap()
+            (tf.chain_config().data_deposit_fee() * data_deposit_outputs_count as u128).unwrap()
         } else {
-            (tf.chain_config().data_deposit_min_fee() * data_deposit_outputs_count as u128)
+            (tf.chain_config().data_deposit_fee() * data_deposit_outputs_count as u128)
                 .and_then(|v| v - Amount::from_atoms(1))
                 .unwrap()
         };
@@ -294,7 +294,7 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let deposited_data_len = rng.gen_range(0..deposited_data_len);
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 
-        let at_least_data_fee = (tf.chain_config().data_deposit_min_fee() * 10).unwrap();
+        let at_least_data_fee = (tf.chain_config().data_deposit_fee() * 10).unwrap();
 
         let tx_with_data_as_output = TransactionBuilder::new()
             .add_input(

@@ -16,7 +16,7 @@
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockDistance, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -72,10 +72,9 @@ pub fn pos_reorg(c: &mut Criterion) {
     )
     .max_depth_for_reorg(BlockDistance::new(5000))
     .build();
-    let target_block_time =
-        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     let common_block_id = tf
         .create_chain_pos(

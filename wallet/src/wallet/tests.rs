@@ -1736,12 +1736,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let mut block1_amount =
         (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-            + chain_config.token_min_issuance_fee())
+            + chain_config.fungible_token_issuance_fee())
         .unwrap();
 
     let issue_token = rng.gen::<bool>();
     if issue_token {
-        block1_amount = (block1_amount + chain_config.token_min_supply_change_fee()).unwrap();
+        block1_amount = (block1_amount + chain_config.token_supply_change_fee()).unwrap();
     }
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -1838,9 +1838,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     let mut expected_amount =
-        ((block1_amount * 2).unwrap() - chain_config.token_min_issuance_fee()).unwrap();
+        ((block1_amount * 2).unwrap() - chain_config.fungible_token_issuance_fee()).unwrap();
     if issue_token {
-        expected_amount = (expected_amount - chain_config.token_min_supply_change_fee()).unwrap();
+        expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
     }
     assert_eq!(coin_balance, expected_amount,);
     assert_eq!(token_balances.len(), 1);
@@ -1880,9 +1880,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     let mut expected_amount =
-        ((block1_amount * 3).unwrap() - chain_config.token_min_issuance_fee()).unwrap();
+        ((block1_amount * 3).unwrap() - chain_config.fungible_token_issuance_fee()).unwrap();
     if issue_token {
-        expected_amount = (expected_amount - chain_config.token_min_supply_change_fee()).unwrap();
+        expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
     }
     assert_eq!(coin_balance, expected_amount,);
     assert!(token_balances.len() <= 1);
@@ -1947,7 +1947,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.token_min_issuance_fee())
+        + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -1976,7 +1976,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_min_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee();
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2004,7 +2004,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + (chain_config.token_min_issuance_fee() * 4).unwrap())
+        + (chain_config.fungible_token_issuance_fee() * 4).unwrap())
     .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -2032,7 +2032,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_min_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee();
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2287,7 +2287,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.token_min_issuance_fee())
+        + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -2314,7 +2314,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_min_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee();
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2534,7 +2534,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.token_min_issuance_fee())
+        + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -2560,7 +2560,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_min_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee();
 
     let _ = create_block(
         &chain_config,
@@ -2722,7 +2722,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the wallet
     let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.token_min_issuance_fee())
+        + chain_config.fungible_token_issuance_fee())
     .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -2748,7 +2748,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_min_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee();
 
     let _ = create_block(
         &chain_config,

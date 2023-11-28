@@ -166,7 +166,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 anyonecanspend_address(),
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
 
@@ -210,7 +210,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 anyonecanspend_address(),
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
             )))
             .build();
         let tx0_id = tx0.transaction().get_id();
