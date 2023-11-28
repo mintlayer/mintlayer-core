@@ -4306,6 +4306,7 @@ dependencies = [
  "criterion",
  "crypto",
  "ctor",
+ "derive_more",
  "dyn-clone",
  "enum-iterator",
  "futures",

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use utils::try_as::TryAsRef;
+
 pub trait TransactionRo {
     fn close(self);
 }
@@ -40,28 +42,32 @@ pub trait Transactional<'t> {
 const MAX_RECOVERABLE_ERROR_RETRY_COUNT: u32 = 3;
 
 /// Try updating the storage, gracefully handle recoverable errors.
-pub fn update_db<'t, S, F>(storage: &'t S, f: F) -> Result<(), storage::Error>
+pub fn update_db<'t, S, F, E>(storage: &'t S, f: F) -> Result<(), E>
 where
     S: Transactional<'t> + Send,
-    F: Fn(&mut <S as Transactional<'t>>::TransactionRw) -> Result<(), storage::Error>,
+    F: Fn(&mut <S as Transactional<'t>>::TransactionRw) -> Result<(), E>,
+    E: std::error::Error + From<storage::Error> + TryAsRef<storage::Error>,
 {
     let mut recoverable_errors = 0;
     loop {
-        let res = || -> Result<(), storage::Error> {
+        let res = || -> Result<(), E> {
             let mut tx = storage.transaction_rw()?;
             f(&mut tx)?;
-            tx.commit()
+            Ok(tx.commit()?)
         }();
 
         match res {
             Ok(()) => return Ok(()),
-            err @ Err(storage::Error::Recoverable(_)) => {
-                recoverable_errors += 1;
-                if recoverable_errors >= MAX_RECOVERABLE_ERROR_RETRY_COUNT {
-                    return err;
+            Err(err) => {
+                let storage_err = err.try_as_ref();
+                if storage_err.is_some_and(|e| e.is_recoverable()) {
+                    recoverable_errors += 1;
+                    if recoverable_errors < MAX_RECOVERABLE_ERROR_RETRY_COUNT {
+                        continue;
+                    }
                 }
+                return Err(err);
             }
-            err @ Err(storage::Error::Fatal(_)) => return err,
         }
     }
 }

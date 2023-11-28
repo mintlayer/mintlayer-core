@@ -34,7 +34,9 @@ use mempool::rpc::MempoolRpcServer;
 
 use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunctionsRpcServer};
 
-use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
+use p2p::{
+    error::P2pError, peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer,
+};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::make_rpc_test_functions;
 use utils::default_data_dir::prepare_data_dir;
@@ -99,13 +101,49 @@ async fn initialize(
     let mempool = manager.add_custom_subsystem("mempool", |handle| mempool.init(handle));
 
     // P2P subsystem
-    // TODO: Replace Lmdb with Sqlite backend when it's ready
-    let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
-        data_dir.join("peerdb-lmdb"),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    ))?;
+    let peerdb_storage = {
+        let peerdb_data_dir = data_dir.join("peerdb-lmdb");
+        let open_storage_backend = |data_dir| {
+            // TODO: Replace Lmdb with Sqlite backend when it's ready
+            storage_lmdb::Lmdb::new(
+                data_dir,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            )
+        };
+        let storage_load_result =
+            p2p::peer_manager::peerdb::open_storage(open_storage_backend(peerdb_data_dir.clone()));
+
+        let is_version_mismatch = storage_load_result.as_ref().is_err_and(|e| match e {
+            P2pError::PeerDbStorageVersionMismatch {
+                expected_version: _,
+                actual_version: _,
+            } => true,
+            P2pError::ProtocolError(_)
+            | P2pError::DialError(_)
+            | P2pError::ChannelClosed
+            | P2pError::PeerError(_)
+            | P2pError::SubsystemFailure
+            | P2pError::ChainstateError(_)
+            | P2pError::StorageFailure(_)
+            | P2pError::ConversionError(_)
+            | P2pError::NoiseHandshakeError(_)
+            | P2pError::InvalidConfigurationValue(_)
+            | P2pError::InvalidStorageState(_)
+            | P2pError::MempoolError(_)
+            | P2pError::MessageCodecError(_) => false,
+        });
+
+        if is_version_mismatch {
+            // TODO: implement a mechanism of upgrading the db, so that the previously collected
+            // addresses are not lost.
+            std::fs::remove_dir_all(&peerdb_data_dir)?;
+            PeerDbStorageImpl::new(open_storage_backend(peerdb_data_dir.clone()))?
+        } else {
+            storage_load_result?
+        }
+    };
     let p2p = p2p::make_p2p(
         Arc::clone(&chain_config),
         Arc::new(node_config.p2p.unwrap_or_default().into()),

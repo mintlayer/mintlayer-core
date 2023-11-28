@@ -14,33 +14,61 @@
 // limitations under the License.
 
 use common::primitives::time::Time;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use serialization::{Decode, Encode};
 
 use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
+use super::address_tables;
+
+#[derive(Debug, derive_more::Display, Clone, Copy, Encode, Decode, Eq, PartialEq)]
+pub struct StorageVersion(u32);
+
+impl StorageVersion {
+    pub const fn new(val: u32) -> Self {
+        Self(val)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Encode, Decode, Eq, PartialEq)]
+pub enum KnownAddressState {
+    #[codec(index = 0)]
+    New,
+    #[codec(index = 1)]
+    Tried,
+}
+
 pub trait PeerDbStorageRead {
-    fn get_version(&self) -> Result<Option<u32>, storage::Error>;
+    fn get_version(&self) -> crate::Result<Option<StorageVersion>>;
 
-    fn get_known_addresses(&self) -> Result<Vec<String>, storage::Error>;
+    fn get_addr_tables_random_key(&self) -> crate::Result<Option<address_tables::RandomKey>>;
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error>;
+    fn get_known_addresses(&self) -> crate::Result<Vec<(SocketAddress, KnownAddressState)>>;
 
-    fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error>;
+    fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
+
+    fn get_anchor_addresses(&self) -> crate::Result<Vec<SocketAddress>>;
 }
 
 pub trait PeerDbStorageWrite {
-    fn set_version(&mut self, version: u32) -> Result<(), storage::Error>;
+    fn set_version(&mut self, version: StorageVersion) -> crate::Result<()>;
 
-    fn add_known_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn set_addr_tables_random_key(&mut self, key: address_tables::RandomKey) -> crate::Result<()>;
 
-    fn del_known_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    // Note: the "add" methods below will overwrite the existing value if it's present.
 
-    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error>;
+    fn add_known_address(
+        &mut self,
+        address: &SocketAddress,
+        state: KnownAddressState,
+    ) -> crate::Result<()>;
+    fn del_known_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
 
-    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn add_banned_address(&mut self, address: &BannableAddress, time: Time) -> crate::Result<()>;
+    fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()>;
 
-    fn add_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
-
-    fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
+    fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
 }
 
 // Note: here we want to say something like:

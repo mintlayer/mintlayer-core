@@ -108,7 +108,11 @@ pub async fn handle_message_processing_result(
         e @ (P2pError::ChannelClosed
         | P2pError::SubsystemFailure
         | P2pError::StorageFailure(_)
-        | P2pError::InvalidStorageState(_)) => Err(e),
+        | P2pError::InvalidStorageState(_)
+        | P2pError::PeerDbStorageVersionMismatch {
+            expected_version: _,
+            actual_version: _,
+        }) => Err(e),
     }
 }
 

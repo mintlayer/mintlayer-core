@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,27 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod atomics;
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod graph_traversals;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod rust_backtrace;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
-pub mod try_as;
+// Note: there is a crate (https://nearoo.github.io/try_as/try_as/) which has the trait as well
+// as a bunch of useful macros. But it doesn't seem to be well-maintained.
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+pub trait TryAsRef<T> {
+    fn try_as_ref(&self) -> Option<&T>;
+}
+
+impl<T> TryAsRef<T> for T {
+    fn try_as_ref(&self) -> Option<&T> {
+        Some(self)
+    }
+}

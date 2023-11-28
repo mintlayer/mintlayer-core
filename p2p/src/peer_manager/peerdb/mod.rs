@@ -25,6 +25,8 @@
 //! if the actual number of active connection is less than the desired number of connections.
 
 pub mod address_data;
+mod address_tables;
+pub mod config;
 pub mod storage;
 pub mod storage_impl;
 mod storage_load;
@@ -40,11 +42,13 @@ use itertools::Itertools;
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
-use crate::{config, error::P2pError};
+use crate::config::P2pConfig;
 
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
-    storage::{PeerDbStorage, PeerDbStorageWrite},
+    address_tables::AddressTables,
+    config::PeerDbConfig,
+    storage::{KnownAddressState, PeerDbStorage, PeerDbStorageWrite},
     storage_load::LoadedStorage,
 };
 
@@ -53,9 +57,12 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
+pub use storage::StorageVersion;
+pub use storage_load::open_storage;
+
 pub struct PeerDb<S> {
     /// P2P configuration
-    p2p_config: Arc<config::P2pConfig>,
+    p2p_config: Arc<P2pConfig>,
 
     /// Map of all outbound peer addresses
     addresses: BTreeMap<SocketAddress, AddressData>,
@@ -65,12 +72,17 @@ pub struct PeerDb<S> {
     /// Every listed address must exist in the `addresses` map.
     reserved_nodes: BTreeSet<SocketAddress>,
 
-    /// Banned addresses along with the duration of the ban.
+    /// Tables of "new" and "tried" addresses that control when and how the contents
+    /// of the `addresses` map should be purged.
     ///
-    /// The duration represents the time point, so the ban should end
-    /// when `current_time > ban_duration`.
+    /// Note that the number of addresses in the tables may be smaller than in the `addresses` map,
+    /// because the latter always contains reserved nodes, while the tables may miss some of them.
+    address_tables: AddressTables,
+
+    /// Banned addresses along with the ban expiration time.
     banned_addresses: BTreeMap<BannableAddress, Time>,
 
+    /// Anchor addresses
     anchor_addresses: BTreeSet<SocketAddress>,
 
     time_getter: TimeGetter,
@@ -81,7 +93,23 @@ pub struct PeerDb<S> {
 impl<S: PeerDbStorage> PeerDb<S> {
     pub fn new(
         chain_config: &ChainConfig,
-        p2p_config: Arc<config::P2pConfig>,
+        p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
+        storage: S,
+    ) -> crate::Result<Self> {
+        Self::new_with_config(
+            chain_config,
+            p2p_config,
+            &Default::default(),
+            time_getter,
+            storage,
+        )
+    }
+
+    fn new_with_config(
+        chain_config: &ChainConfig,
+        p2p_config: Arc<P2pConfig>,
+        peerdb_config: &PeerDbConfig,
         time_getter: TimeGetter,
         storage: S,
     ) -> crate::Result<Self> {
@@ -90,39 +118,77 @@ impl<S: PeerDbStorage> PeerDb<S> {
             known_addresses,
             banned_addresses,
             anchor_addresses,
-        } = LoadedStorage::load_storage(&storage)?;
+            addr_tables_random_key,
+        } = LoadedStorage::load_storage(&storage, peerdb_config)?;
 
-        let boot_nodes = p2p_config
-            .boot_nodes
-            .iter()
-            .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
-            .collect::<BTreeSet<_>>();
         let reserved_nodes = p2p_config
             .reserved_nodes
             .iter()
             .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
             .collect::<BTreeSet<_>>();
+        let boot_nodes = p2p_config
+            .boot_nodes
+            .iter()
+            .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
+            .filter(|addr| !reserved_nodes.contains(addr))
+            .collect::<BTreeSet<_>>();
 
         let now = time_getter.get_time();
-        let addresses = known_addresses
-            .iter()
-            .chain(boot_nodes.iter())
-            .chain(reserved_nodes.iter())
-            .map(|addr| {
-                (
-                    *addr,
-                    AddressData::new(
-                        known_addresses.contains(addr),
-                        reserved_nodes.contains(addr),
-                        now,
-                    ),
-                )
-            })
-            .collect();
+        let mut addresses = BTreeMap::new();
+        let mut address_tables = AddressTables::new(addr_tables_random_key, peerdb_config);
+
+        for (addr, state) in &known_addresses {
+            match *state {
+                // Note: discarded_addr below will be `None` normally, but it can be `Some` if
+                // address hashing logic has been changed without upping the storage version.
+                // Also note that we don't update the db in such a case; this will lead to
+                // some inconsistency between the db/known_addresses and the addr tables, but it
+                // should resolve by itself eventually.
+                KnownAddressState::Tried => {
+                    let discarded_addr = address_tables.force_add_to_tried(addr);
+                    if let Some(discarded_addr) = discarded_addr {
+                        log::warn!("Tried address {discarded_addr} discarded when loading PeerDb");
+                    }
+                }
+                KnownAddressState::New => {
+                    let discarded_addr = address_tables.force_add_to_new(addr);
+                    if let Some(discarded_addr) = discarded_addr {
+                        log::warn!("New address {discarded_addr} discarded when loading PeerDb");
+                    }
+                }
+            }
+
+            let addr_data = AddressData::new(
+                *state == KnownAddressState::Tried,
+                reserved_nodes.contains(addr),
+                now,
+            );
+            addresses.insert(*addr, addr_data);
+        }
+
+        for addr in &boot_nodes {
+            if let Entry::Vacant(entry) = addresses.entry(*addr) {
+                let discarded_addr = address_tables.force_add_to_new(addr);
+                if let Some(discarded_addr) = discarded_addr {
+                    log::info!("Previously loaded 'new' address {discarded_addr} replaced with boot address {addr} when loading PeerDb");
+                }
+
+                entry.insert(AddressData::new(false, false, now));
+            }
+        }
+
+        // Note: no need to add reserved addresses to "new", because they are likely to get into
+        // "tried" soon anyway (though doing so wouldn't hurt either).
+        for addr in &reserved_nodes {
+            if let Entry::Vacant(entry) = addresses.entry(*addr) {
+                entry.insert(AddressData::new(false, true, now));
+            }
+        }
 
         Ok(Self {
             addresses,
             reserved_nodes,
+            address_tables,
             banned_addresses,
             anchor_addresses,
             p2p_config,
@@ -151,6 +217,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let now = self.time_getter.get_time();
 
+        // TODO: select new vs tried addresses with equal probability (or at least with a specific
+        // probability that is not directly tied to the sizes of both tables)
         let mut selected = self
             .addresses
             .iter()
@@ -203,17 +271,25 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Perform the PeerDb maintenance
     pub fn heartbeat(&mut self) {
         let now = self.time_getter.get_time();
-        self.addresses.retain(|_addr, address_data| address_data.retain(now));
 
-        let now = self.time_getter.get_time();
-        self.banned_addresses.retain(|address, banned_till| {
+        self.addresses.retain(|addr, address_data| {
+            let retain = address_data.retain(now);
+
+            if !retain {
+                self.address_tables.remove(addr);
+                update_db(&self.storage, |tx| tx.del_known_address(addr))
+                    .expect("DB failure when deleting known address {addr}");
+            }
+
+            retain
+        });
+
+        self.banned_addresses.retain(|addr, banned_till| {
             let banned = now <= *banned_till;
 
             if !banned {
-                update_db(&self.storage, |tx| {
-                    tx.del_banned_address(&address.to_string())
-                })
-                .expect("removing banned address is expected to succeed");
+                update_db(&self.storage, |tx| tx.del_banned_address(addr))
+                    .expect("removing banned address is expected to succeed");
             }
 
             banned
@@ -222,9 +298,20 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     /// Add a new peer address
     pub fn peer_discovered(&mut self, address: SocketAddress) {
-        if let Entry::Vacant(entry) = self.addresses.entry(address) {
-            log::debug!("new address discovered: {}", address.to_string());
-            entry.insert(AddressData::new(false, false, self.time_getter.get_time()));
+        if self.addresses.get(&address).is_none() {
+            log::debug!("New address discovered: {}", address.to_string());
+
+            debug_assert!(
+                !self.address_tables.have_addr(&address),
+                "Address {address} is in 'address_tables' but not in 'addresses'"
+            );
+
+            if self.add_addr_to_new(&address) {
+                self.addresses.insert(
+                    address,
+                    AddressData::new(false, false, self.time_getter.get_time()),
+                );
+            }
         }
     }
 
@@ -232,8 +319,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, address: SocketAddress, _error: &P2pError) {
+    pub fn report_outbound_failure(&mut self, address: SocketAddress) {
         self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
+
+        // Note: if the failed connection is a manual one, the address won't be in the addr tables,
+        // but the 'change_address_state' call above will insert it into self.addresses.
+        // We don't consider this a problem though.
+        // The same happens in outbound_peer_disconnected too.
     }
 
     /// Mark peer as connected
@@ -242,6 +334,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// it informs the `PeerDb` about it.
     pub fn outbound_peer_connected(&mut self, address: SocketAddress) {
         self.change_address_state(address, AddressStateTransitionTo::Connected);
+        self.move_addr_to_tried(&address);
     }
 
     /// Handle peer disconnect event with unspecified reason
@@ -250,10 +343,96 @@ impl<S: PeerDbStorage> PeerDb<S> {
     }
 
     pub fn remove_outbound_address(&mut self, address: &SocketAddress) {
-        self.addresses.remove(address);
+        if !self.reserved_nodes.contains(address) {
+            self.addresses.remove(address);
+        }
+        self.address_tables.remove(address);
+
+        update_db(&self.storage, |tx| tx.del_known_address(address))
+            .expect("DB failure when removing known address {address}");
     }
 
-    pub fn change_address_state(
+    fn move_addr_to_tried(&mut self, address: &SocketAddress) {
+        let move_result = self.address_tables.move_to_tried(address);
+        let (addr_moved_to_new, discarded_addr) = match move_result {
+            None => (None, None),
+            Some(address_tables::MoveToTriedSideEffects {
+                addr_moved_to_new,
+                discarded_new_addr,
+            }) => (Some(addr_moved_to_new), discarded_new_addr),
+        };
+
+        debug_assert!(discarded_addr != Some(*address));
+
+        update_db(&self.storage, |tx| {
+            tx.add_known_address(address, KnownAddressState::Tried)?;
+
+            if let Some(addr_moved_to_new) = addr_moved_to_new {
+                tx.add_known_address(&addr_moved_to_new, KnownAddressState::New)?;
+            }
+
+            crate::Result::Ok(())
+        })
+        .expect("DB failure when updating known addresses}");
+
+        self.remove_from_addresses_if_some_non_reserved(discarded_addr);
+    }
+
+    fn add_addr_to_new(&mut self, address: &SocketAddress) -> bool {
+        let outcome = self.address_tables.move_to_new(address, |existing_addr| {
+            Self::can_discard_addr_in_new(&self.addresses, &existing_addr)
+        });
+
+        match outcome {
+            address_tables::MoveToNewOutcome::Succeeded { prev_addr } => {
+                update_db(&self.storage, |tx| {
+                    tx.add_known_address(address, KnownAddressState::New)
+                })
+                .expect("DB failure when updating known address {address}");
+
+                self.remove_from_addresses_if_some_non_reserved(prev_addr);
+                true
+            }
+            address_tables::MoveToNewOutcome::Cancelled => false,
+        }
+    }
+
+    fn can_discard_addr_in_new(
+        cur_addresses: &BTreeMap<SocketAddress, AddressData>,
+        address: &SocketAddress,
+    ) -> bool {
+        if let Some(existing_addr_data) = cur_addresses.get(address) {
+            // TODO:
+            // 1) also allow removing addresses with next_connect_after too far in
+            // the future?
+            // 2) also store last_seen_time in AddressData to be able to remove addresses
+            // that haven't been advertised in a while?
+            // 3) also store last_connect_time in AddressData to avoid removing addresses
+            // that we've recently connected to?
+            // 4) Allow removing banned addresses?
+            existing_addr_data.reserved() || existing_addr_data.is_unreachable()
+        } else {
+            debug_assert!(
+                false,
+                "Address {address} is assumed to be in 'address_tables' but it's not in 'addresses'"
+            );
+            true
+        }
+    }
+
+    // Note: this function assumes that the address has already been removed from `address_tables`.
+    fn remove_from_addresses_if_some_non_reserved(&mut self, address: Option<SocketAddress>) {
+        if let Some(address) = address {
+            if !self.reserved_nodes.contains(&address) {
+                self.addresses.remove(&address);
+
+                update_db(&self.storage, |tx| tx.del_known_address(&address))
+                    .expect("DB failure when deleting known address {address}");
+            }
+        }
+    }
+
+    fn change_address_state(
         &mut self,
         address: SocketAddress,
         transition: AddressStateTransitionTo,
@@ -267,33 +446,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .entry(address)
             .or_insert_with(|| AddressData::new(false, false, now));
 
-        let is_persistent_old = address_data.is_persistent();
-
         log::debug!(
-            "update address {} state to {:?}",
+            "Updating address {} state to {:?}",
             address.to_string(),
             transition,
         );
 
         address_data.transition_to(transition, now, &mut make_pseudo_rng());
-
-        let is_persistent_new = address_data.is_persistent();
-
-        match (is_persistent_old, is_persistent_new) {
-            (false, true) => {
-                update_db(&self.storage, |tx| {
-                    tx.add_known_address(&address.to_string())
-                })
-                .expect("adding address expected to succeed (peer_connected)");
-            }
-            (true, false) => {
-                update_db(&self.storage, |tx| {
-                    tx.del_known_address(&address.to_string())
-                })
-                .expect("adding address expected to succeed (peer_connected)");
-            }
-            _ => {}
-        }
     }
 
     pub fn is_reserved_node(&self, address: &SocketAddress) -> bool {
@@ -325,7 +484,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .expect("Ban duration is expected to be valid");
 
         update_db(&self.storage, |tx| {
-            tx.add_banned_address(&address.to_string(), ban_till)
+            tx.add_banned_address(&address, ban_till)
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
 
@@ -333,10 +492,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
     }
 
     pub fn unban(&mut self, address: &BannableAddress) {
-        update_db(&self.storage, |tx| {
-            tx.del_banned_address(&address.to_string())
-        })
-        .expect("adding banned address is expected to succeed (ban_peer)");
+        update_db(&self.storage, |tx| tx.del_banned_address(address))
+            .expect("adding banned address is expected to succeed (ban_peer)");
 
         self.banned_addresses.remove(address);
     }
@@ -352,13 +509,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         update_db(&self.storage, |tx| {
             for address in self.anchor_addresses.difference(&anchor_addresses) {
                 log::debug!("remove anchor peer {address}");
-                tx.del_anchor_address(&address.to_string())?;
+                tx.del_anchor_address(address)?;
             }
             for address in anchor_addresses.difference(&self.anchor_addresses) {
                 log::debug!("add anchor peer {address}");
-                tx.add_anchor_address(&address.to_string())?;
+                tx.add_anchor_address(address)?;
             }
-            Ok(())
+            crate::Result::Ok(())
         })
         .expect("anchor addresses update is expected to succeed");
         self.anchor_addresses = anchor_addresses;

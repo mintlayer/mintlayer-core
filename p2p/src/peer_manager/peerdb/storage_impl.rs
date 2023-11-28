@@ -15,12 +15,21 @@
 
 use std::time::Duration;
 
-use crate::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
-
-use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
 use common::primitives::time::Time;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
 use storage::MakeMapRef;
+
+use crate::{
+    error::P2pError,
+    peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
+};
+
+use super::{
+    address_tables,
+    storage::{KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite},
+    StorageVersion,
+};
 
 type ValueId = u32;
 
@@ -31,7 +40,7 @@ storage::decl_schema! {
         pub DBValue: Map<ValueId, Vec<u8>>,
 
         /// Table for known addresses
-        pub DBKnownAddresses: Map<String, ()>,
+        pub DBKnownAddresses: Map<String, KnownAddressState>,
 
         /// Table for banned addresses vs when they can be unbanned (Duration is timestamp since UNIX Epoch)
         pub DBBannedAddresses: Map<String, Duration>,
@@ -42,6 +51,7 @@ storage::decl_schema! {
 }
 
 const VALUE_ID_VERSION: ValueId = 1;
+const VALUE_ID_ADDR_TABLES_RANDOM_KEY: ValueId = 2;
 
 type PeerDbStoreTxRo<'st, B> = StorageTxRo<'st, B, Schema>;
 type PeerDbStoreTxRw<'st, B> = StorageTxRw<'st, B, Schema>;
@@ -51,63 +61,116 @@ pub type PeerDbStorageImpl<B> = StorageImpl<B, Schema>;
 impl<B: storage::Backend + 'static> PeerDbStorage for PeerDbStorageImpl<B> {}
 
 impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
-    fn set_version(&mut self, version: u32) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())
+    fn set_version(&mut self, version: StorageVersion) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())?)
     }
 
-    fn add_known_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBKnownAddresses, _>().put(address, ())
+    fn set_addr_tables_random_key(&mut self, key: address_tables::RandomKey) -> crate::Result<()> {
+        Ok(self
+            .storage()
+            .get_mut::<DBValue, _>()
+            .put(VALUE_ID_ADDR_TABLES_RANDOM_KEY, key.encode())?)
     }
 
-    fn del_known_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBKnownAddresses, _>().del(address)
+    fn add_known_address(
+        &mut self,
+        address: &SocketAddress,
+        state: KnownAddressState,
+    ) -> crate::Result<()> {
+        Ok(self
+            .storage()
+            .get_mut::<DBKnownAddresses, _>()
+            .put(address.to_string(), state)?)
     }
 
-    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error> {
-        self.storage()
+    fn del_known_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBKnownAddresses, _>().del(address.to_string())?)
+    }
+
+    fn add_banned_address(&mut self, address: &BannableAddress, time: Time) -> crate::Result<()> {
+        Ok(self
+            .storage()
             .get_mut::<DBBannedAddresses, _>()
-            .put(address, time.as_duration_since_epoch())
+            .put(address.to_string(), time.as_duration_since_epoch())?)
     }
 
-    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBBannedAddresses, _>().del(address)
+    fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBBannedAddresses, _>().del(address.to_string())?)
     }
 
-    fn add_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBAnchorAddresses, _>().put(address, ())
+    fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBAnchorAddresses, _>().put(address.to_string(), ())?)
     }
 
-    fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBAnchorAddresses, _>().del(address)
+    fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBAnchorAddresses, _>().del(address.to_string())?)
     }
 }
 
 impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
-    fn get_version(&self) -> Result<Option<u32>, storage::Error> {
+    fn get_version(&self) -> crate::Result<Option<StorageVersion>> {
         let map = self.storage().get::<DBValue, _>();
         let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);
-        Ok(vec_opt.map(|vec| {
-            u32::decode_all(&mut vec.as_ref()).expect("db values to be encoded correctly")
-        }))
+        vec_opt
+            .map(|vec| {
+                StorageVersion::decode_all(&mut vec.as_ref()).map_err(|err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Error decoding version from {vec:?}: {err}"
+                    ))
+                })
+            })
+            .transpose()
     }
 
-    fn get_known_addresses(&self) -> Result<Vec<String>, storage::Error> {
+    fn get_addr_tables_random_key(&self) -> crate::Result<Option<address_tables::RandomKey>> {
+        let map = self.storage().get::<DBValue, _>();
+        let vec_opt = map.get(VALUE_ID_ADDR_TABLES_RANDOM_KEY)?.as_ref().map(Encoded::decode);
+        vec_opt
+            .map(|vec| {
+                address_tables::RandomKey::decode_all(&mut vec.as_ref()).map_err(|err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Error decoding addr tables' random key from {vec:?}: {err}"
+                    ))
+                })
+            })
+            .transpose()
+    }
+
+    fn get_known_addresses(&self) -> crate::Result<Vec<(SocketAddress, KnownAddressState)>> {
         let map = self.storage().get::<DBKnownAddresses, _>();
-        let iter = map.prefix_iter_decoded(&())?;
-        Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, state)| {
+            let addr = addr_str.parse::<SocketAddress>().map_err(|err| {
+                P2pError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })?;
+            crate::Result::Ok((addr, state))
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error> {
+    fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
         let map = self.storage().get::<DBBannedAddresses, _>();
-        let iter = map
-            .prefix_iter_decoded(&())?
-            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)));
-        Ok(iter.collect::<Vec<_>>())
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, dur)| {
+            let addr = addr_str.parse::<BannableAddress>().map_err(|err| {
+                P2pError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })?;
+            Ok((addr, Time::from_duration_since_epoch(dur)))
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 
-    fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error> {
+    fn get_anchor_addresses(&self) -> crate::Result<Vec<SocketAddress>> {
         let map = self.storage().get::<DBAnchorAddresses, _>();
-        let iter = map.prefix_iter_decoded(&())?;
-        Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, _)| {
+            addr_str.parse::<SocketAddress>().map_err(|err| {
+                P2pError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 }

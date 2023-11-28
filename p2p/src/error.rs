@@ -22,8 +22,9 @@ use common::{
     primitives::{time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
+use utils::try_as::TryAsRef;
 
-use crate::protocol::ProtocolVersion;
+use crate::{peer_manager::peerdb, protocol::ProtocolVersion};
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
@@ -150,6 +151,11 @@ pub enum P2pError {
     InvalidConfigurationValue(String),
     #[error("The storage state is invalid: {0}")]
     InvalidStorageState(String),
+    #[error("Peer db storage version mismatch: expected {expected_version}, got {actual_version}")]
+    PeerDbStorageVersionMismatch {
+        expected_version: peerdb::StorageVersion,
+        actual_version: peerdb::StorageVersion,
+    },
     #[error("Mempool error: {0}")]
     MempoolError(#[from] MempoolError),
     #[error("Message codec error: {0}")]
@@ -213,6 +219,10 @@ impl BanScore for P2pError {
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
+            P2pError::PeerDbStorageVersionMismatch {
+                expected_version: _,
+                actual_version: _,
+            } => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
             P2pError::MessageCodecError(_) => 0,
         }
@@ -251,6 +261,30 @@ impl BanScore for ConversionError {
         match self {
             ConversionError::InvalidAddress(_) => 0,
             ConversionError::DecodeError(_) => 100,
+        }
+    }
+}
+
+impl TryAsRef<storage::Error> for P2pError {
+    fn try_as_ref(&self) -> Option<&storage::Error> {
+        match self {
+            P2pError::ProtocolError(_)
+            | P2pError::DialError(_)
+            | P2pError::ChannelClosed
+            | P2pError::PeerError(_)
+            | P2pError::SubsystemFailure
+            | P2pError::ChainstateError(_)
+            | P2pError::ConversionError(_)
+            | P2pError::NoiseHandshakeError(_)
+            | P2pError::InvalidConfigurationValue(_)
+            | P2pError::InvalidStorageState(_)
+            | P2pError::PeerDbStorageVersionMismatch {
+                expected_version: _,
+                actual_version: _,
+            }
+            | P2pError::MempoolError(_)
+            | P2pError::MessageCodecError(_) => None,
+            P2pError::StorageFailure(err) => Some(err),
         }
     }
 }
