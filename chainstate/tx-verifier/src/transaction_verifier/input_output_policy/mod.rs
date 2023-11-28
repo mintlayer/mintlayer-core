@@ -15,6 +15,7 @@
 
 use std::collections::BTreeMap;
 
+use accumulated_fee::AccumulatedFee;
 use common::{
     chain::{
         block::{BlockRewardTransactable, ConsensusData},
@@ -26,7 +27,6 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use constraints_accumulator::ConstrainedValueAccumulator;
-use consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator;
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
@@ -38,8 +38,8 @@ use crate::{
 
 use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
 
+pub mod accumulated_fee;
 pub mod constraints_accumulator;
-pub mod consumed_constraints_accumulator;
 mod purposes_check;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -178,7 +178,7 @@ pub fn check_tx_inputs_outputs_policy<IssuanceTokenIdGetterFunc>(
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<ConsumedConstrainedValueAccumulator, ConnectTransactionError>
+) -> Result<AccumulatedFee, ConnectTransactionError>
 where
     IssuanceTokenIdGetterFunc:
         Fn(Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,

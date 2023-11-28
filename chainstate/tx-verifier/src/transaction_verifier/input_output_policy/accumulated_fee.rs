@@ -25,12 +25,12 @@ use crate::{transaction_verifier::CoinOrTokenId, Fee};
 use super::IOPolicyError;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ConsumedConstrainedValueAccumulator {
+pub struct AccumulatedFee {
     unconstrained_value: BTreeMap<CoinOrTokenId, Amount>,
     timelock_constrained: BTreeMap<NonZeroU64, Amount>,
 }
 
-impl ConsumedConstrainedValueAccumulator {
+impl AccumulatedFee {
     pub fn new() -> Self {
         Self {
             unconstrained_value: Default::default(),

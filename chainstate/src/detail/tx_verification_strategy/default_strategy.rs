@@ -24,8 +24,8 @@ use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
-        error::ConnectTransactionError, storage::TransactionVerifierStorageRef,
-        ConsumedConstrainedValueAccumulator, TransactionSourceForConnect, TransactionVerifier,
+        error::ConnectTransactionError, storage::TransactionVerifierStorageRef, AccumulatedFee,
+        TransactionSourceForConnect, TransactionVerifier,
     },
     TransactionSource,
 };
@@ -70,7 +70,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         let total_fees = block
             .transactions()
             .iter()
-            .try_fold(ConsumedConstrainedValueAccumulator::new(), |total, tx| {
+            .try_fold(AccumulatedFee::new(), |total, tx| {
                 let fee = tx_verifier
                     .connect_transaction(
                         &TransactionSourceForConnect::Chain {

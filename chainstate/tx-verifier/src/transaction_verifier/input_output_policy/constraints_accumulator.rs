@@ -32,10 +32,7 @@ use crate::{
     Fee,
 };
 
-use super::{
-    consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator, insert_or_increase,
-    IOPolicyError,
-};
+use super::{accumulated_fee::AccumulatedFee, insert_or_increase, IOPolicyError};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -447,10 +444,7 @@ impl ConstrainedValueAccumulator {
     }
 
     // Satisfy current constraints with other accumulator.
-    pub fn satisfy_with(
-        mut self,
-        other: Self,
-    ) -> Result<ConsumedConstrainedValueAccumulator, IOPolicyError> {
+    pub fn satisfy_with(mut self, other: Self) -> Result<AccumulatedFee, IOPolicyError> {
         for (key, value) in other.unconstrained_value {
             decrease_or(
                 &mut self.unconstrained_value,
@@ -501,7 +495,7 @@ impl ConstrainedValueAccumulator {
             }
         }
 
-        Ok(ConsumedConstrainedValueAccumulator::from_data(
+        Ok(AccumulatedFee::from_data(
             self.unconstrained_value,
             self.timelock_constrained,
         ))
