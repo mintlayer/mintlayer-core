@@ -86,22 +86,22 @@ export async function run_test() {
 
   try {
     make_receiving_address(bad_priv_key, 0);
-    throw new Error("Invalid public key worked somehow!");
+    throw new Error("Invalid private key worked somehow!");
   } catch (e) {
-    if (!e.includes("Invalid public key encoding")) {
+    if (!e.includes("Invalid private key encoding")) {
       throw e;
     }
-    console.log("Tested decoding bad account public key successfully");
+    console.log("Tested decoding bad account private key successfully");
   }
 
   try {
     make_change_address(bad_priv_key, 0);
-    throw new Error("Invalid public key worked somehow!");
+    throw new Error("Invalid private key worked somehow!");
   } catch (e) {
-    if (!e.includes("Invalid public key encoding")) {
+    if (!e.includes("Invalid private key encoding")) {
       throw e;
     }
-    console.log("Tested decoding bad account public key successfully");
+    console.log("Tested decoding bad account private key successfully");
   }
 
   const mnemonic = "walk exile faculty near leg neutral license matrix maple invite cupboard hat opinion excess coffee leopard latin regret document core limb crew dizzy movie";
@@ -135,7 +135,7 @@ export async function run_test() {
 
     // test bad key index
     try {
-      make_change_address(account_pubkey, 1<<31);
+      make_change_address(account_pubkey, 1 << 31);
       throw new Error("Invalid key index worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid key index, MSB bit set")) {
@@ -298,14 +298,84 @@ export async function run_test() {
     const tx = encode_transaction(inputs, outputs, BigInt(0));
     const expected_tx = [1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 8, 1, 0, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247, 158, 169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60, 217, 2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0];
     assert_eq_arrays(tx, expected_tx);
+    console.log("tx encoding ok");
 
 
     const witness = encode_witness_no_signature();
     const expected_no_signature_witness = [0, 0];
     assert_eq_arrays(witness, expected_no_signature_witness);
-    const witness2 = encode_witness(SignatureHashType.ALL, "signature_bytes");
-    const expected_witness2 = [1, 1, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    assert_eq_arrays(witness2, expected_witness2);
+    console.log("empty witness encoding ok");
+
+    const account_pubkey = make_default_account_privkey(mnemonic, Network.Testnet);
+    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+
+    const opt_utxos = [1, ...output, 1, ...stake_pool_output];
+
+    try {
+      const invalid_private_key = "invalid private key";
+      encode_witness(SignatureHashType.ALL, invalid_private_key, address, tx, opt_utxos, 0, Network.Testnet);
+      throw new Error("Invalid private key worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid private key encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid private key in encode witness successfully");
+    }
+    try {
+      const invalid_address = "invalid address";
+      encode_witness(SignatureHashType.ALL, receiving_privkey, invalid_address, tx, opt_utxos, 0, Network.Testnet);
+      throw new Error("Invalid address worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid addressable encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid address in encode witness successfully");
+    }
+    try {
+      const invalid_tx = "invalid tx";
+      encode_witness(SignatureHashType.ALL, receiving_privkey, address, invalid_tx, opt_utxos, 0, Network.Testnet);
+      throw new Error("Invalid transaction worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid transaction encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid transaction in encode witness successfully");
+    }
+    try {
+      const invalid_utxos = "invalid utxos";
+      encode_witness(SignatureHashType.ALL, receiving_privkey, address, tx, invalid_utxos, 0, Network.Testnet);
+      throw new Error("Invalid utxo worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid Transaction witness encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid utxo in encode witness successfully");
+    }
+    try {
+      const invalid_utxos_count = [0];
+      encode_witness(SignatureHashType.ALL, receiving_privkey, address, tx, invalid_utxos_count, 0, Network.Testnet);
+      throw new Error("Invalid utxo worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid Transaction witness encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid utxo count in encode witness successfully");
+    }
+    try {
+      const invalid_input_idx = 999;
+      encode_witness(SignatureHashType.ALL, receiving_privkey, address, tx, opt_utxos, invalid_input_idx, Network.Testnet);
+      throw new Error("Invalid address worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid Transaction witness encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid utxo in encode witness successfully");
+    }
+    // all ok
+    encode_witness(SignatureHashType.ALL, receiving_privkey, address, tx, opt_utxos, 0, Network.Testnet);
+
+    // as signatures are random, hardcode one so we can test the encodings for the signed transaction
+    const random_witness2 = [1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180, 49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98, 181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14, 235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223, 27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156, 167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235, 158, 62, 127, 177, 12, 228];
 
     try {
       const invalid_witnesses = "invalid witnesses";
@@ -339,9 +409,9 @@ export async function run_test() {
       console.log("Tested invalid transaction successfully");
     }
 
-    let witnesses = [...witness, ...witness2];
+    let witnesses = [...witness, ...random_witness2];
     const signed_tx = encode_signed_transaction(tx, witnesses);
-    const expected_signed_tx = [1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 8, 1, 0, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247, 158, 169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60, 217, 2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0, 8, 0, 0, 1, 1, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const expected_signed_tx = [1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 8, 1, 0, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 113, 2, 0, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 0, 108, 245, 234, 97, 170, 9, 247, 158, 169, 100, 84, 123, 235, 183, 147, 29, 136, 118, 203, 24, 146, 56, 60, 217, 2, 198, 32, 133, 255, 240, 84, 123, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178, 100, 0, 0, 8, 0, 0, 1, 1, 141, 1, 0, 2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212, 180, 49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114, 130, 186, 209, 98, 181, 118, 233, 133, 89, 0, 99, 87, 109, 227, 15, 21, 164, 83, 151, 14, 235, 106, 83, 230, 40, 64, 146, 112, 52, 103, 203, 31, 216, 54, 141, 223, 27, 175, 133, 164, 172, 239, 122, 121, 17, 88, 114, 99, 6, 19, 220, 156, 167, 40, 17, 211, 196, 45, 209, 111, 170, 161, 2, 254, 122, 169, 127, 235, 158, 62, 127, 177, 12, 228];
     assert_eq_arrays(signed_tx, expected_signed_tx);
   }
 }

@@ -161,7 +161,7 @@ pub fn make_receiving_address(private_key_bytes: &[u8], key_index: u32) -> Resul
     const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
 
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
     let receive_funds_pkey = account_privkey
         .derive_child(RECEIVE_FUNDS_INDEX)
@@ -184,7 +184,7 @@ pub fn make_change_address(private_key_bytes: &[u8], key_index: u32) -> Result<V
     const CHANGE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(1).0);
 
     let account_privkey = ExtendedPrivateKey::decode_all(&mut &private_key_bytes[..])
-        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
     let change_funds_pkey = account_privkey
         .derive_child(CHANGE_FUNDS_INDEX)
@@ -483,12 +483,45 @@ pub fn encode_witness_no_signature() -> Vec<u8> {
 }
 
 #[wasm_bindgen]
-pub fn encode_witness(sighashtype: SignatureHashType, raw_signature: &[u8]) -> Vec<u8> {
-    InputWitness::Standard(StandardInputSignature::new(
+pub fn encode_witness(
+    sighashtype: SignatureHashType,
+    private_key_bytes: &[u8],
+    address: &str,
+    transaction_bytes: &[u8],
+    mut inputs: &[u8],
+    input_num: u32,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let private_key = PrivateKey::decode_all(&mut &private_key_bytes[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+
+    let tx = Transaction::decode_all(&mut &transaction_bytes[..])
+        .map_err(|_| Error::InvalidTransaction)?;
+
+    let mut input_utxos = vec![];
+    while !inputs.is_empty() {
+        let utxo = Option::<TxOutput>::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        input_utxos.push(utxo);
+    }
+
+    let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
+
+    let witness = StandardInputSignature::produce_uniparty_signature_for_input(
+        &private_key,
         sighashtype.into(),
-        raw_signature.into(),
-    ))
-    .encode()
+        destination,
+        &tx,
+        &utxos,
+        input_num as usize,
+    )
+    .map(InputWitness::Standard)
+    .map_err(|_| Error::InvalidWitness)?;
+
+    Ok(witness.encode())
 }
 
 #[wasm_bindgen]
