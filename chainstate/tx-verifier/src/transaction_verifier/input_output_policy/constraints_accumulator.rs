@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    num::NonZeroU64,
-};
+use std::{collections::BTreeMap, num::NonZeroU64};
 
 use common::{
     chain::{
@@ -35,7 +32,10 @@ use crate::{
     Fee,
 };
 
-use super::IOPolicyError;
+use super::{
+    consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator, insert_or_increase,
+    IOPolicyError,
+};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -446,14 +446,11 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    pub fn combine(&mut self, other: ConstrainedValueAccumulator) -> Result<(), IOPolicyError> {
-        merge_amount_maps(&mut self.unconstrained_value, other.unconstrained_value)?;
-        merge_amount_maps(&mut self.timelock_constrained, other.timelock_constrained)?;
-
-        Ok(())
-    }
-
-    pub fn subtract(&mut self, other: ConstrainedValueAccumulator) -> Result<(), IOPolicyError> {
+    // Satisfy current constraints with other accumulator.
+    pub fn satisfy_with(
+        mut self,
+        other: Self,
+    ) -> Result<ConsumedConstrainedValueAccumulator, IOPolicyError> {
         for (key, value) in other.unconstrained_value {
             decrease_or(
                 &mut self.unconstrained_value,
@@ -508,54 +505,11 @@ impl ConstrainedValueAccumulator {
             }
         }
 
-        Ok(())
+        Ok(ConsumedConstrainedValueAccumulator::from_data(
+            self.unconstrained_value,
+            self.timelock_constrained,
+        ))
     }
-
-    /// Return accumulated coins that are left
-    pub fn consume(
-        self,
-        chain_config: &ChainConfig,
-        block_height: BlockHeight,
-    ) -> Result<Fee, IOPolicyError> {
-        let unconstrained_change = self
-            .unconstrained_value
-            .get(&CoinOrTokenId::Coin)
-            .cloned()
-            .unwrap_or(Amount::ZERO);
-
-        let maturity_distance = chain_config.staking_pool_spend_maturity_block_count(block_height);
-
-        let timelocked_change = self
-            .timelock_constrained
-            .into_iter()
-            .filter_map(|(lock, amount)| {
-                (lock.get() <= maturity_distance.to_int()).then_some(amount)
-            })
-            .sum::<Option<Amount>>()
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-
-        let fee = (unconstrained_change + timelocked_change)
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
-
-        Ok(Fee(fee))
-    }
-}
-
-fn insert_or_increase<K: Ord>(
-    total_amounts: &mut BTreeMap<K, Amount>,
-    key: K,
-    amount: Amount,
-) -> Result<(), IOPolicyError> {
-    match total_amounts.entry(key) {
-        Entry::Occupied(mut entry) => {
-            let value = entry.get_mut();
-            *value = (*value + amount).ok_or(IOPolicyError::AmountOverflow)?;
-        }
-        Entry::Vacant(ventry) => {
-            ventry.insert(amount);
-        }
-    }
-    Ok(())
 }
 
 fn decrease_or(
@@ -574,23 +528,5 @@ fn decrease_or(
             }
         }
     }
-    Ok(())
-}
-
-fn merge_amount_maps<K: Ord>(
-    left: &mut BTreeMap<K, Amount>,
-    right: BTreeMap<K, Amount>,
-) -> Result<(), IOPolicyError> {
-    for (key, value) in right {
-        match left.get_mut(&key) {
-            Some(existing_value) => {
-                *existing_value = (*existing_value + value).ok_or(IOPolicyError::AmountOverflow)?;
-            }
-            None => {
-                left.insert(key, value);
-            }
-        }
-    }
-
     Ok(())
 }

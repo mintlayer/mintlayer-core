@@ -40,7 +40,7 @@ mod cached_operation;
 pub use cached_operation::CachedOperation;
 
 pub use input_output_policy::{
-    constraints_accumulator::ConstrainedValueAccumulator, IOPolicyError,
+    consumed_constraints_accumulator::ConsumedConstrainedValueAccumulator, IOPolicyError,
 };
 
 use std::collections::BTreeMap;
@@ -795,7 +795,7 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
-    ) -> Result<ConstrainedValueAccumulator, ConnectTransactionError> {
+    ) -> Result<ConsumedConstrainedValueAccumulator, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         // Register tokens if tx has issuance data

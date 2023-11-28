@@ -110,7 +110,7 @@ fn simple_fee_from_coin_transfer(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -182,7 +182,7 @@ fn transfer_lock_and_burn_outputs_fee(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -257,7 +257,7 @@ fn locked_outputs_can_go_to_fee(#[case] seed: Seed) {
                 &tf.genesis().timestamp().add_int_seconds(timelock_secs).unwrap(),
             )
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -305,7 +305,7 @@ fn create_stake_pool(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -392,7 +392,7 @@ fn delegate_staking(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(Fee(expected_fee), actual_fee);
     });
@@ -472,7 +472,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &decommission_tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -562,7 +562,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &spend_share_tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -616,7 +616,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(tf.chain_config(), BlockHeight::new(1))
+            .map_into_block_fees(tf.chain_config(), BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -663,7 +663,7 @@ fn issue_fungible_token_v1(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });
@@ -751,7 +751,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()
-            .consume(&chain_config, BlockHeight::new(1))
+            .map_into_block_fees(&chain_config, BlockHeight::new(1))
             .unwrap();
         assert_eq!(expected_fee, actual_fee);
     });

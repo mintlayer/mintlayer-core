@@ -112,7 +112,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
     )];
 
-    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
         pledge_getter,
@@ -126,12 +126,13 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let outputs_accumulator =
         ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
-    inputs_accumulator.subtract(outputs_accumulator).unwrap();
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
 
-    assert_eq!(
-        inputs_accumulator.consume(&chain_config, block_height).unwrap(),
-        Fee(Amount::from_atoms(fee_atoms))
-    );
+    assert_eq!(accumulated_fee, Fee(Amount::from_atoms(fee_atoms)));
 }
 
 // Check that it's allowed to pay fees from spending a delegation share
@@ -169,7 +170,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         OutputTimeLock::ForBlockCount(required_maturity_distance.to_int()),
     )];
 
-    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
         pledge_getter,
@@ -183,12 +184,13 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let outputs_accumulator =
         ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
-    inputs_accumulator.subtract(outputs_accumulator).unwrap();
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
 
-    assert_eq!(
-        inputs_accumulator.consume(&chain_config, block_height).unwrap(),
-        Fee(Amount::from_atoms(fee_atoms))
-    );
+    assert_eq!(accumulated_fee, Fee(Amount::from_atoms(fee_atoms)));
 }
 
 // Create a staking pool.
@@ -244,7 +246,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     )];
 
     {
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -259,7 +261,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        let result = inputs_accumulator.subtract(outputs_accumulator);
+        let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
             result.unwrap_err(),
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -273,7 +275,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     )];
 
     {
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -288,7 +290,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        inputs_accumulator.subtract(outputs_accumulator).unwrap();
+        inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
 }
 
@@ -356,7 +358,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         ),
     ];
 
-    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
         pledge_getter,
@@ -370,7 +372,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     let outputs_accumulator =
         ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
-    let result = inputs_accumulator.subtract(outputs_accumulator);
+    let result = inputs_accumulator.satisfy_with(outputs_accumulator);
 
     assert_eq!(
         result.unwrap_err(),
@@ -396,7 +398,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     ];
 
     {
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -411,7 +413,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        inputs_accumulator.subtract(outputs_accumulator).unwrap();
+        inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
 }
 
@@ -493,7 +495,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         ),
     ];
 
-    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
         pledge_getter,
@@ -507,7 +509,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let outputs_accumulator =
         ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
-    let result = inputs_accumulator.subtract(outputs_accumulator);
+    let result = inputs_accumulator.satisfy_with(outputs_accumulator);
     assert_eq!(
         result.unwrap_err(),
         IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -526,7 +528,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         ),
     ];
 
-    let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
         pledge_getter,
@@ -540,12 +542,13 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let outputs_accumulator =
         ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
-    inputs_accumulator.subtract(outputs_accumulator).unwrap();
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, BlockHeight::new(1))
+        .unwrap();
 
-    assert_eq!(
-        inputs_accumulator.consume(&chain_config, BlockHeight::new(1)).unwrap(),
-        Fee(Amount::ZERO)
-    );
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
 }
 
 #[rstest]
@@ -607,7 +610,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     )];
 
     {
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -622,7 +625,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        let result = inputs_accumulator.subtract(outputs_accumulator);
+        let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
             result.unwrap_err(),
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
@@ -645,7 +648,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     )];
 
     {
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -660,7 +663,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        inputs_accumulator.subtract(outputs_accumulator).unwrap();
+        inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
 }
 

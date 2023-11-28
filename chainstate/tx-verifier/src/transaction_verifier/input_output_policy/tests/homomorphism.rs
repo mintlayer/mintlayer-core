@@ -45,6 +45,11 @@ fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128
     )
 }
 
+// TODO: add more generic test with homomorphism prove
+
+// The test proves that f(decommission + spend_share) = f(decommission) + f(spend_share),
+// where f(x) is processing the tx with accumulator.
+//
 // Create 2 transactions. The first decommissions the pool and transfer some amount.
 // The second one spends share from delegation and also transfers some amount.
 // Actual amounts and the number of inputs/outputs used is random.
@@ -54,7 +59,7 @@ fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn combine_accumulators(#[case] seed: Seed) {
+fn accumulators_homomorphism(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
@@ -194,7 +199,7 @@ fn combine_accumulators(#[case] seed: Seed) {
         (Transaction::new(0, inputs, outputs).unwrap(), input_utxos)
     };
 
-    let fee1 = {
+    let consumed_accumulator_a = {
         let inputs = decommission_tx
             .inputs()
             .iter()
@@ -206,7 +211,7 @@ fn combine_accumulators(#[case] seed: Seed) {
             .chain(spend_share_inputs_utxos.iter())
             .cloned()
             .collect::<Vec<Option<TxOutput>>>();
-        let mut inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -227,12 +232,11 @@ fn combine_accumulators(#[case] seed: Seed) {
             ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
                 .unwrap();
 
-        inputs_accumulator.subtract(outputs_accumulator).unwrap();
-        inputs_accumulator
+        inputs_accumulator.satisfy_with(outputs_accumulator).unwrap()
     };
 
-    let fee2 = {
-        let mut decommission_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+    let consumed_accumulator_b = {
+        let decommission_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -250,9 +254,7 @@ fn combine_accumulators(#[case] seed: Seed) {
         )
         .unwrap();
 
-        //let mut fee1 = constraints_accumulator_1.consume();
-
-        let mut spend_share_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        let spend_share_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
@@ -271,19 +273,19 @@ fn combine_accumulators(#[case] seed: Seed) {
         .unwrap();
 
         decommission_inputs_accumulator
-            .subtract(decommission_outputs_accumulator)
-            .unwrap();
-        spend_share_inputs_accumulator
-            .subtract(spend_share_outputs_accumulator)
-            .unwrap();
-
-        decommission_inputs_accumulator.combine(spend_share_inputs_accumulator).unwrap();
-        decommission_inputs_accumulator
+            .satisfy_with(decommission_outputs_accumulator)
+            .unwrap()
+            .combine(
+                spend_share_inputs_accumulator
+                    .satisfy_with(spend_share_outputs_accumulator)
+                    .unwrap(),
+            )
+            .unwrap()
     };
 
-    assert_eq!(fee1, fee2);
-    assert_eq!(
-        fee1.consume(&chain_config, block_height).unwrap(),
-        expected_fee
-    );
+    assert_eq!(consumed_accumulator_a, consumed_accumulator_b);
+    let fee_a = consumed_accumulator_a.map_into_block_fees(&chain_config, block_height).unwrap();
+    let fee_b = consumed_accumulator_b.map_into_block_fees(&chain_config, block_height).unwrap();
+    assert_eq!(fee_a, fee_b);
+    assert_eq!(fee_a, expected_fee);
 }
