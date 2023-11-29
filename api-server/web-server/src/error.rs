@@ -39,6 +39,8 @@ pub enum ApiServerWebServerError {
     ClientError(#[from] ApiServerWebServerClientError),
     #[error("Not found error: {0}")]
     NotFound(#[from] ApiServerWebServerNotFoundError),
+    #[error("{0}")]
+    Forbidden(#[from] ApiServerWebServerForbiddenError),
     #[error("Server error: {0}")]
     ServerError(#[from] ApiServerWebServerServerError),
 }
@@ -59,6 +61,12 @@ pub enum ApiServerWebServerNotFoundError {
     PoolNotFound,
     #[error("Delegation not found")]
     DelegationNotFound,
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum ApiServerWebServerForbiddenError {
+    #[error("Forbidden endpoint")]
+    Forbidden,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -103,6 +111,7 @@ impl IntoResponse for ApiServerWebServerError {
                 (StatusCode::BAD_REQUEST, error.to_string())
             }
             ApiServerWebServerError::NotFound(error) => (StatusCode::NOT_FOUND, error.to_string()),
+            ApiServerWebServerError::Forbidden(error) => (StatusCode::FORBIDDEN, error.to_string()),
             ApiServerWebServerError::ServerError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }

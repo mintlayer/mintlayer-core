@@ -22,6 +22,51 @@ use super::*;
 #[rstest]
 #[trace]
 #[tokio::test]
+async fn dissabled_post_route() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let url = "/api/v1/transaction";
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let chain_config = Arc::new(create_unit_test_config());
+            let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+            ApiServerWebServerState {
+                db: Arc::new(storage),
+                chain_config: Arc::clone(&chain_config),
+                rpc: None::<Arc<DummyRPC>>,
+            }
+        };
+
+        web_server(listener, web_server_state).await.unwrap();
+    });
+
+    let body = "invalid transaction bytes";
+
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
+    let response = reqwest::Client::new()
+        .post(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 403);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(body["error"].as_str().unwrap(), "Forbidden endpoint");
+
+    task.abort();
+}
+
+#[rstest]
+#[trace]
+#[tokio::test]
 async fn invalid_transaction() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
@@ -35,7 +80,7 @@ async fn invalid_transaction() {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: Some(Arc::new(DummyRPC {})),
             }
         };
 
@@ -86,7 +131,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: Some(Arc::new(DummyRPC {})),
             }
         };
 

@@ -273,7 +273,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 
@@ -511,7 +511,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 

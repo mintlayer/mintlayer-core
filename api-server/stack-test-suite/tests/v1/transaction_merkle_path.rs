@@ -133,7 +133,7 @@ async fn get_block_failed(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 
@@ -235,7 +235,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 
@@ -356,7 +356,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 
@@ -465,7 +465,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 

@@ -44,7 +44,7 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Arc::new(DummyRPC {}),
+                rpc: Some(Arc::new(DummyRPC {})),
             }
         };
 

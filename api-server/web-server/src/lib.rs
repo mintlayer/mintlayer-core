@@ -39,8 +39,8 @@ impl TxSubmitClient for NodeRpcClient {
 }
 
 #[derive(Debug, Clone)]
-pub struct ApiServerWebServerState<T, Rpc> {
+pub struct ApiServerWebServerState<T, R> {
     pub db: T,
     pub chain_config: Arc<ChainConfig>,
-    pub rpc: Rpc,
+    pub rpc: R,
 }

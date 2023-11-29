@@ -42,6 +42,9 @@ pub struct ApiServerWebServerConfig {
     #[clap(flatten)]
     pub postgres_config: PostgresConfig,
 
+    #[clap(long)]
+    pub enable_post_routes: bool,
+
     /// Optional RPC address
     #[clap(long)]
     pub rpc_address: Option<SocketAddr>,

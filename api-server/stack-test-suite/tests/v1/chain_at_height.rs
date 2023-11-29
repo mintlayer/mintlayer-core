@@ -122,7 +122,7 @@ async fn height_n(#[case] seed: Seed) {
                 ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
-                    rpc: Arc::new(DummyRPC {}),
+                    rpc: None::<std::sync::Arc<DummyRPC>>,
                 }
             };
 

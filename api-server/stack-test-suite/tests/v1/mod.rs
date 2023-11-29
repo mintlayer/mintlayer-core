@@ -91,7 +91,7 @@ async fn chain_genesis() {
                 ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: Arc::clone(&chain_config),
-                    rpc: Arc::new(DummyRPC {}),
+                    rpc: None::<std::sync::Arc<DummyRPC>>,
                 }
             };
 
