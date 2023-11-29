@@ -32,17 +32,14 @@ use common::{
         },
         ChainConfig, ChainstateUpgrade, Destination, NetUpgrades, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable},
+    primitives::{Amount, Fee, Idable},
 };
 use crypto::{
     random::CryptoRng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use test_utils::random_ascii_alphanumeric_string;
-use tx_verifier::{
-    transaction_verifier::{TransactionSourceForConnect, TransactionVerifier},
-    Fee,
-};
+use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();

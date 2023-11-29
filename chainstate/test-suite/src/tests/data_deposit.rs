@@ -22,11 +22,10 @@ use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenIssuanceVersion,
     ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
 };
-use common::primitives::{Amount, BlockHeight, Idable};
+use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]

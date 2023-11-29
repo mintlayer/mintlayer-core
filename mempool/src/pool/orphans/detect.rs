@@ -91,6 +91,7 @@ impl OrphanType {
             | CTE::TotalFeeRequiredOverflow
             | CTE::InsufficientCoinsFee(_, _)
             | CTE::AttemptToSpendFrozenToken(_)
+            | CTE::ConstrainedValueAccumulatorError(_, _)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

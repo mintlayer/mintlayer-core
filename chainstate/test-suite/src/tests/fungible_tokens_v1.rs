@@ -33,7 +33,7 @@ use common::{
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, CoinOrTokenId, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -48,7 +48,6 @@ use test_utils::{
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::transaction_verifier::{
     error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
-    CoinOrTokenId,
 };
 
 fn make_issuance(

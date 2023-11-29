@@ -20,11 +20,12 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::{id::WithId, Idable},
 };
+use constraints_value_accumulator::AccumulatedFee;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
-        error::ConnectTransactionError, storage::TransactionVerifierStorageRef, AccumulatedFee,
+        error::ConnectTransactionError, storage::TransactionVerifierStorageRef,
         TransactionSourceForConnect, TransactionVerifier,
     },
     TransactionSource,
@@ -87,7 +88,12 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .log_err()?;
         let total_fees = total_fees
             .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
-            .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
+            .map_err(|err| {
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    err,
+                    block.get_id().into(),
+                )
+            })?;
 
         tx_verifier
             .check_block_reward(block, total_fees, block_index.block_height())

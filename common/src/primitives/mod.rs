@@ -17,7 +17,6 @@ pub mod amount;
 pub mod compact;
 pub mod encoding;
 pub mod error;
-mod hash_encoded;
 pub mod height;
 pub mod id;
 pub mod per_thousand;
@@ -28,9 +27,25 @@ pub mod time;
 pub mod user_agent;
 pub mod version_tag;
 
+mod hash_encoded;
+
 pub use amount::Amount;
 pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
 pub use height::{BlockCount, BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
 pub use version_tag::VersionTag;
+
+use crate::chain::tokens::TokenId;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fee(pub Amount);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Subsidy(pub Amount);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}

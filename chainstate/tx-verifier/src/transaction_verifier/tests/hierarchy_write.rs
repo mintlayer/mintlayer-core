@@ -21,7 +21,7 @@ use crate::transaction_verifier::{
 use super::*;
 use common::chain::{
     config::Builder as ConfigBuilder,
-    tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenTotalSupply},
+    tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
 };
 use mockall::predicate::eq;
 use pos_accounting::{AccountingTxUndo, DeltaMergeUndo};

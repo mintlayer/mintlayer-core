@@ -147,6 +147,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
@@ -492,6 +493,35 @@ impl BanScore for IOPolicyError {
             IOPolicyError::TokenIdNotFound => 0,
             IOPolicyError::DelegationBalanceNotFound(_) => 0,
             IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
+        }
+    }
+}
+
+impl BanScore for constraints_value_accumulator::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            constraints_value_accumulator::Error::InvalidInputTypeInReward => 100,
+            constraints_value_accumulator::Error::InvalidOutputTypeInReward => 100,
+            constraints_value_accumulator::Error::InvalidInputTypeInTx => 100,
+            constraints_value_accumulator::Error::MultiplePoolCreated => 100,
+            constraints_value_accumulator::Error::MultipleDelegationCreated => 100,
+            constraints_value_accumulator::Error::ProduceBlockInTx => 100,
+            constraints_value_accumulator::Error::AmountOverflow => 100,
+            constraints_value_accumulator::Error::CoinOrTokenOverflow(_) => 100,
+            constraints_value_accumulator::Error::AttemptToPrintMoney(_) => 100,
+            constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
+            constraints_value_accumulator::Error::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
+            constraints_value_accumulator::Error::MissingOutputOrSpent(_) => 100,
+            constraints_value_accumulator::Error::PoSAccountingError(err) => err.ban_score(),
+            constraints_value_accumulator::Error::PledgeAmountNotFound(_) => 100,
+            constraints_value_accumulator::Error::MultipleAccountCommands => 100,
+            constraints_value_accumulator::Error::SpendingNonSpendableOutput(_) => 100,
+            constraints_value_accumulator::Error::AttemptToViolateFeeRequirements => 100,
+            constraints_value_accumulator::Error::AttemptToUseAccountInputInReward => 100,
+            constraints_value_accumulator::Error::TokenIdQueryFailed => 0,
+            constraints_value_accumulator::Error::TokenIdNotFound => 0,
+            constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,
+            constraints_value_accumulator::Error::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }

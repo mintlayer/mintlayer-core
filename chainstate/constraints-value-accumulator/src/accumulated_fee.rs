@@ -17,12 +17,10 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 
 use common::{
     chain::ChainConfig,
-    primitives::{Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee},
 };
 
-use crate::{transaction_verifier::CoinOrTokenId, Fee};
-
-use super::IOPolicyError;
+use super::Error;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AccumulatedFee {
@@ -48,7 +46,7 @@ impl AccumulatedFee {
         }
     }
 
-    pub fn combine(self, other: Self) -> Result<Self, IOPolicyError> {
+    pub fn combine(self, other: Self) -> Result<Self, Error> {
         let unconstrained_value =
             merge_amount_maps(self.unconstrained_value, other.unconstrained_value)?;
         let timelock_constrained =
@@ -67,7 +65,7 @@ impl AccumulatedFee {
         self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-    ) -> Result<Fee, IOPolicyError> {
+    ) -> Result<Fee, Error> {
         let unconstrained_change = self
             .unconstrained_value
             .get(&CoinOrTokenId::Coin)
@@ -83,10 +81,10 @@ impl AccumulatedFee {
                 (lock.get() <= maturity_distance.to_int()).then_some(amount)
             })
             .sum::<Option<Amount>>()
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+            .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
 
         let fee = (unconstrained_change + timelocked_change)
-            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+            .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
 
         Ok(Fee(fee))
     }
@@ -95,7 +93,7 @@ impl AccumulatedFee {
 fn merge_amount_maps<K: Ord>(
     mut left: BTreeMap<K, Amount>,
     right: BTreeMap<K, Amount>,
-) -> Result<BTreeMap<K, Amount>, IOPolicyError> {
+) -> Result<BTreeMap<K, Amount>, Error> {
     right
         .into_iter()
         .try_for_each(|(key, value)| super::insert_or_increase(&mut left, key, value))?;

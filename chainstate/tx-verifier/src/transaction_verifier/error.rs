@@ -22,7 +22,7 @@ use common::{
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use thiserror::Error;
 
@@ -31,7 +31,7 @@ use crate::timelock_check;
 use super::{
     input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
-    storage::TransactionVerifierStorageError, CoinOrTokenId,
+    storage::TransactionVerifierStorageError,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -152,6 +152,8 @@ pub enum ConnectTransactionError {
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]
     IOPolicyError(IOPolicyError, OutPointSourceId),
+    #[error("Constrained value accumulator error: `{0}` in : `{1:?}`")]
+    ConstrainedValueAccumulatorError(constraints_value_accumulator::Error, OutPointSourceId),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("Tokens accounting BlockUndo error: {0}")]

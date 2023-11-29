@@ -30,6 +30,7 @@ pub mod storage;
 pub mod timelock_check;
 
 mod tx_source;
+use constraints_value_accumulator::AccumulatedFee;
 use tokens_accounting::{
     TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
@@ -39,7 +40,7 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
-pub use input_output_policy::{accumulated_fee::AccumulatedFee, IOPolicyError};
+pub use input_output_policy::IOPolicyError;
 
 use std::collections::BTreeMap;
 
@@ -64,31 +65,17 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{make_token_id, TokenId, TokenIssuanceVersion},
+        tokens::{make_token_id, TokenIssuanceVersion},
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{
     PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
     PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
-
-// TODO: We can move it to mod common, because in chain config we have `token_issuance_fee`
-//       that essentially belongs to this type, but return Amount
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Fee(pub Amount);
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Subsidy(pub Amount);
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum CoinOrTokenId {
-    Coin,
-    TokenId(TokenId),
-}
 
 /// The change that a block has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]

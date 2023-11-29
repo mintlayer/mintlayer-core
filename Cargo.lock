@@ -862,6 +862,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
+ "constraints-value-accumulator",
  "crypto",
  "derive_more",
  "hex",
@@ -934,6 +935,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
+ "constraints-value-accumulator",
  "crypto",
  "hex",
  "itertools 0.12.0",
@@ -1256,6 +1258,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "constraints-value-accumulator"
+version = "0.2.0"
+dependencies = [
+ "common",
+ "crypto",
+ "pos_accounting",
+ "rstest",
+ "test-utils",
+ "thiserror",
+ "utils",
+ "utxo",
 ]
 
 [[package]]
@@ -6936,6 +6952,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
+ "constraints-value-accumulator",
  "crypto",
  "fallible-iterator 0.3.0",
  "itertools 0.12.0",

@@ -145,6 +145,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,

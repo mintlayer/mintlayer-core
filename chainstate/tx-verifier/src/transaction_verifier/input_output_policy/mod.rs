@@ -13,9 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
-use accumulated_fee::AccumulatedFee;
 use common::{
     chain::{
         block::{BlockRewardTransactable, ConsensusData},
@@ -24,22 +21,17 @@ use common::{
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
         Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, Subsidy},
 };
-use constraints_accumulator::ConstrainedValueAccumulator;
+use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
 
-use crate::{
-    error::{SpendStakeError, TokensError},
-    Fee,
-};
+use crate::error::{SpendStakeError, TokensError};
 
-use super::{error::ConnectTransactionError, CoinOrTokenId, Subsidy};
+use super::error::ConnectTransactionError;
 
-pub mod accumulated_fee;
-pub mod constraints_accumulator;
 mod purposes_check;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -141,13 +133,17 @@ pub fn check_reward_inputs_outputs_policy(
                 )
                 .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
-                let outputs_accumulator =
-                    ConstrainedValueAccumulator::from_outputs(chain_config, outputs)
-                        .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+                let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
+                    chain_config,
+                    outputs,
+                )
+                .map_err(|e| {
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(e, block_id.into())
+                })?;
 
-                inputs_accumulator
-                    .satisfy_with(outputs_accumulator)
-                    .map_err(|e| ConnectTransactionError::IOPolicyError(e, block_id.into()))?;
+                inputs_accumulator.satisfy_with(outputs_accumulator).map_err(|e| {
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(e, block_id.into())
+                })?;
             }
         }
         ConsensusData::PoS(_) => {
@@ -231,14 +227,19 @@ pub fn check_tx_inputs_outputs_policy(
         tx.inputs(),
         &inputs_utxos,
     )
-    .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+    .map_err(|e| {
+        ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
+    })?;
 
     let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs())
-        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+        .map_err(|e| {
+            ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
+        })?;
 
-    let consumed_accumulator = inputs_accumulator
-        .satisfy_with(outputs_accumulator)
-        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+    let consumed_accumulator =
+        inputs_accumulator.satisfy_with(outputs_accumulator).map_err(|e| {
+            ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
+        })?;
 
     Ok(consumed_accumulator)
 }
@@ -299,17 +300,6 @@ fn collect_inputs_utxos(
                 ))
         })
         .collect::<Result<Vec<_>, _>>()
-}
-
-fn insert_or_increase<K: Ord>(
-    collection: &mut BTreeMap<K, Amount>,
-    key: K,
-    amount: Amount,
-) -> Result<(), IOPolicyError> {
-    let value = collection.entry(key).or_insert(Amount::ZERO);
-    *value = (*value + amount).ok_or(IOPolicyError::AmountOverflow)?;
-
-    Ok(())
 }
 
 #[cfg(test)]

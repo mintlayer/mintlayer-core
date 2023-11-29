@@ -399,7 +399,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         )
                         .map_err(|e| {
                             TxValidationError::TxValidation(
-                                chainstate::ConnectTransactionError::IOPolicyError(
+                                chainstate::ConnectTransactionError::ConstrainedValueAccumulatorError(
                                     e,
                                     (*transaction.tx_id()).into(),
                                 ),

@@ -23,7 +23,9 @@ use common::{
         timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
         NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Idable},
+    primitives::{
+        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable,
+    },
     Uint256,
 };
 use crypto::{
@@ -32,7 +34,6 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]

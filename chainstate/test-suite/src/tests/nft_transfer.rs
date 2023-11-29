@@ -23,13 +23,12 @@ use common::{
         tokens::{make_token_id, NftIssuance, TokenId, TokenIssuanceVersion},
         ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, CoinOrTokenId},
 };
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::nft_utils::random_nft_issuance;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]

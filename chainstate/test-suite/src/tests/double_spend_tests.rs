@@ -26,10 +26,9 @@ use common::{
         output_value::OutputValue, signed_transaction::SignedTransaction, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
 use crypto::random::SliceRandom;
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 // Process a block where the second transaction uses the first one as input.
 //

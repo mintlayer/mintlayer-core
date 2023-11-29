@@ -20,16 +20,11 @@ use common::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
         ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
 use utils::ensure;
 
-use crate::{
-    transaction_verifier::{CoinOrTokenId, Subsidy},
-    Fee,
-};
-
-use super::{accumulated_fee::AccumulatedFee, insert_or_increase, IOPolicyError};
+use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -65,14 +60,14 @@ impl ConstrainedValueAccumulator {
         delegation_balance_getter: DelegationBalanceGetterFn,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
-    ) -> Result<Self, IOPolicyError>
+    ) -> Result<Self, Error>
     where
-        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, IOPolicyError>,
+        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
+        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
     {
         ensure!(
             inputs.len() == inputs_utxos.len(),
-            IOPolicyError::InputsAndInputsUtxosLengthMismatch(inputs.len(), inputs_utxos.len())
+            Error::InputsAndInputsUtxosLengthMismatch(inputs.len(), inputs_utxos.len())
         );
 
         let mut accumulator = Self::new();
@@ -81,9 +76,8 @@ impl ConstrainedValueAccumulator {
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
                 TxInput::Utxo(outpoint) => {
-                    let input_utxo = input_utxo
-                        .as_ref()
-                        .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?;
+                    let input_utxo =
+                        input_utxo.as_ref().ok_or(Error::MissingOutputOrSpent(outpoint.clone()))?;
                     accumulator.process_input_utxo(
                         chain_config,
                         block_height,
@@ -105,7 +99,7 @@ impl ConstrainedValueAccumulator {
                         accumulator.process_input_account_command(chain_config, command)?;
 
                     total_fee_deducted = (total_fee_deducted + fee_to_deduct)
-                        .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                        .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
                 }
             }
         }
@@ -114,7 +108,7 @@ impl ConstrainedValueAccumulator {
             &mut accumulator.unconstrained_value,
             CoinOrTokenId::Coin,
             total_fee_deducted,
-            IOPolicyError::AttemptToViolateFeeRequirements,
+            Error::AttemptToViolateFeeRequirements,
         )?;
 
         Ok(accumulator)
@@ -127,9 +121,9 @@ impl ConstrainedValueAccumulator {
         pledge_amount_getter: &PledgeAmountGetterFn,
         outpoint: UtxoOutPoint,
         input_utxo: &TxOutput,
-    ) -> Result<(), IOPolicyError>
+    ) -> Result<(), Error>
     where
-        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
+        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
     {
         match input_utxo {
             TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
@@ -151,7 +145,7 @@ impl ConstrainedValueAccumulator {
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::Burn(_)
             | TxOutput::DataDeposit(_) => {
-                return Err(IOPolicyError::SpendingNonSpendableOutput(outpoint.clone()));
+                return Err(Error::SpendingNonSpendableOutput(outpoint.clone()));
             }
             TxOutput::IssueNft(token_id, _, _) => {
                 insert_or_increase(
@@ -164,8 +158,8 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let pledged_amount = pledge_amount_getter(*pool_id)?
-                    .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
+                let pledged_amount =
+                    pledge_amount_getter(*pool_id)?.ok_or(Error::PledgeAmountNotFound(*pool_id))?;
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
 
@@ -176,7 +170,7 @@ impl ConstrainedValueAccumulator {
                             .entry(maturity_distance)
                             .or_insert(Amount::ZERO);
                         *balance = (*balance + pledged_amount)
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                            .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
                     }
                     None => {
                         insert_or_increase(
@@ -198,17 +192,17 @@ impl ConstrainedValueAccumulator {
         block_height: BlockHeight,
         account: &AccountSpending,
         delegation_balance_getter: &DelegationBalanceGetterFn,
-    ) -> Result<(), IOPolicyError>
+    ) -> Result<(), Error>
     where
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, IOPolicyError>,
+        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
     {
         match account {
             AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
                 let delegation_balance = delegation_balance_getter(*delegation_id)?
-                    .ok_or(IOPolicyError::DelegationBalanceNotFound(*delegation_id))?;
+                    .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
                 ensure!(
                     *spend_amount <= delegation_balance,
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin)
+                    Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
                 );
 
                 let maturity_distance =
@@ -221,7 +215,7 @@ impl ConstrainedValueAccumulator {
                             .entry(maturity_distance)
                             .or_insert(Amount::ZERO);
                         *balance = (*balance + *spend_amount)
-                            .ok_or(IOPolicyError::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                            .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
                     }
                     None => {
                         insert_or_increase(
@@ -241,7 +235,7 @@ impl ConstrainedValueAccumulator {
         &mut self,
         chain_config: &ChainConfig,
         command: &AccountCommand,
-    ) -> Result<Amount, IOPolicyError> {
+    ) -> Result<Amount, Error> {
         match command {
             AccountCommand::MintTokens(token_id, amount) => {
                 insert_or_increase(
@@ -263,10 +257,7 @@ impl ConstrainedValueAccumulator {
         }
     }
 
-    pub fn from_outputs(
-        chain_config: &ChainConfig,
-        outputs: &[TxOutput],
-    ) -> Result<Self, IOPolicyError> {
+    pub fn from_outputs(chain_config: &ChainConfig, outputs: &[TxOutput]) -> Result<Self, Error> {
         let mut accumulator = Self::new();
 
         for output in outputs {
@@ -333,7 +324,7 @@ impl ConstrainedValueAccumulator {
         &mut self,
         timelock: &OutputTimeLock,
         locked_coins: Amount,
-    ) -> Result<(), IOPolicyError> {
+    ) -> Result<(), Error> {
         match timelock {
             OutputTimeLock::UntilHeight(_)
             | OutputTimeLock::UntilTime(_)
@@ -362,13 +353,13 @@ impl ConstrainedValueAccumulator {
     }
 
     // Satisfy current constraints with other accumulator.
-    pub fn satisfy_with(mut self, other: Self) -> Result<AccumulatedFee, IOPolicyError> {
+    pub fn satisfy_with(mut self, other: Self) -> Result<AccumulatedFee, Error> {
         for (key, value) in other.unconstrained_value {
             decrease_or(
                 &mut self.unconstrained_value,
                 key,
                 value,
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(key),
+                Error::AttemptToPrintMoneyOrViolateTimelockConstraints(key),
             )?;
         }
 
@@ -394,9 +385,7 @@ impl ConstrainedValueAccumulator {
             let mut output_coins = locked_coins;
             while output_coins > Amount::ZERO {
                 let constrained_coins = constraint_range_iter.peek_mut().ok_or(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
-                        CoinOrTokenId::Coin,
-                    ),
+                    Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 )?;
 
                 if output_coins > **constrained_coins {
@@ -424,8 +413,8 @@ fn decrease_or(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
     key: CoinOrTokenId,
     amount: Amount,
-    error: IOPolicyError,
-) -> Result<(), IOPolicyError> {
+    error: Error,
+) -> Result<(), Error> {
     if amount > Amount::ZERO {
         match total_amounts.get_mut(&key) {
             Some(value) => {

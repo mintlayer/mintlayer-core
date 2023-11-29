@@ -24,14 +24,13 @@ use common::chain::{
     ChainstateUpgrade, Destination, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
-use common::primitives::{Amount, BlockHeight, Idable};
+use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
 };
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
