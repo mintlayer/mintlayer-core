@@ -210,8 +210,8 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
                                             .insert(tx_id);
 
                                         match output_value {
-                                            OutputValue::TokenV0(_)
-                                            | OutputValue::TokenV1(_, _) => {
+                                            OutputValue::TokenV0(_) => { /* ignore */ }
+                                            OutputValue::TokenV1(_, _) => {
                                                 // TODO
                                             }
                                             OutputValue::Coin(amount) => {

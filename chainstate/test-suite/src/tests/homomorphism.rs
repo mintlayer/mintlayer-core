@@ -22,11 +22,12 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
-        tokens::{make_token_id, TokenData, TokenIssuanceV0, TokenTransfer},
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        tokens::{make_token_id, TokenIssuance},
+        AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
+use test_utils::nft_utils::random_token_issuance_v1;
 
 // These tests prove that TransactionVerifiers hierarchy has homomorphic property: f(ab) == f(a)f(b)
 // Meaning that multiple operations done via a single verifier give the same result as using one
@@ -149,36 +150,30 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
+            .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+            ))))
             .add_output(TxOutput::Transfer(
-                TokenIssuanceV0 {
-                    token_ticker: "XXXX".as_bytes().to_vec(),
-                    amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
-                    number_of_decimals: rng.gen_range(1..18),
-                    metadata_uri: "http://uri".as_bytes().to_vec(),
-                }
-                .into(),
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_supply_change_fee()),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(
-                tf.chainstate.get_chain_config().fungible_token_issuance_fee(),
-            )))
             .build();
         let token_id = make_token_id(tx_1.transaction().inputs()).unwrap();
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::MintTokens(token_id, Amount::from_atoms(100)),
                 ),
                 InputWitness::NoSignature(None),
             )
+            .add_input(
+                TxInput::from_utxo(tx_1.transaction().get_id().into(), 1),
+                empty_witness(&mut rng),
+            )
             .add_output(TxOutput::Transfer(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(rng.gen_range(1..100_000)),
-                })
-                .into(),
+                OutputValue::TokenV1(token_id, Amount::from_atoms(100)),
                 Destination::AnyoneCanSpend,
             ))
             .build();

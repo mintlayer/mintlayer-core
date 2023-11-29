@@ -29,6 +29,12 @@ pub struct NftIssuanceV0 {
     //       Payout might be Multisig contract with amount enforcement.
 }
 
+impl From<NftIssuanceV0> for NftIssuance {
+    fn from(d: NftIssuanceV0) -> Self {
+        NftIssuance::V0(d)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub struct TokenCreator {
     pub public_key: PublicKey,

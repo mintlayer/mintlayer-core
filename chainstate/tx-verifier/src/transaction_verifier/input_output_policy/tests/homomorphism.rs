@@ -90,7 +90,6 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             - spend_share_output,
     ));
 
-    let issuance_token_id_getter = |_| unreachable!();
     let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
     let delegation_balance_getter = |_| Ok(Some(delegation_balance));
 
@@ -216,7 +215,6 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
@@ -229,8 +227,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             .cloned()
             .collect::<Vec<TxOutput>>();
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap()
     };
@@ -241,36 +238,28 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             decommission_tx.inputs(),
             &decommission_tx_inputs_utxos,
         )
         .unwrap();
 
-        let decommission_outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
-            &chain_config,
-            block_height,
-            decommission_tx.outputs(),
-        )
-        .unwrap();
+        let decommission_outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, decommission_tx.outputs())
+                .unwrap();
 
         let spend_share_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             spend_share_tx.inputs(),
             &spend_share_inputs_utxos,
         )
         .unwrap();
 
-        let spend_share_outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
-            &chain_config,
-            block_height,
-            spend_share_tx.outputs(),
-        )
-        .unwrap();
+        let spend_share_outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, spend_share_tx.outputs())
+                .unwrap();
 
         decommission_inputs_accumulator
             .satisfy_with(decommission_outputs_accumulator)

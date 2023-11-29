@@ -34,13 +34,6 @@ impl OutputValue {
             OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => None,
         }
     }
-
-    pub fn token_data(&self) -> Option<&TokenData> {
-        match self {
-            OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => None,
-            OutputValue::TokenV0(d) => Some(d),
-        }
-    }
 }
 
 impl From<TokenData> for OutputValue {

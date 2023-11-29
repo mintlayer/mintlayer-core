@@ -14,22 +14,20 @@
 // limitations under the License.
 
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, Metadata, NftIssuanceV0, TokenData, TokenTransfer},
+        tokens::{make_token_id, NftIssuance},
         Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
 use rstest::rstest;
-use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
-    nft_utils::random_creator,
+    nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
-    random_ascii_alphanumeric_string,
 };
 
 #[rstest]
@@ -51,28 +49,13 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-
-        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
-        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
 
         // Issue a new NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let issuance_data = NftIssuanceV0 {
-            metadata: Metadata {
-                creator: Some(random_creator(&mut rng)),
-                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
-                    .into_bytes(),
-                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: DataOrNoVec::from(None),
-                additional_metadata_uri: DataOrNoVec::from(None),
-                media_uri: DataOrNoVec::from(None),
-                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-            },
-        }
-        .into();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_id =
+            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+        let issuance_data = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
 
         let block_index = tf
             .make_block_builder()
@@ -82,15 +65,15 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        issuance_data,
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(issuance_data.into()),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(token_min_issuance_fee),
                         Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -104,8 +87,6 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .next()
             .unwrap()
             .clone();
-        let token_id =
-            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // B1 - burn NFT in mainchain
         let block_index = tf
@@ -120,13 +101,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::from_utxo(issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        Amount::from_atoms(1),
+                    )))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123455)),
                         Destination::AnyoneCanSpend,
@@ -154,11 +132,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
@@ -238,11 +212,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                })
-                .into(),
+                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
@@ -271,13 +241,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::from_utxo(b2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                }
-                .into(),
-            ))
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(1),
+            )))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
                 Destination::AnyoneCanSpend,
@@ -304,13 +271,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::from_utxo(c2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                }
-                .into(),
-            ))
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(1),
+            )))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
                 Destination::AnyoneCanSpend,
@@ -365,28 +329,14 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
-        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
-
         // Issue a new NFT
-        let issuance_value = NftIssuanceV0 {
-            metadata: Metadata {
-                creator: Some(random_creator(&mut rng)),
-                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
-                    .into_bytes(),
-                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: DataOrNoVec::from(None),
-                additional_metadata_uri: DataOrNoVec::from(None),
-                media_uri: DataOrNoVec::from(None),
-                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-            },
-        };
+        let issuance_value = random_nft_issuance(tf.chain_config().as_ref(), &mut rng);
+
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let token_id =
+            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())
@@ -396,11 +346,11 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        issuance_value.clone().into(),
+                    .add_output(TxOutput::IssueNft(
+                        token_id,
+                        Box::new(issuance_value.clone().into()),
                         Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -408,8 +358,6 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let token_id =
-            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // Check NFT available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
@@ -420,15 +368,21 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             issuance_tx.transaction().get_id(),
             token_aux_data.issuance_tx().get_id()
         );
+
         // Check issuance storage in the chain and in the storage
-        assert_eq!(
-            get_output_value(&issuance_tx.outputs()[0]).unwrap(),
-            issuance_value.clone().into()
-        );
-        assert_eq!(
-            get_output_value(&token_aux_data.issuance_tx().outputs()[0]).unwrap(),
-            issuance_value.into()
-        );
+
+        match &issuance_tx.outputs()[0] {
+            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
+                NftIssuance::V0(nft) => assert_eq!(*nft, issuance_value),
+            },
+            _ => panic!("unexpected output"),
+        };
+        match &token_aux_data.issuance_tx().outputs()[0] {
+            TxOutput::IssueNft(_, nft, _) => match nft.as_ref() {
+                NftIssuance::V0(nft) => assert_eq!(*nft, issuance_value),
+            },
+            _ => panic!("unexpected output"),
+        };
 
         // Cause reorg
         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();

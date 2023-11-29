@@ -576,7 +576,21 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let storage = TestStore::new_empty().unwrap();
 
-        let tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                        )])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
         let storage = InMemoryStorageWrapper::new(storage, tf.chain_config().as_ref().clone());
 
         let issuance = TokenIssuanceV0 {
@@ -586,13 +600,13 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
         };
 
-        let token_min_issuance_fee = tf.chain_config().fungible_token_issuance_fee();
+        let token_issuance_fee = tf.chain_config().fungible_token_issuance_fee();
 
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
             .coin_amount()
             .unwrap();
-        let expected_fee = Fee((genesis_amount - token_min_issuance_fee).unwrap());
+        let expected_fee = Fee((genesis_amount - token_issuance_fee).unwrap());
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -603,7 +617,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                 issuance.into(),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
             .build();
 
         let mut verifier = TransactionVerifier::new(&storage, tf.chain_config().as_ref());

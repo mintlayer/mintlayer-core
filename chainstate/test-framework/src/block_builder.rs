@@ -315,7 +315,7 @@ impl<'f> BlockBuilder<'f> {
     ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
         outputs
             .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
+            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
             .multiunzip()
     }
 }

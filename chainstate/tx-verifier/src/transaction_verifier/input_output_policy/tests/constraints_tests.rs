@@ -95,7 +95,6 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
     let delegation_balance_getter = |_| Ok(None);
-    let issuance_token_id_getter = |_| unreachable!();
 
     let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -117,14 +116,13 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         &inputs,
         &input_utxos,
     )
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -156,7 +154,6 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(None);
     let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
-    let issuance_token_id_getter = |_| unreachable!();
 
     let inputs_utxos = vec![None];
     let inputs = vec![TxInput::from_account(
@@ -175,14 +172,13 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         &inputs,
         &inputs_utxos,
     )
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -216,7 +212,6 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
     let delegation_balance_getter = |_| Ok(None);
-    let issuance_token_id_getter = |_| unreachable!();
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -251,15 +246,13 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
@@ -280,15 +273,13 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
@@ -318,7 +309,6 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
     let delegation_balance_getter = |_| Ok(None);
-    let issuance_token_id_getter = |_| unreachable!();
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -363,14 +353,13 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         &inputs,
         &inputs_utxos,
     )
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
     let result = inputs_accumulator.satisfy_with(outputs_accumulator);
 
@@ -403,15 +392,13 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
@@ -455,7 +442,6 @@ fn check_timelock_saturation(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
     let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
-    let issuance_token_id_getter = |_| unreachable!();
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -500,14 +486,13 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         &inputs,
         &inputs_utxos,
     )
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
     let result = inputs_accumulator.satisfy_with(outputs_accumulator);
     assert_eq!(
@@ -533,14 +518,13 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         block_height,
         pledge_getter,
         delegation_balance_getter,
-        issuance_token_id_getter,
         &inputs,
         &inputs_utxos,
     )
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -568,7 +552,6 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
 
     let pledge_getter = |_| Ok(None);
     let delegation_balance_getter = |_| Ok(Some(delegation_balance));
-    let issuance_token_id_getter = |_| unreachable!();
 
     // it's an error to spend more the balance
     let inputs = vec![TxInput::from_account(
@@ -583,7 +566,6 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         );
@@ -615,15 +597,13 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
@@ -653,15 +633,13 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
             block_height,
             pledge_getter,
             delegation_balance_getter,
-            issuance_token_id_getter,
             &inputs,
             &inputs_utxos,
         )
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
-                .unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
@@ -750,15 +728,12 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        let issuance_token_id_getter = |_| unreachable!();
-
         let err = check_tx_inputs_outputs_policy(
             &tx,
             &chain_config,
             BlockHeight::new(1),
             &pos_db,
             &utxo_db,
-            issuance_token_id_getter,
         )
         .unwrap_err();
         assert_eq!(
@@ -804,17 +779,8 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        let issuance_token_id_getter = |_| unreachable!();
-
-        check_tx_inputs_outputs_policy(
-            &tx,
-            &chain_config,
-            BlockHeight::new(1),
-            &pos_db,
-            &utxo_db,
-            issuance_token_id_getter,
-        )
-        .unwrap();
+        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
+            .unwrap();
     }
 }
 
@@ -888,15 +854,12 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let issuance_token_id_getter = |_| unreachable!();
-
         let res = check_tx_inputs_outputs_policy(
             &tx,
             &chain_config,
             BlockHeight::new(1),
             &pos_db,
             &utxo_db,
-            issuance_token_id_getter,
         )
         .unwrap_err();
         assert_eq!(
@@ -947,16 +910,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let issuance_token_id_getter = |_| unreachable!();
-
-        check_tx_inputs_outputs_policy(
-            &tx,
-            &chain_config,
-            BlockHeight::new(1),
-            &pos_db,
-            &utxo_db,
-            issuance_token_id_getter,
-        )
-        .unwrap();
+        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
+            .unwrap();
     }
 }

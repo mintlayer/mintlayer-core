@@ -226,8 +226,6 @@ pub enum TokensError {
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
     #[error("Token version {0:?} from tx {1} is deprecated")]
     DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
-    #[error("Token issuance version {0:?} from tx {1} is not supported yet")]
-    UnsupportedTokenIssuanceVersion(TokenIssuanceVersion, Id<Transaction>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -45,8 +45,7 @@ use common::chain::signature::inputsig::standard_signature::StandardInputSignatu
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{
-    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenData,
-    TokenId, TokenTransfer,
+    make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
 };
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -394,7 +393,6 @@ impl Account {
                 grouped.push((element.0.clone(), element.1 .0.clone()));
                 Ok(())
             },
-            |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
             vec![],
         )?
         .into_iter()
@@ -1135,7 +1133,6 @@ impl Account {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
             },
-            |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
             Amount::ZERO,
         )?;
         Ok(amounts_by_currency)
@@ -1637,19 +1634,7 @@ fn group_outputs<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::TokenV0(token_data) => {
-                let token_data = token_data.as_ref();
-                match token_data {
-                    TokenData::TokenTransfer(token_transfer) => {
-                        let total_token_amount = tokens_grouped
-                            .entry(Currency::Token(token_transfer.token_id))
-                            .or_insert_with(|| init.clone());
-
-                        combiner(total_token_amount, &output, token_transfer.amount)?;
-                    }
-                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
-                }
-            }
+            OutputValue::TokenV0(_) => { /* ignore */ }
             OutputValue::TokenV1(id, amount) => {
                 let total_token_amount =
                     tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
@@ -1699,19 +1684,7 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::TokenV0(token_data) => {
-                let token_data = token_data.as_ref();
-                match token_data {
-                    TokenData::TokenTransfer(token_transfer) => {
-                        let total_token_amount = tokens_grouped
-                            .entry(Currency::Token(token_transfer.token_id))
-                            .or_insert_with(|| init.clone());
-
-                        combiner(total_token_amount, &output, token_transfer.amount)?;
-                    }
-                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
-                }
-            }
+            OutputValue::TokenV0(_) => { /* ignore */ }
             OutputValue::TokenV1(id, amount) => {
                 let total_token_amount =
                     tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
@@ -1729,7 +1702,6 @@ fn group_utxos_for_input<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
-    get_token_id: impl Fn(&T) -> WalletResult<TokenId>,
     init: Grouped,
 ) -> WalletResult<BTreeMap<Currency, Grouped>> {
     let mut coin_grouped = init.clone();
@@ -1760,34 +1732,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::TokenV0(token_data) => {
-                let token_data = token_data.as_ref();
-                match token_data {
-                    TokenData::TokenTransfer(token_transfer) => {
-                        let total_token_amount = tokens_grouped
-                            .entry(Currency::Token(token_transfer.token_id))
-                            .or_insert_with(|| init.clone());
-
-                        combiner(total_token_amount, &output, token_transfer.amount)?;
-                    }
-                    TokenData::TokenIssuance(token_issuance) => {
-                        let token_id = get_token_id(&output)?;
-                        let total_token_amount = tokens_grouped
-                            .entry(Currency::Token(token_id))
-                            .or_insert_with(|| init.clone());
-
-                        combiner(total_token_amount, &output, token_issuance.amount_to_issue)?;
-                    }
-                    TokenData::NftIssuance(_) => {
-                        let token_id = get_token_id(&output)?;
-                        let total_token_amount = tokens_grouped
-                            .entry(Currency::Token(token_id))
-                            .or_insert_with(|| init.clone());
-
-                        combiner(total_token_amount, &output, Amount::from_atoms(1))?;
-                    }
-                }
-            }
+            OutputValue::TokenV0(_) => { /* ignore */ }
             OutputValue::TokenV1(id, amount) => {
                 let total_token_amount =
                     tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
@@ -1834,8 +1779,8 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
 
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
-        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id: TokenId::zero(),
+        OutputValue::TokenV1(
+            TokenId::zero(),
             // TODO: as the  amount is compact there is an edge case where those extra few bytes of
             // size can cause the output fee to be go over the available amount of coins thus not
             // including a change output, and losing money for the user
@@ -1843,8 +1788,8 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
             // enough the make an output with change but the amount having single byte encoding
             // but by using Amount::MAX the algorithm thinks that the change output will cost more
             // than Z and it will not create a change output
-            amount: Amount::MAX,
-        }))),
+            Amount::MAX,
+        ),
         destination,
     );
 

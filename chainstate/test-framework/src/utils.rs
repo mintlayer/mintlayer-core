@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{framework::BlockOutputs, TestChainstate, TestFramework};
-use chainstate::chainstate_interface::ChainstateInterface;
+use crate::{framework::BlockOutputs, TestFramework};
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
@@ -27,7 +26,6 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
-        tokens::{TokenData, TokenTransfer},
         Block, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
         UtxoOutPoint,
@@ -71,21 +69,17 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
 }
 
 pub fn create_new_outputs(
-    chainstate: &TestChainstate,
     srcid: OutPointSourceId,
     outs: &[TxOutput],
     rng: &mut impl Rng,
 ) -> Vec<(InputWitness, TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| {
-            create_utxo_data(chainstate, srcid.clone(), index, output, rng)
-        })
+        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output, rng))
         .collect()
 }
 
 pub fn create_utxo_data(
-    chainstate: &TestChainstate,
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
@@ -101,18 +95,7 @@ pub fn create_utxo_data(
                     utils::ensure!(new_value >= Amount::from_atoms(1));
                     TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
                 }
-                OutputValue::TokenV0(token_data) => match token_data.as_ref() {
-                    TokenData::TokenTransfer(_transfer) => TxOutput::Transfer(
-                        OutputValue::TokenV0(token_data.clone()),
-                        anyonecanspend_address(),
-                    ),
-                    TokenData::TokenIssuance(issuance) => {
-                        new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
-                    }
-                    TokenData::NftIssuance(_issuance) => {
-                        new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
-                    }
-                },
+                OutputValue::TokenV0(_) => return None, // ignore
                 OutputValue::TokenV1(token_id, output_value) => {
                     let spent_value =
                         Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
@@ -140,28 +123,6 @@ pub fn create_utxo_data(
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_) => None,
     }
-}
-
-pub fn new_token_transfer_output(
-    chainstate: &TestChainstate,
-    outsrc: &OutPointSourceId,
-    amount: Amount,
-) -> TxOutput {
-    TxOutput::Transfer(
-        TokenTransfer {
-            token_id: match outsrc {
-                OutPointSourceId::Transaction(prev_tx) => {
-                    chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
-                }
-                OutPointSourceId::BlockReward(_) => {
-                    panic!("cannot issue token in block reward")
-                }
-            },
-            amount,
-        }
-        .into(),
-        anyonecanspend_address(),
-    )
 }
 
 pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
