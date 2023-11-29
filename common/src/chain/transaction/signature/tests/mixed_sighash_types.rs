@@ -25,7 +25,7 @@ use crate::chain::{signature::inputsig::InputWitness, Destination};
 
 // Create a transaction with a different signature hash type for every input.
 // This test takes a long time to finish, so it is ignored by default.
-#[ignore]
+#[ignore = "Expensive test"]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
