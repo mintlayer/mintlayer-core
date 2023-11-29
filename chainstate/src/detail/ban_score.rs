@@ -257,7 +257,6 @@ impl BanScore for TokensError {
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
             TokensError::DeprecatedTokenOperationVersion(_, _) => 100,
-            TokensError::UnsupportedTokenIssuanceVersion(_, _) => 100,
         }
     }
 }
@@ -273,7 +272,6 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
             CheckBlockTransactionsError::NoSignatureDataNotAllowed(_, _) => 100,
             CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
-            CheckBlockTransactionsError::DataDepositNotActivated(_, _, _) => 100,
             CheckBlockTransactionsError::DataDepositMaxSizeExceeded(_, _, _, _) => 100,
         }
     }

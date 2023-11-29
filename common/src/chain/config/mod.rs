@@ -744,7 +744,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                 BlockHeight::zero(),
                 ChainstateUpgrade::new(TokenIssuanceVersion::V1),
             )])
-            .unwrap(),
+            .expect("cannot fail"),
         )
         .genesis_unittest(Destination::AnyoneCanSpend)
 }

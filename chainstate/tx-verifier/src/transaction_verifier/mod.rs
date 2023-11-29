@@ -64,7 +64,7 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_issuance_count_via_tokens_op, make_token_id, TokenId, TokenIssuanceVersion},
+        tokens::{make_token_id, TokenId, TokenIssuanceVersion},
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -552,19 +552,7 @@ where
             .token_issuance_version();
 
         match latest_token_version {
-            TokenIssuanceVersion::V0 => {
-                let was_token_issued_with_token_op =
-                    get_issuance_count_via_tokens_op(tx.outputs()) > 0;
-                ensure!(
-                    !was_token_issued_with_token_op,
-                    ConnectTransactionError::TokensError(
-                        TokensError::UnsupportedTokenIssuanceVersion(
-                            TokenIssuanceVersion::V1,
-                            tx.get_id(),
-                        ),
-                    )
-                );
-            }
+            TokenIssuanceVersion::V0 => { /* do nothing */ }
             TokenIssuanceVersion::V1 => {
                 let has_tokens_v0_op = tx.outputs().iter().any(|output| match output {
                     TxOutput::Transfer(output_value, _)

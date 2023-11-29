@@ -28,13 +28,12 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenIssuanceVersion, TokenTotalSupply,
+            TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, ChainstateUpgrade, Destination, GenBlock,
-        NetUpgrades, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OutPointSourceId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{signed_amount::SignedAmount, Amount, BlockHeight, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -466,90 +465,6 @@ fn token_issue_test(#[case] seed: Seed) {
         )
         .unwrap();
         assert_eq!(actual_supply, None);
-    });
-}
-
-// TokensV1 issuance should be an error before V1 fork is activated
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn token_issue_before_v1_activation(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![
-                            (
-                                BlockHeight::zero(),
-                                ChainstateUpgrade::new(TokenIssuanceVersion::V0),
-                            ),
-                            (
-                                BlockHeight::new(2),
-                                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                            ),
-                        ])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
-        let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
-
-        let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(outpoint_source_id.clone(), 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
-            .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
-            .build();
-        let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
-
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::UnsupportedTokenIssuanceVersion(
-                    TokenIssuanceVersion::V1,
-                    tx_id
-                ))
-            ))
-        );
-
-        // Add block to activate fork
-        let coin_transfer_tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(outpoint_source_id, 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(token_issuance_fee),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
-        let coin_transfer_tx_id = coin_transfer_tx.transaction().get_id();
-        tf.make_block_builder()
-            .add_transaction(coin_transfer_tx)
-            .build_and_process()
-            .unwrap();
-
-        tf.make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_utxo(coin_transfer_tx_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
-                    .build(),
-            )
-            .build_and_process()
-            .unwrap();
     });
 }
 
