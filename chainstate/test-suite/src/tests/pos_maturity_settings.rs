@@ -138,8 +138,8 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                     CoinOrTokenId::Coin
                 ),
                 decommission_tx_id.into()
@@ -280,8 +280,8 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                     CoinOrTokenId::Coin
                 ),
                 spend_share_tx_id.into()

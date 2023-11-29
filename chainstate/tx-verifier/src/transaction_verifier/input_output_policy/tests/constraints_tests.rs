@@ -21,7 +21,7 @@ use common::{
         timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
         TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, H256},
+    primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, H256},
 };
 use crypto::{
     random::{CryptoRng, Rng, SliceRandom},
@@ -166,8 +166,8 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             err,
-            ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 tx.get_id().into()
             )
         );
@@ -292,8 +292,8 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             res,
-            ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 tx.get_id().into()
             )
         )

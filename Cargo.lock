@@ -961,6 +961,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
+ "constraints-value-accumulator",
  "criterion",
  "crypto",
  "expect-test",

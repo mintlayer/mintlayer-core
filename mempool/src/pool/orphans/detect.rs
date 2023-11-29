@@ -81,7 +81,6 @@ impl OrphanType {
             | CTE::DelegationDataNotFound(_)
             | CTE::OutputTimelockError(_)
             | CTE::NotEnoughPledgeToCreateStakePool(..)
-            | CTE::DelegationBalanceNotFound(_)
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
             | CTE::AttemptToCreateDelegationFromAccounts

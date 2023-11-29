@@ -137,7 +137,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
-            ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
@@ -477,22 +476,8 @@ impl BanScore for IOPolicyError {
             IOPolicyError::MultiplePoolCreated => 100,
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::ProduceBlockInTx => 100,
-            IOPolicyError::AmountOverflow => 100,
-            IOPolicyError::CoinOrTokenOverflow(_) => 100,
-            IOPolicyError::AttemptToPrintMoney(_) => 100,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
-            IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
-            IOPolicyError::MissingOutputOrSpent(_) => 100,
-            IOPolicyError::PoSAccountingError(err) => err.ban_score(),
-            IOPolicyError::PledgeAmountNotFound(_) => 100,
             IOPolicyError::MultipleAccountCommands => 100,
-            IOPolicyError::SpendingNonSpendableOutput(_) => 100,
-            IOPolicyError::AttemptToViolateFeeRequirements => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
-            IOPolicyError::TokenIdQueryFailed => 0,
-            IOPolicyError::TokenIdNotFound => 0,
-            IOPolicyError::DelegationBalanceNotFound(_) => 0,
-            IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }
@@ -500,12 +485,6 @@ impl BanScore for IOPolicyError {
 impl BanScore for constraints_value_accumulator::Error {
     fn ban_score(&self) -> u32 {
         match self {
-            constraints_value_accumulator::Error::InvalidInputTypeInReward => 100,
-            constraints_value_accumulator::Error::InvalidOutputTypeInReward => 100,
-            constraints_value_accumulator::Error::InvalidInputTypeInTx => 100,
-            constraints_value_accumulator::Error::MultiplePoolCreated => 100,
-            constraints_value_accumulator::Error::MultipleDelegationCreated => 100,
-            constraints_value_accumulator::Error::ProduceBlockInTx => 100,
             constraints_value_accumulator::Error::AmountOverflow => 100,
             constraints_value_accumulator::Error::CoinOrTokenOverflow(_) => 100,
             constraints_value_accumulator::Error::AttemptToPrintMoney(_) => 100,
@@ -514,14 +493,9 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::MissingOutputOrSpent(_) => 100,
             constraints_value_accumulator::Error::PoSAccountingError(err) => err.ban_score(),
             constraints_value_accumulator::Error::PledgeAmountNotFound(_) => 100,
-            constraints_value_accumulator::Error::MultipleAccountCommands => 100,
             constraints_value_accumulator::Error::SpendingNonSpendableOutput(_) => 100,
             constraints_value_accumulator::Error::AttemptToViolateFeeRequirements => 100,
-            constraints_value_accumulator::Error::AttemptToUseAccountInputInReward => 100,
-            constraints_value_accumulator::Error::TokenIdQueryFailed => 0,
-            constraints_value_accumulator::Error::TokenIdNotFound => 0,
             constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,
-            constraints_value_accumulator::Error::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }

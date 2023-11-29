@@ -19,9 +19,9 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
-        Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, Subsidy},
+    primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use pos_accounting::PoSAccountingView;
@@ -50,36 +50,8 @@ pub enum IOPolicyError {
     ProduceBlockInTx,
     #[error("Attempted to provide multiple account command inputs in a single tx")]
     MultipleAccountCommands,
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Coin or token overflow {0:?}")]
-    CoinOrTokenOverflow(CoinOrTokenId),
-    #[error("Attempt to print money {0:?}")]
-    AttemptToPrintMoney(CoinOrTokenId),
-    #[error("Attempt to print money or violate timelock constraints {0:?}")]
-    AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId),
-    #[error("Attempt to violate operations fee requirements")]
-    AttemptToViolateFeeRequirements,
-    #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
-    InputsAndInputsUtxosLengthMismatch(usize, usize),
-    #[error("Output is not found in the cache or database: {0:?}")]
-    MissingOutputOrSpent(UtxoOutPoint),
-    #[error("PoS accounting error: `{0}`")]
-    PoSAccountingError(#[from] pos_accounting::Error),
-    #[error("Pledge amount not found for pool: `{0}`")]
-    PledgeAmountNotFound(PoolId),
-    #[error("Spending non-spendable output: `{0:?}`")]
-    SpendingNonSpendableOutput(UtxoOutPoint),
     #[error("Attempt to use account input in block reward")]
     AttemptToUseAccountInputInReward,
-    #[error("Failed to query token id for tx")]
-    TokenIdQueryFailed,
-    #[error("Token id not found for tx")]
-    TokenIdNotFound,
-    #[error("Token issuance must come from transaction utxo")]
-    TokenIssuanceInputMustBeTransactionUtxo,
-    #[error("Balance not found for delegation `{0}`")]
-    DelegationBalanceNotFound(DelegationId),
 }
 
 pub fn calculate_tokens_burned_in_outputs(

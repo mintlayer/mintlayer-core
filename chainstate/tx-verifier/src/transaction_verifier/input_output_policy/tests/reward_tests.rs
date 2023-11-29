@@ -23,7 +23,7 @@ use common::{
         timelock::OutputTimeLock,
         Destination, GenBlock, PoolId, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Compact, H256},
+    primitives::{per_thousand::PerThousand, CoinOrTokenId, Compact, H256},
 };
 use crypto::{
     random::Rng,
@@ -71,11 +71,11 @@ fn check_block_reward_pow(#[case] seed: Seed) {
         let invalid_output_value = (expected_output_value + Amount::from_atoms(1)).unwrap();
         let result = check(invalid_output_value);
         assert_eq!(
-            result,
-            Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
+            result.unwrap_err(),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 block_id.into()
-            ))
+            )
         );
     }
 
@@ -85,11 +85,11 @@ fn check_block_reward_pow(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range((expected_output_value.into_atoms() + 1)..u128::MAX));
         let result = check(invalid_output_value);
         assert_eq!(
-            result,
-            Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
+            result.unwrap_err(),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                 block_id.into()
-            ))
+            )
         );
     }
 

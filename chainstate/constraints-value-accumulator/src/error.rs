@@ -22,20 +22,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    #[error("Attempted to use a invalid input type in block reward")]
-    InvalidInputTypeInReward,
-    #[error("Attempted to use a invalid output type in block reward")]
-    InvalidOutputTypeInReward,
-    #[error("Attempted to use a invalid input type in a tx")]
-    InvalidInputTypeInTx,
-    #[error("Attempted to create multiple stake pools in a single tx")]
-    MultiplePoolCreated,
-    #[error("Attempted to create multiple delegations in a single tx")]
-    MultipleDelegationCreated,
-    #[error("Attempted to produce block in a tx")]
-    ProduceBlockInTx,
-    #[error("Attempted to provide multiple account command inputs in a single tx")]
-    MultipleAccountCommands,
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Coin or token overflow {0:?}")]
@@ -56,14 +42,6 @@ pub enum Error {
     PledgeAmountNotFound(PoolId),
     #[error("Spending non-spendable output: `{0:?}`")]
     SpendingNonSpendableOutput(UtxoOutPoint),
-    #[error("Attempt to use account input in block reward")]
-    AttemptToUseAccountInputInReward,
-    #[error("Failed to query token id for tx")]
-    TokenIdQueryFailed,
-    #[error("Token id not found for tx")]
-    TokenIdNotFound,
-    #[error("Token issuance must come from transaction utxo")]
-    TokenIssuanceInputMustBeTransactionUtxo,
     #[error("Balance not found for delegation `{0}`")]
     DelegationBalanceNotFound(DelegationId),
 }

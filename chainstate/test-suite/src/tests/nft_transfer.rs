@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::primitives::Idable;
 use common::{
@@ -82,8 +82,8 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(random_token_id)
                     ),
                     tx_id.into()
@@ -143,8 +143,8 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(token_id)
                     ),
                     tx_id.into()
@@ -279,8 +279,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(first_token_id)
                     ),
                     tx_id.into()
@@ -412,8 +412,8 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(token_id)
                     ),
                     tx_id.into()

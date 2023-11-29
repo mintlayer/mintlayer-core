@@ -122,8 +122,6 @@ pub enum ConnectTransactionError {
     TotalDelegationBalanceZero(PoolId),
     #[error("Data for delegation {0} not found")]
     DelegationDataNotFound(DelegationId),
-    #[error("Balance for delegation {0} not found")]
-    DelegationBalanceNotFound(DelegationId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811

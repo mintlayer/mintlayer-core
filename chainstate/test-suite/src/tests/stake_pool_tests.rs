@@ -346,8 +346,8 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::Coin
                     ),
                     tx_id.into()
@@ -470,8 +470,8 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
             assert_eq!(
                 result,
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                             CoinOrTokenId::Coin
                         ),
                         tx2_id.into()

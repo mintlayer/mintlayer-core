@@ -22,7 +22,7 @@ use super::helpers::pos::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
-    CheckBlockError, ConnectTransactionError, IOPolicyError, SpendStakeError,
+    CheckBlockError, ConnectTransactionError, SpendStakeError,
 };
 use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
@@ -1898,8 +1898,8 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoney(CoinOrTokenId::Coin),
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoney(CoinOrTokenId::Coin),
                     tx_id.into()
                 )
             ))
