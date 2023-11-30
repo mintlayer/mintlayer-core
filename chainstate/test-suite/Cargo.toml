@@ -15,6 +15,7 @@ chainstate-test-framework = { path = '../test-framework' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 consensus = { path = '../../consensus' }
+constraints-value-accumulator = {path = '../constraints-value-accumulator'}
 crypto = { path = '../../crypto' }
 logging = { path = '../../logging' }
 pos_accounting = {path = '../../pos_accounting'}

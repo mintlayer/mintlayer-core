@@ -16,10 +16,10 @@
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
-        TxOutput,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, DelegationId, Destination,
+        NetUpgrades, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, Amount, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Fee, Id, H256},
 };
 use crypto::{
     random::{CryptoRng, Rng},
@@ -31,7 +31,7 @@ use test_utils::{
     split_value,
 };
 
-use super::*;
+use crate::ConstrainedValueAccumulator;
 
 fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128) -> StakePoolData {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);

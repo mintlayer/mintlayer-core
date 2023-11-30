@@ -22,7 +22,7 @@ use common::{
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use thiserror::Error;
 
@@ -31,7 +31,7 @@ use crate::timelock_check;
 use super::{
     input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
-    storage::TransactionVerifierStorageError, CoinOrTokenId,
+    storage::TransactionVerifierStorageError,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -122,8 +122,6 @@ pub enum ConnectTransactionError {
     TotalDelegationBalanceZero(PoolId),
     #[error("Data for delegation {0} not found")]
     DelegationDataNotFound(DelegationId),
-    #[error("Balance for delegation {0} not found")]
-    DelegationBalanceNotFound(DelegationId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811
@@ -152,6 +150,8 @@ pub enum ConnectTransactionError {
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]
     IOPolicyError(IOPolicyError, OutPointSourceId),
+    #[error("Constrained value accumulator error: `{0}` in : `{1:?}`")]
+    ConstrainedValueAccumulatorError(constraints_value_accumulator::Error, OutPointSourceId),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("Tokens accounting BlockUndo error: {0}")]

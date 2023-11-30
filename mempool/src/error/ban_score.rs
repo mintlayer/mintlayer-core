@@ -145,6 +145,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
+            ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -176,7 +177,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
-            ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
@@ -349,21 +349,7 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::ProduceBlockInTx => 100,
-            IOPolicyError::AmountOverflow => 100,
-            IOPolicyError::CoinOrTokenOverflow(_) => 100,
-            IOPolicyError::AttemptToPrintMoney(_) => 100,
-            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(_) => 100,
-            IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
-            IOPolicyError::MissingOutputOrSpent(_) => 0,
-            IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
-            IOPolicyError::PledgeAmountNotFound(_) => 0,
-            IOPolicyError::SpendingNonSpendableOutput(_) => 100,
-            IOPolicyError::AttemptToViolateFeeRequirements => 0,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
-            IOPolicyError::TokenIdQueryFailed => 0,
-            IOPolicyError::TokenIdNotFound => 0,
-            IOPolicyError::DelegationBalanceNotFound(_) => 0,
-            IOPolicyError::TokenIssuanceInputMustBeTransactionUtxo => 100,
         }
     }
 }

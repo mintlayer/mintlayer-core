@@ -51,8 +51,8 @@ impl Sum<Fee> for Option<Fee> {
     }
 }
 
-impl From<chainstate::tx_verifier::Fee> for Fee {
-    fn from(value: chainstate::tx_verifier::Fee) -> Self {
+impl From<common::primitives::Fee> for Fee {
+    fn from(value: common::primitives::Fee) -> Self {
         Self(value.0)
     }
 }

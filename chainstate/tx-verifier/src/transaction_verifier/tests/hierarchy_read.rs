@@ -22,7 +22,7 @@ use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
         config::Builder as ConfigBuilder,
-        tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenTotalSupply},
+        tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
     },
     primitives::H256,
 };

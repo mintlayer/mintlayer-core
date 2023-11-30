@@ -81,7 +81,6 @@ impl OrphanType {
             | CTE::DelegationDataNotFound(_)
             | CTE::OutputTimelockError(_)
             | CTE::NotEnoughPledgeToCreateStakePool(..)
-            | CTE::DelegationBalanceNotFound(_)
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
             | CTE::AttemptToCreateDelegationFromAccounts
@@ -91,6 +90,7 @@ impl OrphanType {
             | CTE::TotalFeeRequiredOverflow
             | CTE::InsufficientCoinsFee(_, _)
             | CTE::AttemptToSpendFrozenToken(_)
+            | CTE::ConstrainedValueAccumulatorError(_, _)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

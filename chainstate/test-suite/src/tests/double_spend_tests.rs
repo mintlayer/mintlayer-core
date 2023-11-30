@@ -16,7 +16,7 @@
 use super::*;
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, IOPolicyError,
+    ConnectTransactionError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
@@ -26,10 +26,9 @@ use common::{
         output_value::OutputValue, signed_transaction::SignedTransaction, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
 use crypto::random::SliceRandom;
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -231,8 +230,8 @@ fn overspend_single_output(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::Coin
                     ),
                     second_tx_id.into()
@@ -276,8 +275,8 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::Coin
                     ),
                     tx2_id.into()

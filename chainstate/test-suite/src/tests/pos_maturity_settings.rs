@@ -23,7 +23,9 @@ use common::{
         timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
         NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Idable},
+    primitives::{
+        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable,
+    },
     Uint256,
 };
 use crypto::{
@@ -32,7 +34,6 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -137,8 +138,8 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                     CoinOrTokenId::Coin
                 ),
                 decommission_tx_id.into()
@@ -279,8 +280,8 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                     CoinOrTokenId::Coin
                 ),
                 spend_share_tx_id.into()

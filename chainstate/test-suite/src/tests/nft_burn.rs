@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{
-    BlockError, ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
-};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError, TokensError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue,
@@ -24,14 +22,13 @@ use common::chain::{
     ChainstateUpgrade, Destination, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
-use common::primitives::{Amount, BlockHeight, Idable};
+use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
 };
-use tx_verifier::transaction_verifier::CoinOrTokenId;
 
 #[rstest]
 #[trace]
@@ -88,8 +85,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(token_id)
                     ),
                     tx_id.into()

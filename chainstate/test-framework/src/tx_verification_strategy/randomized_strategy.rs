@@ -21,6 +21,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::{id::WithId, Idable},
 };
+use constraints_value_accumulator::AccumulatedFee;
 use crypto::random::{Rng, RngCore};
 use pos_accounting::PoSAccountingView;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -28,8 +29,8 @@ use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, AccumulatedFee, TransactionSourceForConnect,
-        TransactionVerifier, TransactionVerifierDelta,
+        storage::TransactionVerifierStorageRef, TransactionSourceForConnect, TransactionVerifier,
+        TransactionVerifierDelta,
     },
     TransactionSource,
 };
@@ -185,7 +186,12 @@ impl RandomizedTransactionVerificationStrategy {
 
         let total_fees = total_fees
             .map_into_block_fees(chain_config.as_ref(), block_index.block_height())
-            .map_err(|err| ConnectTransactionError::IOPolicyError(err, block.get_id().into()))?;
+            .map_err(|err| {
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    err,
+                    block.get_id().into(),
+                )
+            })?;
 
         tx_verifier
             .check_block_reward(block, total_fees, block_index.block_height())

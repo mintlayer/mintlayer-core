@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,14 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod transaction_verifier;
-
-pub use transaction_verifier::{
-    error,
-    flush::flush_to_storage,
-    storage::{
-        TransactionVerifierStorageError, TransactionVerifierStorageMut,
-        TransactionVerifierStorageRef,
-    },
-    timelock_check, TransactionSource, TransactionVerifier,
-};
+mod constraints_tests;
+mod homomorphism;
