@@ -18,12 +18,7 @@ use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
     ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
 };
-use chainstate::{
-    constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
-    tx_verifier::transaction_verifier::{
-        calculate_pool_owner_reward, calculate_rewards_per_delegation,
-    },
-};
+use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
     address::Address,
     chain::{
@@ -39,6 +34,11 @@ use std::{
     ops::{Add, Sub},
     sync::Arc,
 };
+use tx_verifier::transaction_verifier::{distribute_pos_reward, DelegationSharesView};
+
+use self::adapter::PoSAdapter;
+
+mod adapter;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -351,66 +351,25 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Unable to get pool data")
                 .expect("Pool should exist");
 
-            let pool_owner_reward = calculate_pool_owner_reward(
-                total_reward,
-                pool_data.cost_per_block(),
-                pool_data.margin_ratio_per_thousand(),
-            )
-            .expect("Pool owner reward should not overflow");
-
-            let total_delegations_reward =
-                (total_reward - pool_owner_reward).expect("Total reward should not underflow");
-
             let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
-            let total_delegation_balance: Amount = delegation_shares
-                .values()
-                .map(|delegation| *delegation.balance())
-                .sum::<Option<Amount>>()
-                .expect("no overflow");
+            let mut adapter = PoSAdapter::new(pool_id, pool_data, delegation_shares);
 
-            let unallocated_reward = if total_delegation_balance > Amount::ZERO {
-                let rewards_per_delegation = calculate_rewards_per_delegation(
-                    delegation_shares
-                        .iter()
-                        .map(|(delegation_id, delegation)| (delegation_id, delegation.balance())),
-                    pool_id,
-                    total_delegation_balance,
-                    total_delegations_reward,
+            distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
+                .expect("no error");
+
+            for (delegation_id, rewards, updated_delegation) in adapter.rewards_per_delegation() {
+                db_tx
+                    .set_delegation_at_height(delegation_id, &updated_delegation, block_height)
+                    .await?;
+                let address = Address::<Destination>::new(
+                    &chain_config,
+                    updated_delegation.spend_destination(),
                 )
-                .expect("no overflow");
+                .expect("Unable to encode address");
+                increase_address_amount(db_tx, &address, &rewards, block_height).await;
+            }
 
-                let total_delegation_reward_distributed = rewards_per_delegation
-                    .iter()
-                    .map(|(_, rewards)| *rewards)
-                    .sum::<Option<Amount>>()
-                    .expect("no overflow");
-
-                for (delegation_id, rewards) in rewards_per_delegation {
-                    let delegation = delegation_shares.get(&delegation_id).expect("must exist");
-                    let delegation = delegation.add_pledge(rewards);
-                    db_tx
-                        .set_delegation_at_height(delegation_id, &delegation, block_height)
-                        .await?;
-                    let address =
-                        Address::<Destination>::new(&chain_config, delegation.spend_destination())
-                            .expect("Unable to encode address");
-                    increase_address_amount(db_tx, &address, &rewards, block_height).await;
-                }
-
-                (total_delegations_reward - total_delegation_reward_distributed)
-                    .expect("no underflow")
-            } else {
-                total_delegations_reward
-            };
-
-            let total_owner_reward = (pool_owner_reward + unallocated_reward).expect("no overflow");
-            let pool_data = PoolData::new(
-                pool_data.decommission_destination().clone(),
-                (pool_data.pledge_amount() + total_owner_reward).expect("no overflow"),
-                pool_data.vrf_public_key().clone(),
-                pool_data.margin_ratio_per_thousand(),
-                pool_data.cost_per_block(),
-            );
+            let pool_data = adapter.find_pool_data(pool_id).expect("ok").expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
         }
     }

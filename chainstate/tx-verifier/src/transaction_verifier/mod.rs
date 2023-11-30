@@ -57,7 +57,10 @@ use self::{
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
-pub use reward_distribution::{calculate_pool_owner_reward, calculate_rewards_per_delegation};
+pub use reward_distribution::{
+    calculate_pool_owner_reward, calculate_rewards_per_delegation, distribute_pos_reward,
+    DelegationSharesOperations, DelegationSharesView,
+};
 
 use chainstate_types::BlockIndex;
 use common::{
@@ -73,8 +76,8 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView,
+    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -874,12 +877,18 @@ where
                 let total_reward = (block_subsidy + total_fees.0)
                     .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
-                let undos = reward_distribution::distribute_pos_reward(
-                    &mut self.pos_accounting_adapter,
-                    block_id,
-                    *pos_data.stake_pool_id(),
-                    total_reward,
-                )?;
+                let undos = {
+                    let mut accounting_adapter =
+                        self.pos_accounting_adapter.operations(TransactionSource::Chain(block_id));
+                    let undos = reward_distribution::distribute_pos_reward(
+                        &mut accounting_adapter,
+                        block_id,
+                        *pos_data.stake_pool_id(),
+                        total_reward,
+                    )?;
+
+                    AccountingBlockRewardUndo::new(undos)
+                };
 
                 self.pos_accounting_block_undo
                     .get_or_create_block_undo(&TransactionSource::Chain(block_id))

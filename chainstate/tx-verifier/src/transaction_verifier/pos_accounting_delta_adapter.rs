@@ -106,6 +106,51 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperationImpl<'a, P> {
     }
 }
 
+impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<'a, P> {
+    type Error = pos_accounting::Error;
+
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
+        self.adapter.accounting_delta.pool_exists(pool_id)
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+        self.adapter.accounting_delta.get_pool_data(pool_id)
+    }
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        self.adapter.accounting_delta.get_pool_balance(pool_id)
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: common::chain::DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
+        self.adapter.accounting_delta.get_delegation_data(delegation_id)
+    }
+
+    fn get_delegation_balance(
+        &self,
+        delegation_id: common::chain::DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        self.adapter.accounting_delta.get_delegation_balance(delegation_id)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: common::chain::DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        self.adapter.accounting_delta.get_pool_delegation_share(pool_id, delegation_id)
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<common::chain::DelegationId, Amount>>, Self::Error> {
+        self.adapter.accounting_delta.get_pool_delegations_shares(pool_id)
+    }
+}
+
 impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperationImpl<'a, P> {
     fn create_pool(
         &mut self,
