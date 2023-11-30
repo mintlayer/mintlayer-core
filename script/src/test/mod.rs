@@ -17,6 +17,7 @@ use crate::*;
 use logging::log;
 
 // Test the interpreter on all 4-byte combinations of non-trivial opcodes.
+#[ignore = "Expensive test"]
 #[test]
 fn test_4opc_sequences() {
     use hex::FromHex;
