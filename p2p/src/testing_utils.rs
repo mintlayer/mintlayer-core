@@ -106,9 +106,8 @@ impl TestTransportMaker for TestTransportNoise {
     type Transport = NoiseTcpTransport;
 
     fn make_transport() -> Self::Transport {
-        let stream_adapter = NoiseEncryptionAdapter::gen_new();
         let base_transport = TcpTransportSocket::new();
-        NoiseTcpTransport::new(stream_adapter, base_transport)
+        NoiseTcpTransport::new(NoiseEncryptionAdapter::gen_new, base_transport)
     }
 
     fn make_address() -> SocketAddress {

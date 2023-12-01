@@ -15,7 +15,10 @@
 
 use p2p::{
     net::default_backend::{
-        transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
+        transport::{
+            NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, TcpTransportSocket,
+            WrappedTransportSocket,
+        },
         DefaultNetworkingService,
     },
     testing_utils::TestTransportNoise,
@@ -27,7 +30,11 @@ fn main() {
     p2p_backend_test_suite::run::<
         TestTransportNoise,
         DefaultNetworkingService<
-            WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
+            WrappedTransportSocket<
+                NoiseEncryptionAdapterMaker,
+                NoiseEncryptionAdapter,
+                TcpTransportSocket,
+            >,
         >,
     >();
 }

@@ -214,15 +214,13 @@ pub type P2pNetworkingServiceSocks5Proxy = DefaultNetworkingService<NoiseSocks5T
 pub type P2pNetworkingServiceUnencrypted = DefaultNetworkingService<TcpTransportSocket>;
 
 pub fn make_p2p_transport() -> NoiseTcpTransport {
-    let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = TcpTransportSocket::new();
-    NoiseTcpTransport::new(stream_adapter, base_transport)
+    NoiseTcpTransport::new(NoiseEncryptionAdapter::gen_new, base_transport)
 }
 
 pub fn make_p2p_transport_socks5_proxy(proxy: &str) -> NoiseSocks5Transport {
-    let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = Socks5TransportSocket::new(proxy);
-    NoiseSocks5Transport::new(stream_adapter, base_transport)
+    NoiseSocks5Transport::new(NoiseEncryptionAdapter::gen_new, base_transport)
 }
 
 pub fn make_p2p_transport_unencrypted() -> TcpTransportSocket {

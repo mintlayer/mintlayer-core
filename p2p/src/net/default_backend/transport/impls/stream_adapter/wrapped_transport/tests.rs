@@ -39,7 +39,10 @@ use crate::{
     message::BlockListRequest,
     net::default_backend::{
         transport::{
-            impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
+            impls::stream_adapter::{
+                noise::NoiseEncryptionAdapterMaker,
+                wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
+            },
             BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
             NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
@@ -50,6 +53,8 @@ use crate::{
 };
 
 use super::wrapped_socket::WrappedTransportSocket;
+
+type IdentityStreamAdapterMaker = fn() -> IdentityStreamAdapter;
 
 async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) {
     let send_data = (0..len).map(|v| v as u8).collect::<Vec<_>>();
@@ -83,40 +88,72 @@ async fn test_send_recv() {
 
     test::<TestTransportChannel, MpscChannelTransport>(MpscChannelTransport::new()).await;
 
-    test::<TestTransportTcp, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
-        WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
-    )
-    .await;
-
     test::<
-        TestTransportChannel,
-        WrappedTransportSocket<NoiseEncryptionAdapter, MpscChannelTransport>,
+        TestTransportTcp,
+        WrappedTransportSocket<
+            NoiseEncryptionAdapterMaker,
+            NoiseEncryptionAdapter,
+            TcpTransportSocket,
+        >,
     >(WrappedTransportSocket::new(
-        NoiseEncryptionAdapter::gen_new(),
-        MpscChannelTransport::new(),
+        NoiseEncryptionAdapter::gen_new,
+        TcpTransportSocket::new(),
     ))
     .await;
 
-    test::<TestTransportTcp, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>(
-        WrappedTransportSocket::new(IdentityStreamAdapter::new(), TcpTransportSocket::new()),
-    )
-    .await;
-
     test::<
         TestTransportChannel,
-        WrappedTransportSocket<IdentityStreamAdapter, MpscChannelTransport>,
-    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MpscChannelTransport::new()))
+        WrappedTransportSocket<
+            NoiseEncryptionAdapterMaker,
+            NoiseEncryptionAdapter,
+            MpscChannelTransport,
+        >,
+    >(WrappedTransportSocket::new(
+        NoiseEncryptionAdapter::gen_new,
+        MpscChannelTransport::new(),
+    ))
     .await;
 
     test::<
         TestTransportTcp,
         WrappedTransportSocket<
-            NoiseEncryptionAdapter,
-            WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
+            IdentityStreamAdapterMaker,
+            IdentityStreamAdapter,
+            TcpTransportSocket,
         >,
     >(WrappedTransportSocket::new(
-        NoiseEncryptionAdapter::gen_new(),
-        WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
+        IdentityStreamAdapter::new,
+        TcpTransportSocket::new(),
+    ))
+    .await;
+
+    test::<
+        TestTransportChannel,
+        WrappedTransportSocket<
+            IdentityStreamAdapterMaker,
+            IdentityStreamAdapter,
+            MpscChannelTransport,
+        >,
+    >(WrappedTransportSocket::new(
+        IdentityStreamAdapter::new,
+        MpscChannelTransport::new(),
+    ))
+    .await;
+
+    test::<
+        TestTransportTcp,
+        WrappedTransportSocket<
+            NoiseEncryptionAdapterMaker,
+            NoiseEncryptionAdapter,
+            WrappedTransportSocket<
+                NoiseEncryptionAdapterMaker,
+                NoiseEncryptionAdapter,
+                TcpTransportSocket,
+            >,
+        >,
+    >(WrappedTransportSocket::new(
+        NoiseEncryptionAdapter::gen_new,
+        WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new, TcpTransportSocket::new()),
     ))
     .await;
 }
@@ -187,10 +224,11 @@ impl Drop for TestListener {
 #[tokio::test]
 // Test that the base listener is dropped after AdaptedTransport::Listener is dropped.
 async fn test_bind_port_closed() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestTransport>::new(
-        NoiseEncryptionAdapter::gen_new(),
-        TestTransport::new(),
-    );
+    let transport = WrappedTransportSocket::<
+        NoiseEncryptionAdapterMaker,
+        NoiseEncryptionAdapter,
+        TestTransport,
+    >::new(NoiseEncryptionAdapter::gen_new, TestTransport::new());
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
     let address = SocketAddress::new(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into());
@@ -209,10 +247,11 @@ async fn test_bind_port_closed() {
 async fn send_2_reqs(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
-        NoiseEncryptionAdapter::gen_new(),
-        TcpTransportSocket::new(),
-    );
+    let transport = WrappedTransportSocket::<
+        NoiseEncryptionAdapterMaker,
+        NoiseEncryptionAdapter,
+        TcpTransportSocket,
+    >::new(NoiseEncryptionAdapter::gen_new, TcpTransportSocket::new());
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
@@ -236,10 +275,11 @@ async fn send_2_reqs(#[case] seed: Seed) {
 #[tracing::instrument]
 #[tokio::test]
 async fn pending_handshakes() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
-        NoiseEncryptionAdapter::gen_new(),
-        TcpTransportSocket::new(),
-    );
+    let transport = WrappedTransportSocket::<
+        NoiseEncryptionAdapterMaker,
+        NoiseEncryptionAdapter,
+        TcpTransportSocket,
+    >::new(NoiseEncryptionAdapter::gen_new, TcpTransportSocket::new());
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let local_addr = server.local_addresses().unwrap();
 
@@ -279,8 +319,12 @@ async fn pending_handshakes() {
 #[tokio::test]
 async fn handshake_timeout() {
     let time_getter = P2pBasicTestTimeGetter::new();
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
-        NoiseEncryptionAdapter::gen_new().with_handshake_timeout(Duration::from_millis(100)),
+    let transport = WrappedTransportSocket::<
+        NoiseEncryptionAdapterMaker,
+        NoiseEncryptionAdapter,
+        TcpTransportSocket,
+    >::new(
+        || NoiseEncryptionAdapter::gen_new().with_handshake_timeout(Duration::from_millis(100)),
         TcpTransportSocket::new(),
     );
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
