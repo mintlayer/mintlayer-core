@@ -14,13 +14,12 @@
 // limitations under the License.
 
 use api_server_common::storage::storage_api::Delegation;
-use common::chain::{DelegationId, PoolId};
+use common::chain::{DelegationId, Destination, PoolId, UtxoOutPoint};
 use common::primitives::Amount;
-use pos_accounting::PoolData;
+use pos_accounting::{PoSAccountingOperations, PoSAccountingView, PoolData};
 use std::collections::BTreeMap;
-use tx_verifier::transaction_verifier::{DelegationSharesOperations, DelegationSharesView};
 
-/// Helper struct used for `distribute_pos_reward`
+/// Helper struct used for distribute_pos_reward
 pub struct PoSAdapter {
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, Delegation>,
@@ -54,11 +53,46 @@ impl PoSAdapter {
     }
 }
 
-impl DelegationSharesView for PoSAdapter {
+impl PoSAccountingView for PoSAdapter {
     type Error = pos_accounting::Error;
 
-    fn find_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
+        Ok(self.pools.contains_key(&pool_id))
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         Ok(self.pools.get(&pool_id).cloned())
+    }
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        Ok(self.pools.get(&pool_id).map(|data| data.pledge_amount()))
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
+        let data = self.delegations.get(&delegation_id).map(|data| {
+            pos_accounting::DelegationData::new(data.pool_id(), data.spend_destination().clone())
+        });
+        Ok(data)
+    }
+
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        let data = self.delegations.get(&delegation_id).map(|data| *data.balance());
+        Ok(data)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        let data = self.delegations.get(&delegation_id).map(|data| *data.balance());
+        Ok(data)
     }
 
     fn get_pool_delegations_shares(
@@ -71,8 +105,20 @@ impl DelegationSharesView for PoSAdapter {
     }
 }
 
-impl DelegationSharesOperations<()> for PoSAdapter {
-    fn add_reward_to_delegate(
+impl PoSAccountingOperations<()> for PoSAdapter {
+    fn undo(&mut self, _undo_data: ()) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn create_pool(
+        &mut self,
+        _pool_id: PoolId,
+        _pool_data: PoolData,
+    ) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn delegate_staking(
         &mut self,
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
@@ -81,7 +127,27 @@ impl DelegationSharesOperations<()> for PoSAdapter {
         Ok(())
     }
 
-    fn add_reward_to_pool_pledge(
+    fn decommission_pool(&mut self, _pool_id: PoolId) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn create_delegation_id(
+        &mut self,
+        _target_pool: PoolId,
+        _spend_key: Destination,
+        _input0_outpoint: &UtxoOutPoint,
+    ) -> Result<(DelegationId, ()), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn delete_delegation_id(
+        &mut self,
+        _delegation_id: DelegationId,
+    ) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn increase_pool_pledge_amount(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
@@ -96,5 +162,13 @@ impl DelegationSharesOperations<()> for PoSAdapter {
             );
         }
         Ok(())
+    }
+
+    fn spend_share_from_delegation_id(
+        &mut self,
+        _delegation_id: DelegationId,
+        _amount: Amount,
+    ) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
     }
 }

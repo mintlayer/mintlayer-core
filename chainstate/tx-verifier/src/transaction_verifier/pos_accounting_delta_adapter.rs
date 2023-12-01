@@ -151,7 +151,9 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<
     }
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperationImpl<'a, P> {
+impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
+    for PoSAccountingOperationImpl<'a, P>
+{
     fn create_pool(
         &mut self,
         pool_id: PoolId,

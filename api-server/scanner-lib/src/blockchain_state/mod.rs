@@ -28,13 +28,13 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
-use pos_accounting::{make_delegation_id, PoolData};
+use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
     sync::Arc,
 };
-use tx_verifier::transaction_verifier::{distribute_pos_reward, DelegationSharesView};
+use tx_verifier::transaction_verifier::distribute_pos_reward;
 
 use self::adapter::PoSAdapter;
 
@@ -369,7 +369,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 increase_address_amount(db_tx, &address, &rewards, block_height).await;
             }
 
-            let pool_data = adapter.find_pool_data(pool_id).expect("ok").expect("must exist");
+            let pool_data = adapter.get_pool_data(pool_id).expect("ok").expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
         }
     }

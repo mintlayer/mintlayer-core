@@ -33,6 +33,7 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::in_memory::InMemoryPoSAccounting,
+    PoSAccountingUndo,
 };
 
 #[rstest]
@@ -60,7 +61,7 @@ fn create_pool_delta_undo_no_flush(#[case] seed: Seed) {
 
 fn create_pool_check_undo_check(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, undo) = create_pool(rng, op, pledged_amount).unwrap();
@@ -160,7 +161,7 @@ fn decommission_pool_delta_undo_no_flush(#[case] seed: Seed) {
 
 fn decommission_pool_check_undo_check(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
@@ -273,7 +274,7 @@ fn create_delegation_id_delta_undo_no_flush(#[case] seed: Seed) {
 
 fn check_delegation_id(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
@@ -406,7 +407,7 @@ fn delegate_staking_delta_undo_no_flush(#[case] seed: Seed) {
 
 fn check_delegate_staking(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
@@ -549,7 +550,7 @@ fn spend_share_delta_undo_no_flush(#[case] seed: Seed) {
 
 fn check_spend_share(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();

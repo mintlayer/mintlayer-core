@@ -35,7 +35,7 @@ use crate::{
     PoSAccountingDB, StorageTag,
 };
 
-impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
+impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoSAccountingUndo>
     for PoSAccountingDB<S, T>
 {
     fn create_pool(

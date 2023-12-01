@@ -134,7 +134,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
 
 fn perform_random_operation(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut (impl PoSAccountingOperations + PoSAccountingView),
+    op: &mut (impl PoSAccountingOperations<PoSAccountingUndo> + PoSAccountingView),
     undos: &mut Vec<PoSAccountingUndo>,
     random_pool: Option<PoolId>,
     random_delegation: Option<(DelegationId, DelegationData)>,

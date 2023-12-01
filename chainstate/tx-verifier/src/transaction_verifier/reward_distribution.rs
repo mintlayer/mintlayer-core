@@ -23,76 +23,13 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, Id},
     Uint256,
 };
-use pos_accounting::{PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView, PoolData};
+use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
 use utils::ensure;
-
-pub trait DelegationSharesView {
-    type Error: std::error::Error;
-
-    fn find_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error>;
-
-    fn get_pool_delegations_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error>;
-}
-
-impl<T> DelegationSharesView for T
-where
-    T: PoSAccountingView,
-{
-    type Error = T::Error;
-    fn find_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.get_pool_data(pool_id)
-    }
-
-    fn get_pool_delegations_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.get_pool_delegations_shares(pool_id)
-    }
-}
-
-pub trait DelegationSharesOperations<U> {
-    fn add_reward_to_pool_pledge(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<U, pos_accounting::Error>;
-
-    fn add_reward_to_delegate(
-        &mut self,
-        delegation_target: DelegationId,
-        amount_to_delegate: Amount,
-    ) -> Result<U, pos_accounting::Error>;
-}
-
-impl<T> DelegationSharesOperations<PoSAccountingUndo> for T
-where
-    T: PoSAccountingOperations,
-{
-    fn add_reward_to_pool_pledge(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
-        self.increase_pool_pledge_amount(pool_id, amount_to_add)
-    }
-
-    fn add_reward_to_delegate(
-        &mut self,
-        delegation_target: DelegationId,
-        amount_to_delegate: Amount,
-    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
-        self.delegate_staking(delegation_target, amount_to_delegate)
-    }
-}
 
 /// Distribute reward among the pool's owner and delegations
 pub fn distribute_pos_reward<
     U,
-    P: DelegationSharesView<Error = pos_accounting::Error> + DelegationSharesOperations<U>,
+    P: PoSAccountingView<Error = pos_accounting::Error> + PoSAccountingOperations<U>,
 >(
     accounting_adapter: &mut P,
     block_id: Id<Block>,
@@ -100,7 +37,7 @@ pub fn distribute_pos_reward<
     total_reward: Amount,
 ) -> Result<Vec<U>, ConnectTransactionError> {
     let pool_data = accounting_adapter
-        .find_pool_data(pool_id)?
+        .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
     let pool_owner_reward = calculate_pool_owner_reward(
@@ -156,7 +93,7 @@ pub fn distribute_pos_reward<
     let total_owner_reward = (pool_owner_reward + unallocated_reward)
         .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
     let increase_pool_balance_undo =
-        accounting_adapter.add_reward_to_pool_pledge(pool_id, total_owner_reward)?;
+        accounting_adapter.increase_pool_pledge_amount(pool_id, total_owner_reward)?;
 
     let undos = delegation_undos
         .into_iter()
@@ -166,7 +103,7 @@ pub fn distribute_pos_reward<
     Ok(undos)
 }
 
-pub fn calculate_pool_owner_reward(
+fn calculate_pool_owner_reward(
     total_reward: Amount,
     cost_per_block: Amount,
     mpt: PerThousand,
@@ -184,10 +121,7 @@ pub fn calculate_pool_owner_reward(
 }
 
 /// The reward is distributed among delegations proportionally to their balance
-fn distribute_delegations_pos_reward<
-    U,
-    P: DelegationSharesView<Error = pos_accounting::Error> + DelegationSharesOperations<U>,
->(
+fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOperations<U>>(
     accounting_adapter: &mut P,
     delegation_shares: &BTreeMap<DelegationId, Amount>,
     block_id: Id<Block>,
@@ -207,7 +141,7 @@ fn distribute_delegations_pos_reward<
         .iter()
         .map(|(delegation_id, reward)| {
             accounting_adapter
-                .add_reward_to_delegate(*delegation_id, *reward)
+                .delegate_staking(*delegation_id, *reward)
                 .map_err(ConnectTransactionError::PoSAccountingError)
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -231,7 +165,7 @@ fn distribute_delegations_pos_reward<
     Ok((delegation_undos, delegations_reward_remainder))
 }
 
-pub fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'a Amount)>>(
+fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'a Amount)>>(
     delegation_shares: I,
     pool_id: PoolId,
     total_delegations_amount: Amount,

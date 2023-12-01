@@ -94,44 +94,37 @@ pub enum PoSAccountingUndo {
 
 use super::{delegation::DelegationData, pool_data::PoolData};
 
-pub trait PoSAccountingOperations {
-    fn create_pool(
-        &mut self,
-        pool_id: PoolId,
-        pool_data: PoolData,
-    ) -> Result<PoSAccountingUndo, Error>;
+pub trait PoSAccountingOperations<U> {
+    fn create_pool(&mut self, pool_id: PoolId, pool_data: PoolData) -> Result<U, Error>;
 
-    fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;
+    fn decommission_pool(&mut self, pool_id: PoolId) -> Result<U, Error>;
 
     fn increase_pool_pledge_amount(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
-    ) -> Result<PoSAccountingUndo, Error>;
+    ) -> Result<U, Error>;
 
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
         spend_key: Destination,
         input0_outpoint: &UtxoOutPoint,
-    ) -> Result<(DelegationId, PoSAccountingUndo), Error>;
+    ) -> Result<(DelegationId, U), Error>;
 
-    fn delete_delegation_id(
-        &mut self,
-        delegation_id: DelegationId,
-    ) -> Result<PoSAccountingUndo, Error>;
+    fn delete_delegation_id(&mut self, delegation_id: DelegationId) -> Result<U, Error>;
 
     fn delegate_staking(
         &mut self,
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
-    ) -> Result<PoSAccountingUndo, Error>;
+    ) -> Result<U, Error>;
 
     fn spend_share_from_delegation_id(
         &mut self,
         delegation_id: DelegationId,
         amount: Amount,
-    ) -> Result<PoSAccountingUndo, Error>;
+    ) -> Result<U, Error>;
 
-    fn undo(&mut self, undo_data: PoSAccountingUndo) -> Result<(), Error>;
+    fn undo(&mut self, undo_data: U) -> Result<(), Error>;
 }
