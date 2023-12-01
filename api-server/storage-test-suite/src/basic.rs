@@ -37,8 +37,8 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         block::timestamp::BlockTimestamp, config::create_unit_test_config,
-        output_value::OutputValue, Block, DelegationId, Destination, OutPointSourceId, PoolId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue, AccountNonce, Block, DelegationId, Destination,
+        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -438,21 +438,55 @@ where
         }
 
         {
-            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
-            let random_block_height = BlockHeight::new(rng.gen_range(1..1000) as u64);
+            let (random_delegation_id, random_delegation_id2) = {
+                let id1 = DelegationId::new(H256::random_using(&mut rng));
+                let id2 = DelegationId::new(H256::random_using(&mut rng));
+
+                if id1 < id2 {
+                    (id1, id2)
+                } else {
+                    (id2, id1)
+                }
+            };
+
+            let random_block_height = BlockHeight::new(rng.gen_range(500..1000) as u64);
+            let random_block_height2 = BlockHeight::new(rng.gen_range(1..500) as u64);
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_pool_id2 = PoolId::new(H256::random_using(&mut rng));
             let random_balance = Amount::from_atoms(rng.gen::<u128>());
+            let random_balance2 = Amount::from_atoms(rng.gen::<u128>());
+            let random_nonce = AccountNonce::new(rng.gen::<u64>());
+            let random_nonce2 = AccountNonce::new(rng.gen::<u64>());
 
-            let random_delegation =
-                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+            let random_delegation = Delegation::new(
+                Destination::PublicKey(pk.clone()),
+                random_pool_id,
+                random_balance,
+                random_nonce,
+            );
+
+            let random_delegation2 = Delegation::new(
+                Destination::PublicKey(pk.clone()),
+                random_pool_id2,
+                random_balance2,
+                random_nonce2,
+            );
 
             db_tx
                 .set_delegation_at_height(
                     random_delegation_id,
                     &random_delegation,
                     random_block_height,
+                )
+                .await
+                .unwrap();
+            db_tx
+                .set_delegation_at_height(
+                    random_delegation_id2,
+                    &random_delegation2,
+                    random_block_height2,
                 )
                 .await
                 .unwrap();
@@ -464,12 +498,30 @@ where
             assert_eq!(delegations.len(), 1);
             assert_eq!(delegations.values().last().unwrap(), &random_delegation);
 
-            // update delegation on new height
-            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+            let mut delegations = db_tx
+                .get_delegations_from_address(random_delegation.spend_destination())
+                .await
+                .unwrap();
+            delegations.sort_by_key(|(id, _)| *id);
+            assert_eq!(delegations.len(), 2);
 
-            let random_delegation_new =
-                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+            let (delegation_id, delegation) = delegations.first().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id);
+            assert_eq!(delegation, &random_delegation);
+            let (delegation_id, delegation) = delegations.last().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id2);
+            assert_eq!(delegation, &random_delegation2);
+
+            // update delegation on new height
+            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+            let random_nonce = AccountNonce::new(rng.gen::<u64>());
+
+            let random_delegation_new = Delegation::new(
+                Destination::PublicKey(pk),
+                random_pool_id,
+                random_balance,
+                random_nonce,
+            );
 
             db_tx
                 .set_delegation_at_height(
@@ -487,6 +539,20 @@ where
             assert_eq!(delegations.len(), 1);
             assert_eq!(delegations.values().last().unwrap(), &random_delegation_new);
 
+            let mut delegations = db_tx
+                .get_delegations_from_address(random_delegation.spend_destination())
+                .await
+                .unwrap();
+            delegations.sort_by_key(|(id, _)| *id);
+            assert_eq!(delegations.len(), 2);
+
+            let (delegation_id, delegation) = delegations.first().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id);
+            assert_eq!(delegation, &random_delegation_new);
+            let (delegation_id, delegation) = delegations.last().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id2);
+            assert_eq!(delegation, &random_delegation2);
+
             // delete the new one and we should be back to the old one
             db_tx.del_delegations_above_height(random_block_height).await.unwrap();
             let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
@@ -495,6 +561,20 @@ where
             let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
             assert_eq!(delegations.len(), 1);
             assert_eq!(delegations.values().last().unwrap(), &random_delegation);
+
+            let mut delegations = db_tx
+                .get_delegations_from_address(random_delegation.spend_destination())
+                .await
+                .unwrap();
+            delegations.sort_by_key(|(id, _)| *id);
+            assert_eq!(delegations.len(), 2);
+
+            let (delegation_id, delegation) = delegations.first().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id);
+            assert_eq!(delegation, &random_delegation);
+            let (delegation_id, delegation) = delegations.last().unwrap();
+            assert_eq!(delegation_id, &random_delegation_id2);
+            assert_eq!(delegation, &random_delegation2);
 
             db_tx
                 .del_delegations_above_height(random_block_height.prev_height().unwrap())

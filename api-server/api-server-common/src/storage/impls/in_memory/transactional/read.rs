@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -123,5 +123,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
         self.transaction.get_address_available_utxos(address)
+    }
+
+    async fn get_delegations_from_address(
+        &self,
+        address: &Destination,
+    ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
+        self.transaction.get_delegations_from_address(address)
     }
 }

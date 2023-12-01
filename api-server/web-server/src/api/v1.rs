@@ -82,7 +82,8 @@ pub fn routes<
 
     let router = router
         .route("/address/:address", get(address))
-        .route("/address/:address/available-utxos", get(address_utxos));
+        .route("/address/:address/available-utxos", get(address_utxos))
+        .route("/address/:address/delegations", get(address_delegations));
 
     let router = router
         .route("/pool/:id", get(pool))
@@ -528,6 +529,46 @@ pub async fn address_utxos<T: ApiServerStorage>(
     ))
 }
 
+pub async fn address_delegations<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+    let delegations = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_delegations_from_address(
+            &address.decode_object(&state.chain_config).expect("already checked"),
+        )
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        delegations.into_iter().map(|(delegation_id, delegation)|
+            json!({
+            "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
+                "no error in encoding"
+            ).get(),
+            "next_nonce": delegation.next_nonce(),
+            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+                "no error in encoding"
+            ).get(),
+            "balance": delegation.balance(),
+        })
+        ).collect::<Vec<_>>(),
+    ))
+}
+
 //
 // pool/
 //
@@ -599,6 +640,7 @@ pub async fn pool_delegations<T: ApiServerStorage>(
             "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
                 "no error in encoding"
             ).get(),
+            "next_nonce": delegation.next_nonce(),
             "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
                 "no error in encoding"
             ).get(),
@@ -639,6 +681,7 @@ pub async fn delegation<T: ApiServerStorage>(
             "no error in encoding"
         ).get(),
         "balance": delegation.balance(),
+        "next_nonce": delegation.next_nonce(),
         "pool_id": Address::new(&state.chain_config, &delegation.pool_id()).expect(
             "no error in encoding"
         ).get(),

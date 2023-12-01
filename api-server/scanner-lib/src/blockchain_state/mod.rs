@@ -23,8 +23,9 @@ use common::{
     address::Address,
     chain::{
         block::ConsensusData, config::ChainConfig, output_value::OutputValue,
-        transaction::OutPointSourceId, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        transaction::OutPointSourceId, AccountNonce, AccountSpending, Block, DelegationId,
+        Destination, GenBlock, Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -564,7 +565,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
 
-                        let new_delegation = delegation.sub_pledge(*amount);
+                        let new_delegation = delegation.sub_pledge(*amount, outpoint.nonce());
 
                         db_tx
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
@@ -753,7 +754,12 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     db_tx
                         .set_delegation_at_height(
                             make_delegation_id(input0_outpoint),
-                            &Delegation::new(destination.clone(), *pool_id, Amount::ZERO),
+                            &Delegation::new(
+                                destination.clone(),
+                                *pool_id,
+                                Amount::ZERO,
+                                AccountNonce::new(0),
+                            ),
                             block_height,
                         )
                         .await

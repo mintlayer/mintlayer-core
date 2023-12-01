@@ -17,8 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -59,14 +59,21 @@ pub struct Delegation {
     spend_destination: Destination,
     pool_id: PoolId,
     balance: Amount,
+    next_nonce: AccountNonce,
 }
 
 impl Delegation {
-    pub fn new(spend_destination: Destination, pool_id: PoolId, balance: Amount) -> Self {
+    pub fn new(
+        spend_destination: Destination,
+        pool_id: PoolId,
+        balance: Amount,
+        next_nonce: AccountNonce,
+    ) -> Self {
         Self {
             spend_destination,
             pool_id,
             balance,
+            next_nonce,
         }
     }
 
@@ -82,19 +89,25 @@ impl Delegation {
         &self.balance
     }
 
+    pub fn next_nonce(&self) -> &AccountNonce {
+        &self.next_nonce
+    }
+
     pub fn add_pledge(&self, rewards: Amount) -> Self {
         Self {
             spend_destination: self.spend_destination.clone(),
             pool_id: self.pool_id,
             balance: (self.balance + rewards).expect("no overflow"),
+            next_nonce: self.next_nonce,
         }
     }
 
-    pub fn sub_pledge(&self, amount: Amount) -> Self {
+    pub fn sub_pledge(&self, amount: Amount, nonce: AccountNonce) -> Self {
         Self {
             spend_destination: self.spend_destination.clone(),
             pool_id: self.pool_id,
             balance: (self.balance - amount).expect("not underflow"),
+            next_nonce: nonce.increment().expect("no overflow"),
         }
     }
 }
@@ -187,6 +200,11 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+
+    async fn get_delegations_from_address(
+        &self,
+        address: &Destination,
+    ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
