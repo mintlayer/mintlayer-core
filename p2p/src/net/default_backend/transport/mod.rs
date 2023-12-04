@@ -25,13 +25,18 @@ pub use self::{
     channel::{ChannelListener, ChannelStream, MpscChannelTransport},
     socks5::Socks5TransportSocket,
     stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter,
+        identity::IdentityStreamAdapter,
+        noise::{NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker},
         wrapped_transport::wrapped_socket::WrappedTransportSocket,
     },
     tcp::TcpTransportSocket,
     traits::{PeerStream, TransportListener, TransportSocket},
 };
 
-pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;
-pub type NoiseSocks5Transport =
-    WrappedTransportSocket<NoiseEncryptionAdapter, Socks5TransportSocket>;
+pub type NoiseTcpTransport =
+    WrappedTransportSocket<NoiseEncryptionAdapterMaker, NoiseEncryptionAdapter, TcpTransportSocket>;
+pub type NoiseSocks5Transport = WrappedTransportSocket<
+    NoiseEncryptionAdapterMaker,
+    NoiseEncryptionAdapter,
+    Socks5TransportSocket,
+>;

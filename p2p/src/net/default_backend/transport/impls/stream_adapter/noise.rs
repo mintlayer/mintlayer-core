@@ -34,6 +34,8 @@ static NOISE_HANDSHAKE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 static NOISE_HANDSHAKE_PARAMS: once_cell::sync::Lazy<snowstorm::NoiseParams> =
     once_cell::sync::Lazy::new(|| NOISE_HANDSHAKE_PATTERN.parse().expect("valid pattern"));
 
+pub type NoiseEncryptionAdapterMaker = fn() -> NoiseEncryptionAdapter;
+
 #[derive(Clone)]
 pub struct NoiseEncryptionAdapter {
     local_key: Arc<snowstorm::Keypair>,
