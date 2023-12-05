@@ -631,6 +631,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                     INSERT INTO ml_delegations (delegation_id, block_height, pool_id, balance, spend_destination)
                     VALUES($1, $2, $3, $4, $5)
+                    ON CONFLICT (delegation_id, block_height) DO UPDATE
+                    SET pool_id = $3, balance = $4, spend_destination = $5;
                 "#,
                 &[
                     &delegation_id.encode(),

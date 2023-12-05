@@ -36,9 +36,9 @@ use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
-        block::timestamp::BlockTimestamp, output_value::OutputValue, Block, DelegationId,
-        Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, config::create_unit_test_config,
+        output_value::OutputValue, Block, DelegationId, Destination, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -54,7 +54,11 @@ where
     S: ApiServerStorage,
     Fut: Future<Output = S> + Send + 'static,
 {
-    let storage = storage_maker().await;
+    let mut storage = storage_maker().await;
+    let mut tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    tx.initialize_storage(&chain_config).await.unwrap();
+    tx.commit().await.unwrap();
     let tx = storage.transaction_ro().await.unwrap();
     assert!(tx.is_initialized().await.unwrap());
     Ok(())
@@ -73,6 +77,10 @@ where
     let mut rng = make_seedable_rng(seed);
 
     let mut storage = storage_maker().await;
+    let mut tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    tx.initialize_storage(&chain_config).await.unwrap();
+    tx.commit().await.unwrap();
 
     let db_tx = storage.transaction_ro().await.unwrap();
 

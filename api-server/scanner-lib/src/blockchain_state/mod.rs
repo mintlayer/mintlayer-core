@@ -24,7 +24,8 @@ use common::{
     chain::{
         block::ConsensusData, config::ChainConfig, output_value::OutputValue,
         transaction::OutPointSourceId, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        GenBlockId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        GenBlockId, Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -61,6 +62,25 @@ impl<S: ApiServerStorage> BlockchainState<S> {
 
     pub fn storage(&self) -> &S {
         &self.storage
+    }
+
+    pub async fn scan_genesis(&mut self, genesis: &Genesis) -> Result<(), BlockchainStateError> {
+        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+
+        update_tables_from_block_reward(
+            self.chain_config.clone(),
+            &mut db_tx,
+            BlockHeight::new(0),
+            genesis.utxos(),
+            genesis.get_id().into(),
+        )
+        .await
+        .expect("Unable to update tables from block reward");
+
+        db_tx.commit().await.expect("Unable to commit transaction");
+        logging::log::info!("Database commit completed successfully");
+
+        Ok(())
     }
 }
 
@@ -183,9 +203,15 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     block: &Block,
 ) -> Result<(), ApiServerStorageError> {
-    update_tables_from_block_reward(chain_config.clone(), db_tx, block_height, block)
-        .await
-        .expect("Unable to update tables from block reward");
+    update_tables_from_block_reward(
+        chain_config.clone(),
+        db_tx,
+        block_height,
+        block.block_reward().outputs(),
+        block.get_id().into(),
+    )
+    .await
+    .expect("Unable to update tables from block reward");
 
     update_tables_from_consensus_data(chain_config.clone(), db_tx, block_height, block)
         .await
@@ -198,30 +224,74 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
-    block: &Block,
+    block_rewards: &[TxOutput],
+    block_id: Id<GenBlock>,
 ) -> Result<(), ApiServerStorageError> {
-    for output in block.block_reward().outputs().iter() {
+    for (idx, output) in block_rewards.iter().enumerate() {
         match output {
             TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::CreateStakePool(_, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::ProduceBlockFromStake(_, _) => {}
+            | TxOutput::IssueNft(_, _, _) => {}
+            TxOutput::ProduceBlockFromStake(_, _) => {
+                set_utxo(
+                    OutPointSourceId::BlockReward(block_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::CreateStakePool(pool_id, pool_data) => {
+                let pool_data = PoolData::new(
+                    pool_data.decommission_key().clone(),
+                    pool_data.value(),
+                    pool_data.vrf_public_key().clone(),
+                    pool_data.margin_ratio_per_thousand(),
+                    pool_data.cost_per_block(),
+                );
+
+                db_tx
+                    .set_pool_data_at_height(*pool_id, &pool_data, block_height)
+                    .await
+                    .expect("unable to update pool data");
+                set_utxo(
+                    OutPointSourceId::BlockReward(block_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
                 Destination::PublicKey(_) | Destination::Address(_) => {
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
-
                     match output_value {
                         OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
                         OutputValue::Coin(amount) => {
                             increase_address_amount(db_tx, &address, amount, block_height).await;
                         }
                     }
+                    set_utxo(
+                        OutPointSourceId::BlockReward(block_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
                 }
                 Destination::AnyoneCanSpend
                 | Destination::ClassicMultisig(_)
@@ -239,9 +309,25 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
     block: &Block,
     block_height: BlockHeight,
 ) -> Result<Fee, ApiServerStorageError> {
+    let new_outputs: BTreeMap<_, _> = block
+        .transactions()
+        .iter()
+        .flat_map(|tx| {
+            tx.outputs().iter().enumerate().map(|(idx, out)| {
+                (
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(tx.transaction().get_id()),
+                        idx as u32,
+                    ),
+                    out,
+                )
+            })
+        })
+        .collect();
+
     let mut total_fees = AccumulatedFee::new();
-    for tx in block.transactions() {
-        let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
+    for tx in block.transactions().iter() {
+        let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
         total_fees = total_fees.combine(fee).expect("no overflow");
     }
 
@@ -253,8 +339,9 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
     tx: &SignedTransaction,
     db_tx: &mut T,
+    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
+    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
 
     let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
 
@@ -312,12 +399,17 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
 async fn collect_inputs_utxos<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     inputs: &[TxInput],
+    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
     let mut outputs = Vec::with_capacity(inputs.len());
     for input in inputs {
         let output = match input {
             TxInput::Utxo(outpoint) => {
-                db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output())
+                if let Some(output) = new_outputs.get(outpoint) {
+                    Some((*output).clone())
+                } else {
+                    db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output())
+                }
             }
             TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
         };
@@ -337,6 +429,26 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     match block.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {}
         ConsensusData::PoS(pos_data) => {
+            for input in pos_data.kernel_inputs() {
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo =
+                            db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                        set_utxo(
+                            outpoint.source_id(),
+                            outpoint.output_index() as usize,
+                            utxo.output(),
+                            db_tx,
+                            block_height,
+                            true,
+                            &chain_config,
+                        )
+                        .await;
+                    }
+                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
+                }
+            }
+
             let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
 
             let total_fees = calculate_fees(&chain_config, db_tx, block, block_height).await?;
@@ -483,8 +595,21 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::IssueFungibleToken(_) => {}
-                        TxOutput::CreateStakePool(pool_id, _)
-                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        TxOutput::CreateStakePool(pool_id, pool_data) => {
+                            let pool_data = PoolData::new(
+                                pool_data.decommission_key().clone(),
+                                pool_data.value(),
+                                pool_data.vrf_public_key().clone(),
+                                pool_data.margin_ratio_per_thousand(),
+                                pool_data.cost_per_block(),
+                            );
+
+                            db_tx
+                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
+                                .await
+                                .expect("unable to update pool data");
+                        }
+                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let pool_data = db_tx
                                 .get_pool_data(pool_id)
                                 .await?

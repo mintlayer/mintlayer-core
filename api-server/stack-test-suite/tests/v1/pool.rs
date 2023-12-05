@@ -309,7 +309,7 @@ async fn ok(#[case] seed: Seed) {
             decommission_key.get(),
         );
         assert_eq!(
-            body.get("balance").unwrap(),
+            body.get("pledge").unwrap(),
             &serde_json::json!(pool_data.value())
         );
 

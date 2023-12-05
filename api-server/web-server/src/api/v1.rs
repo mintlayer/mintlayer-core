@@ -563,7 +563,7 @@ pub async fn pool<T: ApiServerStorage>(
             .expect("no error in encoding");
     Ok(Json(json!({
         "decommission_destination": decommission_destination.get(),
-        "balance": pool_data.pledge_amount(),
+        "pledge": pool_data.pledge_amount(),
         "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
         "cost_per_block": pool_data.cost_per_block(),
         "vrf_public_key": pool_data.vrf_public_key(),
