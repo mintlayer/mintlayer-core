@@ -26,7 +26,9 @@ use crate::{
 };
 
 make_config_setting!(BanThreshold, u32, 100);
-make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
+// BanDuration is only 30 mins as a compromise between banning for a longer period of time
+// and not banning at all with alternative approaches such as discouragement
+make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 30));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
