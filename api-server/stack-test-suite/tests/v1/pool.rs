@@ -29,14 +29,14 @@ use super::*;
 fn prepare_stake_pool(
     stake_pool_outpoint: UtxoOutPoint,
     rng: &mut (impl Rng + CryptoRng),
-    available_amount: Amount,
+    available_amount: &mut Amount,
     tf: &mut TestFramework,
 ) -> (UtxoOutPoint, StakePoolData, PoolId, Block) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let min_stake_pool_pledge =
         tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
     let amount_to_stake =
-        Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 2)));
 
     let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
 
@@ -51,6 +51,7 @@ fn prepare_stake_pool(
     );
     let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
+    *available_amount = (*available_amount - amount_to_stake).unwrap();
     let stake_pool_transaction = TransactionBuilder::new()
         .add_input(stake_pool_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::CreateStakePool(
@@ -58,7 +59,7 @@ fn prepare_stake_pool(
             Box::new(stake_pool_data.clone()),
         ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin(available_amount),
+            OutputValue::Coin(*available_amount),
             Destination::AnyoneCanSpend,
         ))
         .build();
@@ -109,12 +110,13 @@ fn stake_delegation(
     delegation_id: DelegationId,
     tf: &mut TestFramework,
 ) -> (Amount, UtxoOutPoint, Block) {
-    let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..=available_amount.into_atoms()));
+    let delegate_max_amount = std::cmp::min(1000, available_amount.into_atoms());
+    let amount_to_delegate = Amount::from_atoms(rng.gen_range(1..=delegate_max_amount));
     let stake_tx = TransactionBuilder::new()
         .add_input(transfer_outpoint.into(), empty_witness(rng))
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin(available_amount),
+            OutputValue::Coin((available_amount - amount_to_delegate).unwrap()),
             Destination::AnyoneCanSpend,
         ))
         .build();
@@ -185,7 +187,9 @@ async fn ok(#[case] seed: Seed) {
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 );
-                let mut available_amount = Amount::from_atoms(10000);
+                let mut available_amount = ((chain_config.min_stake_pool_pledge() * 10).unwrap()
+                    + Amount::from_atoms(10000))
+                .unwrap();
 
                 let (_, pools) = (0..rng.gen_range(1..5)).fold(
                     (stake_pool_outpoint, vec![]),
@@ -198,7 +202,7 @@ async fn ok(#[case] seed: Seed) {
                             prepare_stake_pool(
                                 stake_pool_outpoint,
                                 &mut rng,
-                                available_amount,
+                                &mut available_amount,
                                 &mut tf,
                             );
 
@@ -272,6 +276,7 @@ async fn ok(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             ApiServerWebServerState {

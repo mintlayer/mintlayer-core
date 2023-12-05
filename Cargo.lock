@@ -245,6 +245,7 @@ dependencies = [
  "node-comm",
  "pos_accounting",
  "rstest",
+ "serialization",
  "test-utils",
  "thiserror",
  "tokio",

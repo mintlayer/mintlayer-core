@@ -96,6 +96,7 @@ async fn get_block_failed(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             storage = {
@@ -220,6 +221,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             storage = {
@@ -325,6 +327,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             storage = {
@@ -460,6 +463,7 @@ async fn ok(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             ApiServerWebServerState {

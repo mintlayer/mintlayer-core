@@ -82,14 +82,12 @@ pub async fn run<S: ApiServerStorage>(
                 .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
 
             let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
-            eprintln!("Scanning GENESIS!!!!!\n\n\n\n");
             local_block
                 .scan_genesis(chain_config.genesis_block().as_ref())
                 .await
                 .expect("Can't scan genesis");
             local_block
         } else {
-            eprintln!("NOT Scanning GENESIS!!!!!\n\n\n\n");
             db_tx
                 .commit()
                 .await

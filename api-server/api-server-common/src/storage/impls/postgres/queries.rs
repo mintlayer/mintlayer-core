@@ -921,7 +921,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT utxo FROM ml_utxo WHERE outpoint = $1;",
+                "SELECT utxo FROM ml_utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
                 &[&outpoint.encode()],
             )
             .await

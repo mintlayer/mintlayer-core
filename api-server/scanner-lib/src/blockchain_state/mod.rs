@@ -24,8 +24,7 @@ use common::{
     chain::{
         block::ConsensusData, config::ChainConfig, output_value::OutputValue,
         transaction::OutPointSourceId, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        GenBlockId, Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -111,14 +110,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
-            update_tables_from_block(
-                Arc::clone(&self.chain_config),
-                &mut db_tx,
-                block_height,
-                &block,
-            )
-            .await
-            .expect("Unable to update tables from block");
+            let total_fees =
+                calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
 
             for tx in block.transactions() {
                 db_tx
@@ -135,6 +128,16 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to update tables from transaction");
             }
+
+            update_tables_from_block(
+                Arc::clone(&self.chain_config),
+                &mut db_tx,
+                block_height,
+                &block,
+                total_fees,
+            )
+            .await
+            .expect("Unable to update tables from block");
 
             let block_id = block.get_id();
             db_tx
@@ -202,6 +205,7 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
     block: &Block,
+    total_tx_fees: Fee,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_block_reward(
         chain_config.clone(),
@@ -213,9 +217,15 @@ async fn update_tables_from_block<T: ApiServerStorageWrite>(
     .await
     .expect("Unable to update tables from block reward");
 
-    update_tables_from_consensus_data(chain_config.clone(), db_tx, block_height, block)
-        .await
-        .expect("Unable to update tables from consensus data");
+    update_tables_from_consensus_data(
+        chain_config.clone(),
+        db_tx,
+        block_height,
+        block,
+        total_tx_fees,
+    )
+    .await
+    .expect("Unable to update tables from consensus data");
 
     Ok(())
 }
@@ -293,9 +303,20 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                Destination::AnyoneCanSpend
-                | Destination::ClassicMultisig(_)
-                | Destination::ScriptHash(_) => {}
+                Destination::AnyoneCanSpend => {
+                    // for tests
+                    set_utxo(
+                        OutPointSourceId::BlockReward(block_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             },
         }
     }
@@ -342,7 +363,6 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
-
     let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
 
     let pledge_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
@@ -425,6 +445,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
     block: &Block,
+    total_tx_fees: Fee,
 ) -> Result<(), ApiServerStorageError> {
     match block.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {}
@@ -451,10 +472,8 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
 
             let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
 
-            let total_fees = calculate_fees(&chain_config, db_tx, block, block_height).await?;
-
-            let total_reward =
-                (block_subsidy + total_fees.0).expect("Block subsidy and fees should not overflow");
+            let total_reward = (block_subsidy + total_tx_fees.0)
+                .expect("Block subsidy and fees should not overflow");
 
             let pool_id = *pos_data.stake_pool_id();
             let pool_data = db_tx
@@ -561,24 +580,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 }
             }
             TxInput::Utxo(outpoint) => match outpoint.source_id() {
-                OutPointSourceId::BlockReward(block_id) => {
-                    let utxo = match block_id.classify(&chain_config) {
-                        GenBlockId::Genesis(_) => chain_config.genesis_block().utxos()
-                            [outpoint.output_index() as usize]
-                            .clone(),
-                        GenBlockId::Block(block_id) => db_tx
-                            .get_block(block_id)
-                            .await?
-                            .expect("cannot find block")
-                            .block_reward()
-                            .outputs()[outpoint.output_index() as usize]
-                            .clone(),
-                    };
-
+                OutPointSourceId::BlockReward(_) => {
+                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
                     set_utxo(
                         outpoint.source_id(),
                         outpoint.output_index() as usize,
-                        &utxo,
+                        utxo.output(),
                         db_tx,
                         block_height,
                         true,
@@ -586,7 +593,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
 
-                    match utxo {
+                    match utxo.into_output() {
                         TxOutput::Burn(_)
                         | TxOutput::Transfer(_, _)
                         | TxOutput::LockThenTransfer(_, _, _)
@@ -623,20 +630,12 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         }
                     }
                 }
-                OutPointSourceId::Transaction(transaction_id) => {
-                    let input_transaction = db_tx
-                        .get_transaction(transaction_id)
-                        .await?
-                        .expect("Transaction should exist")
-                        .1;
-
-                    let output = &input_transaction.transaction().outputs()
-                        [outpoint.output_index() as usize];
-
+                OutPointSourceId::Transaction(_) => {
+                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
                     set_utxo(
                         outpoint.source_id(),
                         outpoint.output_index() as usize,
-                        output,
+                        utxo.output(),
                         db_tx,
                         block_height,
                         true,
@@ -644,7 +643,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
 
-                    match output {
+                    match utxo.into_output() {
                         TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::Burn(_)
@@ -658,7 +657,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             | Destination::ScriptHash(_) => {}
                             Destination::PublicKey(_) | Destination::Address(_) => {
                                 let address =
-                                    Address::<Destination>::new(&chain_config, destination)
+                                    Address::<Destination>::new(&chain_config, &destination)
                                         .expect("Unable to encode destination");
 
                                 address_transactions
@@ -676,7 +675,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             | Destination::ScriptHash(_) => {}
                             Destination::PublicKey(_) | Destination::Address(_) => {
                                 let address =
-                                    Address::<Destination>::new(&chain_config, destination)
+                                    Address::<Destination>::new(&chain_config, &destination)
                                         .expect("Unable to encode destination");
 
                                 address_transactions
@@ -690,7 +689,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                         decrease_address_amount(
                                             db_tx,
                                             address,
-                                            amount,
+                                            &amount,
                                             block_height,
                                         )
                                         .await;
@@ -861,9 +860,20 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                Destination::AnyoneCanSpend
-                | Destination::ClassicMultisig(_)
-                | Destination::ScriptHash(_) => {}
+                Destination::AnyoneCanSpend => {
+                    // for tests
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             },
         }
     }

@@ -92,6 +92,7 @@ async fn ok(#[case] seed: Seed) {
             // Scan those blocks
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(chain_config.clone(), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             // Get the current block at block_height
