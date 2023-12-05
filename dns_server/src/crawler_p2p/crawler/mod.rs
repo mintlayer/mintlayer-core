@@ -53,11 +53,22 @@ use self::address_data::{AddressData, AddressState};
 
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
+const DEFAULT_BAN_THRESHOLD: u32 = 100;
+const DEFAULT_BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Clone)]
 pub struct CrawlerConfig {
     pub ban_threshold: BanThreshold,
     pub ban_duration: BanDuration,
+}
+
+impl Default for CrawlerConfig {
+    fn default() -> Self {
+        Self {
+            ban_threshold: BanThreshold::from(DEFAULT_BAN_THRESHOLD),
+            ban_duration: BanDuration::from(DEFAULT_BAN_DURATION),
+        }
+    }
 }
 
 /// The `Crawler` is the component that communicates with Mintlayer peers using p2p,
