@@ -25,13 +25,14 @@ const MAX_DELAY_RESERVED: Duration = Duration::from_secs(360);
 const MAX_DELAY_REACHABLE: Duration = Duration::from_secs(3600);
 
 /// When the node drops the unreachable node address. Used for negative caching.
-const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
+pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the node itself has prolonged connectivity problems.
 const PURGE_REACHABLE_TIME: Duration = Duration::from_secs(3600 * 24 * 7 * 4);
 
-const PURGE_REACHABLE_FAIL_COUNT: u32 =
+// TODO: this is 672 currently, which is too much.
+pub const PURGE_REACHABLE_FAIL_COUNT: u32 =
     (PURGE_REACHABLE_TIME.as_secs() / MAX_DELAY_REACHABLE.as_secs()) as u32;
 
 /// The maximum value for the random factor by which reconnection delays will be multiplied.
@@ -42,6 +43,7 @@ const PURGE_REACHABLE_FAIL_COUNT: u32 =
 /// -ln(0.0000000000000035527136788) which is about 33.
 const MAX_DELAY_FACTOR: u32 = 30;
 
+#[derive(Debug)]
 pub enum AddressState {
     Connected {},
 
@@ -83,6 +85,7 @@ pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
     AddressStateTransitionTo::UnsetReserved,
 ];
 
+#[derive(Debug)]
 pub struct AddressData {
     state: AddressState,
 
@@ -132,20 +135,7 @@ impl AddressData {
                 fail_count: _,
                 next_connect_after: _,
             } => true,
-            AddressState::Unreachable { erase_after } => erase_after < now,
-        }
-    }
-
-    /// Returns true if the address should be stored in the DB
-    pub fn is_persistent(&self) -> bool {
-        match self.state {
-            AddressState::Connected {} => true,
-            AddressState::Disconnected {
-                fail_count: _,
-                next_connect_after: _,
-                was_reachable,
-            } => was_reachable,
-            AddressState::Unreachable { erase_after: _ } => false,
+            AddressState::Unreachable { erase_after } => erase_after > now,
         }
     }
 

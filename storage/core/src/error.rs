@@ -72,4 +72,11 @@ impl Error {
             }
         }
     }
+
+    pub fn is_recoverable(&self) -> bool {
+        match self {
+            Self::Recoverable(_) => true,
+            Self::Fatal(_) => false,
+        }
+    }
 }

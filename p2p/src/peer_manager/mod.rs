@@ -1003,7 +1003,7 @@ where
                 PeerRole::OutboundFullRelay
                 | PeerRole::OutboundBlockRelay
                 | PeerRole::OutboundManual => {
-                    self.peerdb.report_outbound_failure(address, accept_err);
+                    self.peerdb.report_outbound_failure(address);
                 }
             }
         }
@@ -1022,7 +1022,7 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: SocketAddress, error: P2pError) {
-        self.peerdb.report_outbound_failure(address, &error);
+        self.peerdb.report_outbound_failure(address);
 
         let PendingConnect {
             outbound_connect_type,
@@ -1105,8 +1105,8 @@ where
     async fn query_dns_seed(&mut self) {
         let addresses = self.dns_seed.obtain_addresses().await;
         log::debug!("Dns seed queried, addresses = {addresses:?}");
-        for addr in addresses {
-            self.peerdb.peer_discovered(addr);
+        for addr in &addresses {
+            self.peerdb.peer_discovered(*addr);
         }
 
         self.last_dns_query_time = Some(self.time_getter.get_time());
@@ -1341,9 +1341,9 @@ where
             ))
         );
 
-        for address in addresses {
+        for address in &addresses {
             if let Some(address) = SocketAddress::from_peer_address(
-                &address,
+                address,
                 *self.p2p_config.allow_discover_private_ips,
             ) {
                 self.peerdb.peer_discovered(address);
@@ -1637,6 +1637,10 @@ where
             // might establish only a few OutboundBlockRelay connections and then stop establishing
             // new connections until both it's out of IBD and its tip becomes stale (following
             // the second part of the condition above).
+            // TODO: dns seeds are considered bad sources of peer addresses, because they can be
+            // compromised. It's better to avoid connecting to them unless necessary.
+            // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
+            // for extra details.
             true
         }
     }
