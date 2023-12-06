@@ -93,7 +93,7 @@ impl Delegation {
         &self.next_nonce
     }
 
-    pub fn add_pledge(&self, rewards: Amount) -> Self {
+    pub fn stake(&self, rewards: Amount) -> Self {
         Self {
             spend_destination: self.spend_destination.clone(),
             pool_id: self.pool_id,
@@ -102,7 +102,7 @@ impl Delegation {
         }
     }
 
-    pub fn sub_pledge(&self, amount: Amount, nonce: AccountNonce) -> Self {
+    pub fn spend_share(&self, amount: Amount, nonce: AccountNonce) -> Self {
         Self {
             spend_destination: self.spend_destination.clone(),
             pool_id: self.pool_id,

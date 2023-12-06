@@ -565,7 +565,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .expect("Unable to get delegation")
                             .expect("Delegation should exist");
 
-                        let new_delegation = delegation.sub_pledge(*amount, outpoint.nonce());
+                        let new_delegation = delegation.spend_share(*amount, outpoint.nonce());
 
                         db_tx
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
@@ -816,7 +816,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .expect("Unable to get delegation")
                     .expect("Delegation should exist");
 
-                let new_delegation = delegation.add_pledge(*amount);
+                let new_delegation = delegation.stake(*amount);
 
                 db_tx
                     .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
