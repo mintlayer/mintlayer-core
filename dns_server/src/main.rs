@@ -109,15 +109,10 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         default_p2p_port: chain_config.p2p_port(),
     };
 
-    let crawler_config = CrawlerConfig {
-        ban_duration: p2p_config.ban_duration.clone(),
-        ban_threshold: p2p_config.ban_threshold.clone(),
-    };
-
     let mut crawler_manager = CrawlerManager::<p2p::P2pNetworkingService, _>::new(
         time_getter,
         crawler_mgr_config,
-        crawler_config,
+        CrawlerConfig::default(),
         chain_config,
         conn,
         sync,
