@@ -322,6 +322,8 @@ impl TestNodeGroup {
                         | PeerManagerEvent::ListBanned(_)
                         | PeerManagerEvent::Ban(_, _)
                         | PeerManagerEvent::Unban(_, _)
+                        | PeerManagerEvent::Whitelist(_, _)
+                        | PeerManagerEvent::Unwhitelist(_, _)
                         | PeerManagerEvent::GenericQuery(_) => {
                             panic!("Unexpected peer manager event: {peer_event:?}");
                         }

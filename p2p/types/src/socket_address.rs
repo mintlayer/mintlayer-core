@@ -15,7 +15,7 @@
 
 use std::{
     fmt::Display,
-    net::{AddrParseError, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
 };
 
@@ -33,6 +33,10 @@ impl SocketAddress {
 
     pub fn socket_addr(&self) -> SocketAddr {
         self.0
+    }
+
+    pub fn ip_addr(&self) -> IpAddr {
+        self.0.ip()
     }
 
     pub fn as_bannable(&self) -> BannableAddress {

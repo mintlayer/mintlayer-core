@@ -19,6 +19,7 @@ mod connections;
 mod peer_types;
 mod ping;
 mod utils;
+mod whitelist;
 
 use std::{sync::Arc, time::Duration};
 
