@@ -77,7 +77,7 @@ use self::{
     address_groups::AddressGroup,
     dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
-    peerdb::storage::PeerDbStorage,
+    peerdb::{config::PeerDbConfig, storage::PeerDbStorage},
     peers_eviction::{
         OutboundBlockRelayConnectionMinAge, OutboundFullRelayConnectionMinAge,
         PreservedInboundCountAddressGroup, PreservedInboundCountNewBlocks,
@@ -130,6 +130,14 @@ pub struct PeerManagerConfig {
 
     /// How often the main loop should be woken up when no other events occur.
     pub main_loop_tick_interval: MainLoopTickInterval,
+
+    /// Whether feeler connections should be enabled.
+    pub enable_feeler_connections: EnableFeelerConnections,
+    /// The minimum interval between feeler connections.
+    pub feeler_connections_interval: FeelerConnectionsInterval,
+
+    /// Peer db configuration.
+    pub peerdb_config: PeerDbConfig,
 }
 
 impl PeerManagerConfig {
@@ -153,6 +161,12 @@ make_config_setting!(OutboundBlockRelayCount, usize, 2);
 make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
 make_config_setting!(StaleTipTimeDiff, Duration, Duration::from_secs(30 * 60));
 make_config_setting!(MainLoopTickInterval, Duration, Duration::from_secs(1));
+make_config_setting!(
+    FeelerConnectionsInterval,
+    Duration,
+    Duration::from_secs(2 * 60)
+);
+make_config_setting!(EnableFeelerConnections, bool, true);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -191,15 +205,16 @@ enum OutboundConnectType {
     Manual {
         response_sender: oneshot_nofail::Sender<crate::Result<()>>,
     },
+    Feeler,
 }
 
 impl OutboundConnectType {
     fn block_relay_only(&self) -> bool {
         match self {
             OutboundConnectType::Automatic { block_relay_only } => *block_relay_only,
-            OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
-                false
-            }
+            OutboundConnectType::Reserved
+            | OutboundConnectType::Manual { response_sender: _ }
+            | OutboundConnectType::Feeler => false,
         }
     }
 }
@@ -265,6 +280,8 @@ where
     last_dns_query_time: Option<Time>,
     /// Last time ping check was performed.
     last_ping_check_time: Option<Time>,
+    /// The time after which a new feeler connection can be established.
+    next_feeler_connection_time: Time,
     /// If true, we've already loaded the predefined addresses into peerdb.
     predefined_addresses_already_loaded: bool,
 }
@@ -322,8 +339,11 @@ where
             peerdb_storage,
         )?;
         let now = time_getter.get_time();
+        let next_feeler_connection_time =
+            Self::choose_next_feeler_connection_time(&p2p_config, now);
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
+
         Ok(PeerManager {
             chain_config,
             p2p_config,
@@ -343,8 +363,17 @@ where
             last_heartbeat_time: None,
             last_dns_query_time: None,
             last_ping_check_time: None,
+            next_feeler_connection_time,
             predefined_addresses_already_loaded: false,
         })
+    }
+
+    fn choose_next_feeler_connection_time(p2p_config: &P2pConfig, now: Time) -> Time {
+        let delay = p2p_config
+            .peer_manager_config
+            .feeler_connections_interval
+            .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+        (now + delay).expect("Unexpected time overflow")
     }
 
     /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
@@ -366,7 +395,7 @@ where
         receiver_address: Option<PeerAddress>,
     ) -> Option<SocketAddress> {
         let discover = match peer_role {
-            PeerRole::Inbound | PeerRole::OutboundBlockRelay => false,
+            PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
             PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
                 common_services.has_service(Service::PeerAddresses)
             }
@@ -455,9 +484,14 @@ where
         }
     }
 
+    // TODO: this should probably be renamed to 'should_ignore_ban_score_adjustment' or something
+    // similar, because it only makes sense in that particular context.
     fn is_whitelisted_node(peer_role: PeerRole) -> bool {
         match peer_role {
-            PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => {
+            PeerRole::Inbound
+            | PeerRole::OutboundFullRelay
+            | PeerRole::OutboundBlockRelay
+            | PeerRole::Feeler => {
                 // TODO: Add whitelisted IPs option and check it here
                 false
             }
@@ -617,7 +651,8 @@ where
                     OutboundConnectType::Automatic {
                         block_relay_only: _,
                     }
-                    | OutboundConnectType::Reserved => {}
+                    | OutboundConnectType::Reserved
+                    | OutboundConnectType::Feeler => {}
                     OutboundConnectType::Manual { response_sender } => {
                         response_sender.send(Err(e));
                     }
@@ -728,7 +763,7 @@ where
                 }
             }
 
-            PeerRole::OutboundManual => {}
+            PeerRole::OutboundManual | PeerRole::Feeler => {}
 
             PeerRole::OutboundFullRelay => {
                 let expected: Services = (*self.p2p_config.node_type).into();
@@ -813,7 +848,7 @@ where
         // Load addresses only from outbound peers, like it's done in Bitcoin Core
         match peer_role {
             PeerRole::OutboundFullRelay | PeerRole::OutboundManual => true,
-            PeerRole::Inbound | PeerRole::OutboundBlockRelay => false,
+            PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
         }
     }
 
@@ -824,7 +859,8 @@ where
             PeerRole::Inbound => true,
             PeerRole::OutboundFullRelay
             | PeerRole::OutboundBlockRelay
-            | PeerRole::OutboundManual => false,
+            | PeerRole::OutboundManual
+            | PeerRole::Feeler => false,
         }
     }
 
@@ -906,7 +942,8 @@ where
             PeerRole::Inbound => {}
             PeerRole::OutboundFullRelay
             | PeerRole::OutboundBlockRelay
-            | PeerRole::OutboundManual => {
+            | PeerRole::OutboundManual
+            | PeerRole::Feeler => {
                 self.peerdb.outbound_peer_connected(address);
             }
         }
@@ -916,9 +953,10 @@ where
                 .peers
                 .values()
                 .filter_map(|peer| match peer.peer_role {
-                    PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
-                        None
-                    }
+                    PeerRole::Inbound
+                    | PeerRole::OutboundFullRelay
+                    | PeerRole::OutboundManual
+                    | PeerRole::Feeler => None,
                     PeerRole::OutboundBlockRelay => Some(peer.address),
                 })
                 // Note: there may be more than outbound_block_relay_count block relay connections
@@ -947,6 +985,7 @@ where
             }
             OutboundConnectType::Reserved => PeerRole::OutboundManual,
             OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
+            OutboundConnectType::Feeler => PeerRole::Feeler,
         }
     }
 
@@ -970,7 +1009,8 @@ where
                     OutboundConnectType::Automatic {
                         block_relay_only: _,
                     }
-                    | OutboundConnectType::Reserved => None,
+                    | OutboundConnectType::Reserved
+                    | OutboundConnectType::Feeler => None,
                     OutboundConnectType::Manual { response_sender } => Some(response_sender),
                 };
 
@@ -1002,7 +1042,8 @@ where
                 PeerRole::Inbound => {}
                 PeerRole::OutboundFullRelay
                 | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual => {
+                | PeerRole::OutboundManual
+                | PeerRole::Feeler => {
                     self.peerdb.report_outbound_failure(address);
                 }
             }
@@ -1010,6 +1051,10 @@ where
 
         if let Some(response) = response {
             response.send(accept_res);
+        }
+
+        if peer_role == PeerRole::Feeler {
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -1033,7 +1078,8 @@ where
             OutboundConnectType::Automatic {
                 block_relay_only: _,
             }
-            | OutboundConnectType::Reserved => {}
+            | OutboundConnectType::Reserved
+            | OutboundConnectType::Feeler => {}
             OutboundConnectType::Manual { response_sender } => {
                 response_sender.send(Err(error));
             }
@@ -1057,7 +1103,8 @@ where
                 PeerRole::Inbound => {}
                 PeerRole::OutboundFullRelay
                 | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual => {
+                | PeerRole::OutboundManual
+                | PeerRole::Feeler => {
                     self.peerdb.outbound_peer_disconnected(peer.address);
                 }
             }
@@ -1073,7 +1120,8 @@ where
                         PeerRole::Inbound => {}
                         PeerRole::OutboundFullRelay
                         | PeerRole::OutboundBlockRelay
-                        | PeerRole::OutboundManual => {
+                        | PeerRole::OutboundManual
+                        | PeerRole::Feeler => {
                             self.peerdb.remove_outbound_address(&peer.address);
                         }
                     },
@@ -1113,14 +1161,12 @@ where
     }
 
     fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, PeerRole)> + '_ {
-        let pending_automatic_outbound =
-            self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
-                let role = Self::determine_outbound_peer_role(pending_conn);
-                (*addr, role)
-            });
-        let connected_automatic_outbound =
-            self.peers.values().map(|peer_ctx| (peer_ctx.address, peer_ctx.peer_role));
-        connected_automatic_outbound.chain(pending_automatic_outbound)
+        let pending = self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
+            let role = Self::determine_outbound_peer_role(pending_conn);
+            (*addr, role)
+        });
+        let connected = self.peers.values().map(|peer_ctx| (peer_ctx.address, peer_ctx.peer_role));
+        connected.chain(pending)
     }
 
     /// Maintains the peer manager state.
@@ -1163,6 +1209,7 @@ where
     fn establish_new_connections(&mut self) {
         let mut cur_outbound_full_relay_conn_count = 0;
         let mut cur_outbound_block_relay_conn_count = 0;
+        let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
         for (addr, role) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
@@ -1185,6 +1232,9 @@ where
                     cur_outbound_block_relay_conn_count += 1;
                     cur_outbound_conn_addr_groups.insert(addr_group);
                 }
+                PeerRole::Feeler => {
+                    cur_feeler_conn_count += 1;
+                }
             }
         }
 
@@ -1199,7 +1249,7 @@ where
                 .saturating_sub(cur_outbound_full_relay_conn_count)
         };
 
-        let new_full_relay_conn_addresses = self.peerdb.select_new_non_reserved_outbound_addresses(
+        let new_full_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
             needed_outbound_full_relay_conn_count,
         );
@@ -1209,12 +1259,12 @@ where
         // manual connections (see CConnman::MaybePickPreferredNetwork for reference).
         // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
 
-        for address in new_full_relay_conn_addresses.into_iter() {
+        for address in &new_full_relay_conn_addresses {
             let addr_group = AddressGroup::from_peer_address(&address.as_peer_address());
             cur_outbound_conn_addr_groups.insert(addr_group);
 
             self.connect(
-                address,
+                *address,
                 OutboundConnectType::Automatic {
                     block_relay_only: false,
                 },
@@ -1226,15 +1276,14 @@ where
                 + *self.p2p_config.peer_manager_config.outbound_block_relay_extra_count)
                 .saturating_sub(cur_outbound_block_relay_conn_count);
 
-        let new_block_relay_conn_addresses =
-            self.peerdb.select_new_non_reserved_outbound_addresses(
-                &cur_outbound_conn_addr_groups,
-                needed_outbound_block_relay_conn_count,
-            );
+        let new_block_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
+            &cur_outbound_conn_addr_groups,
+            needed_outbound_block_relay_conn_count,
+        );
 
-        for address in new_block_relay_conn_addresses.into_iter() {
+        for address in &new_block_relay_conn_addresses {
             self.connect(
-                address,
+                *address,
                 OutboundConnectType::Automatic {
                     block_relay_only: true,
                 },
@@ -1247,8 +1296,21 @@ where
             .peerdb
             .select_reserved_outbound_addresses(&cur_pending_outbound_conn_addresses);
 
-        for address in new_reserved_conn_addresses.into_iter() {
-            self.connect(address, OutboundConnectType::Reserved);
+        for address in &new_reserved_conn_addresses {
+            self.connect(*address, OutboundConnectType::Reserved);
+        }
+
+        let now = self.time_getter.get_time();
+        if *self.p2p_config.peer_manager_config.enable_feeler_connections
+            && new_full_relay_conn_addresses.is_empty()
+            && cur_feeler_conn_count == 0
+            && now >= self.next_feeler_connection_time
+        {
+            if let Some(address) = self.peerdb.select_non_reserved_address_from_new_addr_table() {
+                self.connect(address, OutboundConnectType::Feeler);
+                self.next_feeler_connection_time =
+                    Self::choose_next_feeler_connection_time(&self.p2p_config, now);
+            }
         }
     }
 
@@ -1555,7 +1617,8 @@ where
                 PeerRole::Inbound => !self.pending_disconnects.contains_key(peer_id),
                 PeerRole::OutboundFullRelay
                 | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual => false,
+                | PeerRole::OutboundManual
+                | PeerRole::Feeler => false,
             })
             .count()
     }

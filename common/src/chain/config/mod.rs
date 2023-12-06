@@ -747,6 +747,7 @@ pub fn create_unit_test_config_builder() -> Builder {
             .expect("cannot fail"),
         )
         .genesis_unittest(Destination::AnyoneCanSpend)
+        .dns_seeds(vec![])
 }
 
 pub fn create_unit_test_config() -> ChainConfig {

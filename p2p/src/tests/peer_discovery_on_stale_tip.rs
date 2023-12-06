@@ -117,6 +117,10 @@ async fn peer_discovery_on_stale_tip_impl(
         outbound_full_relay_connection_min_age: Default::default(),
         stale_tip_time_diff: Default::default(),
         main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+
+        peerdb_config: Default::default(),
     };
     let p2p_config = Arc::new(make_p2p_config(peer_mgr_config));
 
@@ -253,6 +257,8 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let stale_tip_time_diff = Duration::from_secs(60 * 60);
     let outbound_conn_min_age = Duration::from_secs(30);
     let peer_mgr_main_loop_tick_interval = Duration::from_millis(1);
+    // Disable feeler connections, so that they don't interfere.
+    let enable_feeler_connections = false;
 
     let main_node_peer_mgr_config = PeerManagerConfig {
         outbound_full_relay_count: 1.into(),
@@ -265,13 +271,16 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_full_relay_connection_min_age: outbound_conn_min_age.into(),
         main_loop_tick_interval: peer_mgr_main_loop_tick_interval.into(),
 
+        enable_feeler_connections: enable_feeler_connections.into(),
+
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
         preserved_inbound_count_new_blocks: Default::default(),
         preserved_inbound_count_new_transactions: Default::default(),
-
         max_inbound_connections: Default::default(),
         outbound_block_relay_connection_min_age: Default::default(),
+        feeler_connections_interval: Default::default(),
+        peerdb_config: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
 
@@ -286,14 +295,17 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         stale_tip_time_diff: stale_tip_time_diff.into(),
         main_loop_tick_interval: peer_mgr_main_loop_tick_interval.into(),
 
+        enable_feeler_connections: enable_feeler_connections.into(),
+
         preserved_inbound_count_address_group: Default::default(),
         preserved_inbound_count_ping: Default::default(),
         preserved_inbound_count_new_blocks: Default::default(),
         preserved_inbound_count_new_transactions: Default::default(),
-
         max_inbound_connections: Default::default(),
         outbound_block_relay_connection_min_age: Default::default(),
         outbound_full_relay_connection_min_age: Default::default(),
+        feeler_connections_interval: Default::default(),
+        peerdb_config: Default::default(),
     };
     let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
 

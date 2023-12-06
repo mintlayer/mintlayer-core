@@ -147,6 +147,11 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 stale_tip_time_diff: Default::default(),
                 main_loop_tick_interval: Default::default(),
+
+                enable_feeler_connections: Default::default(),
+                feeler_connections_interval: Default::default(),
+
+                peerdb_config: Default::default(),
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),

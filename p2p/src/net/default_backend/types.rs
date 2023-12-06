@@ -35,7 +35,7 @@ use crate::{
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Command {
     Connect {
         address: SocketAddress,

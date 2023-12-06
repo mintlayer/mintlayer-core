@@ -50,6 +50,7 @@ pub enum PeerRole {
     OutboundFullRelay,
     OutboundBlockRelay,
     OutboundManual,
+    Feeler,
 }
 
 // TODO: Use something like enum_iterator

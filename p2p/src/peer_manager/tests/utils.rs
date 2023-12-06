@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use tokio::sync::mpsc;
+
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::PeerId;
 use test_utils::assert_matches_return_val;
 
@@ -31,4 +36,22 @@ pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {
     let msg = msg.categorize();
     let msg = assert_matches_return_val!(msg, CategorizedMessage::PeerManagerMessage(msg), msg);
     (peer_id, msg)
+}
+
+pub async fn recv_command_advance_time(
+    cmd_receiver: &mut mpsc::UnboundedReceiver<Command>,
+    time_getter: &P2pBasicTestTimeGetter,
+    advance_duration: Duration,
+) -> Result<Command, mpsc::error::TryRecvError> {
+    loop {
+        match cmd_receiver.try_recv() {
+            Err(mpsc::error::TryRecvError::Empty) => {
+                time_getter.advance_time(advance_duration);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            other => {
+                break other;
+            }
+        }
+    }
 }

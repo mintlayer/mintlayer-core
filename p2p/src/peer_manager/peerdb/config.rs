@@ -22,7 +22,7 @@ make_config_setting!(NewAddrTableBucketCount, usize, 1024);
 make_config_setting!(TriedAddrTableBucketCount, usize, 256);
 make_config_setting!(AddrTablesBucketSize, usize, 64);
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PeerDbConfig {
     /// Bucket count for the "new" address table.
     pub new_addr_table_bucket_count: NewAddrTableBucketCount,

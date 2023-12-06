@@ -256,7 +256,6 @@ impl Table {
         }
     }
 
-    #[cfg(test)]
     pub fn addr_iter(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
         self.addresses.values()
     }
@@ -302,6 +301,24 @@ pub mod test_utils {
         let result = map.values().copied().collect::<Vec<_>>();
         assert_eq!(result.len(), count);
         result
+    }
+
+    pub fn filter_out_collisions(
+        table: &Table,
+        addresses: impl Iterator<Item = SocketAddress>,
+    ) -> impl Iterator<Item = SocketAddress> {
+        let mut map = BTreeMap::new();
+
+        for addr in addresses {
+            let bucket_idx = table.bucket_idx(&addr);
+            let bucket_pos = table.bucket_pos(&addr, bucket_idx);
+
+            if let Entry::Vacant(entry) = map.entry((bucket_idx, bucket_pos)) {
+                entry.insert(addr);
+            }
+        }
+
+        map.into_values()
     }
 
     pub fn make_colliding_address(table: &Table, addr: &SocketAddress) -> SocketAddress {

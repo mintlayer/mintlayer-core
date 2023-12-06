@@ -1000,6 +1000,9 @@ fn config_with_block_relay_conn_limits(
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),
         main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        peerdb_config: Default::default(),
     }
 }
 
@@ -1025,6 +1028,9 @@ fn config_with_full_relay_conn_limits(
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),
         main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        peerdb_config: Default::default(),
     }
 }
 
@@ -1047,5 +1053,8 @@ fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
         // Other values are irrelevant
         stale_tip_time_diff: Default::default(),
         main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        peerdb_config: Default::default(),
     }
 }
