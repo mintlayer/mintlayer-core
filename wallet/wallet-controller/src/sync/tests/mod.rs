@@ -35,6 +35,7 @@ use crypto::{
 use futures::executor::block_on;
 use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
+use mempool_types::tx_options::TxOptionsOverrides;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
@@ -297,7 +298,11 @@ impl NodeInterface for MockNode {
     async fn submit_block(&self, _block: Block) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<(), Self::Error> {
+    async fn submit_transaction(
+        &self,
+        _tx: SignedTransaction,
+        _options: TxOptionsOverrides,
+    ) -> Result<(), Self::Error> {
         unreachable!()
     }
 

@@ -82,26 +82,30 @@ impl RpcCreds {
             }
 
             (None, None) => {
-                let username = COOKIE_USERNAME.to_owned();
-                let password = gen_password(&mut make_true_rng(), COOKIE_PASSWORD_LEN);
                 let cookie_file = match cookie_file {
                     Some(cookie_file) => cookie_file.as_ref().into(),
                     None => data_dir.as_ref().join(COOKIE_FILENAME),
                 };
-                let cookie = format!("{username}:{password}");
-
-                write_file_atomically(&cookie_file, &cookie)
-                    .map_err(|e| RpcCredsError::CookieFileIoError(cookie_file.clone(), e))?;
-
-                Ok(Self {
-                    username,
-                    password,
-                    cookie_file: Some(cookie_file),
-                })
+                Self::cookie_file(cookie_file)
             }
 
             _ => Err(RpcCredsError::InvalidUsernamePasswordConfig),
         }
+    }
+
+    pub fn cookie_file(cookie_file: PathBuf) -> Result<Self, RpcCredsError> {
+        let username = COOKIE_USERNAME.to_owned();
+        let password = gen_password(&mut make_true_rng(), COOKIE_PASSWORD_LEN);
+        let cookie = format!("{username}:{password}");
+
+        write_file_atomically(&cookie_file, &cookie)
+            .map_err(|e| RpcCredsError::CookieFileIoError(cookie_file.clone(), e))?;
+
+        Ok(Self {
+            username,
+            password,
+            cookie_file: Some(cookie_file),
+        })
     }
 
     pub fn basic(

@@ -7208,6 +7208,7 @@ dependencies = [
  "parity-scale-codec",
  "pos_accounting",
  "rstest",
+ "serde",
  "serialization",
  "storage",
  "tempfile",
@@ -7328,6 +7329,48 @@ dependencies = [
  "wallet-storage",
  "wallet-types",
  "zeroize",
+]
+
+[[package]]
+name = "wallet-rpc-daemon"
+version = "0.2.0"
+dependencies = [
+ "clap",
+ "common",
+ "logging",
+ "rpc",
+ "thiserror",
+ "tokio",
+ "utils",
+ "wallet-rpc-lib",
+]
+
+[[package]]
+name = "wallet-rpc-lib"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common",
+ "crypto",
+ "futures",
+ "jsonrpsee",
+ "logging",
+ "mempool-types",
+ "node-comm",
+ "rpc",
+ "rstest",
+ "serde",
+ "serialization",
+ "subsystem",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "utils",
+ "wallet",
+ "wallet-controller",
+ "wallet-test-node",
+ "wallet-types",
 ]
 
 [[package]]

@@ -19,7 +19,7 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 pub struct ChainInfo {
     chain_type: String,
     genesis_block_id: Id<GenBlock>,

@@ -1594,7 +1594,7 @@ fn group_preselected_inputs(
     Ok(preselected_inputs)
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Currency {
     Coin,
     Token(TokenId),

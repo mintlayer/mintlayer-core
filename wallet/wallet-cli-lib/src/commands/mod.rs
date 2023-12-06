@@ -521,7 +521,10 @@ impl CommandHandler {
         rpc_client: &NodeRpcClient,
         tx: SignedTransaction,
     ) -> Result<ConsoleCommand, WalletCliError> {
-        rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+        rpc_client
+            .submit_transaction(tx, Default::default())
+            .await
+            .map_err(WalletCliError::RpcError)?;
         Ok(Self::tx_submitted_command())
     }
 

@@ -1,0 +1,37 @@
+[package]
+name = "wallet-rpc-lib"
+license.workspace = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+common = { path = "../../common" }
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
+mempool-types = { path = "../../mempool/types" }
+node-comm = { path = "../wallet-node-client" }
+rpc = { path = "../../rpc" }
+serialization = { path = "../../serialization" }
+utils = { path = "../../utils" }
+wallet = { path = ".." }
+wallet-controller = { path = "../wallet-controller" }
+wallet-types = { path = "../types" }
+
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+jsonrpsee.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+
+subsystem = { path = "../../subsystem" }
+test-utils = { path = "../../test-utils" }
+wallet-test-node = { path = "../wallet-test-node" }
+wallet-types = { path = "../types" }
+
+rstest.workspace = true

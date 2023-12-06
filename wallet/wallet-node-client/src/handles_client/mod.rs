@@ -26,7 +26,9 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{tx_accumulator::PackingStrategy, FeeRate, MempoolHandle};
+use mempool::{
+    tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate, MempoolHandle,
+};
 use p2p::{
     error::P2pError,
     interface::types::ConnectedPeer,
@@ -242,8 +244,11 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        let options = mempool::tx_options::TxOptionsOverrides::default();
+    async fn submit_transaction(
+        &self,
+        tx: SignedTransaction,
+        options: TxOptionsOverrides,
+    ) -> Result<(), Self::Error> {
         Ok(self
             .p2p
             .call_async_mut(move |this| this.submit_transaction(tx, options))

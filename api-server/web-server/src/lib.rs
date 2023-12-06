@@ -41,7 +41,7 @@ pub trait TxSubmitClient {
 #[async_trait::async_trait]
 impl TxSubmitClient for NodeRpcClient {
     async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
-        self.submit_transaction(tx).await
+        self.submit_transaction(tx, Default::default()).await
     }
 
     async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {

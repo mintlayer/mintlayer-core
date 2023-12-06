@@ -77,6 +77,8 @@ pub enum ChainType {
 }
 
 impl ChainType {
+    pub const ALL: [ChainType; 4] = [Self::Mainnet, Self::Testnet, Self::Regtest, Self::Signet];
+
     pub const fn name(&self) -> &'static str {
         match self {
             ChainType::Mainnet => "mainnet",
