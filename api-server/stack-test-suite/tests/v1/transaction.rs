@@ -121,11 +121,13 @@ async fn ok(#[case] seed: Seed) {
 
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 

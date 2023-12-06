@@ -13,13 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use common::chain::UtxoOutPoint;
+
 use crate::DummyRPC;
 
 use super::*;
 
 #[tokio::test]
 async fn invalid_address() {
-    let (task, response) = spawn_webserver("/api/v1/address/invalid-address").await;
+    let (task, response) = spawn_webserver("/api/v1/address/invalid-address/available-utxos").await;
 
     assert_eq!(response.status(), 400);
 
@@ -43,14 +47,19 @@ async fn address_not_found(#[case] seed: Seed) {
     let destination = Destination::Address(PublicKeyHash::from(&public_key));
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v1/address/{}", address.get())).await;
+    let (task, response) = spawn_webserver(&format!(
+        "/api/v1/address/{}/available-utxos",
+        address.get()
+    ))
+    .await;
 
-    assert_eq!(response.status(), 404);
+    assert_eq!(response.status(), 200);
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let utxos = body.as_array().unwrap();
 
-    assert_eq!(body["error"].as_str().unwrap(), "Address not found");
+    assert!(utxos.is_empty());
 
     task.abort();
 }
@@ -59,11 +68,11 @@ async fn address_not_found(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
+async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = tokio::sync::oneshot::channel::<[(String, serde_json::Value); 2]>();
 
     let task = tokio::spawn(async move {
         let web_server_state = {
@@ -84,7 +93,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let alice_address =
                     Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
-                let mut alice_transaction_history: Vec<Id<Transaction>> = vec![];
+                let mut alice_utxos = BTreeMap::new();
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -92,8 +101,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 let bob_destination = Destination::Address(PublicKeyHash::from(&bob_pk));
                 let bob_address =
                     Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
-                let mut bob_balance = Amount::ZERO;
-                let mut bob_transaction_history: Vec<Id<Transaction>> = vec![];
+                let mut bob_utxos = BTreeMap::new();
 
                 // setup initial transaction
 
@@ -111,7 +119,6 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .add_output(previous_tx_out.clone())
                     .build();
 
-                alice_transaction_history.push(transaction.transaction().get_id());
                 let previous_transaction_id = transaction.transaction().get_id();
 
                 let mut previous_witness = InputWitness::Standard(
@@ -142,9 +149,6 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount1)).unwrap();
                 alice_balance = (alice_balance - Amount::from_atoms(random_coin_amount2)).unwrap();
 
-                bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount1)).unwrap();
-                bob_balance = (bob_balance + Amount::from_atoms(random_coin_amount2)).unwrap();
-
                 let alice_tx_out =
                     TxOutput::Transfer(OutputValue::Coin(alice_balance), alice_destination.clone());
 
@@ -171,8 +175,25 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     .add_output(bob_tx_out2.clone())
                     .build();
 
-                alice_transaction_history.push(transaction.transaction().get_id());
-                bob_transaction_history.push(transaction.transaction().get_id());
+                let utxo = UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(transaction.transaction().get_id()),
+                    0,
+                );
+                alice_utxos.insert(utxo, alice_tx_out);
+                bob_utxos.insert(
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction.transaction().get_id()),
+                        1,
+                    ),
+                    bob_tx_out1,
+                );
+                bob_utxos.insert(
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction.transaction().get_id()),
+                        2,
+                    ),
+                    bob_tx_out2,
+                );
 
                 previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
@@ -204,17 +225,27 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 _ = tx.send([
                     (
                         alice_address.get().to_string(),
-                        json!({
-                        "coin_balance": alice_balance.into_atoms(),
-                        "transaction_history": alice_transaction_history,
-                                }),
+                        alice_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo.0,
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
                     ),
                     (
                         bob_address.to_string(),
-                        json!({
-                        "coin_balance": bob_balance.into_atoms(),
-                        "transaction_history": bob_transaction_history,
-                                }),
+                        bob_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo.0,
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
                     ),
                 ]);
 
@@ -250,8 +281,8 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
         web_server(listener, web_server_state).await
     });
 
-    for (address, expected_balance) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}");
+    for (address, expected) in rx.await.unwrap() {
+        let url = format!("/api/v1/address/{address}/available-utxos");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
@@ -269,7 +300,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
         let body = response.text().await.unwrap();
         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-        assert_eq!(body, expected_balance);
+        assert_eq!(body, expected);
     }
 
     task.abort();
@@ -283,7 +314,7 @@ async fn ok(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = tokio::sync::oneshot::channel::<[(String, serde_json::Value); 2]>();
 
     let task = tokio::spawn(async move {
         let web_server_state = {
@@ -304,7 +335,7 @@ async fn ok(#[case] seed: Seed) {
                 let alice_address =
                     Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
-                let mut alice_transaction_history: Vec<Id<Transaction>> = vec![];
+                let mut alice_utxos = BTreeMap::new();
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -313,7 +344,7 @@ async fn ok(#[case] seed: Seed) {
                 let bob_address =
                     Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
                 let mut bob_balance = Amount::ZERO;
-                let mut bob_transaction_history: Vec<Id<Transaction>> = vec![];
+                let mut bob_utxos = BTreeMap::new();
 
                 // setup initial transaction
 
@@ -331,7 +362,6 @@ async fn ok(#[case] seed: Seed) {
                     .add_output(previous_tx_out.clone())
                     .build();
 
-                alice_transaction_history.push(transaction.transaction().get_id());
                 let mut previous_transaction_id = transaction.transaction().get_id();
 
                 let mut previous_witness = InputWitness::Standard(
@@ -384,8 +414,21 @@ async fn ok(#[case] seed: Seed) {
                         .add_output(bob_tx_out.clone())
                         .build();
 
-                    alice_transaction_history.push(transaction.transaction().get_id());
-                    bob_transaction_history.push(transaction.transaction().get_id());
+                    alice_utxos.clear();
+                    alice_utxos.insert(
+                        UtxoOutPoint::new(
+                            OutPointSourceId::Transaction(transaction.transaction().get_id()),
+                            0,
+                        ),
+                        alice_tx_out.clone(),
+                    );
+                    bob_utxos.insert(
+                        UtxoOutPoint::new(
+                            OutPointSourceId::Transaction(transaction.transaction().get_id()),
+                            1,
+                        ),
+                        bob_tx_out,
+                    );
                     previous_transaction_id = transaction.transaction().get_id();
 
                     previous_witness = InputWitness::Standard(
@@ -421,17 +464,27 @@ async fn ok(#[case] seed: Seed) {
                 _ = tx.send([
                     (
                         alice_address.get().to_string(),
-                        json!({
-                        "coin_balance": alice_balance.into_atoms(),
-                        "transaction_history": alice_transaction_history,
-                                }),
+                        alice_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo.0,
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
                     ),
                     (
                         bob_address.to_string(),
-                        json!({
-                        "coin_balance": bob_balance.into_atoms(),
-                        "transaction_history": bob_transaction_history,
-                                }),
+                        bob_utxos
+                            .into_iter()
+                            .map(|utxo| {
+                                json!({
+                                "outpoint": utxo.0,
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                            })
+                            .collect::<Vec<_>>()
+                            .into(),
                     ),
                 ]);
 
@@ -468,7 +521,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     for (address, expected_values) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}");
+        let url = format!("/api/v1/address/{address}/available-utxos");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener

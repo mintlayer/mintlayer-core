@@ -61,7 +61,7 @@ pub async fn run<S: ApiServerStorage>(
 ) -> Result<(), ApiServerScannerError> {
     // TODO: move this storage initialization into a separate function... the trait bounds are gonna be painful
 
-    {
+    let mut local_block = {
         let mut db_tx = storage
             .transaction_rw()
             .await
@@ -75,14 +75,27 @@ pub async fn run<S: ApiServerStorage>(
                 .initialize_storage(chain_config)
                 .await
                 .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
-        }
-        db_tx
-            .commit()
-            .await
-            .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
-    }
 
-    let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
+            db_tx
+                .commit()
+                .await
+                .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
+
+            let mut local_block = BlockchainState::new(Arc::clone(chain_config), storage);
+            local_block
+                .scan_genesis(chain_config.genesis_block().as_ref())
+                .await
+                .expect("Can't scan genesis");
+            local_block
+        } else {
+            db_tx
+                .commit()
+                .await
+                .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
+            BlockchainState::new(Arc::clone(chain_config), storage)
+        }
+    };
+
     loop {
         let sync_result =
             api_blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, &mut local_block)

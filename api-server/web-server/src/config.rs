@@ -41,6 +41,25 @@ pub struct ApiServerWebServerConfig {
     /// Postgres config values
     #[clap(flatten)]
     pub postgres_config: PostgresConfig,
+
+    #[clap(long)]
+    pub enable_post_routes: bool,
+
+    /// Optional RPC address
+    #[clap(long)]
+    pub rpc_address: Option<SocketAddr>,
+
+    /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
+    #[clap(long)]
+    pub rpc_cookie_file: Option<String>,
+
+    /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub rpc_username: Option<String>,
+
+    /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub rpc_password: Option<String>,
 }
 
 #[derive(Clone, Debug, Parser)]

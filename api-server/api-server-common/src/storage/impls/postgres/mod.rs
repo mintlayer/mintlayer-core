@@ -25,9 +25,6 @@ use bb8_postgres::PostgresConnectionManager;
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::ApiServerStorageError;
-use crate::storage::storage_api::ApiServerStorageRead;
-use crate::storage::storage_api::ApiServerStorageWrite;
-use crate::storage::storage_api::ApiServerTransactionRw;
 
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
@@ -57,7 +54,7 @@ impl TransactionalApiServerPostgresStorage {
         passsword: Option<&str>,
         database: Option<&str>,
         max_connections: u32,
-        chain_config: &common::chain::ChainConfig,
+        _chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
         let password_part = match passsword {
             Some(p) => format!("password={}", p),
@@ -110,21 +107,7 @@ impl TransactionalApiServerPostgresStorage {
             db_tx_conn_sender: conn_tx,
         };
 
-        result.initialize_if_not(chain_config).await?;
-
         Ok(result)
-    }
-
-    async fn initialize_if_not(
-        &self,
-        chain_config: &common::chain::ChainConfig,
-    ) -> Result<(), ApiServerStorageError> {
-        let mut tx = self.begin_rw_transaction().await?;
-        if !tx.is_initialized().await? {
-            tx.initialize_storage(chain_config).await?;
-        }
-        tx.commit().await?;
-        Ok(())
     }
 
     pub async fn begin_ro_transaction(

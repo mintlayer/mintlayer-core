@@ -18,14 +18,22 @@ mod config;
 mod error;
 
 use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
-use api_web_server::{api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState};
+use api_web_server::{
+    api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState, TxSubmitClient,
+};
 use clap::Parser;
-use common::chain::config::Builder;
+use common::chain::config::{Builder, ChainType};
 use logging::log;
+use node_comm::make_rpc_client;
+use node_lib::default_rpc_config;
+use rpc::RpcAuthData;
 use std::sync::Arc;
+use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
+
+use crate::error::ApiServerWebServerInitError;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), ApiServerWebServerInitError> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
@@ -35,7 +43,8 @@ async fn main() {
     let args = ApiServerWebServerConfig::parse();
     log::info!("Command line options: {args:?}");
 
-    let chain_config = Arc::new(Builder::new(args.network.into()).build());
+    let chain_type: ChainType = args.network.into();
+    let chain_config = Arc::new(Builder::new(chain_type).build());
 
     let storage = TransactionalApiServerPostgresStorage::new(
         &args.postgres_config.postgres_host,
@@ -47,17 +56,49 @@ async fn main() {
         &chain_config,
     )
     .await
-    .unwrap_or_else(|e| {
-        log::error!("Error creating Postgres storage: {}", e);
-        std::process::exit(1);
-    });
+    .map_err(ApiServerWebServerInitError::PostgresConnectionError)?;
+
+    let rpc_client = match args.enable_post_routes {
+        false => None,
+        true => {
+            let rpc_auth = match (args.rpc_cookie_file, args.rpc_username, args.rpc_password) {
+                (None, None, None) => {
+                    let cookie_file_path =
+                        default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+                    RpcAuthData::Cookie { cookie_file_path }
+                }
+                (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
+                    cookie_file_path: cookie_file_path.into(),
+                },
+                (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
+                _ => {
+                    return Err(ApiServerWebServerInitError::InvalidConfig(
+                        "Invalid RPC cookie/username/password combination".to_owned(),
+                    ))
+                }
+            };
+            let default_http_rpc_addr =
+                || default_rpc_config(&chain_config).http_bind_address.expect("Can't fail");
+
+            let rpc_address = args.rpc_address.unwrap_or_else(default_http_rpc_addr);
+
+            Some(
+                make_rpc_client(rpc_address.to_string(), rpc_auth)
+                    .await
+                    .map_err(ApiServerWebServerInitError::RpcError)?,
+            )
+        }
+    };
 
     let state = ApiServerWebServerState {
         db: Arc::new(storage),
         chain_config,
+        rpc: rpc_client.map(Arc::new),
     };
 
     web_server(args.address.unwrap_or_default().tcp_listener(), state)
         .await
         .expect("API Server Web Server failed");
+
+    Ok(())
 }

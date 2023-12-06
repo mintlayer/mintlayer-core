@@ -13,27 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::helpers::make_trial;
 use crate::make_test;
+use pos_accounting::PoolData;
 
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw,
+        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
     },
 };
-use crypto::random::Rng;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
-        block::timestamp::BlockTimestamp, Block, OutPointSourceId, SignedTransaction, Transaction,
-        TxInput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, config::create_unit_test_config,
+        output_value::OutputValue, Block, DelegationId, Destination, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -47,7 +54,11 @@ where
     S: ApiServerStorage,
     Fut: Future<Output = S> + Send + 'static,
 {
-    let storage = storage_maker().await;
+    let mut storage = storage_maker().await;
+    let mut tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    tx.initialize_storage(&chain_config).await.unwrap();
+    tx.commit().await.unwrap();
     let tx = storage.transaction_ro().await.unwrap();
     assert!(tx.is_initialized().await.unwrap());
     Ok(())
@@ -66,6 +77,10 @@ where
     let mut rng = make_seedable_rng(seed);
 
     let mut storage = storage_maker().await;
+    let mut tx = storage.transaction_rw().await.unwrap();
+    let chain_config = create_unit_test_config();
+    tx.initialize_storage(&chain_config).await.unwrap();
+    tx.commit().await.unwrap();
 
     let db_tx = storage.transaction_ro().await.unwrap();
 
@@ -231,6 +246,263 @@ where
 
         let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting address available utxos
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+        let test_framework = TestFramework::builder(&mut rng).build();
+        let chain_config = test_framework.chain_config().clone();
+
+        let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let bob_destination = Destination::Address(PublicKeyHash::from(&bob_pk));
+        let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+
+        let tx = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+        assert!(tx.is_empty());
+
+        drop(db_tx);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
+        let outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(random_tx_id),
+            rng.gen::<u32>(),
+        );
+        let output = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+            bob_destination.clone(),
+        );
+
+        let utxo = Utxo::new(output.clone(), false);
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+
+        // set one and get it
+        {
+            db_tx
+                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.get(), block_height)
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+        }
+
+        // set another one and retrieve both
+        {
+            let random_tx_id: Id<Transaction> =
+                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let outpoint2 = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(random_tx_id),
+                rng.gen::<u32>(),
+            );
+            let output2 = TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                bob_destination,
+            );
+
+            let utxo = Utxo::new(output2.clone(), false);
+            let block_height = BlockHeight::new(rng.gen_range(1..100));
+            db_tx
+                .set_utxo_at_height(
+                    outpoint2.clone(),
+                    utxo.clone(),
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            let mut expected_utxos =
+                BTreeMap::from_iter([(outpoint, output), (outpoint2.clone(), output2.clone())]);
+            assert_eq!(bob_utxos.len(), 2);
+
+            for (outpoint, output) in bob_utxos {
+                let expected = expected_utxos.get(&outpoint).unwrap();
+                assert_eq!(&output, expected);
+            }
+
+            // set the new one to spent
+            let utxo = Utxo::new(output2.clone(), true);
+            expected_utxos.remove(&outpoint2);
+            db_tx
+                .set_utxo_at_height(
+                    outpoint2,
+                    utxo,
+                    bob_address.get(),
+                    block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            assert_eq!(bob_utxos.len(), 1);
+
+            for (outpoint, output) in bob_utxos {
+                let expected = expected_utxos.get(&outpoint).unwrap();
+                assert_eq!(&output, expected);
+            }
+        }
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting pool data
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // test missing random pool data
+        {
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap();
+            assert!(pool_data.is_none());
+        }
+
+        {
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
+            let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let random_pool_data = PoolData::new(
+                Destination::PublicKey(pk),
+                amount_to_stake,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+
+            db_tx
+                .set_pool_data_at_height(random_pool_id, &random_pool_data, random_block_height)
+                .await
+                .unwrap();
+
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data);
+
+            let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let random_pool_data_new = PoolData::new(
+                Destination::PublicKey(pk),
+                amount_to_stake,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+
+            // update pool data in next block height
+            db_tx
+                .set_pool_data_at_height(
+                    random_pool_id,
+                    &random_pool_data_new,
+                    random_block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data_new);
+
+            // delete the new data
+            db_tx.del_pools_above_height(random_block_height).await.unwrap();
+
+            // the old data should still be there
+            let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data);
+        }
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // Test setting/getting delegation data
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // test missing random pool data
+        {
+            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
+            let delegation_data = db_tx.get_delegation(random_delegation_id).await.unwrap();
+            assert!(delegation_data.is_none());
+        }
+
+        {
+            let random_delegation_id = DelegationId::new(H256::random_using(&mut rng));
+            let random_block_height = BlockHeight::new(rng.gen_range(1..1000) as u64);
+
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let random_pool_id = PoolId::new(H256::random_using(&mut rng));
+            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+
+            let random_delegation =
+                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+
+            db_tx
+                .set_delegation_at_height(
+                    random_delegation_id,
+                    &random_delegation,
+                    random_block_height,
+                )
+                .await
+                .unwrap();
+
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation);
+
+            // update delegation on new height
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let random_balance = Amount::from_atoms(rng.gen::<u128>());
+
+            let random_delegation_new =
+                Delegation::new(Destination::PublicKey(pk), random_pool_id, random_balance);
+
+            db_tx
+                .set_delegation_at_height(
+                    random_delegation_id,
+                    &random_delegation_new,
+                    random_block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation_new);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation_new);
+
+            // delete the new one and we should be back to the old one
+            db_tx.del_delegations_above_height(random_block_height).await.unwrap();
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap().unwrap();
+            assert_eq!(delegation, random_delegation);
+
+            let delegations = db_tx.get_pool_delegations(random_pool_id).await.unwrap();
+            assert_eq!(delegations.len(), 1);
+            assert_eq!(delegations.values().last().unwrap(), &random_delegation);
+
+            db_tx
+                .del_delegations_above_height(random_block_height.prev_height().unwrap())
+                .await
+                .unwrap();
+            let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap();
+            assert!(delegation.is_none());
+        }
 
         db_tx.commit().await.unwrap();
     }

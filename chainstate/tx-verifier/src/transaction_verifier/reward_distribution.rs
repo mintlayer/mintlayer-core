@@ -16,29 +16,27 @@
 use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
-use crate::{error::ConnectTransactionError, TransactionSource};
+use crate::error::ConnectTransactionError;
 
 use common::{
     chain::{Block, DelegationId, PoolId},
     primitives::{per_thousand::PerThousand, Amount, Id},
     Uint256,
 };
-use pos_accounting::{
-    AccountingBlockRewardUndo, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
-};
+use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
 use utils::ensure;
 
-use super::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter;
-
 /// Distribute reward among the pool's owner and delegations
-pub fn distribute_pos_reward<P: PoSAccountingView>(
-    accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
+pub fn distribute_pos_reward<
+    U,
+    P: PoSAccountingView<Error = pos_accounting::Error> + PoSAccountingOperations<U>,
+>(
+    accounting_adapter: &mut P,
     block_id: Id<Block>,
     pool_id: PoolId,
     total_reward: Amount,
-) -> Result<AccountingBlockRewardUndo, ConnectTransactionError> {
+) -> Result<Vec<U>, ConnectTransactionError> {
     let pool_data = accounting_adapter
-        .accounting_delta()
         .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
@@ -63,7 +61,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
     // Distribute reward among delegators.
     // In some cases this process can yield reward unallocated to delegators. This reward goes to the pool owner.
     let (delegation_undos, unallocated_reward) = if total_delegations_reward > Amount::ZERO {
-        match accounting_adapter.accounting_delta().get_pool_delegations_shares(pool_id)? {
+        match accounting_adapter.get_pool_delegations_shares(pool_id)? {
             Some(delegation_shares) => {
                 let total_delegations_balance =
                     delegation_shares.values().copied().sum::<Option<Amount>>().ok_or(
@@ -94,16 +92,15 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
 
     let total_owner_reward = (pool_owner_reward + unallocated_reward)
         .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
-    let increase_pool_balance_undo = accounting_adapter
-        .operations(TransactionSource::Chain(block_id))
-        .increase_pool_pledge_amount(pool_id, total_owner_reward)?;
+    let increase_pool_balance_undo =
+        accounting_adapter.increase_pool_pledge_amount(pool_id, total_owner_reward)?;
 
     let undos = delegation_undos
         .into_iter()
         .chain(std::iter::once(increase_pool_balance_undo))
         .collect();
 
-    Ok(AccountingBlockRewardUndo::new(undos))
+    Ok(undos)
 }
 
 fn calculate_pool_owner_reward(
@@ -124,16 +121,16 @@ fn calculate_pool_owner_reward(
 }
 
 /// The reward is distributed among delegations proportionally to their balance
-fn distribute_delegations_pos_reward<P: PoSAccountingView>(
-    accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
+fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOperations<U>>(
+    accounting_adapter: &mut P,
     delegation_shares: &BTreeMap<DelegationId, Amount>,
     block_id: Id<Block>,
     pool_id: PoolId,
     total_delegations_balance: Amount,
     total_delegations_reward: Amount,
-) -> Result<(Vec<PoSAccountingUndo>, Amount), ConnectTransactionError> {
+) -> Result<(Vec<U>, Amount), ConnectTransactionError> {
     let rewards_per_delegation = calculate_rewards_per_delegation(
-        delegation_shares,
+        delegation_shares.iter(),
         pool_id,
         total_delegations_balance,
         total_delegations_reward,
@@ -144,7 +141,6 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
         .iter()
         .map(|(delegation_id, reward)| {
             accounting_adapter
-                .operations(TransactionSource::Chain(block_id))
                 .delegate_staking(*delegation_id, *reward)
                 .map_err(ConnectTransactionError::PoSAccountingError)
         })
@@ -169,8 +165,8 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     Ok((delegation_undos, delegations_reward_remainder))
 }
 
-fn calculate_rewards_per_delegation(
-    delegation_shares: &BTreeMap<DelegationId, Amount>,
+fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'a Amount)>>(
+    delegation_shares: I,
     pool_id: PoolId,
     total_delegations_amount: Amount,
     total_delegations_reward_amount: Amount,
@@ -187,7 +183,7 @@ fn calculate_rewards_per_delegation(
     let total_delegations_balance = Uint256::from_amount(total_delegations_amount);
     let total_delegations_reward = Uint256::from_amount(total_delegations_reward_amount);
     delegation_shares
-        .iter()
+        .into_iter()
         .map(
             |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
                 let balance = Uint256::from_amount(*balance_amount);
@@ -211,6 +207,11 @@ fn calculate_rewards_per_delegation(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        transaction_verifier::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
+        TransactionSource,
+    };
+
     use super::*;
     use common::{
         amount_sum,
@@ -417,8 +418,11 @@ mod tests {
             ]),
         );
 
-        let all_undos =
-            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id_a, reward).unwrap();
+        let all_undos = {
+            let mut accounting_adapter =
+                accounting_adapter.operations(TransactionSource::Chain(block_id));
+            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id_a, reward).unwrap()
+        };
 
         let (consumed, _) = accounting_adapter.consume();
         db.batch_write_delta(consumed).unwrap();
@@ -429,7 +433,6 @@ mod tests {
         let mut db = PoSAccountingDB::new(&mut store);
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
         all_undos
-            .into_inner()
             .into_iter()
             .try_for_each(|u| {
                 accounting_adapter.operations(TransactionSource::Chain(block_id)).undo(u)
@@ -503,7 +506,11 @@ mod tests {
         let db = PoSAccountingDB::new(&store);
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&db);
 
-        distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
+        {
+            let mut accounting_adapter =
+                accounting_adapter.operations(TransactionSource::Chain(block_id));
+            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
+        };
 
         let new_pledge_amount = accounting_adapter
             .accounting_delta()
@@ -624,7 +631,11 @@ mod tests {
         let mut db = PoSAccountingDB::new(&mut store);
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
 
-        distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
+        {
+            let mut accounting_adapter =
+                accounting_adapter.operations(TransactionSource::Chain(block_id));
+            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
+        };
 
         let expected_store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, expected_pool_data)]),
@@ -688,7 +699,11 @@ mod tests {
         let mut db = PoSAccountingDB::new(&mut store);
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
 
-        distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
+        {
+            let mut accounting_adapter =
+                accounting_adapter.operations(TransactionSource::Chain(block_id));
+            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
+        };
 
         let expected_store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, expected_pool_data)]),
@@ -747,7 +762,11 @@ mod tests {
         let mut db = PoSAccountingDB::new(&mut store);
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
 
-        distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
+        {
+            let mut accounting_adapter =
+                accounting_adapter.operations(TransactionSource::Chain(block_id));
+            distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
+        };
 
         let expected_store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, expected_pool_data)]),

@@ -67,7 +67,7 @@ fn create_pool_data(
 
 fn create_pool(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut impl PoSAccountingOperations,
+    op: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
     pledged_amount: Amount,
 ) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
@@ -83,7 +83,7 @@ fn create_pool(
 
 fn create_delegation_id(
     rng: &mut (impl Rng + CryptoRng),
-    op: &mut impl PoSAccountingOperations,
+    op: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
     target_pool: PoolId,
 ) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);

@@ -13,7 +13,10 @@ chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
 node-comm = { path = "../../wallet/wallet-node-client" }
+pos_accounting = { path = "../../pos_accounting" }
 utils = { path = "../../utils" }
+tx-verifier = { path = "../../chainstate/tx-verifier" }
+constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }
 
 async-trait.workspace = true
 thiserror.workspace = true
@@ -23,5 +26,6 @@ tokio = { workspace = true, features = ["full"] }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 crypto = { path = "../../crypto" }
 test-utils = { path = "../../test-utils" }
+serialization = { path = "../../serialization" }
 
 rstest.workspace = true

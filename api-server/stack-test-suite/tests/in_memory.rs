@@ -16,9 +16,21 @@
 mod v1;
 
 use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
-use api_web_server::{api::web_server, ApiServerWebServerState};
-use common::chain::config::create_unit_test_config;
+use api_web_server::{api::web_server, ApiServerWebServerState, TxSubmitClient};
+use common::chain::{config::create_unit_test_config, SignedTransaction};
 use std::{net::TcpListener, sync::Arc};
+
+struct DummyRPC {}
+
+#[async_trait::async_trait]
+impl TxSubmitClient for DummyRPC {
+    async fn submit_tx(
+        &self,
+        _: SignedTransaction,
+    ) -> Result<(), node_comm::rpc_client::NodeRpcError> {
+        Ok(())
+    }
+}
 
 pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -32,6 +44,7 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
+                rpc: Some(Arc::new(DummyRPC {})),
             }
         };
 

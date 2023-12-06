@@ -19,11 +19,28 @@ pub mod error;
 
 pub use error::ApiServerWebServerError;
 
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, SignedTransaction};
+use node_comm::{
+    node_traits::NodeInterface,
+    rpc_client::{NodeRpcClient, NodeRpcError},
+};
 use std::sync::Arc;
 
+#[async_trait::async_trait]
+pub trait TxSubmitClient {
+    async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError>;
+}
+
+#[async_trait::async_trait]
+impl TxSubmitClient for NodeRpcClient {
+    async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
+        self.submit_transaction(tx).await
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct ApiServerWebServerState<T> {
+pub struct ApiServerWebServerState<T, R> {
     pub db: T,
     pub chain_config: Arc<ChainConfig>,
+    pub rpc: R,
 }

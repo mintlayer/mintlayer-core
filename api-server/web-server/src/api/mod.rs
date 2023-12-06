@@ -19,7 +19,7 @@ pub mod v1;
 use crate::{
     api,
     error::{ApiServerWebServerClientError, ApiServerWebServerError},
-    ApiServerWebServerState,
+    ApiServerWebServerState, TxSubmitClient,
 };
 
 use api_server_common::storage::storage_api::ApiServerStorage;
@@ -47,9 +47,12 @@ async fn server_status() -> Result<impl IntoResponse, ApiServerWebServerError> {
 }
 
 #[allow(dead_code)]
-pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
+pub fn web_server<
+    T: ApiServerStorage + Send + Sync + 'static,
+    R: TxSubmitClient + Send + Sync + 'static,
+>(
     socket: TcpListener,
-    state: ApiServerWebServerState<Arc<T>>,
+    state: ApiServerWebServerState<Arc<T>, Option<Arc<R>>>,
 ) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
     let cors_layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
@@ -58,7 +61,7 @@ pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
 
     let routes = Router::new()
         .route("/", get(server_status))
-        .nest("/api/v1", api::v1::routes())
+        .nest("/api/v1", api::v1::routes(state.rpc.is_some()))
         .fallback(bad_request)
         .with_state(state)
         .layer(cors_layer);

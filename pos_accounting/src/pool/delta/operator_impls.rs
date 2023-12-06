@@ -36,7 +36,7 @@ use crate::{
 
 use super::PoSAccountingDelta;
 
-impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
+impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAccountingDelta<P> {
     fn create_pool(
         &mut self,
         pool_id: PoolId,

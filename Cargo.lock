@@ -239,13 +239,17 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
+ "constraints-value-accumulator",
  "crypto",
  "logging",
  "node-comm",
+ "pos_accounting",
  "rstest",
+ "serialization",
  "test-utils",
  "thiserror",
  "tokio",
+ "tx-verifier",
  "utils",
 ]
 
@@ -262,6 +266,7 @@ dependencies = [
  "futures",
  "libtest-mimic",
  "logging",
+ "pos_accounting",
  "proptest",
  "rand 0.8.5",
  "test-utils",
@@ -282,6 +287,7 @@ dependencies = [
  "futures",
  "logging",
  "parity-scale-codec",
+ "pos_accounting",
  "rstest",
  "serialization",
  "test-utils",
@@ -305,6 +311,8 @@ dependencies = [
  "crypto",
  "hex",
  "libtest-mimic",
+ "node-comm",
+ "pos_accounting",
  "reqwest",
  "rstest",
  "serde",
@@ -320,6 +328,7 @@ name = "api-web-server"
 version = "0.2.0"
 dependencies = [
  "api-server-common",
+ "async-trait",
  "axum",
  "clap",
  "common",
@@ -327,12 +336,16 @@ dependencies = [
  "hex",
  "hyper",
  "logging",
+ "node-comm",
+ "node-lib",
+ "rpc",
  "serde",
  "serde_json",
  "serialization",
  "thiserror",
  "tokio",
  "tower-http",
+ "utils",
 ]
 
 [[package]]

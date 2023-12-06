@@ -15,6 +15,8 @@
 
 use api_web_server::api::json_helpers::{tx_to_json, txoutput_to_json};
 
+use crate::DummyRPC;
+
 use super::*;
 
 #[tokio::test]
@@ -90,6 +92,7 @@ async fn ok(#[case] seed: Seed) {
             // Scan those blocks
             let chain_config = Arc::new(chain_config);
             let mut local_node = BlockchainState::new(chain_config.clone(), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
             // Get the current block at block_height
@@ -168,6 +171,7 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config,
+                rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
 

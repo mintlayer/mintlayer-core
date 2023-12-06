@@ -54,7 +54,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
+use pos_accounting::{PoSAccountingDB, PoSAccountingOperations, PoSAccountingUndo};
 use tx_verifier::transaction_verifier;
 use utils::{
     ensure,
@@ -592,7 +592,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn create_pool_in_storage(
         &self,
-        db: &mut impl PoSAccountingOperations,
+        db: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
     ) -> Result<(), BlockError> {
         for output in self.chain_config.genesis_block().utxos().iter() {
             match output {

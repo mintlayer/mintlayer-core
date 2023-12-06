@@ -13,13 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -55,6 +61,20 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_transaction_with_block(transaction_id)
     }
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        self.transaction.get_delegation(delegation_id)
+    }
+
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        self.transaction.get_pool_delegations(pool_id)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
@@ -82,5 +102,26 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)
+    }
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        self.transaction.get_pool_data(pool_id)
+    }
+
+    async fn get_utxo(
+        &self,
+        outpoint: UtxoOutPoint,
+    ) -> Result<Option<Utxo>, ApiServerStorageError> {
+        self.transaction.get_utxo(outpoint)
+    }
+
+    async fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        self.transaction.get_address_available_utxos(address)
     }
 }

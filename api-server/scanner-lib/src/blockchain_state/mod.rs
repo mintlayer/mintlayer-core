@@ -16,21 +16,29 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw,
+    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
 };
+use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
     address::Address,
     chain::{
-        config::ChainConfig, output_value::OutputValue, transaction::OutPointSourceId, Block,
-        Destination, GenBlock, Transaction, TxInput, TxOutput,
+        block::ConsensusData, config::ChainConfig, output_value::OutputValue,
+        transaction::OutPointSourceId, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
+use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
     sync::Arc,
 };
+use tx_verifier::transaction_verifier::distribute_pos_reward;
+
+use self::adapter::PoSAdapter;
+
+mod adapter;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -54,6 +62,25 @@ impl<S: ApiServerStorage> BlockchainState<S> {
     pub fn storage(&self) -> &S {
         &self.storage
     }
+
+    pub async fn scan_genesis(&mut self, genesis: &Genesis) -> Result<(), BlockchainStateError> {
+        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
+
+        update_tables_from_block_reward(
+            self.chain_config.clone(),
+            &mut db_tx,
+            BlockHeight::new(0),
+            genesis.utxos(),
+            genesis.get_id().into(),
+        )
+        .await
+        .expect("Unable to update tables from block reward");
+
+        db_tx.commit().await.expect("Unable to commit transaction");
+        logging::log::info!("Database commit completed successfully");
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -73,22 +100,9 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     ) -> Result<(), Self::Error> {
         let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
 
-        // Disconnect blocks from main-chain
-        db_tx
-            .del_main_chain_blocks_above_height(common_block_height)
+        disconnect_tables_above_height(&mut db_tx, common_block_height)
             .await
-            .expect("Unable to disconnect block");
-
-        // Disconnect address balances
-        db_tx
-            .del_address_balance_above_height(common_block_height)
-            .await
-            .expect("Unable to disconnect address balance");
-
-        db_tx
-            .del_address_transactions_above_height(common_block_height)
-            .await
-            .expect("Unable to disconnect address transactions");
+            .expect("Unable to disconnect tables");
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
@@ -96,15 +110,8 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
-            update_address_tables_from_outputs(
-                Arc::clone(&self.chain_config),
-                &mut db_tx,
-                None,
-                block_height,
-                block.block_reward().outputs(),
-            )
-            .await
-            .expect("Unable to update balances from block reward outputs");
+            let total_fees =
+                calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
 
             for tx in block.transactions() {
                 db_tx
@@ -112,26 +119,25 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     .await
                     .expect("Unable to set transaction");
 
-                update_address_tables_from_inputs(
+                update_tables_from_transaction(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
                     block_height,
-                    tx.inputs(),
-                    tx.transaction().get_id(),
+                    tx,
                 )
                 .await
-                .expect("Unable to update balances from inputs");
-
-                update_address_tables_from_outputs(
-                    Arc::clone(&self.chain_config),
-                    &mut db_tx,
-                    Some(tx.transaction().get_id()),
-                    block_height,
-                    tx.outputs(),
-                )
-                .await
-                .expect("Unable to update balances from transaction outputs");
+                .expect("Unable to update tables from transaction");
             }
+
+            update_tables_from_block(
+                Arc::clone(&self.chain_config),
+                &mut db_tx,
+                block_height,
+                &block,
+                total_fees,
+            )
+            .await
+            .expect("Unable to update tables from block");
 
             let block_id = block.get_id();
             db_tx
@@ -154,7 +160,385 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     }
 }
 
-async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
+async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    block_height: BlockHeight,
+) -> Result<(), ApiServerStorageError> {
+    if db_tx.get_best_block().await.expect("Unable to get best block").0 > block_height {
+        logging::log::info!("Disconnecting blocks above: {:?}", block_height);
+        db_tx
+            .del_main_chain_blocks_above_height(block_height)
+            .await
+            .expect("Unable to disconnect block");
+    }
+
+    db_tx
+        .del_address_balance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address balance");
+
+    db_tx
+        .del_address_transactions_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address transactions");
+
+    db_tx
+        .del_utxo_above_height(block_height)
+        .await
+        .expect("Unable to disconnect UTXOs");
+
+    db_tx
+        .del_delegations_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address transactions");
+
+    db_tx
+        .del_pools_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address transactions");
+
+    Ok(())
+}
+
+async fn update_tables_from_block<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    block: &Block,
+    total_tx_fees: Fee,
+) -> Result<(), ApiServerStorageError> {
+    update_tables_from_block_reward(
+        chain_config.clone(),
+        db_tx,
+        block_height,
+        block.block_reward().outputs(),
+        block.get_id().into(),
+    )
+    .await
+    .expect("Unable to update tables from block reward");
+
+    update_tables_from_consensus_data(
+        chain_config.clone(),
+        db_tx,
+        block_height,
+        block,
+        total_tx_fees,
+    )
+    .await
+    .expect("Unable to update tables from consensus data");
+
+    Ok(())
+}
+
+async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    block_rewards: &[TxOutput],
+    block_id: Id<GenBlock>,
+) -> Result<(), ApiServerStorageError> {
+    for (idx, output) in block_rewards.iter().enumerate() {
+        match output {
+            TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => {}
+            TxOutput::ProduceBlockFromStake(_, _) => {
+                set_utxo(
+                    OutPointSourceId::BlockReward(block_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::CreateStakePool(pool_id, pool_data) => {
+                let pool_data = PoolData::new(
+                    pool_data.decommission_key().clone(),
+                    pool_data.value(),
+                    pool_data.vrf_public_key().clone(),
+                    pool_data.margin_ratio_per_thousand(),
+                    pool_data.cost_per_block(),
+                );
+
+                db_tx
+                    .set_pool_data_at_height(*pool_id, &pool_data, block_height)
+                    .await
+                    .expect("unable to update pool data");
+                set_utxo(
+                    OutPointSourceId::BlockReward(block_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::Transfer(output_value, destination)
+            | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
+                Destination::PublicKey(_) | Destination::Address(_) => {
+                    let address = Address::<Destination>::new(&chain_config, destination)
+                        .expect("Unable to encode destination");
+                    match output_value {
+                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::Coin(amount) => {
+                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                        }
+                    }
+                    set_utxo(
+                        OutPointSourceId::BlockReward(block_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::AnyoneCanSpend => {
+                    // for tests
+                    set_utxo(
+                        OutPointSourceId::BlockReward(block_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
+            },
+        }
+    }
+
+    Ok(())
+}
+
+async fn calculate_fees<T: ApiServerStorageWrite>(
+    chain_config: &ChainConfig,
+    db_tx: &mut T,
+    block: &Block,
+    block_height: BlockHeight,
+) -> Result<Fee, ApiServerStorageError> {
+    let new_outputs: BTreeMap<_, _> = block
+        .transactions()
+        .iter()
+        .flat_map(|tx| {
+            tx.outputs().iter().enumerate().map(|(idx, out)| {
+                (
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(tx.transaction().get_id()),
+                        idx as u32,
+                    ),
+                    out,
+                )
+            })
+        })
+        .collect();
+
+    let mut total_fees = AccumulatedFee::new();
+    for tx in block.transactions().iter() {
+        let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
+        total_fees = total_fees.combine(fee).expect("no overflow");
+    }
+
+    Ok(total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow"))
+}
+
+async fn tx_fees<T: ApiServerStorageWrite>(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    tx: &SignedTransaction,
+    db_tx: &mut T,
+    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
+) -> Result<AccumulatedFee, ApiServerStorageError> {
+    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
+    let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
+
+    let pledge_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
+    // only used for checks for attempted to print money but we don't need to check that here
+    let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        chain_config,
+        block_height,
+        pledge_getter,
+        delegation_balance_getter,
+        tx.inputs(),
+        &inputs_utxos,
+    )
+    .expect("valid block");
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs()).expect("valid block");
+    let consumed_accumulator =
+        inputs_accumulator.satisfy_with(outputs_accumulator).expect("valid block");
+    Ok(consumed_accumulator)
+}
+
+async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
+    inputs_utxos: &Vec<Option<TxOutput>>,
+    db_tx: &mut T,
+) -> Result<BTreeMap<PoolId, Amount>, ApiServerStorageError> {
+    let mut pools = BTreeMap::new();
+    for output in inputs_utxos {
+        match output {
+            Some(
+                TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
+            ) => {
+                let amount =
+                    db_tx.get_pool_data(*pool_id).await?.expect("should exist").pledge_amount();
+                pools.insert(*pool_id, amount);
+            }
+            Some(
+                TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _),
+            ) => {}
+            Some(TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_)) => {
+                //TODO: add when we support tokens
+            }
+            None => {}
+        }
+    }
+    Ok(pools)
+}
+
+async fn collect_inputs_utxos<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    inputs: &[TxInput],
+    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
+) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
+    let mut outputs = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let output = match input {
+            TxInput::Utxo(outpoint) => {
+                if let Some(output) = new_outputs.get(outpoint) {
+                    Some((*output).clone())
+                } else {
+                    db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output())
+                }
+            }
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+        };
+
+        outputs.push(output);
+    }
+
+    Ok(outputs)
+}
+
+async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    block: &Block,
+    total_tx_fees: Fee,
+) -> Result<(), ApiServerStorageError> {
+    match block.consensus_data() {
+        ConsensusData::None | ConsensusData::PoW(_) => {}
+        ConsensusData::PoS(pos_data) => {
+            for input in pos_data.kernel_inputs() {
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo =
+                            db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                        set_utxo(
+                            outpoint.source_id(),
+                            outpoint.output_index() as usize,
+                            utxo.output(),
+                            db_tx,
+                            block_height,
+                            true,
+                            &chain_config,
+                        )
+                        .await;
+                    }
+                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
+                }
+            }
+
+            let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
+
+            let total_reward = (block_subsidy + total_tx_fees.0)
+                .expect("Block subsidy and fees should not overflow");
+
+            let pool_id = *pos_data.stake_pool_id();
+            let pool_data = db_tx
+                .get_pool_data(pool_id)
+                .await
+                .expect("Unable to get pool data")
+                .expect("Pool should exist");
+
+            let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
+            let mut adapter = PoSAdapter::new(pool_id, pool_data, delegation_shares);
+
+            distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
+                .expect("no error");
+
+            for (delegation_id, rewards, updated_delegation) in adapter.rewards_per_delegation() {
+                db_tx
+                    .set_delegation_at_height(delegation_id, &updated_delegation, block_height)
+                    .await?;
+                let address = Address::<Destination>::new(
+                    &chain_config,
+                    updated_delegation.spend_destination(),
+                )
+                .expect("Unable to encode address");
+                increase_address_amount(db_tx, &address, &rewards, block_height).await;
+            }
+
+            let pool_data = adapter.get_pool_data(pool_id).expect("ok").expect("must exist");
+            db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
+    chain_config: Arc<ChainConfig>,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    transaction: &SignedTransaction,
+) -> Result<(), ApiServerStorageError> {
+    update_tables_from_transaction_inputs(
+        Arc::clone(&chain_config),
+        db_tx,
+        block_height,
+        transaction.transaction().inputs(),
+        transaction.transaction().get_id(),
+    )
+    .await
+    .expect("Unable to update tables from transaction inputs");
+
+    update_tables_from_transaction_outputs(
+        Arc::clone(&chain_config),
+        db_tx,
+        block_height,
+        transaction.transaction().get_id(),
+        transaction.transaction().inputs(),
+        transaction.transaction().outputs(),
+    )
+    .await
+    .expect("Unable to update tables from transaction outputs");
+
+    Ok(())
+}
+
+async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
@@ -166,85 +550,156 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
 
     for input in inputs {
         match input {
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
-                // TODO
-            }
-            TxInput::Utxo(outpoint) => {
-                match outpoint.source_id() {
-                    OutPointSourceId::BlockReward(_block_id) => {
-                        // TODO
-                    }
-                    OutPointSourceId::Transaction(transaction_id) => {
-                        let input_transaction = db_tx
-                            .get_transaction(transaction_id)
-                            .await?
-                            .expect("Transaction should exist");
+            // TODO: update token states
+            | TxInput::AccountCommand(_, _) => {}
+            TxInput::Account(outpoint) => {
+                match outpoint.account() {
+                    AccountSpending::DelegationBalance(delegation_id, amount) => {
+                        // Update delegation pledge
 
-                        assert!(
-                            input_transaction.1.transaction().outputs().len()
-                                > outpoint.output_index() as usize
-                        );
+                        //TODO: optimize into a single query when amount is a number in the DB
+                        let delegation = db_tx
+                            .get_delegation(*delegation_id)
+                            .await
+                            .expect("Unable to get delegation")
+                            .expect("Delegation should exist");
 
-                        match &input_transaction.1.transaction().outputs()
-                            [outpoint.output_index() as usize]
-                        {
-                            TxOutput::Burn(_)
-                            | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::CreateStakePool(_, _)
-                            | TxOutput::DataDeposit(_)
-                            | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::IssueFungibleToken(_)
-                            | TxOutput::IssueNft(_, _, _)
-                            | TxOutput::ProduceBlockFromStake(_, _) => {}
-                            TxOutput::LockThenTransfer(output_value, destination, _)
-                            | TxOutput::Transfer(output_value, destination) => {
-                                match destination {
-                                    Destination::PublicKey(_) | Destination::Address(_) => {
-                                        let address =
-                                            Address::<Destination>::new(&chain_config, destination)
-                                                .expect("Unable to encode destination");
+                        let new_delegation = delegation.sub_pledge(*amount);
 
-                                        address_transactions
-                                            .entry(address.clone())
-                                            .or_default()
-                                            .insert(tx_id);
-
-                                        match output_value {
-                                            OutputValue::TokenV0(_) => { /* ignore */ }
-                                            OutputValue::TokenV1(_, _) => {
-                                                // TODO
-                                            }
-                                            OutputValue::Coin(amount) => {
-                                                let current_balance = db_tx
-                                                    .get_address_balance(address.get())
-                                                    .await
-                                                    .expect("Unable to get balance")
-                                                    .unwrap_or(Amount::ZERO);
-
-                                                let new_amount = current_balance
-                                                    .sub(*amount)
-                                                    .expect("Balance should not underflow");
-
-                                                db_tx
-                                                    .set_address_balance_at_height(
-                                                        address.get(),
-                                                        new_amount,
-                                                        block_height,
-                                                    )
-                                                    .await
-                                                    .expect("Unable to update balance")
-                                            }
-                                        }
-                                    }
-                                    Destination::AnyoneCanSpend
-                                    | Destination::ClassicMultisig(_)
-                                    | Destination::ScriptHash(_) => {}
-                                }
-                            }
-                        }
+                        db_tx
+                            .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
+                            .await
+                            .expect("Unable to update delegation");
+                        let address = Address::<Destination>::new(
+                            &chain_config,
+                            delegation.spend_destination(),
+                        )
+                        .expect("Unable to encode address");
+                        decrease_address_amount(db_tx, address, amount, block_height).await;
                     }
                 }
             }
+            TxInput::Utxo(outpoint) => match outpoint.source_id() {
+                OutPointSourceId::BlockReward(_) => {
+                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    set_utxo(
+                        outpoint.source_id(),
+                        outpoint.output_index() as usize,
+                        utxo.output(),
+                        db_tx,
+                        block_height,
+                        true,
+                        &chain_config,
+                    )
+                    .await;
+
+                    match utxo.into_output() {
+                        TxOutput::Burn(_)
+                        | TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::IssueNft(_, _, _)
+                        | TxOutput::DataDeposit(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::IssueFungibleToken(_) => {}
+                        TxOutput::CreateStakePool(pool_id, pool_data) => {
+                            let pool_data = PoolData::new(
+                                pool_data.decommission_key().clone(),
+                                pool_data.value(),
+                                pool_data.vrf_public_key().clone(),
+                                pool_data.margin_ratio_per_thousand(),
+                                pool_data.cost_per_block(),
+                            );
+
+                            db_tx
+                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
+                                .await
+                                .expect("unable to update pool data");
+                        }
+                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            let pool_data = db_tx
+                                .get_pool_data(pool_id)
+                                .await?
+                                .expect("pool data should exist")
+                                .decommission_pool();
+
+                            db_tx
+                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
+                                .await
+                                .expect("unable to update pool data");
+                        }
+                    }
+                }
+                OutPointSourceId::Transaction(_) => {
+                    let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
+                    set_utxo(
+                        outpoint.source_id(),
+                        outpoint.output_index() as usize,
+                        utxo.output(),
+                        db_tx,
+                        block_height,
+                        true,
+                        &chain_config,
+                    )
+                    .await;
+
+                    match utxo.into_output() {
+                        TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::DataDeposit(_)
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::CreateStakePool(_, _)
+                        | TxOutput::ProduceBlockFromStake(_, _) => {}
+                        TxOutput::IssueNft(_, _, destination) => match destination {
+                            Destination::AnyoneCanSpend
+                            | Destination::ClassicMultisig(_)
+                            | Destination::ScriptHash(_) => {}
+                            Destination::PublicKey(_) | Destination::Address(_) => {
+                                let address =
+                                    Address::<Destination>::new(&chain_config, &destination)
+                                        .expect("Unable to encode destination");
+
+                                address_transactions
+                                    .entry(address.clone())
+                                    .or_default()
+                                    .insert(tx_id);
+
+                                // TODO: update nft/token balance for address
+                            }
+                        },
+                        TxOutput::LockThenTransfer(output_value, destination, _)
+                        | TxOutput::Transfer(output_value, destination) => match destination {
+                            Destination::AnyoneCanSpend
+                            | Destination::ClassicMultisig(_)
+                            | Destination::ScriptHash(_) => {}
+                            Destination::PublicKey(_) | Destination::Address(_) => {
+                                let address =
+                                    Address::<Destination>::new(&chain_config, &destination)
+                                        .expect("Unable to encode destination");
+
+                                address_transactions
+                                    .entry(address.clone())
+                                    .or_default()
+                                    .insert(tx_id);
+
+                                match output_value {
+                                    OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                                    OutputValue::Coin(amount) => {
+                                        decrease_address_amount(
+                                            db_tx,
+                                            address,
+                                            &amount,
+                                            block_height,
+                                        )
+                                        .await;
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
         }
     }
 
@@ -266,71 +721,160 @@ async fn update_address_tables_from_inputs<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-async fn update_address_tables_from_outputs<T: ApiServerStorageWrite>(
+async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
-    transaction_id_maybe: Option<Id<Transaction>>,
     block_height: BlockHeight,
+    transaction_id: Id<Transaction>,
+    inputs: &[TxInput],
     outputs: &[TxOutput],
 ) -> Result<(), ApiServerStorageError> {
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
 
-    for output in outputs {
+    for (idx, output) in outputs.iter().enumerate() {
         match output {
-            TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::CreateStakePool(_, _)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::ProduceBlockFromStake(_, _) => {}
-            TxOutput::Transfer(output_value, destination)
-            | TxOutput::LockThenTransfer(output_value, destination, _) => {
-                match destination {
-                    Destination::PublicKey(_) | Destination::Address(_) => {
-                        let address = Address::<Destination>::new(&chain_config, destination)
-                            .expect("Unable to encode destination");
-
-                        transaction_id_maybe.map(|transaction_id| {
-                            address_transactions
-                                .entry(address.clone())
-                                .or_default()
-                                .insert(transaction_id)
-                        });
-
-                        match output_value {
-                            OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {
-                                // TODO
-                            }
-                            OutputValue::Coin(amount) => {
-                                let current_balance = db_tx
-                                    .get_address_balance(address.get())
-                                    .await
-                                    .expect("Unable to get balance")
-                                    .unwrap_or(Amount::ZERO);
-
-                                let new_amount = current_balance
-                                    .add(*amount)
-                                    .expect("Balance should not overflow");
-
-                                db_tx
-                                    .set_address_balance_at_height(
-                                        address.get(),
-                                        new_amount,
-                                        block_height,
-                                    )
-                                    .await
-                                    .expect("Unable to update balance")
-                            }
-                        }
-                    }
-                    Destination::AnyoneCanSpend
-                    | Destination::ClassicMultisig(_)
-                    | Destination::ScriptHash(_) => {}
+            TxOutput::Burn(_) | TxOutput::DataDeposit(_) | TxOutput::IssueFungibleToken(_) => {}
+            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::IssueNft(_, _, _) => {
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::CreateDelegationId(destination, pool_id) => {
+                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
+                {
+                    db_tx
+                        .set_delegation_at_height(
+                            make_delegation_id(input0_outpoint),
+                            &Delegation::new(destination.clone(), *pool_id, Amount::ZERO),
+                            block_height,
+                        )
+                        .await
+                        .expect("Unable to set delegation data");
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
                 }
             }
+            TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
+                // Create pool pledge
+
+                let new_pool_data = PoolData::new(
+                    stake_pool_data.decommission_key().clone(),
+                    stake_pool_data.value(),
+                    stake_pool_data.vrf_public_key().clone(),
+                    stake_pool_data.margin_ratio_per_thousand(),
+                    stake_pool_data.cost_per_block(),
+                );
+
+                db_tx
+                    .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)
+                    .await
+                    .expect("Unable to update pool balance");
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+                let address =
+                    Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
+                        .expect("Unable to encode address");
+                increase_address_amount(db_tx, &address, &stake_pool_data.value(), block_height)
+                    .await;
+            }
+            | TxOutput::DelegateStaking(amount, delegation_id) => {
+                // Update delegation pledge
+
+                let delegation = db_tx
+                    .get_delegation(*delegation_id)
+                    .await
+                    .expect("Unable to get delegation")
+                    .expect("Delegation should exist");
+
+                let new_delegation = delegation.add_pledge(*amount);
+
+                db_tx
+                    .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
+                    .await
+                    .expect("Unable to update delegation");
+
+                let address =
+                    Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
+                        .expect("Unable to encode address");
+                increase_address_amount(db_tx, &address, amount, block_height).await;
+
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::Transfer(output_value, destination)
+            | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
+                Destination::PublicKey(_) | Destination::Address(_) => {
+                    let address = Address::<Destination>::new(&chain_config, destination)
+                        .expect("Unable to encode destination");
+
+                    address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                    match output_value {
+                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::Coin(amount) => {
+                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                        }
+                    }
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::AnyoneCanSpend => {
+                    // for tests
+                    set_utxo(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx,
+                        output,
+                        db_tx,
+                        block_height,
+                        false,
+                        &chain_config,
+                    )
+                    .await;
+                }
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
+            },
         }
     }
 
@@ -350,4 +894,80 @@ async fn update_address_tables_from_outputs<T: ApiServerStorageWrite>(
     }
 
     Ok(())
+}
+
+async fn increase_address_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: &Address<Destination>,
+    amount: &Amount,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_balance(address.get())
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .await
+        .expect("Unable to update balance")
+}
+
+async fn decrease_address_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: Address<Destination>,
+    amount: &Amount,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_balance(address.get())
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .await
+        .expect("Unable to update balance")
+}
+
+async fn set_utxo<T: ApiServerStorageWrite>(
+    outpoint_source_id: OutPointSourceId,
+    idx: usize,
+    output: &TxOutput,
+    db_tx: &mut T,
+    block_height: BlockHeight,
+    spent: bool,
+    chain_config: &ChainConfig,
+) {
+    let outpoint = UtxoOutPoint::new(outpoint_source_id, idx as u32);
+    let utxo = Utxo::new(output.clone(), spent);
+    if let Some(destination) = get_tx_output_destination(output) {
+        let address = Address::<Destination>::new(chain_config, destination)
+            .expect("Unable to encode destination");
+        db_tx
+            .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+            .await
+            .expect("Unable to set utxo");
+    }
+}
+
+fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+    match txo {
+        TxOutput::Transfer(_, d)
+        | TxOutput::LockThenTransfer(_, d, _)
+        | TxOutput::CreateDelegationId(d, _)
+        | TxOutput::IssueNft(_, _, d)
+        | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
+        TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+        TxOutput::IssueFungibleToken(_)
+        | TxOutput::Burn(_)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_) => None,
+    }
 }

@@ -13,12 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    chain::{
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoolData;
+use serialization::{Decode, Encode};
 
 use self::block_aux_data::BlockAuxData;
 
@@ -45,6 +50,77 @@ pub enum ApiServerStorageError {
     TxCommitFailed(String),
     #[error("Transaction rw rollback failed: {0}")]
     TxRwRollbackFailed(String),
+    #[error("Invalid block received: {0}")]
+    InvalidBlock(String),
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct Delegation {
+    spend_destination: Destination,
+    pool_id: PoolId,
+    balance: Amount,
+}
+
+impl Delegation {
+    pub fn new(spend_destination: Destination, pool_id: PoolId, balance: Amount) -> Self {
+        Self {
+            spend_destination,
+            pool_id,
+            balance,
+        }
+    }
+
+    pub fn spend_destination(&self) -> &Destination {
+        &self.spend_destination
+    }
+
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id
+    }
+
+    pub fn balance(&self) -> &Amount {
+        &self.balance
+    }
+
+    pub fn add_pledge(&self, rewards: Amount) -> Self {
+        Self {
+            spend_destination: self.spend_destination.clone(),
+            pool_id: self.pool_id,
+            balance: (self.balance + rewards).expect("no overflow"),
+        }
+    }
+
+    pub fn sub_pledge(&self, amount: Amount) -> Self {
+        Self {
+            spend_destination: self.spend_destination.clone(),
+            pool_id: self.pool_id,
+            balance: (self.balance - amount).expect("not underflow"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct Utxo {
+    output: TxOutput,
+    spent: bool,
+}
+
+impl Utxo {
+    pub fn new(output: TxOutput, spent: bool) -> Self {
+        Self { output, spent }
+    }
+
+    pub fn output(&self) -> &TxOutput {
+        &self.output
+    }
+
+    pub fn into_output(self) -> TxOutput {
+        self.output
+    }
+
+    pub fn spent(&self) -> bool {
+        self.spent
+    }
 }
 
 #[async_trait::async_trait]
@@ -72,10 +148,25 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    async fn get_delegation(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Delegation>, ApiServerStorageError>;
+
+    async fn get_pool_delegations(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError>;
+
     async fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
+
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<PoolData>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
     async fn get_transaction_with_block(
@@ -88,6 +179,14 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
+
+    async fn get_utxo(&self, outpoint: UtxoOutPoint)
+        -> Result<Option<Utxo>, ApiServerStorageError>;
+
+    async fn get_address_available_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -128,6 +227,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block: &Block,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn set_delegation_at_height(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation: &Delegation,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -142,6 +248,36 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_main_chain_blocks_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_pool_data_at_height(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_delegations_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_pools_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: Utxo,
+        address: &str,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_utxo_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
