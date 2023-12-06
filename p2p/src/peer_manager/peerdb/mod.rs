@@ -82,8 +82,7 @@ pub struct PeerDb<S> {
     /// Banned addresses along with the ban expiration time.
     banned_addresses: BTreeMap<BannableAddress, Time>,
 
-    // Set of addresses that cannot be banned
-    // FIXME: do we want to store them in db?
+    // Set of addresses that cannot be automatically banned
     whitelisted_addresses: BTreeSet<IpAddr>,
 
     /// Anchor addresses

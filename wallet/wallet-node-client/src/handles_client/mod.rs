@@ -299,6 +299,20 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
+    async fn p2p_add_whitelist_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.add_whitelist_node(address)).await??;
+        Ok(())
+    }
+    async fn p2p_remove_whitelist_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
+        self.p2p
+            .call_async_mut(move |this| this.remove_whitelist_node(address))
+            .await??;
+        Ok(())
+    }
+
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
         let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await??;
         Ok(res)

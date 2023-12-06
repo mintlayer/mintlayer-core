@@ -338,6 +338,15 @@ impl NodeInterface for MockNode {
     ) -> Result<(), Self::Error> {
         unreachable!()
     }
+    async fn p2p_add_whitelist_node(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_remove_whitelist_node(
+        &self,
+        _address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
+        unreachable!()
+    }
 
     async fn mempool_get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
         Ok(FeeRate::from_amount_per_kb(Amount::ZERO))

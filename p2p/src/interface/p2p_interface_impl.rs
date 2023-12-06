@@ -121,6 +121,28 @@ where
         Ok(response_receiver.await??)
     }
 
+    async fn add_whitelist_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::Whitelist(
+                addr.to_ip_address(),
+                response_sender,
+            ))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        Ok(response_receiver.await??)
+    }
+
+    async fn remove_whitelist_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::Unwhitelist(
+                addr.to_ip_address(),
+                response_sender,
+            ))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        Ok(response_receiver.await??)
+    }
+
     async fn submit_transaction(
         &mut self,
         tx: SignedTransaction,

@@ -623,10 +623,8 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::ListBanned(_) => PeerManagerEventDesc::ListBanned,
             PeerManagerEvent::Ban(addr, _) => PeerManagerEventDesc::Ban(*addr),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
-            PeerManagerEvent::Whitelist(addr, _) => PeerManagerEventDesc::Whitelist(addr.clone()),
-            PeerManagerEvent::Unwhitelist(addr, _) => {
-                PeerManagerEventDesc::Unwhitelist(addr.clone())
-            }
+            PeerManagerEvent::Whitelist(addr, _) => PeerManagerEventDesc::Whitelist(*addr),
+            PeerManagerEvent::Unwhitelist(addr, _) => PeerManagerEventDesc::Unwhitelist(*addr),
             PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
         }
     }

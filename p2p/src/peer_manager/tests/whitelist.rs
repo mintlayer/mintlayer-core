@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -68,7 +68,7 @@ where
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
 
     assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
 
@@ -137,7 +137,7 @@ where
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
 
     // automatic ban
     pm2.adjust_peer_score(peer_id, 1000);
@@ -208,7 +208,7 @@ where
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
 
     assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
 

@@ -60,6 +60,13 @@ impl IpOrSocketAddress {
             IpOrSocketAddress::Socket(addr) => *addr,
         }
     }
+
+    pub fn to_ip_address(&self) -> IpAddr {
+        match self {
+            IpOrSocketAddress::Ip(ip) => *ip,
+            IpOrSocketAddress::Socket(addr) => addr.ip(),
+        }
+    }
 }
 
 impl serde::Serialize for IpOrSocketAddress {

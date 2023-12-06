@@ -253,6 +253,20 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
+    async fn p2p_add_whitelist_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
+        P2pRpcClient::add_whitelist_node(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_remove_whitelist_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
+        P2pRpcClient::remove_whitelist_node(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
         MempoolRpcClient::get_fee_rate(&self.http_client, in_top_x_mb)
             .await
