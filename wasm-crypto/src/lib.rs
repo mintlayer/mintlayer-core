@@ -27,8 +27,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
-        ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
@@ -448,11 +448,31 @@ pub fn encode_outpoint_source_id(id: &[u8], source: SourceId) -> Vec<u8> {
 }
 
 #[wasm_bindgen]
-pub fn encode_input_utxo(outpoint_source_id: &[u8], output_index: u32) -> Result<Vec<u8>, Error> {
+pub fn encode_input_for_utxo(
+    outpoint_source_id: &[u8],
+    output_index: u32,
+) -> Result<Vec<u8>, Error> {
     let outpoint_source_id = OutPointSourceId::decode_all(&mut &outpoint_source_id[..])
         .map_err(|_| Error::InvalidOutpointId)?;
-    let output = TxInput::Utxo(UtxoOutPoint::new(outpoint_source_id, output_index));
-    Ok(output.encode())
+    let input = TxInput::Utxo(UtxoOutPoint::new(outpoint_source_id, output_index));
+    Ok(input.encode())
+}
+
+#[wasm_bindgen]
+pub fn encode_input_for_account_outpoint(
+    delegation_id: &str,
+    amount: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let amount = parse_amount(amount)?;
+    let delegation_id = parse_addressable(&chain_config, delegation_id)?;
+    let input = TxInput::Account(AccountOutPoint::new(
+        AccountNonce::new(nonce),
+        AccountSpending::DelegationBalance(delegation_id, amount),
+    ));
+    Ok(input.encode())
 }
 
 #[wasm_bindgen]

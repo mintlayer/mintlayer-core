@@ -46,7 +46,7 @@ impl PoSAdapter {
             .copied()
             .map(|(delegation_id, reward)| {
                 let data = self.delegations.get(&delegation_id).expect("must exist");
-                let updated_delegation = data.add_pledge(reward);
+                let updated_delegation = data.stake(reward);
                 (delegation_id, reward, updated_delegation)
             })
             .collect()

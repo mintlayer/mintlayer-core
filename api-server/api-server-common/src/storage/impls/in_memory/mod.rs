@@ -20,8 +20,8 @@ use crate::storage::storage_api::{
 };
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -230,6 +230,20 @@ impl ApiServerInMemoryStorage {
                 .collect()
         });
         Ok(result)
+    }
+
+    fn get_delegations_from_address(
+        &self,
+        address: &Destination,
+    ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
+        Ok(self
+            .delegation_table
+            .iter()
+            .filter_map(|(delegation_id, by_height)| {
+                let last = by_height.values().last().expect("not empty");
+                (last.spend_destination() == address).then_some((*delegation_id, last.clone()))
+            })
+            .collect())
     }
 }
 

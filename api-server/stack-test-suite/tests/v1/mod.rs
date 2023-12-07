@@ -15,12 +15,14 @@
 
 mod address;
 mod address_available_utxos;
+mod address_delegations;
 mod block;
 mod block_header;
 mod block_reward;
 mod block_transaction_ids;
 mod chain_at_height;
 mod chain_tip;
+mod helpers;
 mod pool;
 mod transaction;
 mod transaction_merkle_path;

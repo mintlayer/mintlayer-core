@@ -21,8 +21,8 @@ use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -422,6 +422,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     block_height bigint NOT NULL,
                     pool_id bytea NOT NULL,
                     balance bytea NOT NULL,
+                    next_nonce bytea NOT NULL,
                     spend_destination bytea NOT NULL,
                     PRIMARY KEY (delegation_id, block_height)
                 );",
@@ -573,7 +574,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT pool_id, balance, spend_destination
+                r#"SELECT pool_id, balance, spend_destination, next_nonce
                 FROM ml_delegations
                 WHERE delegation_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml_delegations WHERE delegation_id = $1);
@@ -591,6 +592,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let pool_id: Vec<u8> = data.get(0);
         let balance: Vec<u8> = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
+        let next_nonce: Vec<u8> = data.get(3);
 
         let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
@@ -614,8 +616,82 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ))
             })?;
 
-        let delegation = Delegation::new(spend_destination, pool_id, balance);
+        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Delegation {} deserialization failed: {}",
+                delegation_id, e
+            ))
+        })?;
+
+        let delegation = Delegation::new(spend_destination, pool_id, balance, next_nonce);
         Ok(Some(delegation))
+    }
+
+    pub async fn get_delegations_from_address(
+        &mut self,
+        address: &Destination,
+    ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce
+                FROM (
+                    SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
+                    FROM ml_delegations
+                    WHERE spend_destination = $1
+                )
+                WHERE newest = 1;
+                "#,
+                &[&address.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let delegation_id: Vec<u8> = row.get(0);
+                let pool_id: Vec<u8> = row.get(1);
+                let balance: Vec<u8> = row.get(2);
+                let spend_destination: Vec<u8> = row.get(3);
+                let next_nonce: Vec<u8> = row.get(4);
+
+                let delegation_id = DelegationId::decode_all(&mut delegation_id.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Delegation deserialization failed: {e}",
+                        ))
+                    })?;
+
+                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Delegation deserialization failed: {e}",
+                    ))
+                })?;
+
+                let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Delegation deserialization failed: {e}",
+                    ))
+                })?;
+
+                let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Delegation deserialization failed: {e}",
+                        ))
+                    })?;
+
+                let next_nonce =
+                    AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Delegation deserialization failed: {e}",
+                        ))
+                    })?;
+
+                let delegation = Delegation::new(spend_destination, pool_id, balance, next_nonce);
+                Ok((delegation_id, delegation))
+            })
+            .collect()
     }
 
     pub async fn set_delegation_at_height(
@@ -629,10 +705,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_delegations (delegation_id, block_height, pool_id, balance, spend_destination)
-                    VALUES($1, $2, $3, $4, $5)
+                    INSERT INTO ml_delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce)
+                    VALUES($1, $2, $3, $4, $5, $6)
                     ON CONFLICT (delegation_id, block_height) DO UPDATE
-                    SET pool_id = $3, balance = $4, spend_destination = $5;
+                    SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6;
                 "#,
                 &[
                     &delegation_id.encode(),
@@ -640,6 +716,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &delegation.pool_id().encode(),
                     &delegation.balance().encode(),
                     &delegation.spend_destination().encode(),
+                    &delegation.next_nonce().encode(),
                 ],
             )
             .await
@@ -688,7 +765,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         self.tx
             .query(
-                r#"SELECT delegation_id, balance, spend_destination
+                r#"SELECT delegation_id, balance, spend_destination, next_nonce
                     FROM ml_delegations
                     WHERE pool_id = $1
                     AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
@@ -705,6 +782,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id: Vec<u8> = row.get(0);
                 let balance: Vec<u8> = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
+                let next_nonce: Vec<u8> = row.get(3);
 
                 let delegation_id = DelegationId::decode_all(&mut delegation_id.as_slice())
                     .map_err(|e| {
@@ -726,10 +804,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                             pool_id, e
                         ))
                     })?;
+                let next_nonce =
+                    AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Delegation {} deserialization failed: {}",
+                            delegation_id, e
+                        ))
+                    })?;
 
                 Ok((
                     delegation_id,
-                    Delegation::new(spend_destination, pool_id, balance),
+                    Delegation::new(spend_destination, pool_id, balance, next_nonce),
                 ))
             })
             .collect()

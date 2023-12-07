@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{GenBlock, TxOutput},
+    chain::{Destination, GenBlock, TxOutput},
     primitives::{BlockHeight, Id},
 };
 
@@ -182,6 +182,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_available_utxos(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_delegations_from_address(
+        &self,
+        address: &Destination,
+    ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_delegations_from_address(address).await?;
 
         Ok(res)
     }
