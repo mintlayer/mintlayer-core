@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod array_2d;
 pub mod atomics;
 pub mod blockuntilzero;
 pub mod bloom_filters;
