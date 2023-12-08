@@ -22,7 +22,7 @@ use crypto::random::Rng;
 const MAX_DELAY_RESERVED: Duration = Duration::from_secs(360);
 
 /// Maximum delay between reconnection attempts to previously reachable nodes
-const MAX_DELAY_REACHABLE: Duration = Duration::from_secs(3600);
+pub const MAX_DELAY_REACHABLE: Duration = Duration::from_secs(3600);
 
 /// When the node drops the unreachable node address. Used for negative caching.
 pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);

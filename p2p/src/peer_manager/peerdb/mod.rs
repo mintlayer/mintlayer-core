@@ -37,10 +37,11 @@ use std::{
 };
 
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
 use itertools::Itertools;
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use utils::rand::choose_multiple_weighted;
 
 use crate::config::P2pConfig;
 
@@ -197,33 +198,61 @@ impl<S: PeerDbStorage> PeerDb<S> {
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         count: usize,
     ) -> Vec<SocketAddress> {
+        self.select_non_reserved_outbound_addresses_with_rng(
+            cur_outbound_conn_addr_groups,
+            count,
+            &mut make_pseudo_rng(),
+        )
+    }
+
+    #[allow(clippy::float_arithmetic)]
+    fn select_non_reserved_outbound_addresses_with_rng(
+        &self,
+        cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
+        count: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<SocketAddress> {
         if count == 0 {
             return Vec::new();
         }
 
         let now = self.time_getter.get_time();
 
-        // TODO: select new vs tried addresses with equal probability (or at least with a specific
-        // probability that is not directly tied to the sizes of both tables)
-        let mut selected = self
-            .addresses
-            .iter()
-            .filter_map(|(addr, address_data)| {
-                if address_data.connect_now(now)
+        let filter = |addr: &&SocketAddress| match self.addresses.get(addr) {
+            Some(addr_data) => {
+                addr_data.connect_now(now)
                     && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
-                    && !address_data.reserved()
+                    && !addr_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
-                {
-                    Some(*addr)
-                } else {
-                    None
-                }
-            })
-            .choose_multiple(&mut make_pseudo_rng(), count);
+            }
+            None => {
+                debug_assert!(false, "Address {addr} not found in self.addresses");
+                false
+            }
+        };
+        let new_addr_count = self.address_tables.new_addr_count();
+        let tried_addr_count = self.address_tables.tried_addr_count();
+
+        let new_addr_weight = 1.0 / new_addr_count as f64;
+        let tried_addr_weight = 1.0 / tried_addr_count as f64;
+
+        let new_addr_iter = self
+            .address_tables
+            .new_addresses()
+            .filter(filter)
+            .map(|addr| (*addr, new_addr_weight));
+        let tried_addr_iter = self
+            .address_tables
+            .tried_addresses()
+            .filter(filter)
+            .map(|addr| (*addr, tried_addr_weight));
+
+        let mut selected =
+            choose_multiple_weighted(new_addr_iter.chain(tried_addr_iter), rng, count);
 
         // Drop duplicate address groups as needed (shuffle selected addresses first to make the selection fair)
-        selected.shuffle(&mut make_pseudo_rng());
+        selected.shuffle(rng);
         selected
             .into_iter()
             .unique_by(|a| AddressGroup::from_peer_address(&a.as_peer_address()))

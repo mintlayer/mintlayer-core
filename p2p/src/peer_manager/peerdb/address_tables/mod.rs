@@ -172,8 +172,20 @@ impl AddressTables {
         self.tried_addr_table.remove(addr);
     }
 
+    pub fn new_addr_count(&self) -> usize {
+        self.new_addr_table.addr_count()
+    }
+
+    pub fn tried_addr_count(&self) -> usize {
+        self.tried_addr_table.addr_count()
+    }
+
     pub fn new_addresses(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
         self.new_addr_table.addr_iter()
+    }
+
+    pub fn tried_addresses(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
+        self.tried_addr_table.addr_iter()
     }
 
     #[cfg(test)]
@@ -184,6 +196,12 @@ impl AddressTables {
     #[cfg(test)]
     pub fn tried_addr_table(&self) -> &Table {
         &self.tried_addr_table
+    }
+
+    #[cfg(test)]
+    pub fn set_should_check_consistency(&mut self, val: bool) {
+        self.new_addr_table.set_should_check_consistency(val);
+        self.tried_addr_table.set_should_check_consistency(val);
     }
 }
 
