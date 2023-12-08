@@ -372,7 +372,7 @@ where
         let delay = p2p_config
             .peer_manager_config
             .feeler_connections_interval
-            .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+            .mul_f64(utils::rand::exponential_rand(&mut make_pseudo_rng()));
         (now + delay).expect("Unexpected time overflow")
     }
 
@@ -1878,7 +1878,7 @@ where
                     1,
                 );
                 let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)
-                    .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                    .mul_f64(utils::rand::exponential_rand(&mut make_pseudo_rng()));
                 next_time_resend_own_address = (next_time_resend_own_address + delay)
                     .expect("Time derived from local clock; cannot fail");
             }

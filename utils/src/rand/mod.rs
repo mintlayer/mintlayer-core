@@ -29,4 +29,4 @@ pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
 }
 
 #[cfg(test)]
-mod test;
+mod tests;
