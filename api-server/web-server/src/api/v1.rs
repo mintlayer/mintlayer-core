@@ -68,12 +68,16 @@ pub fn routes<
         .route("/block/:id/transaction-ids", get(block_transaction_ids));
 
     let router = if enable_post_routes {
-        router.route(
-            "/transaction",
-            post(submit_transaction).layer(DefaultBodyLimit::max(TX_BODY_LIMIT)),
-        )
+        router
+            .route(
+                "/transaction",
+                post(submit_transaction).layer(DefaultBodyLimit::max(TX_BODY_LIMIT)),
+            )
+            .route("/feerate", get(feerate))
     } else {
-        router.route("/transaction", post(forbidden_request))
+        router
+            .route("/transaction", post(forbidden_request))
+            .route("/feerate", get(forbidden_request))
     };
 
     let router = router
@@ -313,6 +317,35 @@ async fn get_transaction(
         .ok_or(ApiServerWebServerError::NotFound(
             ApiServerWebServerNotFoundError::TransactionNotFound,
         ))
+}
+
+pub async fn feerate<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const IN_TOP_X_MB: &str = "in_top_x_mb";
+    const DEFAULT_IN_TOP_X_MB: usize = 5;
+    let in_top_x_mb = params
+        .get(IN_TOP_X_MB)
+        .map(|str| usize::from_str(str))
+        .transpose()
+        .map_err(|_| ApiServerWebServerClientError::InvalidInTopX)?
+        .unwrap_or(DEFAULT_IN_TOP_X_MB);
+
+    let feerate = state
+        .rpc
+        .expect("must be present if route is enabled")
+        .get_mempool_fee_rate(in_top_x_mb)
+        .await
+        .map_err(|e| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::RpcError(
+                e.to_string(),
+            ))
+        })?;
+
+    Ok(Json(
+        serde_json::to_value(feerate.atoms_per_kb().to_string()).expect("should not fail"),
+    ))
 }
 
 pub async fn submit_transaction<T: ApiServerStorage>(

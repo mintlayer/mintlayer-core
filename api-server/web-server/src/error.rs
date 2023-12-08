@@ -99,6 +99,8 @@ pub enum ApiServerWebServerClientError {
     InvalidTokenId,
     #[error("Invalid NFT Id")]
     InvalidNftId,
+    #[error("Invalid in top X MB query parameter")]
+    InvalidInTopX,
 }
 
 #[allow(dead_code)]

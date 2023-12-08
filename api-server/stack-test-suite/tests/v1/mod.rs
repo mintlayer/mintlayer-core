@@ -22,6 +22,7 @@ mod block_reward;
 mod block_transaction_ids;
 mod chain_at_height;
 mod chain_tip;
+mod feerate;
 mod helpers;
 mod nft;
 mod pool;
