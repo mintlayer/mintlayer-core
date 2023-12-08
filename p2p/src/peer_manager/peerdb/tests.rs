@@ -40,7 +40,10 @@ use crate::{
         },
         peerdb_common::Transactional,
     },
-    testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
+    testing_utils::{
+        peerdb_inmemory_store, test_p2p_config, test_p2p_config_with_peer_db_config,
+        TestAddressMaker,
+    },
 };
 
 use super::{
@@ -224,18 +227,16 @@ fn remove_addr(#[case] seed: Seed) {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let p2p_config = Arc::new(test_p2p_config());
-    let peerdb_config = PeerDbConfig {
+    let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
         addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
-    };
+    }));
 
-    let mut peerdb = PeerDb::new_with_config(
+    let mut peerdb = PeerDb::new(
         &chain_config,
         Arc::clone(&p2p_config),
-        &peerdb_config,
         time_getter.get_time_getter(),
         db_store,
     )
@@ -286,18 +287,16 @@ fn remove_unreachable(#[case] seed: Seed) {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let p2p_config = Arc::new(test_p2p_config());
-    let peerdb_config = PeerDbConfig {
+    let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
         addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
-    };
+    }));
 
-    let mut peerdb = PeerDb::new_with_config(
+    let mut peerdb = PeerDb::new(
         &chain_config,
         Arc::clone(&p2p_config),
-        &peerdb_config,
         time_getter.get_time_getter(),
         db_store,
     )
@@ -379,21 +378,20 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let p2p_config = Arc::new(test_p2p_config());
+
     let bucket_size = 10;
     let bucket_count = 10;
     let max_addrs_in_one_table = bucket_count * bucket_size;
-    let peerdb_config = PeerDbConfig {
+    let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
         addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
-    };
+    }));
 
-    let mut peerdb = PeerDb::new_with_config(
+    let mut peerdb = PeerDb::new(
         &chain_config,
         Arc::clone(&p2p_config),
-        &peerdb_config,
         time_getter.get_time_getter(),
         db_store,
     )
@@ -439,21 +437,20 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let p2p_config = Arc::new(test_p2p_config());
+
     let bucket_size = 10;
     let bucket_count = 10;
     let max_addrs_in_one_table = bucket_count * bucket_size;
-    let peerdb_config = PeerDbConfig {
+    let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
         addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
-    };
+    }));
 
-    let mut peerdb = PeerDb::new_with_config(
+    let mut peerdb = PeerDb::new(
         &chain_config,
         Arc::clone(&p2p_config),
-        &peerdb_config,
         time_getter.get_time_getter(),
         db_store,
     )

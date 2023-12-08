@@ -25,7 +25,7 @@
 //! if the actual number of active connection is less than the desired number of connections.
 
 pub mod address_data;
-mod address_tables;
+pub mod address_tables;
 pub mod config;
 pub mod storage;
 pub mod storage_impl;
@@ -47,7 +47,6 @@ use crate::config::P2pConfig;
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
     address_tables::AddressTables,
-    config::PeerDbConfig,
     storage::{KnownAddressState, PeerDbStorage, PeerDbStorageWrite},
     storage_load::LoadedStorage,
 };
@@ -97,29 +96,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         time_getter: TimeGetter,
         storage: S,
     ) -> crate::Result<Self> {
-        Self::new_with_config(
-            chain_config,
-            p2p_config,
-            &Default::default(),
-            time_getter,
-            storage,
-        )
-    }
-
-    fn new_with_config(
-        chain_config: &ChainConfig,
-        p2p_config: Arc<P2pConfig>,
-        peerdb_config: &PeerDbConfig,
-        time_getter: TimeGetter,
-        storage: S,
-    ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
         let LoadedStorage {
             known_addresses,
             banned_addresses,
             anchor_addresses,
             addr_tables_random_key,
-        } = LoadedStorage::load_storage(&storage, peerdb_config)?;
+        } = LoadedStorage::load_storage(&storage, &p2p_config.peer_manager_config.peerdb_config)?;
 
         let reserved_nodes = p2p_config
             .reserved_nodes
@@ -135,7 +118,10 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let now = time_getter.get_time();
         let mut addresses = BTreeMap::new();
-        let mut address_tables = AddressTables::new(addr_tables_random_key, peerdb_config);
+        let mut address_tables = AddressTables::new(
+            addr_tables_random_key,
+            &p2p_config.peer_manager_config.peerdb_config,
+        );
 
         for (addr, state) in &known_addresses {
             match *state {
@@ -206,7 +192,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     /// Selects peer addresses for outbound connections, excluding reserved ones.
     /// Only one outbound connection is allowed per address group.
-    pub fn select_new_non_reserved_outbound_addresses(
+    pub fn select_non_reserved_outbound_addresses(
         &self,
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
         count: usize,
@@ -242,6 +228,26 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .into_iter()
             .unique_by(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
             .collect()
+    }
+
+    pub fn select_non_reserved_address_from_new_addr_table(&self) -> Option<SocketAddress> {
+        let now = self.time_getter.get_time();
+
+        self.address_tables
+            .new_addresses()
+            .filter(|addr| match self.addresses.get(addr) {
+                Some(addr_data) => {
+                    addr_data.connect_now(now)
+                        && !addr_data.reserved()
+                        && !self.banned_addresses.contains_key(&addr.as_bannable())
+                }
+                None => {
+                    debug_assert!(false, "Address {addr} not found in self.addresses");
+                    false
+                }
+            })
+            .copied()
+            .choose(&mut make_pseudo_rng())
     }
 
     /// Selects reserved peer addresses for outbound connections
@@ -520,7 +526,17 @@ impl<S: PeerDbStorage> PeerDb<S> {
         .expect("anchor addresses update is expected to succeed");
         self.anchor_addresses = anchor_addresses;
     }
+
+    #[cfg(test)]
+    pub fn address_tables(&self) -> &AddressTables {
+        &self.address_tables
+    }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub mod test_utils {
+    pub use super::address_tables::test_utils::*;
+}

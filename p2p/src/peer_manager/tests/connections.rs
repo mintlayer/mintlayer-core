@@ -14,29 +14,43 @@
 // limitations under the License.
 
 use std::{
+    collections::BTreeSet,
     sync::Arc,
     time::{Duration, Instant},
 };
 
+use logging::log;
+use rstest::rstest;
+use test_utils::random::make_seedable_rng;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use crypto::random::Rng;
+use p2p_test_utils::{expect_no_recv, run_with_timeout, P2pBasicTestTimeGetter};
 use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
+use test_utils::random::Seed;
 
 use crate::{
-    config::P2pConfig,
-    net::types::{services::Service, PeerRole},
+    config::{NodeType, P2pConfig},
+    message::AddrListRequest,
+    net::{
+        default_backend::{
+            types::{Command, Message},
+            ConnectivityHandle,
+        },
+        types::{services::Service, ConnectivityEvent, PeerRole},
+    },
     peer_manager::{
-        tests::{get_connected_peers, run_peer_manager},
-        MaxInboundConnections,
+        peerdb::{self, address_tables, config::PeerDbConfig},
+        tests::{get_connected_peers, run_peer_manager, utils::recv_command_advance_time},
+        MaxInboundConnections, PeerManager, PeerManagerConfig,
     },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
+        peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -1044,4 +1058,331 @@ async fn discovered_node_noise() {
 #[tokio::test]
 async fn discovered_node_channel() {
     discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
+}
+
+// 1) Configure the peer manager to only allow 1 full outbound connection. Make it discover
+// a number of addresses.
+// 2) Wait for the normal outbound connection attempt; make it succeed and check that it's not
+// closed immediately.
+// 3) In a loop wait for feeler connection attempts while advancing mocked time. Make some of
+// them succeed and some fail. The succeeded connections must be disconnected immediately anyway.
+// 4) In the end check that "successful" addresses were moved to the 'tried' table and failed ones
+// remain in 'new'.
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn feeler_connections_test(#[case] seed: Seed) {
+    run_with_timeout(feeler_connections_test_impl(seed)).await;
+}
+
+async fn feeler_connections_test_impl(seed: Seed) {
+    use feeler_connections_test_utils::*;
+
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = Arc::new(config::create_unit_test_config());
+
+    // Though this is mocked time, we still want to make the interval small, because
+    // we'll be advancing mocked time by this value frequently. And with the default
+    // value we can reach the lifetime limit for unreachable connection addresses,
+    // after which some "failed" addresses might be purged and the assertion at the end
+    // of the test will fail.
+    let feeler_connections_interval = Duration::from_secs(1);
+    let p2p_config = Arc::new(make_p2p_config(feeler_connections_interval, &mut rng));
+
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, peer_mgr_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
+
+    let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_mgr_event_receiver,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let mut addresses = BTreeSet::new();
+    for _ in 0..10 {
+        let addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+        peer_mgr.peerdb.peer_discovered(addr);
+        addresses.insert(addr);
+    }
+    // All the addresses are in the "new" table and none are in "tried".
+    let peerdb_new_addresses = new_addr_table_as_set(&peer_mgr.peerdb);
+    assert_eq!(peerdb_new_addresses, addresses);
+    let peerdb_tried_addresses = tried_addr_table_as_set(&peer_mgr.peerdb);
+    assert!(peerdb_tried_addresses.is_empty());
+
+    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
+        let mut peer_mgr = peer_mgr;
+        let _ = peer_mgr.run_internal(None).await;
+        peer_mgr
+    });
+
+    let mut successful_conn_addresses = BTreeSet::new();
+    let mut unsuccessful_conn_addresses = BTreeSet::new();
+
+    log::debug!("Expecting normal outbound connection attempt");
+    let cmd = cmd_receiver.recv().await.unwrap();
+    let outbound_peer_addr = expect_connect(&cmd, &mut addresses);
+
+    let outbound_peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::OutboundAccepted {
+            address: outbound_peer_addr,
+            peer_info: make_peer_info(outbound_peer_id, &chain_config),
+            receiver_address: None,
+        })
+        .unwrap();
+    successful_conn_addresses.insert(outbound_peer_addr);
+
+    log::debug!("Expecting Command::Accept");
+    let cmd = cmd_receiver.recv().await.unwrap();
+    assert_eq!(
+        cmd,
+        Command::Accept {
+            peer_id: outbound_peer_id
+        }
+    );
+
+    log::debug!("Expecting AddrListRequest");
+    let cmd = cmd_receiver.recv().await.unwrap();
+    assert_eq!(
+        cmd,
+        Command::SendMessage {
+            peer_id: outbound_peer_id,
+            message: Message::AddrListRequest(AddrListRequest {})
+        }
+    );
+
+    // No other commands are sent immediately.
+    expect_no_recv!(cmd_receiver);
+
+    let mut had_successful_feelers = false;
+    let mut had_unsuccessful_feelers = false;
+
+    // Check for feeler connections in a loop.
+    while !addresses.is_empty() {
+        log::debug!("addresses.len() == {}", addresses.len());
+
+        log::debug!("Expecting feeler connection attempt");
+        let cmd =
+            recv_command_advance_time(&mut cmd_receiver, &time_getter, feeler_connections_interval)
+                .await
+                .unwrap();
+        let addr = expect_connect(&cmd, &mut addresses);
+        let is_last_addr = addresses.is_empty();
+        let should_succeed = {
+            let rand_bool = rng.gen_bool(0.5);
+            if is_last_addr {
+                if !had_successful_feelers {
+                    true
+                } else if !had_unsuccessful_feelers {
+                    false
+                } else {
+                    rand_bool
+                }
+            } else {
+                rand_bool
+            }
+        };
+
+        if should_succeed {
+            log::debug!("Feeler connection to {addr} will succeed");
+
+            let cur_peer_id = PeerId::new();
+            conn_event_sender
+                .send(ConnectivityEvent::OutboundAccepted {
+                    address: addr,
+                    peer_info: make_peer_info(cur_peer_id, &chain_config),
+                    receiver_address: None,
+                })
+                .unwrap();
+
+            log::debug!("Expecting Command::Accept");
+            let cmd = cmd_receiver.recv().await.unwrap();
+            assert_eq!(
+                cmd,
+                Command::Accept {
+                    peer_id: cur_peer_id
+                }
+            );
+
+            // Disconnect command should be sent immediately.
+            log::debug!("Expecting Command::Disconnect");
+            let cmd = cmd_receiver.recv().await.unwrap();
+            assert_eq!(
+                cmd,
+                Command::Disconnect {
+                    peer_id: cur_peer_id
+                }
+            );
+
+            conn_event_sender
+                .send(ConnectivityEvent::ConnectionClosed {
+                    peer_id: cur_peer_id,
+                })
+                .unwrap();
+
+            successful_conn_addresses.insert(addr);
+            had_successful_feelers = true;
+        } else {
+            log::debug!("Feeler connection to {addr} will fail");
+
+            conn_event_sender
+                .send(ConnectivityEvent::ConnectionError {
+                    address: addr,
+                    error: P2pError::ProtocolError(ProtocolError::Unresponsive),
+                })
+                .unwrap();
+            unsuccessful_conn_addresses.insert(addr);
+            had_unsuccessful_feelers = true;
+        }
+
+        // No other commands are sent immediately.
+        expect_no_recv!(cmd_receiver);
+    }
+
+    drop(conn_event_sender);
+    drop(peer_mgr_event_sender);
+
+    let peer_mgr = peer_mgr_join_handle.await.unwrap();
+
+    let peerdb_new_addresses = new_addr_table_as_set(&peer_mgr.peerdb);
+    let unsuccessful_conn_addresses = peerdb::test_utils::filter_out_collisions(
+        peer_mgr.peerdb.address_tables().new_addr_table(),
+        unsuccessful_conn_addresses.iter().copied(),
+    )
+    .collect();
+    assert_eq!(peerdb_new_addresses, unsuccessful_conn_addresses);
+
+    let peerdb_tried_addresses = tried_addr_table_as_set(&peer_mgr.peerdb);
+    let successful_conn_addresses = peerdb::test_utils::filter_out_collisions(
+        peer_mgr.peerdb.address_tables().tried_addr_table(),
+        successful_conn_addresses.iter().copied(),
+    )
+    .collect();
+    assert_eq!(peerdb_tried_addresses, successful_conn_addresses);
+}
+
+mod feeler_connections_test_utils {
+    use common::chain::ChainConfig;
+
+    use crate::peer_manager::peerdb::{storage::PeerDbStorage, PeerDb};
+
+    use super::*;
+
+    pub fn make_p2p_config(feeler_connections_interval: Duration, rng: &mut impl Rng) -> P2pConfig {
+        P2pConfig {
+            peer_manager_config: PeerManagerConfig {
+                outbound_full_relay_count: 1.into(),
+                outbound_block_relay_count: 0.into(),
+
+                outbound_full_relay_extra_count: 0.into(),
+                outbound_block_relay_extra_count: 0.into(),
+
+                feeler_connections_interval: feeler_connections_interval.into(),
+
+                peerdb_config: PeerDbConfig {
+                    addr_tables_initial_random_key: Some(
+                        address_tables::RandomKey::new_random_with_rng(rng),
+                    ),
+
+                    new_addr_table_bucket_count: Default::default(),
+                    tried_addr_table_bucket_count: Default::default(),
+                    addr_tables_bucket_size: Default::default(),
+                },
+
+                preserved_inbound_count_address_group: Default::default(),
+                preserved_inbound_count_ping: Default::default(),
+                preserved_inbound_count_new_blocks: Default::default(),
+                preserved_inbound_count_new_transactions: Default::default(),
+
+                max_inbound_connections: Default::default(),
+                outbound_block_relay_connection_min_age: Default::default(),
+                outbound_full_relay_connection_min_age: Default::default(),
+                stale_tip_time_diff: Default::default(),
+                enable_feeler_connections: Default::default(),
+                main_loop_tick_interval: Default::default(),
+            },
+            // Disable pings to simplify the test.
+            ping_check_period: Duration::ZERO.into(),
+
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            ban_threshold: Default::default(),
+            ban_duration: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_timeout: Default::default(),
+            peer_handshake_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            sync_stalling_timeout: Default::default(),
+            protocol_config: Default::default(),
+        }
+    }
+
+    pub fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
+        PeerInfo {
+            peer_id,
+            protocol_version: TEST_PROTOCOL_VERSION,
+            network: *chain_config.magic_bytes(),
+            software_version: *chain_config.software_version(),
+            user_agent: mintlayer_core_user_agent(),
+            common_services: NodeType::Full.into(),
+        }
+    }
+
+    pub fn expect_connect(cmd: &Command, addresses: &mut BTreeSet<SocketAddress>) -> SocketAddress {
+        match cmd {
+            Command::Connect {
+                address,
+                local_services_override: _,
+            } => {
+                log::debug!("Connection attempt to {address} detected");
+                assert!(addresses.contains(address));
+                addresses.remove(address);
+                *address
+            }
+            cmd => {
+                panic!("Unexpected command received: {cmd:?}");
+            }
+        }
+    }
+
+    pub fn new_addr_table_as_set<S: PeerDbStorage>(peerdb: &PeerDb<S>) -> BTreeSet<SocketAddress> {
+        peerdb
+            .address_tables()
+            .new_addr_table()
+            .addr_iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+    }
+
+    pub fn tried_addr_table_as_set<S: PeerDbStorage>(
+        peerdb: &PeerDb<S>,
+    ) -> BTreeSet<SocketAddress> {
+        peerdb
+            .address_tables()
+            .tried_addr_table()
+            .addr_iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+    }
 }

@@ -117,8 +117,8 @@ fn validate_services() {
                     assert_eq!(res, Err(P2pError::PeerError(PeerError::EmptyServices)));
                 } else {
                     let expected_services: Option<Services> = match peer_role {
-                        PeerRole::Inbound | PeerRole::OutboundManual => {
-                            // Inbound and OutboundManual peers are allowed to nodes with any combination of services
+                        PeerRole::Inbound | PeerRole::OutboundManual | PeerRole::Feeler => {
+                            // Inbound, OutboundManual and Feeler peers are allowed to nodes with any combination of services
                             None
                         }
                         PeerRole::OutboundFullRelay => match node_type {

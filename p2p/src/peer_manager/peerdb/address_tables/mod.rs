@@ -29,7 +29,7 @@ pub mod table;
 ///
 /// It will be randomly generated once and stored in the peer db.
 // TODO: is "salt" a better name for this?
-#[derive(Hash, Encode, Decode, Copy, Clone)]
+#[derive(Debug, Hash, Encode, Decode, Copy, Clone)]
 pub struct RandomKey(u64);
 
 impl RandomKey {
@@ -170,6 +170,10 @@ impl AddressTables {
     pub fn remove(&mut self, addr: &SocketAddress) {
         self.new_addr_table.remove(addr);
         self.tried_addr_table.remove(addr);
+    }
+
+    pub fn new_addresses(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
+        self.new_addr_table.addr_iter()
     }
 
     #[cfg(test)]

@@ -544,15 +544,10 @@ async fn recv_command_advance_time(
     cmd_receiver: &mut UnboundedReceiver<Command>,
     time_getter: &P2pBasicTestTimeGetter,
 ) -> Result<Command, TryRecvError> {
-    loop {
-        match cmd_receiver.try_recv() {
-            Err(TryRecvError::Empty) => {
-                time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            other => {
-                break other;
-            }
-        }
-    }
+    super::utils::recv_command_advance_time(
+        cmd_receiver,
+        time_getter,
+        PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+    )
+    .await
 }
