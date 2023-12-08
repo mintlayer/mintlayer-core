@@ -18,6 +18,8 @@ mod v1;
 use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
 use api_web_server::{api::web_server, ApiServerWebServerState, TxSubmitClient};
 use common::chain::{config::create_unit_test_config, SignedTransaction};
+use common::primitives::Amount;
+use mempool::FeeRate;
 use std::{net::TcpListener, sync::Arc};
 
 struct DummyRPC {}
@@ -29,6 +31,15 @@ impl TxSubmitClient for DummyRPC {
         _: SignedTransaction,
     ) -> Result<(), node_comm::rpc_client::NodeRpcError> {
         Ok(())
+    }
+
+    async fn get_mempool_fee_rate(
+        &self,
+        in_top_x_mb: usize,
+    ) -> Result<FeeRate, node_comm::rpc_client::NodeRpcError> {
+        Ok(FeeRate::from_amount_per_kb(Amount::from_atoms(
+            in_top_x_mb as u128,
+        )))
     }
 }
 

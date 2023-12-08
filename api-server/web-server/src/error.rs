@@ -85,6 +85,8 @@ pub enum ApiServerWebServerClientError {
     InvalidPoolId,
     #[error("Invalid signed transaction")]
     InvalidSignedTransaction,
+    #[error("Invalid in top X MB query parameter")]
+    InvalidInTopX,
 }
 
 #[allow(dead_code)]

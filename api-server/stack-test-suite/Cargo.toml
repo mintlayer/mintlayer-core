@@ -17,6 +17,7 @@ serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 pos_accounting = {path = '../../pos_accounting'}
 node-comm = { path = "../../wallet/wallet-node-client" }
+mempool = { path = "../../mempool" }
 
 async-trait.workspace = true
 axum.workspace = true
