@@ -801,7 +801,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 };
                 db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;
             }
-            TxOutput::IssueNft(_, _, _) => {
+            TxOutput::IssueNft(token_id, issuance, _) => {
+                db_tx.set_nft_token_issuance(*token_id, block_height, *issuance.clone()).await?;
                 set_utxo(
                     OutPointSourceId::Transaction(transaction_id),
                     idx,
@@ -812,7 +813,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     &chain_config,
                 )
                 .await;
-                // TODO: save nft
             }
             TxOutput::ProduceBlockFromStake(_, _) => {
                 set_utxo(

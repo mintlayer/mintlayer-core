@@ -17,7 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
+            TokenTotalSupply,
+        },
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -367,6 +370,13 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         token_id: TokenId,
         block_height: BlockHeight,
         issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
     ) -> Result<(), ApiServerStorageError>;
 }
 

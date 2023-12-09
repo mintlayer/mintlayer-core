@@ -20,8 +20,9 @@ use crate::storage::storage_api::{
 };
 use common::{
     chain::{
-        tokens::TokenId, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{NftIssuance, TokenId},
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -47,6 +48,7 @@ struct ApiServerInMemoryStorage {
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
+    nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -65,6 +67,7 @@ impl ApiServerInMemoryStorage {
             utxo_table: BTreeMap::new(),
             address_utxos: BTreeMap::new(),
             fungible_token_issuances: BTreeMap::new(),
+            nft_token_issuances: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
@@ -518,6 +521,18 @@ impl ApiServerInMemoryStorage {
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
         self.fungible_token_issuances
+            .entry(token_id)
+            .or_default()
+            .insert(block_height, issuance);
+        Ok(())
+    }
+    fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        self.nft_token_issuances
             .entry(token_id)
             .or_default()
             .insert(block_height, issuance);

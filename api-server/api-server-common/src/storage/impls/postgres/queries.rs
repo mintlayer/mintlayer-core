@@ -21,8 +21,9 @@ use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{
-        tokens::TokenId, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock,
-        PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{NftIssuance, TokenId},
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -1257,6 +1258,25 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some(issuance))
+    }
+
+    pub async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_nft_token (token_id, block_height, issuance) VALUES ($1, $2, $3);",
+                &[&token_id.encode(), &height, &issuance.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
     }
 
     pub async fn get_block_aux_data(

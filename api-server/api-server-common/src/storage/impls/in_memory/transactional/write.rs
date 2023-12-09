@@ -17,8 +17,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        tokens::TokenId, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::{NftIssuance, TokenId},
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -163,6 +164,15 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         issuance: FungibleTokenData,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_fungible_token_issuance(token_id, block_height, issuance)
+    }
+
+    async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_nft_token_issuance(token_id, block_height, issuance)
     }
 }
 
