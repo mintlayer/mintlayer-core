@@ -17,8 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::TokenId, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -26,7 +26,7 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, Delegation, Utxo,
+    ApiServerStorageWrite, Delegation, FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -155,6 +155,15 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_utxo_above_height(block_height)
     }
+
+    async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_fungible_token_issuance(token_id, block_height, issuance)
+    }
 }
 
 #[async_trait::async_trait]
@@ -273,5 +282,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         self.transaction.get_delegations_from_address(address)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        self.transaction.get_fungible_token_issuance(token_id)
     }
 }

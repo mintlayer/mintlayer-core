@@ -16,12 +16,12 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
 };
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::TokenId, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -46,6 +46,7 @@ struct ApiServerInMemoryStorage {
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
+    fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -63,6 +64,7 @@ impl ApiServerInMemoryStorage {
             transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
             address_utxos: BTreeMap::new(),
+            fungible_token_issuances: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
@@ -298,6 +300,16 @@ impl ApiServerInMemoryStorage {
             })
             .collect())
     }
+
+    fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_issuances
+            .get(&token_id)
+            .map(|by_height| by_height.values().last().cloned().expect("not empty")))
+    }
 }
 
 impl ApiServerInMemoryStorage {
@@ -496,6 +508,19 @@ impl ApiServerInMemoryStorage {
             !v.is_empty()
         });
 
+        Ok(())
+    }
+
+    fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.fungible_token_issuances
+            .entry(token_id)
+            .or_default()
+            .insert(block_height, issuance);
         Ok(())
     }
 }

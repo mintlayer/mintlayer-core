@@ -16,16 +16,19 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
+    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
     address::Address,
     chain::{
-        block::ConsensusData, config::ChainConfig, output_value::OutputValue,
-        transaction::OutPointSourceId, AccountNonce, AccountSpending, Block, DelegationId,
-        Destination, GenBlock, Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        block::ConsensusData,
+        config::ChainConfig,
+        output_value::OutputValue,
+        tokens::{make_token_id, IsTokenFrozen, TokenIssuance},
+        transaction::OutPointSourceId,
+        AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -35,7 +38,9 @@ use std::{
     ops::{Add, Sub},
     sync::Arc,
 };
-use tx_verifier::transaction_verifier::distribute_pos_reward;
+use tx_verifier::transaction_verifier::{
+    calculate_tokens_burned_in_outputs, distribute_pos_reward,
+};
 
 use self::adapter::PoSAdapter;
 
@@ -406,11 +411,10 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _),
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::IssueFungibleToken(_),
             ) => {}
-            Some(TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_)) => {
-                //TODO: add when we support tokens
-            }
             None => {}
         }
     }
@@ -520,7 +524,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         db_tx,
         block_height,
         transaction.transaction().inputs(),
-        transaction.transaction().get_id(),
+        transaction.transaction(),
     )
     .await
     .expect("Unable to update tables from transaction inputs");
@@ -544,15 +548,60 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
     inputs: &[TxInput],
-    tx_id: Id<Transaction>,
+    tx: &Transaction,
 ) -> Result<(), ApiServerStorageError> {
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
 
     for input in inputs {
         match input {
-            // TODO: update token states
-            | TxInput::AccountCommand(_, _) => {}
+            TxInput::AccountCommand(_, cmd) => match cmd {
+                AccountCommand::MintTokens(token_id, amount) => {
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.mint_tokens(*amount);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::UnmintTokens(token_id) => {
+                    let total_burned =
+                        calculate_tokens_burned_in_outputs(tx, token_id).expect("no overflow");
+
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.unmint_tokens(total_burned);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::FreezeToken(token_id, is_unfreezable) => {
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.freeze(*is_unfreezable);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::UnfreezeToken(token_id) => {
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.unfreeze();
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::LockTokenSupply(token_id) => {
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.lock();
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::ChangeTokenAuthority(token_id, destination) => {
+                    let issance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issance.change_authority(destination.clone());
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+            },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, amount) => {
@@ -664,7 +713,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 address_transactions
                                     .entry(address.clone())
                                     .or_default()
-                                    .insert(tx_id);
+                                    .insert(tx.get_id());
 
                                 // TODO: update nft/token balance for address
                             }
@@ -682,7 +731,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 address_transactions
                                     .entry(address.clone())
                                     .or_default()
-                                    .insert(tx_id);
+                                    .insert(tx.get_id());
 
                                 match output_value {
                                     OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
@@ -735,8 +784,37 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
     for (idx, output) in outputs.iter().enumerate() {
         match output {
-            TxOutput::Burn(_) | TxOutput::DataDeposit(_) | TxOutput::IssueFungibleToken(_) => {}
-            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::IssueNft(_, _, _) => {
+            TxOutput::Burn(_) | TxOutput::DataDeposit(_) => {}
+            TxOutput::IssueFungibleToken(issuance) => {
+                let token_id = make_token_id(inputs).expect("should not fail");
+                let issuance = match issuance.as_ref() {
+                    TokenIssuance::V1(issuance) => FungibleTokenData {
+                        token_ticker: issuance.token_ticker.clone(),
+                        number_of_decimals: issuance.number_of_decimals,
+                        metadata_uri: issuance.metadata_uri.clone(),
+                        circulating_supply: Amount::ZERO,
+                        total_supply: issuance.total_supply,
+                        is_locked: false,
+                        frozen: IsTokenFrozen::No(issuance.is_freezable),
+                        authority: issuance.authority.clone(),
+                    },
+                };
+                db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;
+            }
+            TxOutput::IssueNft(_, _, _) => {
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+                // TODO: save nft
+            }
+            TxOutput::ProduceBlockFromStake(_, _) => {
                 set_utxo(
                     OutPointSourceId::Transaction(transaction_id),
                     idx,

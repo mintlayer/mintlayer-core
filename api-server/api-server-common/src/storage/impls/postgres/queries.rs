@@ -21,8 +21,8 @@ use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        tokens::TokenId, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock,
+        PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -30,7 +30,9 @@ use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
-    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo},
+    storage_api::{
+        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+    },
 };
 
 const VERSION_STR: &str = "version";
@@ -1201,6 +1203,60 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
+    }
+
+    pub async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_fungible_token (token_id, block_height, issuance) VALUES ($1, $2, $3)
+                    ON CONFLICT (token_id, block_height) DO UPDATE
+                    SET issuance = $3;",
+                &[&token_id.encode(), &height, &issuance.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT issuance FROM ml_fungible_token WHERE token_id = $1
+                    ORDER BY block_height DESC
+                    LIMIT 1;",
+                &[&token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let issuance =
+            FungibleTokenData::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Token data for token id {} deserialization failed: {}",
+                    token_id, e
+                ))
+            })?;
+
+        Ok(Some(issuance))
     }
 
     pub async fn get_block_aux_data(

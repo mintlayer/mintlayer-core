@@ -17,15 +17,16 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+    FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -146,5 +147,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         self.transaction.get_delegations_from_address(address)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        self.transaction.get_fungible_token_issuance(token_id)
     }
 }

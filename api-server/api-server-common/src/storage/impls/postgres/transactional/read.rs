@@ -14,14 +14,15 @@
 // limitations under the License.
 
 use common::{
-    chain::{Destination, GenBlock, TxOutput},
+    chain::{tokens::TokenId, Destination, GenBlock, TxOutput},
     primitives::{BlockHeight, Id},
 };
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+        FungibleTokenData, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -214,6 +215,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_delegations_from_address(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_fungible_token_issuance(token_id).await?;
 
         Ok(res)
     }

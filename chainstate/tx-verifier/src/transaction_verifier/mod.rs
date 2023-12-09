@@ -40,7 +40,7 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
-pub use input_output_policy::IOPolicyError;
+pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
 
 use std::collections::BTreeMap;
 

@@ -17,8 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::TokenId, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -28,7 +28,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, Delegation, Utxo,
+        ApiServerStorageWrite, Delegation, FungibleTokenData, Utxo,
     },
 };
 
@@ -202,6 +202,18 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 
         Ok(())
     }
+
+    async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_fungible_token_issuance(token_id, block_height, issuance).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -372,6 +384,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_delegations_from_address(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_fungible_token_issuance(token_id).await?;
 
         Ok(res)
     }
