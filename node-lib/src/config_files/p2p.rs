@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, str::FromStr, time::Duration};
+use std::{net::IpAddr, num::NonZeroU64, str::FromStr, time::Duration};
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
@@ -68,6 +68,8 @@ pub struct P2pConfigFile {
     pub boot_nodes: Option<Vec<IpOrSocketAddress>>,
     /// Optional list of reserved node addresses to connect.
     pub reserved_nodes: Option<Vec<IpOrSocketAddress>>,
+    /// Optional list of whitelisted addresses.
+    pub whitelisted_addresses: Option<Vec<IpAddr>>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: Option<usize>,
     /// The score threshold after which a peer is banned.
@@ -97,6 +99,7 @@ impl From<P2pConfigFile> for P2pConfig {
             disable_noise,
             boot_nodes,
             reserved_nodes,
+            whitelisted_addresses,
             max_inbound_connections,
             ban_threshold,
             ban_duration,
@@ -114,6 +117,7 @@ impl From<P2pConfigFile> for P2pConfig {
             disable_noise,
             boot_nodes: boot_nodes.unwrap_or_default(),
             reserved_nodes: reserved_nodes.unwrap_or_default(),
+            whitelisted_addresses: whitelisted_addresses.unwrap_or_default(),
             ban_threshold: ban_threshold.into(),
             ban_duration: ban_duration.map(Duration::from_secs).into(),
             max_clock_diff: max_clock_diff.map(Duration::from_secs).into(),

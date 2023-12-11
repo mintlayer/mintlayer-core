@@ -66,14 +66,6 @@ trait P2pRpc {
     #[method(name = "remove_reserved_node")]
     async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
-    /// Add the address to the whitelist nodes list which cannot be automatically banned.
-    #[method(name = "add_whitelist_node")]
-    async fn add_whitelist_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
-
-    /// Remove the address from the whitelist nodes list.
-    #[method(name = "remove_whitelist_node")]
-    async fn remove_whitelist_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
-
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(
@@ -132,16 +124,6 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.remove_reserved_node(addr)).await;
-        rpc::handle_result(res)
-    }
-
-    async fn add_whitelist_node(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
-        let res = self.call_async_mut(|this| this.add_whitelist_node(addr)).await;
-        rpc::handle_result(res)
-    }
-
-    async fn remove_whitelist_node(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
-        let res = self.call_async_mut(move |this| this.remove_whitelist_node(addr)).await;
         rpc::handle_result(res)
     }
 

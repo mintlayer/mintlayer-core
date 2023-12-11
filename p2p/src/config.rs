@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::IpAddr;
 use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
@@ -82,6 +83,8 @@ pub struct P2pConfig {
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.
     pub reserved_nodes: Vec<IpOrSocketAddress>,
+    /// Optional list of whitelisted addresses. Such addresses cannot be automatically banned.
+    pub whitelisted_addresses: Vec<IpAddr>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.

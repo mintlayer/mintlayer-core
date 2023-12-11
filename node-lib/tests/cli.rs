@@ -132,6 +132,7 @@ fn read_config_override_values() {
         p2p_ping_timeout: Some(p2p_ping_timeout),
         p2p_sync_stalling_timeout: Some(p2p_sync_stalling_timeout),
         p2p_max_clock_diff: Some(p2p_max_clock_diff),
+        p2p_whitelist_addr: None,
         max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),

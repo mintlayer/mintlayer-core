@@ -491,7 +491,9 @@ where
             PeerRole::Inbound
             | PeerRole::OutboundFullRelay
             | PeerRole::OutboundBlockRelay
-            | PeerRole::Feeler => self.peerdb.is_whitelisted_node(&address.ip_addr()),
+            | PeerRole::Feeler => {
+                self.p2p_config.whitelisted_addresses.contains(&address.ip_addr())
+            }
             PeerRole::OutboundManual => true,
         }
     }
@@ -1531,14 +1533,6 @@ where
             }
             PeerManagerEvent::Unban(address, response_sender) => {
                 self.peerdb.unban(&address);
-                response_sender.send(Ok(()));
-            }
-            PeerManagerEvent::Whitelist(address, response_sender) => {
-                self.peerdb.add_whitelisted_node(address);
-                response_sender.send(Ok(()));
-            }
-            PeerManagerEvent::Unwhitelist(address, response_sender) => {
-                self.peerdb.remove_whitelisted_node(address);
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::GenericQuery(query_func) => {

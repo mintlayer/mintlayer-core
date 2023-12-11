@@ -13,19 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use crate::{
-    config::NodeType,
+    config::{NodeType, P2pConfig},
     net::{
         default_backend::{types::Command, ConnectivityHandle},
-        types::{PeerInfo, Role},
+        types::{PeerInfo, PeerRole, Role},
     },
-    peer_manager::PeerManager,
+    peer_manager::{
+        peerdb::{storage::PeerDbStorageWrite, RandomKey, StorageVersion},
+        peerdb_common::storage::{TransactionRw, Transactional},
+        tests::make_peer_manager_custom,
+        PeerManager,
+    },
     testing_utils::{
-        connect_services, peerdb_inmemory_store, test_p2p_config, TestAddressMaker,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
-        TEST_PROTOCOL_VERSION,
+        connect_services, peerdb_inmemory_store, TestAddressMaker, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -33,6 +37,8 @@ use crate::{
 };
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::bannable_address::BannableAddress;
+use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     net::{
@@ -45,6 +51,30 @@ use crate::{
     peer_manager::tests::make_peer_manager,
 };
 
+fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig {
+    P2pConfig {
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses,
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    }
+}
+
 async fn no_automatic_ban_for_whitelisted<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
@@ -54,11 +84,26 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![addr1.ip_addr()]));
+
+    let (mut pm1, _, _shutdown_sender, _subscribers_sender) = make_peer_manager_custom::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        Default::default(),
+    )
+    .await;
+
+    let (mut pm2, _, _shutdown_sender, _subscribers_sender) = make_peer_manager_custom::<T>(
+        A::make_transport(),
+        addr2,
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        Default::default(),
+    )
+    .await;
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -68,15 +113,7 @@ where
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
-
-    assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
-
-    // whitelist
-    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm2.handle_control_event(PeerManagerEvent::Whitelist(addr1.ip_addr(), ban_sender));
-    ban_receiver.try_recv().unwrap().unwrap();
-    assert!(pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
+    assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
 
     // automatic ban
     pm2.adjust_peer_score(peer_id, 1000);
@@ -123,35 +160,69 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_mainnet());
+
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&chain_config)).await;
+
+    let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![
+        addr1.ip_addr(),
+        addr2.ip_addr(),
+    ]));
+    let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (connectivity_handle, _, _, _) = T::start(
+        A::make_transport(),
+        vec![addr2],
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        Default::default(),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
+        subscribers_receiver,
+    )
+    .await
+    .unwrap();
+    // add banned localhost to the storage
+    let db = {
+        let db = peerdb_inmemory_store();
+        let ban_until = time_getter
+            .get_time_getter()
+            .get_time()
+            .saturating_duration_add(Duration::from_secs(60));
+
+        let mut tx = db.transaction_rw().unwrap();
+        tx.set_version(StorageVersion::new(2)).unwrap();
+        tx.set_addr_tables_random_key(RandomKey::new_random()).unwrap();
+        tx.add_banned_address(&BannableAddress::new(addr1.ip_addr()), ban_until)
+            .unwrap();
+        tx.commit().unwrap();
+        db
+    };
+
+    let mut pm2 = PeerManager::<T, _>::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_receiver,
+        time_getter.get_time_getter(),
+        db,
+    )
+    .unwrap();
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
-
-    // automatic ban
-    pm2.adjust_peer_score(peer_id, 1000);
+    // address is whitelisted and still banned
     assert!(pm2.peerdb.is_address_banned(&addr1.as_bannable()));
-    assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
-
-    // add to whitelist
-    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm2.handle_control_event(PeerManagerEvent::Whitelist(addr1.ip_addr(), ban_sender));
-    ban_receiver.try_recv().unwrap().unwrap();
-
-    // address is not whitelisted but still banned
-    assert!(pm2.peerdb.is_address_banned(&addr1.as_bannable()));
-    assert!(pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
+    assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
 }
 
 #[tracing::instrument]
@@ -184,86 +255,14 @@ async fn no_automatic_unban_for_whitelisted_noise() {
     .await;
 }
 
-// if an address was banned it won't be unbanned automatically if whitelisted
-async fn remove_from_whitelisted<A, T>()
-where
-    A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
-    let config = Arc::new(config::create_mainnet());
-    let (mut pm1, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) =
-        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
-
-    let (address, peer_info, _) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
-    let peer_id = peer_info.peer_id;
-    pm2.accept_connection(address, Role::Inbound, peer_info, None);
-
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0];
-
-    assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
-
-    // add to whitelist
-    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm2.handle_control_event(PeerManagerEvent::Whitelist(addr1.ip_addr(), ban_sender));
-    ban_receiver.try_recv().unwrap().unwrap();
-    assert!(pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
-
-    // try ban
-    pm2.adjust_peer_score(peer_id, 1000);
-    assert!(!pm2.peerdb.is_address_banned(&addr1.as_bannable()));
-
-    // remove from whitelist
-    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm2.handle_control_event(PeerManagerEvent::Unwhitelist(addr1.ip_addr(), ban_sender));
-    ban_receiver.try_recv().unwrap().unwrap();
-    assert!(!pm2.peerdb().is_whitelisted_node(&addr1.ip_addr()));
-
-    // ban
-    pm2.adjust_peer_score(peer_id, 1000);
-    assert!(pm2.peerdb.is_address_banned(&addr1.as_bannable()));
-}
-
-#[tracing::instrument]
-#[tokio::test]
-async fn remove_from_whitelisted_tcp() {
-    remove_from_whitelisted::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
-        .await;
-}
-
-#[tracing::instrument]
-#[tokio::test]
-async fn remove_from_whitelisted_channels() {
-    remove_from_whitelisted::<
-        TestTransportChannel,
-        DefaultNetworkingService<MpscChannelTransport>,
-    >()
-    .await;
-}
-
-#[tracing::instrument]
-#[tokio::test]
-async fn remove_from_whitelisted_noise() {
-    remove_from_whitelisted::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
-        .await;
-}
-
 #[tracing::instrument]
 #[test]
 fn manual_ban_overrides_whitelisting() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+    let address_1 = TestAddressMaker::new_random_address();
 
     let chain_config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(test_p2p_config());
+    let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![address_1.ip_addr()]));
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
@@ -282,7 +281,6 @@ fn manual_ban_overrides_whitelisting() {
     .unwrap();
 
     let peer_id_1 = PeerId::new();
-    let address_1 = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
         protocol_version: TEST_PROTOCOL_VERSION,
@@ -300,13 +298,7 @@ fn manual_ban_overrides_whitelisting() {
         v => panic!("unexpected command: {v:?}"),
     }
 
-    assert!(!pm.peerdb().is_whitelisted_node(&address_1.ip_addr()));
-
-    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm.handle_control_event(PeerManagerEvent::Whitelist(address_1.ip_addr(), ban_sender));
-    ban_receiver.try_recv().unwrap().unwrap();
-
-    assert!(pm.peerdb().is_whitelisted_node(&address_1.ip_addr()));
+    assert!(pm.is_whitelisted_node(PeerRole::Inbound, &address_1));
 
     let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
     pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_sender));

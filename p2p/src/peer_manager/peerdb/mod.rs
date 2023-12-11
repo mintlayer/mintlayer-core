@@ -33,7 +33,6 @@ mod storage_load;
 
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
-    net::IpAddr,
     sync::Arc,
 };
 
@@ -57,6 +56,7 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
+pub use address_tables::RandomKey;
 pub use storage::StorageVersion;
 pub use storage_load::open_storage;
 
@@ -81,9 +81,6 @@ pub struct PeerDb<S> {
 
     /// Banned addresses along with the ban expiration time.
     banned_addresses: BTreeMap<BannableAddress, Time>,
-
-    // Set of addresses that cannot be automatically banned
-    whitelisted_addresses: BTreeSet<IpAddr>,
 
     /// Anchor addresses
     anchor_addresses: BTreeSet<SocketAddress>,
@@ -180,7 +177,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
             reserved_nodes,
             address_tables,
             banned_addresses,
-            whitelisted_addresses: Default::default(),
             anchor_addresses,
             p2p_config,
             time_getter,
@@ -507,18 +503,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .expect("adding banned address is expected to succeed (ban_peer)");
 
         self.banned_addresses.remove(address);
-    }
-
-    pub fn add_whitelisted_node(&mut self, address: IpAddr) {
-        self.whitelisted_addresses.insert(address);
-    }
-
-    pub fn remove_whitelisted_node(&mut self, address: IpAddr) {
-        self.whitelisted_addresses.remove(&address);
-    }
-
-    pub fn is_whitelisted_node(&self, address: &IpAddr) -> bool {
-        self.whitelisted_addresses.contains(address)
     }
 
     pub fn anchors(&self) -> &BTreeSet<SocketAddress> {

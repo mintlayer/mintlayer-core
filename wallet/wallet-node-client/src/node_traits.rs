@@ -90,11 +90,6 @@ pub trait NodeInterface {
     async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
     async fn p2p_remove_reserved_node(&self, address: IpOrSocketAddress)
         -> Result<(), Self::Error>;
-    async fn p2p_add_whitelist_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
-    async fn p2p_remove_whitelist_node(
-        &self,
-        address: IpOrSocketAddress,
-    ) -> Result<(), Self::Error>;
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
 }

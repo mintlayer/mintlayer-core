@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::IpAddr;
-
 use common::{
     chain::{Block, Transaction},
     primitives::Id,
@@ -98,9 +96,6 @@ pub enum PeerManagerEvent {
     ListBanned(oneshot_nofail::Sender<Vec<BannableAddress>>),
     Ban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
     Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
-
-    Whitelist(IpAddr, oneshot_nofail::Sender<crate::Result<()>>),
-    Unwhitelist(IpAddr, oneshot_nofail::Sender<crate::Result<()>>),
 
     GenericQuery(Box<dyn PeerManagerQueryFunc>),
 }

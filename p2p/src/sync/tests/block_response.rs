@@ -157,6 +157,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
+            whitelisted_addresses: Default::default(),
 
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -283,6 +284,7 @@ async fn disconnect(#[case] seed: Seed) {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
+            whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
@@ -350,6 +352,7 @@ async fn slow_response(#[case] seed: Seed) {
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
+            whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),

@@ -401,16 +401,6 @@ pub enum WalletCommand {
         address: IpOrSocketAddress,
     },
 
-    /// Add whitelist peer
-    AddWhitelistPeer {
-        address: IpOrSocketAddress,
-    },
-
-    /// Remove whitelist peer
-    RemoveWhitelistPeer {
-        address: IpOrSocketAddress,
-    },
-
     /// Print the version of the software and optionally the git commit hash
     Version,
 
@@ -1427,20 +1417,6 @@ impl CommandHandler {
             WalletCommand::RemoveReservedPeer { address } => {
                 rpc_client
                     .p2p_remove_reserved_node(address)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
-            }
-            WalletCommand::AddWhitelistPeer { address } => {
-                rpc_client
-                    .p2p_add_whitelist_node(address)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
-            }
-            WalletCommand::RemoveWhitelistPeer { address } => {
-                rpc_client
-                    .p2p_remove_whitelist_node(address)
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))

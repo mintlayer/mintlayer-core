@@ -71,14 +71,6 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().remove_reserved_node(addr).await
     }
 
-    async fn add_whitelist_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
-        self.deref_mut().add_whitelist_node(addr).await
-    }
-
-    async fn remove_whitelist_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
-        self.deref_mut().remove_whitelist_node(addr).await
-    }
-
     async fn submit_transaction(
         &mut self,
         tx: SignedTransaction,

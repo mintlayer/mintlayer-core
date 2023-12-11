@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, net::IpAddr, panic, sync::Arc};
+use std::{collections::BTreeSet, panic, sync::Arc};
 
 use async_trait::async_trait;
 use logging::log;
@@ -321,8 +321,6 @@ impl TestNode {
                     | PeerManagerEvent::ListBanned(_)
                     | PeerManagerEvent::Ban(_, _)
                     | PeerManagerEvent::Unban(_, _)
-                    | PeerManagerEvent::Whitelist(_, _)
-                    | PeerManagerEvent::Unwhitelist(_, _)
                     | PeerManagerEvent::GenericQuery(_) => {
                         panic!("Unexpected peer manager event: {peer_event:?}");
                     }
@@ -581,8 +579,6 @@ pub enum PeerManagerEventDesc {
     ListBanned,
     Ban(BannableAddress),
     Unban(BannableAddress),
-    Whitelist(IpAddr),
-    Unwhitelist(IpAddr),
     GenericQuery,
 }
 
@@ -623,8 +619,6 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::ListBanned(_) => PeerManagerEventDesc::ListBanned,
             PeerManagerEvent::Ban(addr, _) => PeerManagerEventDesc::Ban(*addr),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
-            PeerManagerEvent::Whitelist(addr, _) => PeerManagerEventDesc::Whitelist(*addr),
-            PeerManagerEvent::Unwhitelist(addr, _) => PeerManagerEventDesc::Unwhitelist(*addr),
             PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
         }
     }
