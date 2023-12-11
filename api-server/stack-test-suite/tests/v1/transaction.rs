@@ -127,11 +127,11 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();

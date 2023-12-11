@@ -55,11 +55,11 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Some(Arc::new(DummyRPC {})),
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await.unwrap();
+        web_server(listener, web_server_state, true).await.unwrap();
     });
 
     // Given that the listener port is open, this will block until a
