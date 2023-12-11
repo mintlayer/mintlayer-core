@@ -437,6 +437,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        self.just_execute(
+            "CREATE TABLE ml_fungible_token (
+                    token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    issuance bytea NOT NULL,
+                    PRIMARY KEY (token_id, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_nft_issuance (
+                    nft_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    issuance bytea NOT NULL,
+                    PRIMARY KEY nft_id
+                );",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -1274,8 +1294,42 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_nft_token (token_id, block_height, issuance) VALUES ($1, $2, $3);",
+                "INSERT INTO ml_nft_issuance (nft_id, block_height, issuance) VALUES ($1, $2, $3);",
                 &[&token_id.encode(), &height, &issuance.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_fungible_token WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_nft_issuance WHERE block_height > $1;",
+                &[&height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

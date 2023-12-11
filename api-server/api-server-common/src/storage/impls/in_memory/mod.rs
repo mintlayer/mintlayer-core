@@ -536,6 +536,7 @@ impl ApiServerInMemoryStorage {
             .insert(block_height, issuance);
         Ok(())
     }
+
     fn set_nft_token_issuance(
         &mut self,
         token_id: TokenId,
@@ -546,6 +547,30 @@ impl ApiServerInMemoryStorage {
             .entry(token_id)
             .or_default()
             .insert(block_height, issuance);
+        Ok(())
+    }
+
+    fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.fungible_token_issuances.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.nft_token_issuances.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
         Ok(())
     }
 }

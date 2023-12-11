@@ -180,6 +180,20 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_nft_token_issuance(token_id, block_height, issuance)
     }
+
+    async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_token_issuance_above_height(block_height)
+    }
+
+    async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_nft_issuance_above_height(block_height)
+    }
 }
 
 #[async_trait::async_trait]

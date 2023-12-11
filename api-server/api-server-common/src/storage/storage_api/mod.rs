@@ -386,6 +386,16 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
         issuance: NftIssuance,
     ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

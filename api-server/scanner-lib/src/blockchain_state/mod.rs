@@ -202,7 +202,17 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     db_tx
         .del_pools_above_height(block_height)
         .await
-        .expect("Unable to disconnect address transactions");
+        .expect("Unable to disconnect pool data");
+
+    db_tx
+        .del_token_issuance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect token issuances");
+
+    db_tx
+        .del_nft_issuance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect nft issuances");
 
     Ok(())
 }

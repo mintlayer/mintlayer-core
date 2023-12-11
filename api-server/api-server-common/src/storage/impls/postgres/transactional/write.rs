@@ -229,6 +229,26 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 
         Ok(())
     }
+
+    async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_token_issuance_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_nft_issuance_above_height(block_height).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
