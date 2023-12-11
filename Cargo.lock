@@ -7334,6 +7334,7 @@ dependencies = [
  "wallet",
  "wallet-controller",
  "wallet-storage",
+ "wallet-test-node",
  "wallet-types",
 ]
 
@@ -7383,6 +7384,26 @@ dependencies = [
  "utils",
  "utxo",
  "wallet-types",
+]
+
+[[package]]
+name = "wallet-test-node"
+version = "0.2.0"
+dependencies = [
+ "blockprod",
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "crypto",
+ "hex",
+ "logging",
+ "mempool",
+ "node-lib",
+ "p2p",
+ "rpc",
+ "serialization",
+ "subsystem",
+ "tokio",
 ]
 
 [[package]]

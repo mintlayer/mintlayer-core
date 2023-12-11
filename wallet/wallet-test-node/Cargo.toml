@@ -1,0 +1,24 @@
+[package]
+name = "wallet-test-node"
+license.workspace = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+blockprod = { path = "../../blockprod" }
+chainstate = { path = "../../chainstate" }
+chainstate-storage = { path = "../../chainstate/storage" }
+common = { path = "../../common" }
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
+mempool = { path = "../../mempool" }
+node-lib = { path = "../../node-lib" }
+p2p = { path = "../../p2p" }
+rpc = { path = "../../rpc" }
+serialization = { path = "../../serialization" }
+subsystem = { path = "../../subsystem" }
+
+hex.workspace = true
+tokio = { workspace = true, default-features = false, features = ["rt", "sync"] }

@@ -45,5 +45,6 @@ node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
+wallet-test-node = { path = "../wallet-test-node" }
 
 rstest.workspace = true

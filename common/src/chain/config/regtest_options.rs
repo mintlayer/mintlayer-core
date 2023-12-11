@@ -95,7 +95,7 @@ pub struct ChainConfigOptions {
     pub chain_genesis_staking_settings: GenesisStakingSettings,
 }
 
-pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Builder> {
     let ChainConfigOptions {
         chain_magic_bytes,
         chain_max_future_block_time_offset,
@@ -220,5 +220,9 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
             ));
     }
 
-    Ok(builder.build())
+    Ok(builder)
+}
+
+pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+    regtest_chain_config_builder(options).map(Builder::build)
 }
