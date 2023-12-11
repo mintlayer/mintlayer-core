@@ -452,7 +452,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     nft_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     issuance bytea NOT NULL,
-                    PRIMARY KEY nft_id
+                    PRIMARY KEY (nft_id)
                 );",
         )
         .await?;

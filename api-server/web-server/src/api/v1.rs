@@ -783,7 +783,7 @@ pub async fn token<T: ApiServerStorage>(
     let token_id = Address::from_str(&state.chain_config, &token_id)
         .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
         })?;
 
     let token = state
@@ -822,7 +822,7 @@ pub async fn nft<T: ApiServerStorage>(
     let nft_id = Address::from_str(&state.chain_config, &nft_id)
         .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNftId)
         })?;
 
     let nft = state

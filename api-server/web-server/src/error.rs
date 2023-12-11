@@ -95,6 +95,10 @@ pub enum ApiServerWebServerClientError {
     InvalidPoolsSortOrder,
     #[error("Invalid signed transaction")]
     InvalidSignedTransaction,
+    #[error("Invalid token Id")]
+    InvalidTokenId,
+    #[error("Invalid NFT Id")]
+    InvalidNftId,
 }
 
 #[allow(dead_code)]
