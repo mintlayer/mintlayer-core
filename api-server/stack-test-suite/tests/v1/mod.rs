@@ -97,11 +97,11 @@ async fn chain_genesis() {
                 ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: Arc::clone(&chain_config),
-                    rpc: None::<std::sync::Arc<DummyRPC>>,
+                    rpc: Arc::new(DummyRPC {}),
                 }
             };
 
-            web_server(listener, web_server_state).await
+            web_server(listener, web_server_state, true).await
         }
     });
 

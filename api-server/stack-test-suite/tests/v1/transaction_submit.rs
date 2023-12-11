@@ -35,11 +35,11 @@ async fn dissabled_post_route() {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await.unwrap();
+        web_server(listener, web_server_state, false).await.unwrap();
     });
 
     let body = "invalid transaction bytes";
@@ -80,11 +80,11 @@ async fn invalid_transaction() {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Some(Arc::new(DummyRPC {})),
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await.unwrap();
+        web_server(listener, web_server_state, true).await.unwrap();
     });
 
     let body = "invalid transaction bytes";
@@ -131,11 +131,11 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Some(Arc::new(DummyRPC {})),
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await.unwrap();
+        web_server(listener, web_server_state, true).await.unwrap();
     });
 
     let tx = TransactionBuilder::new()

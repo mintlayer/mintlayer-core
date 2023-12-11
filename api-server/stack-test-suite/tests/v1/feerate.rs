@@ -18,48 +18,6 @@ use super::*;
 #[rstest]
 #[trace]
 #[tokio::test]
-async fn disabled_post_route() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    let url = "/api/v1/feerate";
-
-    let task = tokio::spawn(async move {
-        let web_server_state = {
-            let chain_config = Arc::new(create_unit_test_config());
-            let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-            ApiServerWebServerState {
-                db: Arc::new(storage),
-                chain_config: Arc::clone(&chain_config),
-                rpc: None::<Arc<DummyRPC>>,
-            }
-        };
-
-        web_server(listener, web_server_state).await.unwrap();
-    });
-
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
-    let response = reqwest::Client::new()
-        .get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), 403);
-
-    let body = response.text().await.unwrap();
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-    assert_eq!(body["error"].as_str().unwrap(), "Forbidden endpoint");
-
-    task.abort();
-}
-
-#[rstest]
-#[trace]
-#[tokio::test]
 async fn invalid_query_parameter() {
     let (task, response) = spawn_webserver("/api/v1/feerate?in_top_x_mb=invalid").await;
 

@@ -134,11 +134,11 @@ async fn get_block_failed(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let transaction_id = rx.await.unwrap();
@@ -237,11 +237,11 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let transaction_id = rx.await.unwrap();
@@ -359,11 +359,11 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let transaction_id = rx.await.unwrap();
@@ -469,11 +469,11 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let (transaction_id, expected_path) = rx.await.unwrap();
