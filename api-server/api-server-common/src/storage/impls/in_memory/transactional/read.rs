@@ -25,8 +25,8 @@ use common::{
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-    FungibleTokenData, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, CoinOrTokenId,
+    Delegation, FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -40,8 +40,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.transaction.get_address_balance(address)
+        self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
     async fn get_address_transactions(

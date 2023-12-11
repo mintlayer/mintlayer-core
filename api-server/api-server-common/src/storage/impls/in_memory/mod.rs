@@ -16,7 +16,8 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, CoinOrTokenId, Delegation,
+    FungibleTokenData, Utxo,
 };
 use common::{
     chain::{
@@ -39,7 +40,7 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
-    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, Amount>>,
+    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
@@ -81,10 +82,16 @@ impl ApiServerInMemoryStorage {
         Ok(true)
     }
 
-    fn get_address_balance(&self, address: &str) -> Result<Option<Amount>, ApiServerStorageError> {
+    fn get_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.address_balance_table.get(address).map_or_else(
             || Ok(None),
-            |balance| Ok(balance.last_key_value().map(|(_, &v)| v)),
+            |balance| {
+                Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
+            },
         )
     }
 
@@ -370,12 +377,15 @@ impl ApiServerInMemoryStorage {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.address_balance_table
             .entry(address.to_string())
             .or_default()
-            .insert(block_height, amount);
+            .entry(block_height)
+            .or_default()
+            .insert(coin_or_token_id, amount);
 
         Ok(())
     }

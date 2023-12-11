@@ -32,7 +32,8 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, CoinOrTokenId, Delegation,
+        FungibleTokenData, Utxo,
     },
 };
 
@@ -122,17 +123,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.tx
             .query_opt(
                 r#"
                     SELECT amount
                     FROM ml_address_balance
-                    WHERE address = $1
+                    WHERE address = $1 AND coin_or_token_id = $2
                     ORDER BY block_height DESC
                     LIMIT 1;
                 "#,
-                &[&address],
+                &[&address, &coin_or_token_id.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -173,6 +175,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
@@ -180,12 +183,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_address_balance (address, block_height, amount)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (address, block_height)
-                    DO UPDATE SET amount = $3;
+                    INSERT INTO ml_address_balance (address, block_height, coin_or_token_id, amount)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (address, block_height, coin_or_token_id)
+                    DO UPDATE SET amount = $4;
                 "#,
-                &[&address.to_string(), &height, &amount.encode()],
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -373,8 +376,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_address_balance (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height)
+                    PRIMARY KEY (address, block_height, coin_or_token_id)
                 );",
         )
         .await?;

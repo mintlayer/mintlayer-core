@@ -16,7 +16,8 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
+    ApiServerStorageWrite, ApiServerTransactionRw, CoinOrTokenId, Delegation, FungibleTokenData,
+    Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
@@ -293,9 +294,26 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
                     match output_value {
-                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
                         OutputValue::Coin(amount) => {
-                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
                         }
                     }
                     set_utxo(
@@ -502,7 +520,14 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                     updated_delegation.spend_destination(),
                 )
                 .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, &rewards, block_height).await;
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &rewards,
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
             }
 
             let pool_data = adapter.get_pool_data(pool_id).expect("ok").expect("must exist");
@@ -625,7 +650,14 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             delegation.spend_destination(),
                         )
                         .expect("Unable to encode address");
-                        decrease_address_amount(db_tx, address, amount, block_height).await;
+                        decrease_address_amount(
+                            db_tx,
+                            address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
                     }
                 }
             }
@@ -734,12 +766,23 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                     .insert(tx.get_id());
 
                                 match output_value {
-                                    OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                                    OutputValue::TokenV0(_) => {}
+                                    OutputValue::TokenV1(token_id, amount) => {
+                                        decrease_address_amount(
+                                            db_tx,
+                                            address,
+                                            &amount,
+                                            CoinOrTokenId::TokenId(token_id),
+                                            block_height,
+                                        )
+                                        .await;
+                                    }
                                     OutputValue::Coin(amount) => {
                                         decrease_address_amount(
                                             db_tx,
                                             address,
                                             &amount,
+                                            CoinOrTokenId::Coin,
                                             block_height,
                                         )
                                         .await;
@@ -882,8 +925,14 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
                         .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, &stake_pool_data.value(), block_height)
-                    .await;
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &stake_pool_data.value(),
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
             }
             | TxOutput::DelegateStaking(amount, delegation_id) => {
                 // Update delegation pledge
@@ -904,7 +953,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
                         .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, amount, block_height).await;
+                increase_address_amount(db_tx, &address, amount, CoinOrTokenId::Coin, block_height)
+                    .await;
 
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
@@ -928,9 +978,26 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
                     match output_value {
-                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
                         OutputValue::Coin(amount) => {
-                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
                         }
                     }
                     set_utxo(
@@ -984,10 +1051,11 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     address: &Address<Destination>,
     amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get())
+        .get_address_balance(address.get(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -995,7 +1063,7 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -1004,10 +1072,11 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     address: Address<Destination>,
     amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get())
+        .get_address_balance(address.get(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -1015,7 +1084,7 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }

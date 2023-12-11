@@ -15,14 +15,14 @@
 
 use common::{
     chain::{tokens::TokenId, Destination, GenBlock, TxOutput},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-        FungibleTokenData, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, CoinOrTokenId,
+        Delegation, FungibleTokenData, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -51,9 +51,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_address_balance(
         &self,
         address: &str,
-    ) -> Result<Option<common::primitives::Amount>, ApiServerStorageError> {
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_address_balance(address).await?;
+        let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
         Ok(res)
     }

@@ -22,7 +22,7 @@ use crate::{
     TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, CoinOrTokenId,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -453,7 +453,7 @@ pub async fn address<T: ApiServerStorage>(
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_address_balance(&address.to_string())
+        .get_address_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
         .map_err(|_| {
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)

@@ -184,6 +184,12 @@ impl FungibleTokenData {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -193,6 +199,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
     async fn get_address_transactions(
@@ -293,6 +300,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 

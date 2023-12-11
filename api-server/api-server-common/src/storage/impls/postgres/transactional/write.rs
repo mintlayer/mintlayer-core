@@ -29,7 +29,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, Delegation, FungibleTokenData, Utxo,
+        ApiServerStorageWrite, CoinOrTokenId, Delegation, FungibleTokenData, Utxo,
     },
 };
 
@@ -71,10 +71,12 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_address_balance_at_height(address, amount, block_height).await?;
+        conn.set_address_balance_at_height(address, amount, coin_or_token_id, block_height)
+            .await?;
 
         Ok(())
     }
@@ -248,9 +250,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_address_balance(address).await?;
+        let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
         Ok(res)
     }
