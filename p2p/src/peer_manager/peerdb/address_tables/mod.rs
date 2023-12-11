@@ -172,14 +172,6 @@ impl AddressTables {
         self.tried_addr_table.remove(addr);
     }
 
-    pub fn new_addr_count(&self) -> usize {
-        self.new_addr_table.addr_count()
-    }
-
-    pub fn tried_addr_count(&self) -> usize {
-        self.tried_addr_table.addr_count()
-    }
-
     pub fn new_addresses(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
         self.new_addr_table.addr_iter()
     }

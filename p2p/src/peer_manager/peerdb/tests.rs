@@ -580,9 +580,7 @@ fn new_tried_addr_selection_frequency() {
             let min = std::cmp::min(total_selected_new_addrs, total_selected_tried_addrs);
             let max = std::cmp::max(total_selected_new_addrs, total_selected_tried_addrs);
             let ratio = max as f64 / min as f64;
-            // Note: for some reason, the max here is always bigger than min by 10-20%, sometimes
-            // up to 30%, and it doesn't depend on the number of iterations.
-            assert!(ratio <= 1.3);
+            assert!(ratio <= 1.1);
         }
     }
 }

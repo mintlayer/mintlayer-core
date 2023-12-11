@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,28 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod array_2d;
-pub mod atomics;
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod graph_traversals;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod rust_backtrace;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
-pub mod try_as;
+use crypto::random::Rng;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+/// Returns a value sampled from an exponential distribution with a mean of 1.0
+pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
+    let mut random_f64 = rng.gen::<f64>();
+    // The generated number will be in the range [0, 1). Turn it into (0, 1) to avoid
+    // infinity when taking the logarithm.
+    if random_f64 == 0.0 {
+        random_f64 = f64::MIN_POSITIVE;
+    }
+
+    #[allow(clippy::float_arithmetic)]
+    -random_f64.ln()
+}
+
+#[cfg(test)]
+mod test;

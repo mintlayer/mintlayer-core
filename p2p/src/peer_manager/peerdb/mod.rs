@@ -38,10 +38,8 @@ use std::{
 
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
-use itertools::Itertools;
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use utils::rand::choose_multiple_weighted;
 
 use crate::config::P2pConfig;
 
@@ -205,7 +203,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
         )
     }
 
-    #[allow(clippy::float_arithmetic)]
     fn select_non_reserved_outbound_addresses_with_rng(
         &self,
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
@@ -231,32 +228,44 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 false
             }
         };
-        let new_addr_count = self.address_tables.new_addr_count();
-        let tried_addr_count = self.address_tables.tried_addr_count();
 
-        let new_addr_weight = 1.0 / new_addr_count as f64;
-        let tried_addr_weight = 1.0 / tried_addr_count as f64;
+        let mut selected_new =
+            self.address_tables.new_addresses().filter(filter).choose_multiple(rng, count);
+        selected_new.shuffle(rng);
+        let mut selected_tried =
+            self.address_tables.tried_addresses().filter(filter).choose_multiple(rng, count);
+        selected_tried.shuffle(rng);
 
-        let new_addr_iter = self
-            .address_tables
-            .new_addresses()
-            .filter(filter)
-            .map(|addr| (*addr, new_addr_weight));
-        let tried_addr_iter = self
-            .address_tables
-            .tried_addresses()
-            .filter(filter)
-            .map(|addr| (*addr, tried_addr_weight));
+        let mut selected_new_iter = selected_new.into_iter().peekable();
+        let mut selected_tried_iter = selected_tried.into_iter().peekable();
+        // Only one address per address group should be returned.
+        let mut addr_group_to_addr_map = BTreeMap::new();
 
-        let mut selected =
-            choose_multiple_weighted(new_addr_iter.chain(tried_addr_iter), rng, count);
+        while addr_group_to_addr_map.len() < count {
+            let have_new = selected_new_iter.peek().is_some();
+            let have_tried = selected_tried_iter.peek().is_some();
+            let use_new = match (have_new, have_tried) {
+                (false, false) => {
+                    break;
+                }
+                (true, true) => rng.gen_bool(0.5),
+                _ => have_new,
+            };
 
-        // Drop duplicate address groups as needed (shuffle selected addresses first to make the selection fair)
-        selected.shuffle(rng);
-        selected
-            .into_iter()
-            .unique_by(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
-            .collect()
+            let addr = *if use_new {
+                selected_new_iter.next()
+            } else {
+                selected_tried_iter.next()
+            }
+            .expect("Iterator must not be exhausted");
+
+            addr_group_to_addr_map.insert(
+                AddressGroup::from_peer_address(&addr.as_peer_address()),
+                addr,
+            );
+        }
+
+        addr_group_to_addr_map.values().copied().collect()
     }
 
     pub fn select_non_reserved_address_from_new_addr_table(&self) -> Option<SocketAddress> {

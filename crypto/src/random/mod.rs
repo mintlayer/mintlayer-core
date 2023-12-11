@@ -18,8 +18,7 @@ pub use rand::{seq, CryptoRng, Rng, RngCore, SeedableRng};
 
 pub mod distributions {
     pub use rand::distributions::{
-        uniform::{UniformFloat, UniformSampler},
-        Alphanumeric, DistString, Distribution, Open01, Standard, WeightedIndex,
+        Alphanumeric, DistString, Distribution, Standard, WeightedIndex,
     };
     pub mod uniform {
         pub use rand::distributions::uniform::SampleRange;

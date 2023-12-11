@@ -162,7 +162,7 @@ impl AddressData {
     }
 
     fn next_connect_time(now: Time, fail_count: u32, reserved: bool, rng: &mut impl Rng) -> Time {
-        let factor = utils::rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
+        let factor = utils::exp_rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
         let offset = Self::next_connect_delay(fail_count, reserved).mul_f64(factor);
         (now + offset).expect("Unexpected time addition overflow")
     }
