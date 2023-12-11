@@ -166,18 +166,24 @@ class WalletConflictTransaction(BitcoinTestFramework):
             assert_in("Success", await wallet.select_account(1))
             assert_in("Coin selection error: No available UTXOs", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
 
+            # check that the mempool still has the transfer tx
+            assert node.mempool_contains_tx(transfer_tx_id)
+
             # create a block with the freeze token transaction
             self.generate_block([freeze_tx])
             assert_in("Success", await wallet.sync())
+
+            # after the token is frozen the transfer token tx should be evicted by the mempool as conflicting
+            # wait until mempool evicts the conflicting tx
+            self.wait_until(lambda: not node.mempool_contains_tx(transfer_tx_id), timeout = 5)
+            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-
             assert_in("Success", await wallet.select_account(1))
-            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
             assert_in("The transaction was submitted successfully", await wallet.send_tokens_to_address(token_id, address, 10))
 
             pending_txs = await wallet.list_pending_transactions()
