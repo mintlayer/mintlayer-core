@@ -140,7 +140,7 @@ impl Utxo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct FungibleTokenData {
     pub token_ticker: Vec<u8>,
     pub number_of_decimals: u8,

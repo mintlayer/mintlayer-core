@@ -269,6 +269,7 @@ dependencies = [
  "pos_accounting",
  "proptest",
  "rand 0.8.5",
+ "serialization",
  "test-utils",
  "tokio",
  "utils",

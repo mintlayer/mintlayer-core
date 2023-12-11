@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::helpers::make_trial;
@@ -23,7 +24,7 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
+        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
     },
 };
 use crypto::{
@@ -36,9 +37,14 @@ use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
-        block::timestamp::BlockTimestamp, config::create_unit_test_config,
-        output_value::OutputValue, AccountNonce, Block, DelegationId, Destination,
-        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        config::create_unit_test_config,
+        output_value::OutputValue,
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, NftIssuance, NftIssuanceV0, TokenId, TokenTotalSupply,
+        },
+        AccountNonce, Block, DelegationId, Destination, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -653,6 +659,127 @@ where
             let delegation = db_tx.get_delegation(random_delegation_id).await.unwrap();
             assert!(delegation.is_none());
         }
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // test nfts
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap();
+        assert!(nft.is_none());
+
+        drop(db_tx);
+
+        let nft = NftIssuance::V0(NftIssuanceV0 {
+            metadata: common::chain::tokens::Metadata {
+                creator: None,
+                name: "Name".as_bytes().to_vec(),
+                description: "SomeNFT".as_bytes().to_vec(),
+                ticker: "XXXX".as_bytes().to_vec(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: "123456".as_bytes().to_vec(),
+            },
+        });
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        db_tx
+            .set_nft_token_issuance(random_token_id, block_height, nft.clone())
+            .await
+            .unwrap();
+
+        let returned_nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_nft, nft);
+
+        db_tx
+            .del_nft_issuance_above_height(block_height.prev_height().unwrap())
+            .await
+            .unwrap();
+
+        let nft = db_tx.get_nft_token_issuance(random_token_id).await.unwrap();
+        assert!(nft.is_none());
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // test tokens
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let token = db_tx.get_fungible_token_issuance(random_token_id).await.unwrap();
+        assert!(token.is_none());
+
+        drop(db_tx);
+
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let random_destination = Destination::Address(PublicKeyHash::from(&pk));
+
+        let token_data = FungibleTokenData {
+            token_ticker: "XXXX".as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            circulating_supply: Amount::ZERO,
+            total_supply: TokenTotalSupply::Unlimited,
+            is_locked: false,
+            frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            authority: random_destination,
+        };
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        db_tx
+            .set_fungible_token_issuance(random_token_id, block_height, token_data.clone())
+            .await
+            .unwrap();
+
+        let returned_token =
+            db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_token, token_data);
+
+        let locked_token_data = token_data
+            .clone()
+            .mint_tokens(Amount::from_atoms(rng.gen_range(1..1000)))
+            .lock();
+
+        db_tx
+            .set_fungible_token_issuance(
+                random_token_id,
+                block_height.next_height(),
+                locked_token_data.clone(),
+            )
+            .await
+            .unwrap();
+
+        let returned_token =
+            db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_token, locked_token_data);
+
+        // after reorg go back to the previous token data
+        db_tx.del_token_issuance_above_height(block_height).await.unwrap();
+        let returned_token =
+            db_tx.get_fungible_token_issuance(random_token_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_token, token_data);
+
+        db_tx
+            .del_token_issuance_above_height(block_height.prev_height().unwrap())
+            .await
+            .unwrap();
+
+        let token = db_tx.get_fungible_token_issuance(random_token_id).await.unwrap();
+        assert!(token.is_none());
 
         db_tx.commit().await.unwrap();
     }
