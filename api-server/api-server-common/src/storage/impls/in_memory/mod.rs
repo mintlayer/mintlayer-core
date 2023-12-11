@@ -320,6 +320,16 @@ impl ApiServerInMemoryStorage {
             .get(&token_id)
             .map(|by_height| by_height.values().last().cloned().expect("not empty")))
     }
+
+    fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        Ok(self
+            .nft_token_issuances
+            .get(&token_id)
+            .map(|by_height| by_height.values().last().cloned().expect("not empty")))
+    }
 }
 
 impl ApiServerInMemoryStorage {

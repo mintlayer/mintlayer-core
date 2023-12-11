@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{tokens::TokenId, Destination, GenBlock, TxOutput},
+    chain::{
+        tokens::{NftIssuance, TokenId},
+        Destination, GenBlock, TxOutput,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 
@@ -224,8 +227,18 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_fungible_token_issuance(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_nft_token_issuance(token_id).await?;
 
         Ok(res)
     }

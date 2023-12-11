@@ -32,7 +32,7 @@ use axum::{
 };
 use common::{
     address::Address,
-    chain::{Block, Destination, SignedTransaction, Transaction},
+    chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use hex::ToHex;
@@ -90,7 +90,9 @@ pub fn routes<
         .route("/pool/:id", get(pool))
         .route("/pool/:id/delegations", get(pool_delegations));
 
-    router.route("/delegation/:id", get(delegation))
+    let router = router.route("/delegation/:id", get(delegation));
+
+    router.route("/token/:id", get(token)).route("/nft/:id", get(nft))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -772,4 +774,87 @@ pub async fn delegation<T: ApiServerStorage>(
             "no error in encoding"
         ).get(),
     })))
+}
+
+pub async fn token<T: ApiServerStorage>(
+    Path(token_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_str(&state.chain_config, &token_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?;
+
+    let token = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_fungible_token_issuance(token_id)
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    Ok(Json(json!({
+        "authority": Address::new(&state.chain_config, &token.authority).expect(
+            "no error in encoding"
+        ).get(),
+        "is_locked": token.is_locked,
+        "circulating_supply": amount_to_json(token.circulating_supply),
+        "metadata_uri": token.metadata_uri,
+        "number_of_decimals": token.number_of_decimals,
+        "total_supply": token.total_supply,
+        "frozen": token.frozen,
+    })))
+}
+
+pub async fn nft<T: ApiServerStorage>(
+    Path(nft_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let nft_id = Address::from_str(&state.chain_config, &nft_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?;
+
+    let nft = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_nft_token_issuance(nft_id)
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::NftNotFound,
+        ))?;
+
+    match nft {
+        NftIssuance::V0(nft) => Ok(Json(json!({
+            "authority": nft.metadata.creator
+                .map(|creator| Address::new(&state.chain_config, &Destination::PublicKey(creator.public_key))
+                .expect("no error in encoding")
+                .get().to_owned()
+            ),
+            "name": nft.metadata.name,
+            "description": nft.metadata.description,
+            "ticker": nft.metadata.ticker,
+            "icon_uri": nft.metadata.icon_uri,
+            "additional_metadata_uri": nft.metadata.additional_metadata_uri,
+            "media_uri": nft.metadata.media_uri,
+            "media_hash": nft.metadata.media_hash,
+        }))),
+    }
 }

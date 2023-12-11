@@ -17,8 +17,9 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::{NftIssuance, TokenId},
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -155,5 +156,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
         self.transaction.get_fungible_token_issuance(token_id)
+    }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        self.transaction.get_nft_token_issuance(token_id)
     }
 }

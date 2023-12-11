@@ -277,6 +277,11 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError>;
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

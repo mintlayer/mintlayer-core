@@ -321,4 +321,11 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
         self.transaction.get_fungible_token_issuance(token_id)
     }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        self.transaction.get_nft_token_issuance(token_id)
+    }
 }

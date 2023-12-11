@@ -1252,7 +1252,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn get_fungible_token_issuance(
-        &mut self,
+        &self,
         token_id: TokenId,
     ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
         let row = self
@@ -1280,6 +1280,38 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     token_id, e
                 ))
             })?;
+
+        Ok(Some(issuance))
+    }
+
+    pub async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT issuance FROM ml_nft_issuance WHERE nft_id = $1
+                    ORDER BY block_height DESC
+                    LIMIT 1;",
+                &[&token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let issuance = NftIssuance::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Nft issuance data for nft id {} deserialization failed: {}",
+                token_id, e
+            ))
+        })?;
 
         Ok(Some(issuance))
     }

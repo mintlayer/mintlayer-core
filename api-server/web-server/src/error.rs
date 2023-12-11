@@ -61,6 +61,10 @@ pub enum ApiServerWebServerNotFoundError {
     PoolNotFound,
     #[error("Delegation not found")]
     DelegationNotFound,
+    #[error("Token not found")]
+    TokenNotFound,
+    #[error("NFT not found")]
+    NftNotFound,
 }
 
 #[derive(Debug, Error, Serialize)]
