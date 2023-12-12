@@ -361,6 +361,12 @@ where
             let random_pool_id = PoolId::new(H256::random_using(&mut rng));
             let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap();
             assert!(pool_data.is_none());
+
+            let pools = db_tx.get_latest_pool_data(1, 0).await.unwrap();
+            assert!(pools.is_empty());
+
+            let pools = db_tx.get_pool_data_with_largest_pledge(1, 0).await.unwrap();
+            assert!(pools.is_empty());
         }
 
         {
@@ -389,6 +395,70 @@ where
             let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
             assert_eq!(pool_data, random_pool_data);
 
+            // insert a second pool data
+            let random_pool_id2 = PoolId::new(H256::random_using(&mut rng));
+            let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let amount_to_stake = {
+                let mut amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+                while amount_to_stake == random_pool_data.pledge_amount() {
+                    amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
+                }
+                amount_to_stake
+            };
+            let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
+            let margin_ratio_per_thousand = rng.gen_range(1..=1000);
+            let random_pool_data2 = PoolData::new(
+                Destination::PublicKey(pk),
+                amount_to_stake,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+            let random_block_height2 = {
+                let mut height = BlockHeight::new(rng.gen::<u32>() as u64);
+                while height == random_block_height {
+                    height = BlockHeight::new(rng.gen::<u32>() as u64)
+                }
+                height
+            };
+
+            db_tx
+                .set_pool_data_at_height(random_pool_id2, &random_pool_data2, random_block_height2)
+                .await
+                .unwrap();
+
+            let pool_data = db_tx.get_pool_data(random_pool_id2).await.unwrap().unwrap();
+            assert_eq!(pool_data, random_pool_data2);
+
+            // check getting by latest pool
+            let expected_latest_pool_data = if random_block_height > random_block_height2 {
+                (random_pool_id, &random_pool_data)
+            } else {
+                (random_pool_id2, &random_pool_data2)
+            };
+
+            let latest_pool_data = db_tx.get_latest_pool_data(1, 0).await.unwrap();
+            assert_eq!(latest_pool_data.len(), 1);
+            let (latest_pool_id, latest_pool_data) = latest_pool_data.last().unwrap();
+            assert_eq!(*latest_pool_id, expected_latest_pool_data.0);
+            assert_eq!(latest_pool_data, expected_latest_pool_data.1);
+
+            // check getting by pledge amount
+            let expected_pool_data_largest_pledge =
+                if random_pool_data.pledge_amount() > random_pool_data2.pledge_amount() {
+                    (random_pool_id, &random_pool_data)
+                } else {
+                    (random_pool_id2, &random_pool_data2)
+                };
+
+            let latest_pool_data = db_tx.get_pool_data_with_largest_pledge(1, 0).await.unwrap();
+            assert_eq!(latest_pool_data.len(), 1);
+            let (latest_pool_id, latest_pool_data) = latest_pool_data.last().unwrap();
+            assert_eq!(*latest_pool_id, expected_pool_data_largest_pledge.0);
+            assert_eq!(latest_pool_data, expected_pool_data_largest_pledge.1);
+
+            // update the first one
             let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let amount_to_stake = Amount::from_atoms(rng.gen::<u128>());

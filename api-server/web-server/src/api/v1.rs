@@ -25,7 +25,7 @@ use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
 };
 use axum::{
-    extract::{DefaultBodyLimit, Path, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -38,7 +38,7 @@ use common::{
 use hex::ToHex;
 use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
-use std::{ops::Sub, str::FromStr, sync::Arc};
+use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc};
 
 use crate::ApiServerWebServerState;
 
@@ -86,6 +86,7 @@ pub fn routes<
         .route("/address/:address/delegations", get(address_delegations));
 
     let router = router
+        .route("/pool", get(pools))
         .route("/pool/:id", get(pool))
         .route("/pool/:id/delegations", get(pool_delegations));
 
@@ -572,6 +573,91 @@ pub async fn address_delegations<T: ApiServerStorage>(
 //
 // pool/
 //
+
+enum PoolSorting {
+    ByHeight,
+    ByPledge,
+}
+
+impl FromStr for PoolSorting {
+    type Err = ApiServerWebServerClientError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "by_height" => Ok(Self::ByHeight),
+            "by_pledge" => Ok(Self::ByPledge),
+            _ => Err(ApiServerWebServerClientError::InvalidPoolsSortOrder),
+        }
+    }
+}
+
+pub async fn pools<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET: &str = "offset";
+    const ITEMS: &str = "items";
+    const DEFAULT_NUM_ITEMS: u32 = 10;
+    const SORT: &str = "sort";
+
+    let offset = params
+        .get(OFFSET)
+        .map(|offset| u32::from_str(offset))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
+        })?
+        .unwrap_or_default();
+
+    let items = params
+        .get(ITEMS)
+        .map(|items| u32::from_str(items))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+        })?
+        .unwrap_or(DEFAULT_NUM_ITEMS);
+
+    let sort = params
+        .get(SORT)
+        .map(|offset| PoolSorting::from_str(offset))
+        .transpose()?
+        .unwrap_or(PoolSorting::ByHeight);
+
+    let db_tx = state.db.transaction_ro().await.map_err(|_| {
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let pools = match sort {
+        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?,
+        PoolSorting::ByPledge => {
+            db_tx.get_pool_data_with_largest_pledge(items, offset).await.map_err(|_| {
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
+        }
+    };
+
+    let pools = pools.into_iter().map(|(pool_id, pool_data)| {
+        let decommission_destination =
+            Address::new(&state.chain_config, pool_data.decommission_destination())
+                .expect("no error in encoding");
+        let pool_id = Address::new(&state.chain_config, &pool_id).expect("no error in encoding");
+        json!({
+            "pool_id": pool_id.get(),
+            "decommission_destination": decommission_destination.get(),
+            "pledge": pool_data.pledge_amount(),
+            "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
+            "cost_per_block": pool_data.cost_per_block(),
+            "vrf_public_key": pool_data.vrf_public_key(),
+        })
+    });
+
+    Ok(Json(pools.collect::<Vec<_>>()))
+}
 
 pub async fn pool<T: ApiServerStorage>(
     Path(pool_id): Path<String>,

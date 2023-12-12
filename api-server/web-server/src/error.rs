@@ -83,6 +83,12 @@ pub enum ApiServerWebServerClientError {
     InvalidTransactionId,
     #[error("Invalid pool Id")]
     InvalidPoolId,
+    #[error("Invalid offset")]
+    InvalidOffset,
+    #[error("Invalid number of items")]
+    InvalidNumItems,
+    #[error("Invalid pools sort order")]
+    InvalidPoolsSortOrder,
     #[error("Invalid signed transaction")]
     InvalidSignedTransaction,
 }
