@@ -25,15 +25,14 @@ use common::{
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, CoinOrTokenId, Delegation,
-        FungibleTokenData, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
     },
 };
 

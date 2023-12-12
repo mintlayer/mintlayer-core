@@ -24,7 +24,7 @@ use common::{
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 use serialization::{Decode, Encode};
@@ -182,12 +182,6 @@ impl FungibleTokenData {
         self.authority = authority;
         self
     }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode)]
-pub enum CoinOrTokenId {
-    Coin,
-    TokenId(TokenId),
 }
 
 #[async_trait::async_trait]

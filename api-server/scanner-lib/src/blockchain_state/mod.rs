@@ -16,8 +16,7 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, CoinOrTokenId, Delegation, FungibleTokenData,
-    Utxo,
+    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
@@ -31,7 +30,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
@@ -592,48 +591,48 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
         match input {
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::MintTokens(token_id, amount) => {
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.mint_tokens(*amount);
+                    let issuance = issuance.mint_tokens(*amount);
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
                 AccountCommand::UnmintTokens(token_id) => {
                     let total_burned =
                         calculate_tokens_burned_in_outputs(tx, token_id).expect("no overflow");
 
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.unmint_tokens(total_burned);
+                    let issuance = issuance.unmint_tokens(total_burned);
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
                 AccountCommand::FreezeToken(token_id, is_unfreezable) => {
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.freeze(*is_unfreezable);
+                    let issuance = issuance.freeze(*is_unfreezable);
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
                 AccountCommand::UnfreezeToken(token_id) => {
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.unfreeze();
+                    let issuance = issuance.unfreeze();
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
                 AccountCommand::LockTokenSupply(token_id) => {
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.lock();
+                    let issuance = issuance.lock();
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, destination) => {
-                    let issance =
+                    let issuance =
                         db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
 
-                    let issuance = issance.change_authority(destination.clone());
+                    let issuance = issuance.change_authority(destination.clone());
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                 }
             },

@@ -21,13 +21,13 @@ use common::{
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, CoinOrTokenId,
-    Delegation, FungibleTokenData, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+    FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;

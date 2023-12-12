@@ -18,14 +18,14 @@ use common::{
         tokens::{NftIssuance, TokenId},
         Destination, GenBlock, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, CoinOrTokenId,
-        Delegation, FungibleTokenData, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+        FungibleTokenData, Utxo,
     },
 };
 use std::collections::BTreeMap;

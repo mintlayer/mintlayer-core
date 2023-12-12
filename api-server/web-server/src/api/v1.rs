@@ -22,7 +22,7 @@ use crate::{
     TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, CoinOrTokenId,
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -33,7 +33,7 @@ use axum::{
 use common::{
     address::Address,
     chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
-    primitives::{Amount, BlockHeight, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde_json::json;

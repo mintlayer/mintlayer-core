@@ -16,8 +16,7 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, CoinOrTokenId, Delegation,
-    FungibleTokenData, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
 };
 use common::{
     chain::{
@@ -25,7 +24,7 @@ use common::{
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 use std::{
