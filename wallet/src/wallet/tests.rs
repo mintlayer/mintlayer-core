@@ -2056,7 +2056,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let unconfirmed_token_info =
         wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
 
-    let amount_to_mint = Amount::from_atoms(rng.gen_range(1..fixed_max_amount.into_atoms()));
+    let amount_to_mint = Amount::from_atoms(rng.gen_range(1..=fixed_max_amount.into_atoms()));
     let mint_tx = wallet
         .mint_tokens(
             DEFAULT_ACCOUNT_INDEX,
