@@ -19,6 +19,7 @@ use std::{
 };
 
 use p2p_types::socket_address::SocketAddress;
+use utils::array_2d::Array2d;
 
 use crate::peer_manager::address_groups::AddressGroup;
 
@@ -42,8 +43,7 @@ pub struct Table {
     /// has a fixed size that can be rather large (e.g. 64k items), we don't store addresses
     /// directly. Instead, addresses are stored in a map indexed by a monotonously increasing
     /// ids and the array only contains the ids.
-    // TODO: use something more efficient than a vector of vectors.
-    buckets: Vec<Vec<EntryId>>,
+    buckets: Array2d<EntryId>,
     /// The addresses map.
     addresses: BTreeMap<EntryId, SocketAddress>,
     /// The maximum value of an id plus one. This value will be stored in `buckets` to indicate
@@ -69,7 +69,7 @@ impl Table {
 
         Self {
             // Fill "buckets" with "id_max" initially.
-            buckets: vec![vec![id_max; bucket_size]; bucket_count],
+            buckets: Array2d::new(bucket_count, bucket_size, id_max),
             addresses: BTreeMap::new(),
             random_key,
             id_max,
@@ -93,12 +93,12 @@ impl Table {
         // buckets.
         let final_hash = calc_hash(&(self.random_key, addr_group, addr_hash % BUCKETS_PER_GROUP));
 
-        (final_hash % self.buckets.len() as u64) as usize
+        (final_hash % self.buckets.rows_count() as u64) as usize
     }
 
     fn bucket_pos(&self, addr: &SocketAddress, bucket_idx: usize) -> usize {
         let hash = calc_hash(&(self.random_key, addr, bucket_idx));
-        (hash % self.buckets[bucket_idx].len() as u64) as usize
+        (hash % self.buckets.cols_count() as u64) as usize
     }
 
     /// Get the table "entry" corresponding to the passed address.
@@ -221,7 +221,7 @@ impl Table {
 
         self.addresses = new_addresses;
 
-        for bucket in &mut self.buckets {
+        for bucket in self.buckets.rows_mut() {
             for id in bucket {
                 if *id < self.id_max {
                     *id = *id_map
@@ -236,7 +236,7 @@ impl Table {
         #[cfg(test)]
         {
             let mut entries_in_buckets = 0;
-            for (bucket_idx, bucket) in self.buckets.iter().enumerate() {
+            for (bucket_idx, bucket) in self.buckets.rows().enumerate() {
                 for (bucket_pos, id) in bucket.iter().enumerate() {
                     if *id < self.id_max {
                         let addr = self.addresses.get(id).expect("Id must be in the map");
