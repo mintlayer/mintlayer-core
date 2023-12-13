@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
+use crypto::random::make_pseudo_rng;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::{Instant, MissedTickBehavior},
@@ -49,6 +50,9 @@ use crate::{
 
 use super::requested_transactions::RequestedTransactions;
 
+// TODO: add smaller interval for outbound connections
+pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
+
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
 ///
@@ -56,6 +60,7 @@ use super::requested_transactions::RequestedTransactions;
 pub struct PeerTransactionSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
+    time_getter: TimeGetter,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
@@ -68,6 +73,10 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     /// This tracks transactions that we've requested from this peer but for which we haven't
     /// received a response yet.
     requested_transactions: RequestedTransactions,
+    /// Txs aren't relayed immediately but rather put into a collection to be propagated later
+    /// with random delay to avoid tracking
+    transactions_to_relay: BTreeSet<Id<Transaction>>,
+    next_transaction_relay_time: std::time::Duration,
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
 }
@@ -92,10 +101,12 @@ where
         observer: Option<BoxedObserver>,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
+        let next_transaction_relay_time = time_getter.get_time().as_duration_since_epoch();
 
         Self {
             id: id.into(),
             p2p_config,
+            time_getter: time_getter.clone(),
             common_services,
             chainstate_handle,
             mempool_handle,
@@ -105,6 +116,8 @@ where
             local_event_receiver,
             known_transactions,
             requested_transactions: RequestedTransactions::new(time_getter),
+            transactions_to_relay: Default::default(),
+            next_transaction_relay_time,
             observer,
         }
     }
@@ -150,12 +163,30 @@ where
                 _ = maintenance_interval.tick() => {}
             }
 
+            self.announce_transactions_if_needed()?;
+
             self.requested_transactions.purge_if_needed();
         }
     }
 
     fn send_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
         self.messaging_handle.send_transaction_sync_message(self.id(), message)
+    }
+
+    // TODO: whitelisted peers can get txs without delay
+    fn announce_transactions_if_needed(&mut self) -> Result<()> {
+        let now = self.time_getter.get_time().as_duration_since_epoch();
+        if now >= self.next_transaction_relay_time {
+            let ids = std::mem::take(&mut self.transactions_to_relay);
+            ids.into_iter().try_for_each(|txid| {
+                self.send_message(TransactionSyncMessage::NewTransaction(txid))
+            })?;
+
+            let delay = TX_RELAY_DELAY_INTERVAL
+                .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+            self.next_transaction_relay_time = now + delay;
+        }
+        Ok(())
     }
 
     fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
@@ -171,10 +202,9 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_message(TransactionSyncMessage::NewTransaction(txid))
-                } else {
-                    Ok(())
+                    self.transactions_to_relay.insert(txid);
                 }
+                Ok(())
             }
         }
     }
