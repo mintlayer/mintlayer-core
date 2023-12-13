@@ -23,7 +23,7 @@ use std::{
 
 use common::{
     chain::{SignedTransaction, Transaction, TxInput},
-    primitives::Id,
+    primitives::{Amount, Id},
 };
 use logging::log;
 use utils::newtype;
@@ -33,7 +33,7 @@ use super::{
     fee::Fee,
     Time, TxEntryWithFee,
 };
-use crate::error::MempoolPolicyError;
+use crate::{error::MempoolPolicyError, FeeRate};
 use mem_usage::Tracked;
 
 newtype! {
@@ -60,6 +60,18 @@ newtype! {
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
     pub struct DescendantScore(Fee);
+}
+
+impl DescendantScore {
+    /// Converts a `DescendantScore` to a `FeeRate` using a minimum fee rate as a lower bound.
+    pub fn to_feerate(&self, min_feerate: FeeRate) -> Result<FeeRate, MempoolPolicyError> {
+        (Amount::from_atoms(self.into_atoms()) * 1000)
+            .ok_or(MempoolPolicyError::FeeOverflow)
+            .map(|amount| {
+                let feerate = FeeRate::from_amount_per_kb(amount);
+                std::cmp::max(feerate, min_feerate)
+            })
+    }
 }
 
 newtype! {

@@ -15,7 +15,13 @@
 
 use mempool_types::tx_origin::LocalTxOrigin;
 use parking_lot::RwLock;
-use std::{collections::BTreeSet, mem, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem,
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -45,7 +51,7 @@ use self::{
     orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
     spends_unconfirmed::SpendsUnconfirmed,
-    store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
+    store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
 use crate::{
     config,
@@ -66,6 +72,7 @@ mod collect_txs;
 mod entry;
 pub mod fee;
 mod feerate;
+mod feerate_points;
 pub mod memory_usage_estimator;
 mod orphans;
 mod reorg;
@@ -1043,6 +1050,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
+        let min_feerate = std::cmp::max(
+            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+            *self.mempool_config.min_tx_relay_fee_rate,
+        );
         let mut total_size = 0;
         self.store
             .txs_by_descendant_score
@@ -1053,20 +1064,59 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 (total_size / 1_000_000) >= in_top_x_mb
             })
             .map_or_else(
-                || Ok(self.rolling_fee_rate.read().rolling_minimum_fee_rate()),
-                |(score, _txs)| {
-                    (Amount::from_atoms(score.into_atoms()) * 1000)
-                        .ok_or(MempoolPolicyError::FeeOverflow)
-                        .map(|amount| {
-                            let feerate = FeeRate::from_amount_per_kb(amount);
-                            std::cmp::max(
-                                feerate,
-                                self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-                            )
-                        })
-                },
+                || Ok(min_feerate),
+                |(score, _txs)| score.to_feerate(min_feerate),
             )
-            .map(|feerate| std::cmp::max(feerate, *self.mempool_config.min_tx_relay_fee_rate))
+    }
+
+    pub fn get_fee_rate_points(
+        &self,
+        num_points: NonZeroUsize,
+    ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
+        let min_feerate = std::cmp::max(
+            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+            *self.mempool_config.min_tx_relay_fee_rate,
+        );
+        let min_score = DescendantScore::new(Fee::new(Amount::from_atoms(
+            min_feerate.atoms_per_kb() / 1000,
+        )));
+
+        let size_to_score: BTreeMap<_, _> = self
+            .store
+            .txs_by_descendant_score
+            .iter()
+            .rev()
+            .map(|(score, tx_id)| {
+                let size = self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size());
+                (score, size)
+            })
+            .chain(std::iter::once((&min_score, 1)))
+            .scan(0, |accumulated_size, (score, size)| {
+                *accumulated_size += size;
+
+                Some((*accumulated_size, score))
+            })
+            .collect();
+
+        let last = size_to_score.keys().next_back().expect("not empty");
+        let first = size_to_score.keys().next().expect("not empty");
+        let points = feerate_points::generate_equidistant_span(*first, *last, num_points.get());
+
+        if points.len() >= size_to_score.len() {
+            size_to_score
+                .into_iter()
+                .map(|(point, score)| score.to_feerate(min_feerate).map(|feerate| (point, feerate)))
+                .collect()
+        } else {
+            points
+                .into_iter()
+                .map(|point| {
+                    let score = feerate_points::get_closest_value(&size_to_score, point)
+                        .expect("not empty");
+                    score.to_feerate(min_feerate).map(|feerate| (point, feerate))
+                })
+                .collect()
+        }
     }
 
     pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {

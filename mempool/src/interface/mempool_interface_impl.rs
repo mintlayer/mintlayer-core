@@ -28,7 +28,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 use utils::tap_error_log::LogError;
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
@@ -208,6 +208,13 @@ impl MempoolInterface for MempoolImpl {
 
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
         Ok(self.mempool.get_fee_rate(in_top_x_mb)?)
+    }
+
+    fn get_fee_rate_points(
+        &self,
+        num_points: NonZeroUsize,
+    ) -> Result<Vec<(usize, FeeRate)>, Error> {
+        Ok(self.mempool.get_fee_rate_points(num_points)?)
     }
 
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
