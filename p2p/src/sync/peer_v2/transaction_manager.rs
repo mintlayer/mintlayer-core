@@ -52,6 +52,7 @@ use super::requested_transactions::RequestedTransactions;
 
 // TODO: add smaller interval for outbound connections
 pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
+pub const TX_RELAY_DELAY_INTERVAL_LIMIT: Duration = Duration::from_secs(10);
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
@@ -182,9 +183,10 @@ where
                 self.send_message(TransactionSyncMessage::NewTransaction(txid))
             })?;
 
+            let limit = now + TX_RELAY_DELAY_INTERVAL_LIMIT;
             let delay = TX_RELAY_DELAY_INTERVAL
                 .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-            self.next_transaction_relay_time = now + delay;
+            self.next_transaction_relay_time = num_traits::clamp_max(now + delay, limit);
         }
         Ok(())
     }
