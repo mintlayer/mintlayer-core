@@ -27,6 +27,7 @@ use common::{
 };
 use pos_accounting::PoolData;
 use std::{
+    cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Unbounded},
 };
@@ -178,6 +179,58 @@ impl ApiServerInMemoryStorage {
                 (delegation.pool_id() == pool_id).then_some((*delegation_id, delegation.clone()))
             })
             .collect())
+    }
+
+    fn get_latest_pool_ids(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+        let mut pool_data: Vec<_> = self
+            .pool_data_table
+            .iter()
+            .map(|(pool_id, by_height)| (pool_id, by_height.iter().next().expect("not empty")))
+            .collect();
+
+        pool_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
+        if offset >= pool_data.len() {
+            return Ok(vec![]);
+        }
+
+        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+            .iter()
+            .map(|(pool_id, data)| (**pool_id, (data.1).clone()))
+            .collect();
+
+        Ok(latest_pools)
+    }
+
+    fn get_pool_data_with_largest_pledge(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+        let mut pool_data: Vec<_> = self
+            .pool_data_table
+            .iter()
+            .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
+            .collect();
+
+        pool_data.sort_by_key(|(_, data)| Reverse(data.pledge_amount()));
+        if offset >= pool_data.len() {
+            return Ok(vec![]);
+        }
+
+        let latest_pools = pool_data[offset..std::cmp::min(offset + len, pool_data.len())]
+            .iter()
+            .map(|(pool_id, data)| (**pool_id, (*data).clone()))
+            .collect();
+
+        Ok(latest_pools)
     }
 
     fn get_main_chain_block_id(

@@ -150,6 +150,28 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_latest_pool_data(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_latest_pool_data(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_pool_data_with_largest_pledge(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_data_with_largest_pledge(len, offset).await?;
+
+        Ok(res)
+    }
+
     async fn get_transaction(
         &self,
         transaction_id: Id<common::chain::Transaction>,

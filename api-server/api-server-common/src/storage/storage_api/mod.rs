@@ -181,6 +181,18 @@ pub trait ApiServerStorageRead: Sync {
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError>;
 
+    async fn get_latest_pool_data(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError>;
+
+    async fn get_pool_data_with_largest_pledge(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError>;
+
     #[allow(clippy::type_complexity)]
     async fn get_transaction_with_block(
         &self,

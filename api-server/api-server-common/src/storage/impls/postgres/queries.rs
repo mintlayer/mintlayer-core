@@ -410,6 +410,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_pool_data (
                     pool_id bytea NOT NULL,
                     block_height bigint NOT NULL,
+                    pledge_amount TEXT NOT NULL,
                     data bytea NOT NULL,
                     PRIMARY KEY (pool_id, block_height)
                 );",
@@ -854,6 +855,98 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
     }
 
+    pub async fn get_latest_pool_data(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                SELECT pool_id, data
+                FROM (
+                    SELECT pool_id, data, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height) as oldest
+                    FROM ml_pool_data
+                )
+                WHERE oldest = 1
+                ORDER BY block_height DESC
+                OFFSET $1
+                LIMIT $2;
+            "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+                let pool_id: Vec<u8> = row.get(0);
+                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool Id deserialization failed: {}",
+                        e
+                    ))
+                })?;
+                let pool_data: Vec<u8> = row.get(1);
+                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool data deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+                Ok((pool_id, pool_data))
+            })
+            .collect()
+    }
+
+    pub async fn get_pool_data_with_largest_pledge(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                SELECT pool_id, data
+                FROM (
+                    SELECT pool_id, data, pledge_amount, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
+                    FROM ml_pool_data
+                )
+                WHERE newest = 1
+                ORDER BY pledge_amount DESC
+                OFFSET $1
+                LIMIT $2;
+            "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
+                let pool_id: Vec<u8> = row.get(0);
+                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool Id deserialization failed: {}",
+                        e
+                    ))
+                })?;
+                let pool_data: Vec<u8> = row.get(1);
+                let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Pool data deserialization failed: {}",
+                        e
+                    ))
+                })?;
+
+                Ok((pool_id, pool_data))
+            })
+            .collect()
+    }
+
     pub async fn set_pool_data_at_height(
         &mut self,
         pool_id: PoolId,
@@ -861,14 +954,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let amount_str = amount_to_str(pool_data.pledge_amount());
 
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_pool_data (pool_id, block_height, data)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO ml_pool_data (pool_id, block_height, pledge_amount, data)
+                    VALUES ($1, $2, $3, $4)
                 "#,
-                &[&pool_id.encode(), &height, &pool_data.encode()],
+                &[&pool_id.encode(), &height, &amount_str, &pool_data.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1159,4 +1253,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         Ok(())
     }
+}
+
+fn amount_to_str(amount: Amount) -> String {
+    let mut amount_str = amount.into_fixedpoint_str(0);
+    let max_len = u128::MAX.to_string().len();
+    if amount_str.len() < max_len {
+        let zeros = "0".repeat(max_len - amount_str.len());
+        amount_str = zeros + &amount_str;
+    }
+    amount_str
 }

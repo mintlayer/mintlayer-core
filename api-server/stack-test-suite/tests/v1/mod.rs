@@ -24,6 +24,7 @@ mod chain_at_height;
 mod chain_tip;
 mod helpers;
 mod pool;
+mod pools;
 mod transaction;
 mod transaction_merkle_path;
 mod transaction_submit;
