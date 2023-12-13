@@ -16,3 +16,5 @@
 pub mod block_manager;
 pub mod requested_transactions;
 pub mod transaction_manager;
+
+mod pending_transactions;

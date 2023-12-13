@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, time::Duration};
+use std::time::Duration;
 
 use crypto::random::make_pseudo_rng;
 use tokio::{
@@ -48,11 +48,12 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::requested_transactions::RequestedTransactions;
+use super::{
+    pending_transactions::PendingTransactions, requested_transactions::RequestedTransactions,
+};
 
 // TODO: add smaller interval for outbound connections
 pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
-pub const TX_RELAY_DELAY_INTERVAL_LIMIT: Duration = Duration::from_secs(10);
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
@@ -76,8 +77,7 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     requested_transactions: RequestedTransactions,
     /// Txs aren't relayed immediately but rather put into a collection to be propagated later
     /// with random delay to avoid tracking
-    transactions_to_relay: BTreeSet<Id<Transaction>>,
-    next_transaction_relay_time: std::time::Duration,
+    pending_transactions: PendingTransactions,
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
 }
@@ -102,7 +102,6 @@ where
         observer: Option<BoxedObserver>,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
-        let next_transaction_relay_time = time_getter.get_time().as_duration_since_epoch();
 
         Self {
             id: id.into(),
@@ -116,9 +115,8 @@ where
             sync_msg_receiver,
             local_event_receiver,
             known_transactions,
-            requested_transactions: RequestedTransactions::new(time_getter),
-            transactions_to_relay: Default::default(),
-            next_transaction_relay_time,
+            requested_transactions: RequestedTransactions::new(time_getter.clone()),
+            pending_transactions: PendingTransactions::new(time_getter),
             observer,
         }
     }
@@ -161,10 +159,12 @@ where
                     self.handle_local_event(event)?;
                 }
 
+                new_tx = self.pending_transactions.due() => {
+                    self.send_message(TransactionSyncMessage::NewTransaction(new_tx?))?;
+                }
+
                 _ = maintenance_interval.tick() => {}
             }
-
-            self.announce_transactions_if_needed()?;
 
             self.requested_transactions.purge_if_needed();
         }
@@ -172,23 +172,6 @@ where
 
     fn send_message(&mut self, message: TransactionSyncMessage) -> Result<()> {
         self.messaging_handle.send_transaction_sync_message(self.id(), message)
-    }
-
-    // TODO: whitelisted peers can get txs without delay
-    fn announce_transactions_if_needed(&mut self) -> Result<()> {
-        let now = self.time_getter.get_time().as_duration_since_epoch();
-        if now >= self.next_transaction_relay_time {
-            let ids = std::mem::take(&mut self.transactions_to_relay);
-            ids.into_iter().try_for_each(|txid| {
-                self.send_message(TransactionSyncMessage::NewTransaction(txid))
-            })?;
-
-            let limit = now + TX_RELAY_DELAY_INTERVAL_LIMIT;
-            let delay = TX_RELAY_DELAY_INTERVAL
-                .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-            self.next_transaction_relay_time = num_traits::clamp_max(now + delay, limit);
-        }
-        Ok(())
     }
 
     fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
@@ -204,7 +187,12 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.transactions_to_relay.insert(txid);
+
+                    // TODO: whitelisted peers can get txs without delay
+                    let now = self.time_getter.get_time().as_duration_since_epoch();
+                    let delay = TX_RELAY_DELAY_INTERVAL
+                        .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                    self.pending_transactions.push(txid, now + delay);
                 }
                 Ok(())
             }

@@ -52,7 +52,7 @@ class MempoolOrphanFromDisconnectedPeerTest(BitcoinTestFramework):
         node0.p2p_submit_transaction(tx2, {})
 
         # Check the node gets the orphan transaction
-        self.wait_until(lambda: node1.mempool_contains_orphan_tx(tx2_id), timeout = 5)
+        self.wait_until(lambda: node1.mempool_contains_orphan_tx(tx2_id), timeout = 60)
 
         # Now disconnect the nodes and check the orphan is gone
         self.disconnect_nodes(0, 1)

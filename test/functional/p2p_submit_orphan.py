@@ -71,7 +71,8 @@ class MempoolOrphanSubmissionTest(BitcoinTestFramework):
         # Check both transactions have propagated to the last peer
         for node in self.nodes:
             has_txs = lambda: all(node.mempool_contains_tx(tx_id) for tx_id in [tx1_id, tx2_id])
-            self.wait_until(has_txs, timeout = 10)
+            # there is random delay when relaying txs so we need to wait for a while
+            self.wait_until(has_txs, timeout = 60)
 
 
 if __name__ == '__main__':
