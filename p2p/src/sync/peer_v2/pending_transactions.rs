@@ -43,10 +43,9 @@ impl PendingTransactions {
     pub async fn due(&self) {
         match self.txs.peek() {
             Some(item) => {
-                let now = Instant::now();
                 let (due, _) = item.0;
-                if now < due {
-                    tokio::time::sleep(due - now).await;
+                if Instant::now() < due {
+                    tokio::time::sleep_until(due).await;
                 }
             }
             None => std::future::pending().await,

@@ -188,7 +188,7 @@ where
                 {
                     self.add_known_transaction(txid);
 
-                    // TODO: whitelisted peers can get txs without delay
+                    // TODO: whitelisted peers should get txs without delay
                     let now = Instant::now();
                     let delay = TX_RELAY_DELAY_INTERVAL
                         .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
