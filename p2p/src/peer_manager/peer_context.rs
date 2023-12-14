@@ -37,7 +37,10 @@ pub struct PeerContext {
     pub info: PeerInfo,
 
     /// Peer's address
-    pub address: SocketAddress,
+    pub peer_address: SocketAddress,
+
+    /// Bind address of this node's side of the connection.
+    pub bind_address: SocketAddress,
 
     pub peer_role: PeerRole,
 

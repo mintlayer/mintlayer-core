@@ -27,7 +27,7 @@ use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
 use p2p_types::socket_address::SocketAddress;
 use tokio::{
-    io::DuplexStream,
+    io::{AsyncRead, AsyncWrite, DuplexStream},
     sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         oneshot::{self, Sender},
@@ -37,14 +37,20 @@ use utils::sync::atomic::AtomicU16;
 
 use crate::{
     error::DialError,
-    net::default_backend::transport::{PeerStream, TransportListener, TransportSocket},
+    net::default_backend::transport::{
+        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
+    },
     P2pError, Result,
 };
 
 // How much bytes is allowed for write (without reading on the other side).
 const MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
 
-type IncomingConnection = (SocketAddr, Sender<DuplexStream>);
+struct IncomingConnection {
+    from: SocketAddr,
+    to: SocketAddr,
+    stream_sender: Sender<DuplexStream>,
+}
 
 static CONNECTIONS: Lazy<Mutex<BTreeMap<SocketAddr, UnboundedSender<IncomingConnection>>>> =
     Lazy::new(Default::default);
@@ -164,12 +170,20 @@ impl TransportSocket for MpscChannelTransport {
 
             let (connect_sender, connect_receiver) = oneshot::channel();
             server_sender
-                .send((local_address, connect_sender))
+                .send(IncomingConnection {
+                    from: local_address,
+                    to: address,
+                    stream_sender: connect_sender,
+                })
                 .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
 
-            let channel = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
+            let stream = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
 
-            Ok(channel)
+            Ok(ChannelStream {
+                stream,
+                local_address: SocketAddress::new(local_address),
+                remote_address: SocketAddress::new(address),
+            })
         })
     }
 }
@@ -184,14 +198,29 @@ impl TransportListener for ChannelListener {
     type Stream = ChannelStream;
 
     async fn accept(&mut self) -> Result<(ChannelStream, SocketAddress)> {
-        let (remote_address, response_sender) =
-            self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
+        let IncomingConnection {
+            from: remote_address,
+            to: local_address,
+            stream_sender: client_stream_sender,
+        } = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
-        let (server, client) = tokio::io::duplex(MAX_BUF_SIZE);
+        assert!(self.addresses.contains(&local_address));
 
-        response_sender.send(client).map_err(|_| P2pError::ChannelClosed)?;
+        let (server_stream, client_stream) = tokio::io::duplex(MAX_BUF_SIZE);
 
-        Ok((server, SocketAddress::new(remote_address)))
+        client_stream_sender.send(client_stream).map_err(|_| P2pError::ChannelClosed)?;
+
+        let remote_address = SocketAddress::new(remote_address);
+        let local_address = SocketAddress::new(local_address);
+
+        Ok((
+            ChannelStream {
+                stream: server_stream,
+                local_address,
+                remote_address,
+            },
+            remote_address,
+        ))
     }
 
     fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
@@ -209,9 +238,57 @@ impl Drop for ChannelListener {
     }
 }
 
-pub type ChannelStream = DuplexStream;
+pub struct ChannelStream {
+    stream: DuplexStream,
+    local_address: SocketAddress,
+    remote_address: SocketAddress,
+}
+
+impl AsyncRead for ChannelStream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::pin!(&mut self.stream).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for ChannelStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::pin!(&mut self.stream).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::pin!(&mut self.stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::pin!(&mut self.stream).poll_shutdown(cx)
+    }
+}
 
 impl PeerStream for ChannelStream {}
+
+impl ConnectedSocketInfo for ChannelStream {
+    fn local_address(&self) -> crate::Result<SocketAddress> {
+        Ok(self.local_address)
+    }
+
+    fn remote_address(&self) -> crate::Result<SocketAddress> {
+        Ok(self.remote_address)
+    }
+}
 
 #[cfg(test)]
 mod tests {

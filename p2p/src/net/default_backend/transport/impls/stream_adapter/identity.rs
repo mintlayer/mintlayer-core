@@ -15,7 +15,10 @@
 
 use futures::future::{ready, BoxFuture};
 
-use crate::net::{default_backend::transport::PeerStream, types::Role};
+use crate::net::{
+    default_backend::transport::{ConnectedSocketInfo, PeerStream},
+    types::Role,
+};
 
 use super::StreamAdapter;
 
@@ -29,7 +32,7 @@ impl IdentityStreamAdapter {
 }
 
 /// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
-impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
+impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for IdentityStreamAdapter {
     type Stream = T;
 
     fn handshake(&self, base: T, _role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {

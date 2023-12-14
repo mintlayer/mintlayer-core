@@ -69,7 +69,13 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_connection(address, Role::Inbound, peer_info, None);
+    pm2.accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info,
+        None,
+    );
 
     pm2.adjust_peer_score(peer_id, 1000);
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
@@ -121,7 +127,13 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_connection(address, Role::Inbound, peer_info, None);
+    pm2.accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info,
+        None,
+    );
 
     pm2.adjust_peer_score(peer_id, 1000);
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
@@ -181,7 +193,13 @@ where
     )
     .await;
     let peer_id = peer_info1.peer_id;
-    pm2.accept_connection(address, Role::Inbound, peer_info1, None);
+    pm2.accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info1,
+        None,
+    );
 
     let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0];
 
@@ -244,6 +262,7 @@ where
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
+            TestAddressMaker::new_random_address(),
             TestAddressMaker::new_random_address(),
             peer_role,
             net::types::PeerInfo {
@@ -364,6 +383,7 @@ async fn inbound_connection_invalid_magic_noise() {
 fn ban_and_disconnect() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
+    let bind_address = TestTransportTcp::make_address();
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -393,7 +413,7 @@ fn ban_and_disconnect() {
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     };
-    pm.accept_connection(address_1, Role::Inbound, peer_info, None);
+    pm.accept_connection(address_1, bind_address, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager

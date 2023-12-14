@@ -23,7 +23,9 @@ use tokio_socks::tcp::Socks5Stream;
 
 use crate::{
     error::{DialError, P2pError},
-    net::default_backend::transport::{PeerStream, TransportListener, TransportSocket},
+    net::default_backend::transport::{
+        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
+    },
     Result,
 };
 
@@ -98,3 +100,13 @@ impl TransportListener for Socks5TransportListener {
 pub type Socks5TransportStream = Socks5Stream<TcpStream>;
 
 impl PeerStream for Socks5TransportStream {}
+
+impl ConnectedSocketInfo for Socks5TransportStream {
+    fn local_address(&self) -> crate::Result<SocketAddress> {
+        Ok(SocketAddress::new(TcpStream::local_addr(self)?))
+    }
+
+    fn remote_address(&self) -> crate::Result<SocketAddress> {
+        Ok(SocketAddress::new(TcpStream::peer_addr(self)?))
+    }
+}

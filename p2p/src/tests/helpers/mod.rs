@@ -112,7 +112,7 @@ impl TestPeersInfo {
 
         for ctx in contexts.values() {
             info.insert(
-                ctx.address,
+                ctx.peer_address,
                 TestPeerInfo {
                     info: ctx.info.clone(),
                     role: ctx.peer_role,

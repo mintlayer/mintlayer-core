@@ -230,27 +230,44 @@ where
                 self.handle_conn_message(peer_id, message);
             }
             ConnectivityEvent::OutboundAccepted {
-                address,
+                peer_address,
+                bind_address: _,
                 peer_info,
-                receiver_address: _,
+                node_address_as_seen_by_peer: _,
             } => {
                 // Allow reading input messages from the connected peer
                 self.conn.accept(peer_info.peer_id).expect("accept must succeed");
 
-                self.send_crawler_event(CrawlerEvent::Connected { peer_info, address });
+                self.send_crawler_event(CrawlerEvent::Connected {
+                    peer_info,
+                    address: peer_address,
+                });
             }
             ConnectivityEvent::InboundAccepted {
-                address: _,
+                peer_address: _,
+                bind_address: _,
                 peer_info: _,
-                receiver_address: _,
+                node_address_as_seen_by_peer: _,
             } => {
                 unreachable!("unexpected inbound connection");
             }
-            ConnectivityEvent::ConnectionError { address, error } => {
-                self.send_crawler_event(CrawlerEvent::ConnectionError { address, error });
+            ConnectivityEvent::ConnectionError {
+                peer_address,
+                error,
+            } => {
+                self.send_crawler_event(CrawlerEvent::ConnectionError {
+                    address: peer_address,
+                    error,
+                });
             }
-            ConnectivityEvent::MisbehavedOnHandshake { address, error } => {
-                self.send_crawler_event(CrawlerEvent::MisbehavedOnHandshake { address, error });
+            ConnectivityEvent::MisbehavedOnHandshake {
+                peer_address,
+                error,
+            } => {
+                self.send_crawler_event(CrawlerEvent::MisbehavedOnHandshake {
+                    address: peer_address,
+                    error,
+                });
             }
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });

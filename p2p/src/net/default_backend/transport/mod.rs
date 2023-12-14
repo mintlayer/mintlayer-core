@@ -30,7 +30,7 @@ pub use self::{
         wrapped_transport::wrapped_socket::WrappedTransportSocket,
     },
     tcp::TcpTransportSocket,
-    traits::{PeerStream, TransportListener, TransportSocket},
+    traits::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
 };
 
 pub type NoiseTcpTransport =

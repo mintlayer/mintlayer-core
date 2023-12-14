@@ -143,7 +143,9 @@ impl TestAddressMaker {
 
 pub struct TestChannelAddressMaker {}
 
-/// Can be used in tests only, will panic in case of errors
+/// Connect the node represented by conn1 to the first listening address of the node represented
+/// by conn2.
+/// Can be used in tests only, will panic in case of errors.
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
@@ -152,34 +154,37 @@ where
     T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr = conn2.local_addresses();
-    conn1.connect(addr[0], None).expect("dial to succeed");
+    let conn2_local_addrs = conn2.local_addresses();
+    conn1.connect(conn2_local_addrs[0], None).expect("dial to succeed");
 
-    let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+    let (peer1_address, peer1_info) = match timeout(Duration::from_secs(5), conn2.poll_next()).await
+    {
         Ok(event) => match event.unwrap() {
             ConnectivityEvent::InboundAccepted {
-                address,
+                peer_address,
+                bind_address: _,
                 peer_info,
-                receiver_address: _,
-            } => (address, peer_info),
+                node_address_as_seen_by_peer: _,
+            } => (peer_address, peer_info),
             event => panic!("expected `InboundAccepted`, got {event:?}"),
         },
         Err(_err) => panic!("did not receive `InboundAccepted` in time"),
     };
 
-    let peer_info2 = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+    let peer2_info = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
         Ok(event) => match event.unwrap() {
             ConnectivityEvent::OutboundAccepted {
-                address: _,
+                peer_address: _,
+                bind_address: _,
                 peer_info,
-                receiver_address: _,
+                node_address_as_seen_by_peer: _,
             } => peer_info,
             event => panic!("expected `OutboundAccepted`, got {event:?}"),
         },
         Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
     };
 
-    (address, peer_info1, peer_info2)
+    (peer1_address, peer1_info, peer2_info)
 }
 
 /// Can be used in tests only, will panic in case of errors

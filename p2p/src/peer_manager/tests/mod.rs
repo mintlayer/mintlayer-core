@@ -55,7 +55,7 @@ use super::peerdb::storage::PeerDbStorage;
 
 async fn make_peer_manager_custom<T>(
     transport: T::Transport,
-    addr: SocketAddress,
+    bind_address: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
@@ -74,7 +74,7 @@ where
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(
         transport,
-        vec![addr],
+        vec![bind_address],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -106,7 +106,7 @@ where
 
 async fn make_peer_manager<T>(
     transport: T::Transport,
-    addr: SocketAddress,
+    bind_address: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
@@ -121,7 +121,7 @@ where
     let (peer_manager, _peer_mgr_event_sender, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(
             transport,
-            addr,
+            bind_address,
             chain_config,
             p2p_config,
             Default::default(),

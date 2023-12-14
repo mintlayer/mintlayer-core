@@ -46,7 +46,7 @@ use crate::{
     net::{
         default_backend::{
             peer,
-            transport::{TransportListener, TransportSocket},
+            transport::{ConnectedSocketInfo, TransportListener, TransportSocket},
             types::{BackendEvent, Command, PeerEvent},
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
@@ -86,7 +86,7 @@ struct PeerContext {
     /// True if the peer was accepted by PeerManager and SyncManager was notified
     was_accepted: SetFlag,
 
-    address: SocketAddress,
+    peer_address: SocketAddress,
 
     inbound: bool,
 
@@ -106,7 +106,11 @@ struct PeerContext {
 struct PendingPeerContext {
     handle: tokio::task::JoinHandle<()>,
 
-    address: SocketAddress,
+    /// Address of the peer.
+    peer_address: SocketAddress,
+
+    /// Bind address of this node's side of the connection.
+    bind_address: SocketAddress,
 
     connection_info: ConnectionInfo,
 
@@ -229,7 +233,7 @@ where
 
                 Ok(
                     self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
-                        address,
+                        peer_address: address,
                         error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                     })?,
                 )
@@ -270,7 +274,7 @@ where
         self.events_controller.broadcast(P2pEvent::PeerConnected {
             id: peer_id,
             services: peer.common_services,
-            address: peer.address.to_string(),
+            address: peer.peer_address.to_string(),
             inbound: peer.inbound,
             user_agent: peer.user_agent.clone(),
             software_version: peer.software_version,
@@ -351,33 +355,26 @@ where
     fn create_pending_peer(
         &mut self,
         socket: T::Stream,
-        remote_peer_id: PeerId,
+        peer_id: PeerId,
         connection_info: ConnectionInfo,
-        address: SocketAddress,
+        peer_address: SocketAddress,
     ) -> crate::Result<()> {
         let (backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
 
-        log::debug!("Assigning peer id {remote_peer_id} to peer at address {address:?}");
-
-        // Sending the remote socket address makes no sense and can leak private information when using a proxy
-        let receiver_address = if self.p2p_config.socks5_proxy.is_some() {
-            None
-        } else {
-            Some(address.as_peer_address())
-        };
+        log::debug!("Assigning peer id {peer_id} to peer at address {peer_address:?}");
 
         let (peer_event_sender, peer_event_receiver) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
         let peer_event_stream = ReceiverStream::new(peer_event_receiver);
+        let bind_address = socket.local_address()?;
 
-        self.peer_event_stream_map.insert(remote_peer_id, peer_event_stream);
+        self.peer_event_stream_map.insert(peer_id, peer_event_stream);
 
         let peer = peer::Peer::<T>::new(
-            remote_peer_id,
+            peer_id,
             connection_info,
             self.chain_config.shallow_clone(),
             self.p2p_config.shallow_clone(),
             socket,
-            receiver_address,
             peer_event_sender,
             backend_event_receiver,
             self.node_protocol_version,
@@ -388,15 +385,16 @@ where
             match peer.run().await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
-                Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
+                Err(e) => log::error!("Peer {peer_id} failed: {e}"),
             }
         });
 
         self.pending.insert(
-            remote_peer_id,
+            peer_id,
             PendingPeerContext {
                 handle,
-                address,
+                peer_address,
+                bind_address,
                 connection_info,
                 backend_event_sender,
             },
@@ -413,11 +411,12 @@ where
         peer_id: PeerId,
         handshake_nonce: HandshakeNonce,
         peer_info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let PendingPeerContext {
             handle,
-            address,
+            peer_address,
+            bind_address,
             connection_info,
             backend_event_sender,
         } = match self.pending.remove(&peer_id) {
@@ -445,16 +444,18 @@ where
                 local_services_override: _,
             } => {
                 self.conn_event_sender.send(ConnectivityEvent::OutboundAccepted {
-                    address,
+                    peer_address,
+                    bind_address,
                     peer_info,
-                    receiver_address,
+                    node_address_as_seen_by_peer,
                 })?;
             }
             ConnectionInfo::Inbound => {
                 self.conn_event_sender.send(ConnectivityEvent::InboundAccepted {
-                    address,
+                    peer_address,
+                    bind_address,
                     peer_info,
-                    receiver_address,
+                    node_address_as_seen_by_peer,
                 })?;
             }
         }
@@ -463,7 +464,7 @@ where
             peer_id,
             PeerContext {
                 handle,
-                address,
+                peer_address,
                 inbound,
                 protocol_version,
                 user_agent,
@@ -529,12 +530,12 @@ where
 
                 log::info!(
                     "self-connection detected on address {:?}",
-                    outbound_pending.address
+                    outbound_pending.peer_address
                 );
 
                 // Report outbound connection failure
                 self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
-                    address: outbound_pending.address,
+                    peer_address: outbound_pending.peer_address,
                     error: P2pError::DialError(DialError::AttemptToDialSelf),
                 })?;
 
@@ -554,7 +555,7 @@ where
                 common_services,
                 user_agent,
                 software_version,
-                receiver_address,
+                node_address_as_seen_by_peer,
                 handshake_nonce,
             } => self.create_peer(
                 peer_id,
@@ -567,7 +568,7 @@ where
                     user_agent,
                     common_services,
                 },
-                receiver_address,
+                node_address_as_seen_by_peer,
             ),
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
@@ -579,7 +580,7 @@ where
                     );
 
                     self.conn_event_sender.send(ConnectivityEvent::MisbehavedOnHandshake {
-                        address: pending_peer.address,
+                        peer_address: pending_peer.peer_address,
                         error,
                     })?;
                 } else {
@@ -597,7 +598,7 @@ where
                         ConnectionInfo::Inbound => {
                             log::debug!(
                                 "Inbound pending connection from {} was closed",
-                                pending_peer.address
+                                pending_peer.peer_address
                             );
                         }
                         ConnectionInfo::Outbound {
@@ -606,14 +607,14 @@ where
                         } => {
                             log::debug!(
                                 "Outbound pending connection to {} was closed",
-                                pending_peer.address
+                                pending_peer.peer_address
                             );
 
                             // TODO: this ConnectionRefusedOrTimedOut is misleading; probably
                             // we should include the actual error in PeerEvent::ConnectionClosed
                             // and propagate it here.
                             self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
-                                address: pending_peer.address,
+                                peer_address: pending_peer.peer_address,
                                 error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                             })?;
                         }

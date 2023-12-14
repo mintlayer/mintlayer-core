@@ -85,7 +85,7 @@ impl EvictionCandidate {
             age: now.saturating_sub(peer.created_at),
             peer_id: peer.info.peer_id,
             net_group_keyed: NetGroupKeyed(random_state.get_hash(
-                &AddressGroup::from_peer_address(&peer.address.as_peer_address()),
+                &AddressGroup::from_peer_address(&peer.peer_address.as_peer_address()),
             )),
             ping_min: peer.ping_min.map_or(i64::MAX, |val| val.as_micros() as i64),
             peer_role: peer.peer_role,

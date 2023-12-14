@@ -16,12 +16,16 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
+use p2p_types::socket_address::SocketAddress;
 use snowstorm::NoiseStream;
 use tokio::time::timeout;
 
 use crate::{
     error::P2pError,
-    net::{default_backend::transport::PeerStream, types::Role},
+    net::{
+        default_backend::transport::{ConnectedSocketInfo, PeerStream},
+        types::Role,
+    },
 };
 
 use super::StreamAdapter;
@@ -70,7 +74,7 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
 }
 
 /// StreamAdapter that encrypts the data going through it with noise protocol
-impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
+impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = NoiseStream<T>;
 
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
@@ -99,3 +103,13 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
 }
 
 impl<T: PeerStream> PeerStream for NoiseStream<T> {}
+
+impl<T: ConnectedSocketInfo> ConnectedSocketInfo for NoiseStream<T> {
+    fn local_address(&self) -> crate::Result<SocketAddress> {
+        self.get_inner().local_address()
+    }
+
+    fn remote_address(&self) -> crate::Result<SocketAddress> {
+        self.get_inner().remote_address()
+    }
+}

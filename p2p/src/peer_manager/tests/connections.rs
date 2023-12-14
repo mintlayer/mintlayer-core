@@ -43,7 +43,7 @@ use crate::{
         types::{services::Service, ConnectivityEvent, PeerRole},
     },
     peer_manager::{
-        peerdb::{self, address_tables, config::PeerDbConfig},
+        peerdb::{self, config::PeerDbConfig},
         tests::{get_connected_peers, run_peer_manager, utils::recv_command_advance_time},
         MaxInboundConnections, PeerManager, PeerManagerConfig,
     },
@@ -93,7 +93,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
-            address: _,
+            peer_address: _,
             error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)
         })
     ));
@@ -305,7 +305,14 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None).unwrap();
+    pm2.try_accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        PeerRole::Inbound,
+        peer_info,
+        None,
+    )
+    .unwrap();
 }
 
 #[tracing::instrument]
@@ -361,7 +368,13 @@ where
     .await;
 
     assert_eq!(
-        pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None),
+        pm2.try_accept_connection(
+            address,
+            pm2.peer_connectivity_handle.local_addresses()[0],
+            PeerRole::Inbound,
+            peer_info,
+            None
+        ),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -473,7 +486,8 @@ where
         make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.try_accept_connection(peer.0, PeerRole::Inbound, peer.1, None).unwrap();
+        pm1.try_accept_connection(peer.0, addr2, PeerRole::Inbound, peer.1, None)
+            .unwrap();
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
@@ -607,7 +621,7 @@ where
         Ok(res) => assert!(std::matches!(
             res,
             Ok(net::types::ConnectivityEvent::ConnectionError {
-                address: _,
+                peer_address: _,
                 error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
             })
         )),
@@ -1094,6 +1108,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
     let feeler_connections_interval = Duration::from_secs(1);
     let p2p_config = Arc::new(make_p2p_config(feeler_connections_interval, &mut rng));
 
+    let bind_address = TestTransportTcp::make_address();
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
@@ -1140,9 +1155,10 @@ async fn feeler_connections_test_impl(seed: Seed) {
     let outbound_peer_id = PeerId::new();
     conn_event_sender
         .send(ConnectivityEvent::OutboundAccepted {
-            address: outbound_peer_addr,
+            peer_address: outbound_peer_addr,
+            bind_address,
             peer_info: make_peer_info(outbound_peer_id, &chain_config),
-            receiver_address: None,
+            node_address_as_seen_by_peer: None,
         })
         .unwrap();
     successful_conn_addresses.insert(outbound_peer_addr);
@@ -1204,9 +1220,10 @@ async fn feeler_connections_test_impl(seed: Seed) {
             let cur_peer_id = PeerId::new();
             conn_event_sender
                 .send(ConnectivityEvent::OutboundAccepted {
-                    address: addr,
+                    peer_address: addr,
+                    bind_address,
                     peer_info: make_peer_info(cur_peer_id, &chain_config),
-                    receiver_address: None,
+                    node_address_as_seen_by_peer: None,
                 })
                 .unwrap();
 
@@ -1242,7 +1259,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
 
             conn_event_sender
                 .send(ConnectivityEvent::ConnectionError {
-                    address: addr,
+                    peer_address: addr,
                     error: P2pError::ProtocolError(ProtocolError::Unresponsive),
                 })
                 .unwrap();
@@ -1279,7 +1296,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
 mod feeler_connections_test_utils {
     use common::chain::ChainConfig;
 
-    use crate::peer_manager::peerdb::{storage::PeerDbStorage, PeerDb};
+    use crate::peer_manager::peerdb::{address_tables, storage::PeerDbStorage, PeerDb};
 
     use super::*;
 
