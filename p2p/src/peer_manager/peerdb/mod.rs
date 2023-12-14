@@ -27,6 +27,7 @@
 pub mod address_data;
 pub mod address_tables;
 pub mod config;
+pub mod salt;
 pub mod storage;
 pub mod storage_impl;
 mod storage_load;
@@ -46,6 +47,7 @@ use crate::config::P2pConfig;
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
     address_tables::AddressTables,
+    salt::Salt,
     storage::{KnownAddressState, PeerDbStorage, PeerDbStorageWrite},
     storage_load::LoadedStorage,
 };
@@ -86,6 +88,8 @@ pub struct PeerDb<S> {
     time_getter: TimeGetter,
 
     storage: S,
+
+    salt: Salt,
 }
 
 impl<S: PeerDbStorage> PeerDb<S> {
@@ -100,7 +104,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             known_addresses,
             banned_addresses,
             anchor_addresses,
-            addr_tables_random_key,
+            salt,
         } = LoadedStorage::load_storage(&storage, &p2p_config.peer_manager_config.peerdb_config)?;
 
         let reserved_nodes = p2p_config
@@ -117,10 +121,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         let now = time_getter.get_time();
         let mut addresses = BTreeMap::new();
-        let mut address_tables = AddressTables::new(
-            addr_tables_random_key,
-            &p2p_config.peer_manager_config.peerdb_config,
-        );
+        let mut address_tables =
+            AddressTables::new(salt, &p2p_config.peer_manager_config.peerdb_config);
 
         for (addr, state) in &known_addresses {
             match *state {
@@ -179,7 +181,12 @@ impl<S: PeerDbStorage> PeerDb<S> {
             p2p_config,
             time_getter,
             storage,
+            salt,
         })
+    }
+
+    pub fn salt(&self) -> Salt {
+        self.salt
     }
 
     /// Iterator of all known addresses.
@@ -386,7 +393,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.change_address_state(address, AddressStateTransitionTo::Disconnected);
     }
 
-    pub fn remove_outbound_address(&mut self, address: &SocketAddress) {
+    pub fn remove_address(&mut self, address: &SocketAddress) {
         if !self.reserved_nodes.contains(address) {
             self.addresses.remove(address);
         }
@@ -568,6 +575,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
     #[cfg(test)]
     pub fn address_tables(&self) -> &AddressTables {
         &self.address_tables
+    }
+
+    #[cfg(test)]
+    pub fn address_tables_mut(&mut self) -> &mut AddressTables {
+        &mut self.address_tables
     }
 }
 

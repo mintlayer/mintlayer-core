@@ -49,10 +49,10 @@ async fn basic(#[case] seed: Seed) {
                 msg_header_count_limit: 10.into(),
                 max_request_blocks_count: 5.into(),
 
+                max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),
@@ -287,10 +287,10 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
                 msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
                 max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
 
+                max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),

@@ -15,7 +15,7 @@
 
 use utils::make_config_setting;
 
-use super::address_tables;
+use super::salt::Salt;
 
 // TODO: do we need the tables to be this big?
 make_config_setting!(NewAddrTableBucketCount, usize, 1024);
@@ -30,6 +30,6 @@ pub struct PeerDbConfig {
     pub tried_addr_table_bucket_count: TriedAddrTableBucketCount,
     /// Address table bucket size.
     pub addr_tables_bucket_size: AddrTablesBucketSize,
-    /// The initial value for the address tables' random key.
-    pub addr_tables_initial_random_key: Option<address_tables::RandomKey>,
+    /// The initial value for the peer db's salt.
+    pub salt: Option<Salt>,
 }

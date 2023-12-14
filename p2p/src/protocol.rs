@@ -84,6 +84,7 @@ make_config_setting!(RequestedBlocksLimit, usize, 500);
 make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
+make_config_setting!(MaxAddrListResponseAddressCount, usize, 1000);
 
 /// Protocol configuration. These values are supposed to be modified in tests only.
 ///
@@ -101,6 +102,8 @@ pub struct ProtocolConfig {
     pub msg_header_count_limit: HeaderLimit,
     /// The maximum number of blocks that can be requested from a single peer.
     pub max_request_blocks_count: RequestedBlocksLimit,
+    /// The maximum number of addresses that a single AddrListResponse may contain.
+    pub max_addr_list_response_address_count: MaxAddrListResponseAddressCount,
 
     // "Soft" limits:
     /// The maximum number of elements in a locator.
@@ -109,7 +112,4 @@ pub struct ProtocolConfig {
     pub max_message_size: MaxMessageSize,
     /// The maximum number of announcements (hashes) for which we haven't receive transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// The maximum number of singular unconnected headers that a V1 peer can send before
-    /// it will be considered malicious.
-    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
 }

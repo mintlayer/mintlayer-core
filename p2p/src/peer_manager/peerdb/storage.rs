@@ -19,7 +19,7 @@ use serialization::{Decode, Encode};
 
 use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
-use super::address_tables;
+use super::salt::Salt;
 
 #[derive(Debug, derive_more::Display, Clone, Copy, Encode, Decode, Eq, PartialEq)]
 pub struct StorageVersion(u32);
@@ -41,7 +41,7 @@ pub enum KnownAddressState {
 pub trait PeerDbStorageRead {
     fn get_version(&self) -> crate::Result<Option<StorageVersion>>;
 
-    fn get_addr_tables_random_key(&self) -> crate::Result<Option<address_tables::RandomKey>>;
+    fn get_salt(&self) -> crate::Result<Option<Salt>>;
 
     fn get_known_addresses(&self) -> crate::Result<Vec<(SocketAddress, KnownAddressState)>>;
 
@@ -53,7 +53,7 @@ pub trait PeerDbStorageRead {
 pub trait PeerDbStorageWrite {
     fn set_version(&mut self, version: StorageVersion) -> crate::Result<()>;
 
-    fn set_addr_tables_random_key(&mut self, key: address_tables::RandomKey) -> crate::Result<()>;
+    fn set_salt(&mut self, salt: Salt) -> crate::Result<()>;
 
     // Note: the "add" methods below will overwrite the existing value if it's present.
 

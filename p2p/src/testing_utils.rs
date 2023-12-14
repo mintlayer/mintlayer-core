@@ -17,7 +17,7 @@
 
 use std::{
     fmt::Debug,
-    net::{IpAddr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     time::Duration,
 };
 
@@ -121,17 +121,25 @@ impl TestTransportMaker for TestTransportNoise {
 pub struct TestAddressMaker {}
 
 impl TestAddressMaker {
+    pub fn new_random_ipv6_addr_with_rng(rng: &mut impl Rng) -> Ipv6Addr {
+        Ipv6Addr::new(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+        )
+    }
+
+    pub fn new_random_ipv4_addr_with_rng(rng: &mut impl Rng) -> Ipv4Addr {
+        Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())
+    }
+
     pub fn new_random_address_with_rng(rng: &mut impl Rng) -> SocketAddress {
-        let ip = Ipv6Addr::new(
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-        );
+        let ip = Self::new_random_ipv6_addr_with_rng(rng);
         SocketAddress::new(SocketAddr::new(IpAddr::V6(ip), rng.gen()))
     }
 

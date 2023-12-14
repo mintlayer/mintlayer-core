@@ -1296,7 +1296,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
 mod feeler_connections_test_utils {
     use common::chain::ChainConfig;
 
-    use crate::peer_manager::peerdb::{address_tables, storage::PeerDbStorage, PeerDb};
+    use crate::peer_manager::peerdb::{salt::Salt, storage::PeerDbStorage, PeerDb};
 
     use super::*;
 
@@ -1312,9 +1312,7 @@ mod feeler_connections_test_utils {
                 feeler_connections_interval: feeler_connections_interval.into(),
 
                 peerdb_config: PeerDbConfig {
-                    addr_tables_initial_random_key: Some(
-                        address_tables::RandomKey::new_random_with_rng(rng),
-                    ),
+                    salt: Some(Salt::new_random_with_rng(rng)),
 
                     new_addr_table_bucket_count: Default::default(),
                     tried_addr_table_bucket_count: Default::default(),

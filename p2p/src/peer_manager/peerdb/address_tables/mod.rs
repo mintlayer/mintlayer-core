@@ -13,38 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
-
-use crypto::random::{make_pseudo_rng, Rng};
 use p2p_types::socket_address::SocketAddress;
-use serialization::{Decode, Encode};
 
 use self::table::Table;
 
-use super::config::PeerDbConfig;
+use super::{config::PeerDbConfig, salt::Salt};
 
 pub mod table;
-
-/// The random key that is used to randomize bucket selection inside the tables.
-///
-/// It will be randomly generated once and stored in the peer db.
-// TODO: is "salt" a better name for this?
-#[derive(Debug, Hash, Encode, Decode, Copy, Clone)]
-pub struct RandomKey(u64);
-
-impl RandomKey {
-    pub fn new_random() -> Self {
-        Self::new_random_with_rng(&mut make_pseudo_rng())
-    }
-
-    pub fn new_random_with_rng<R: Rng>(rng: &mut R) -> Self {
-        RandomKey(rng.gen::<u64>())
-    }
-
-    pub fn mix_with<T: Hash>(&self, data: T) -> RandomKey {
-        RandomKey(table::calc_hash(&(self.0, data)))
-    }
-}
 
 /// `AddressTables` provides a way of limiting the number of addresses in the peer db. When an
 /// address is added to it, an older one may be discarded at the same time.
@@ -80,16 +55,16 @@ pub struct AddressTables {
 }
 
 impl AddressTables {
-    pub fn new(random_key: RandomKey, peerdb_config: &PeerDbConfig) -> Self {
+    pub fn new(salt: Salt, peerdb_config: &PeerDbConfig) -> Self {
         let new_addr_table = Table::new(
             *peerdb_config.new_addr_table_bucket_count,
             *peerdb_config.addr_tables_bucket_size,
-            random_key.mix_with('n'),
+            salt.mix_with('n'),
         );
         let tried_addr_table = Table::new(
             *peerdb_config.tried_addr_table_bucket_count,
             *peerdb_config.addr_tables_bucket_size,
-            random_key.mix_with('t'),
+            salt.mix_with('t'),
         );
 
         Self {

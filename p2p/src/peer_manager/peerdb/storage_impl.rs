@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    address_tables,
+    salt::Salt,
     storage::{KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite},
     StorageVersion,
 };
@@ -51,7 +51,7 @@ storage::decl_schema! {
 }
 
 const VALUE_ID_VERSION: ValueId = 1;
-const VALUE_ID_ADDR_TABLES_RANDOM_KEY: ValueId = 2;
+const VALUE_ID_SALT: ValueId = 2;
 
 type PeerDbStoreTxRo<'st, B> = StorageTxRo<'st, B, Schema>;
 type PeerDbStoreTxRw<'st, B> = StorageTxRw<'st, B, Schema>;
@@ -65,11 +65,8 @@ impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
         Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())?)
     }
 
-    fn set_addr_tables_random_key(&mut self, key: address_tables::RandomKey) -> crate::Result<()> {
-        Ok(self
-            .storage()
-            .get_mut::<DBValue, _>()
-            .put(VALUE_ID_ADDR_TABLES_RANDOM_KEY, key.encode())?)
+    fn set_salt(&mut self, salt: Salt) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_SALT, salt.encode())?)
     }
 
     fn add_known_address(
@@ -122,14 +119,14 @@ impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
             .transpose()
     }
 
-    fn get_addr_tables_random_key(&self) -> crate::Result<Option<address_tables::RandomKey>> {
+    fn get_salt(&self) -> crate::Result<Option<Salt>> {
         let map = self.storage().get::<DBValue, _>();
-        let vec_opt = map.get(VALUE_ID_ADDR_TABLES_RANDOM_KEY)?.as_ref().map(Encoded::decode);
+        let vec_opt = map.get(VALUE_ID_SALT)?.as_ref().map(Encoded::decode);
         vec_opt
             .map(|vec| {
-                address_tables::RandomKey::decode_all(&mut vec.as_ref()).map_err(|err| {
+                Salt::decode_all(&mut vec.as_ref()).map_err(|err| {
                     P2pError::InvalidStorageState(format!(
-                        "Error decoding addr tables' random key from {vec:?}: {err}"
+                        "Error decoding addr tables' salt from {vec:?}: {err}"
                     ))
                 })
             })

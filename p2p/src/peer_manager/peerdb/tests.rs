@@ -35,7 +35,7 @@ use crate::{
     peer_manager::{
         peerdb::{
             address_data::{self, PURGE_REACHABLE_FAIL_COUNT, PURGE_UNREACHABLE_TIME},
-            address_tables::RandomKey,
+            salt::Salt,
             storage::{KnownAddressState, PeerDbStorageRead},
         },
         peerdb_common::Transactional,
@@ -215,7 +215,7 @@ fn anchor_peers() {
     assert_addr_consistency(&peerdb);
 }
 
-// Call 'remove_outbound_address' on new and tried addresses, check that the db is
+// Call 'remove_address' on new and tried addresses, check that the db is
 // in consistent state.
 #[tracing::instrument(skip(seed))]
 #[rstest]
@@ -231,7 +231,7 @@ fn remove_addr(#[case] seed: Seed) {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
-        addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random_with_rng(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -264,7 +264,7 @@ fn remove_addr(#[case] seed: Seed) {
     }
 
     for addr in new_addrs_to_remove.iter().chain(tried_addrs_to_remove.iter()) {
-        peerdb.remove_outbound_address(addr);
+        peerdb.remove_address(addr);
     }
 
     let new_addrs_remaining = new_addr_table(&peerdb).addr_iter().copied().collect::<BTreeSet<_>>();
@@ -291,7 +291,7 @@ fn remove_unreachable(#[case] seed: Seed) {
         addr_tables_bucket_size: 10.into(),
         new_addr_table_bucket_count: 10.into(),
         tried_addr_table_bucket_count: 10.into(),
-        addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random_with_rng(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -386,7 +386,7 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
-        addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random_with_rng(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -445,7 +445,7 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
         addr_tables_bucket_size: bucket_size.into(),
         new_addr_table_bucket_count: bucket_count.into(),
         tried_addr_table_bucket_count: bucket_count.into(),
-        addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+        salt: Some(Salt::new_random_with_rng(&mut rng)),
     }));
 
     let mut peerdb = PeerDb::new(
@@ -509,7 +509,7 @@ fn new_tried_addr_selection_frequency() {
                 addr_tables_bucket_size: bucket_size.into(),
                 new_addr_table_bucket_count: bucket_count.into(),
                 tried_addr_table_bucket_count: bucket_count.into(),
-                addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+                salt: Some(Salt::new_random_with_rng(&mut rng)),
             }));
 
             let mut peerdb = PeerDb::new(
