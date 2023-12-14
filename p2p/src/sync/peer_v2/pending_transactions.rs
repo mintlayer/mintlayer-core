@@ -15,13 +15,7 @@
 
 use std::{cmp::Reverse, collections::BinaryHeap, time::Duration};
 
-use common::{
-    chain::Transaction,
-    primitives::{Id, H256},
-    time_getter::TimeGetter,
-};
-
-use crate::Result;
+use common::{chain::Transaction, primitives::Id, time_getter::TimeGetter};
 
 pub struct PendingTransactions {
     time_getter: TimeGetter,
@@ -40,19 +34,23 @@ impl PendingTransactions {
         self.txs.push(Reverse((due_time, tx)));
     }
 
-    pub async fn due(&mut self) -> Result<Id<Transaction>> {
-        if self.txs.is_empty() {
-            std::future::pending::<()>().await;
-            Ok(Id::<Transaction>::new(H256::zero())) // unreachable
-        } else {
-            let now = self.time_getter.get_time().as_duration_since_epoch();
-            let (due, _) = self.txs.peek().expect("cannot be empty").0;
-            if now < due {
-                tokio::time::sleep(due - now).await;
-            }
+    pub fn pop(&mut self) -> Option<Id<Transaction>> {
+        self.txs.pop().map(|item| {
+            let (_, tx) = item.0;
+            tx
+        })
+    }
 
-            let (_, tx) = self.txs.pop().expect("cannot be empty").0;
-            Ok(tx)
+    pub async fn due(&self) {
+        match self.txs.peek() {
+            Some(item) => {
+                let now = self.time_getter.get_time().as_duration_since_epoch();
+                let (due, _) = item.0;
+                if now < due {
+                    tokio::time::sleep(due - now).await;
+                }
+            }
+            None => std::future::pending().await,
         }
     }
 }

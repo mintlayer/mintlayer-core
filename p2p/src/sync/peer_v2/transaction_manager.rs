@@ -159,8 +159,10 @@ where
                     self.handle_local_event(event)?;
                 }
 
-                new_tx = self.pending_transactions.due() => {
-                    self.send_message(TransactionSyncMessage::NewTransaction(new_tx?))?;
+                _ = self.pending_transactions.due() => {
+                    if let Some(new_tx) = self.pending_transactions.pop(){
+                        self.send_message(TransactionSyncMessage::NewTransaction(new_tx))?;
+                    }
                 }
 
                 _ = maintenance_interval.tick() => {}
