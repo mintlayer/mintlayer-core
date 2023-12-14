@@ -21,7 +21,6 @@ use std::{
 
 use common::primitives::time::Time;
 use crypto::random::{make_pseudo_rng, Rng};
-use p2p_types::socket_address::SocketAddress;
 
 use super::{peer_context::PeerContext, peerdb::salt::Salt};
 
@@ -92,7 +91,12 @@ impl AddrListResponseCache {
         debug_assert!(!peer_ctx.peer_role.is_outbound());
         bind_addr.port().hash(&mut hasher);
 
-        get_network(peer_ctx.peer_address).hash(&mut hasher);
+        // Note: in bitcoin they also hash peer address's "network", where ipv6 and ipv4 addresses
+        // are considered to belong to different "networks", unless the ipv6 address is somehow
+        // mapped to an ipv4 address (see CNetAddr::HasLinkedIPv4). So in their case separate
+        // cache entries will be created when a peer connects from a v4-mapped v6 address and from
+        // a non-v4-mapped one, even if the local bind address is the same. But it seems more like
+        // an artefact rather than an important detail.
 
         hasher.finish()
     }
@@ -118,26 +122,4 @@ type Addresses = Vec<PeerAddress>;
 struct CacheEntry {
     addresses: Addresses,
     expiration_time: Time,
-}
-
-#[derive(Hash)]
-enum Network {
-    IpV4,
-    IpV6,
-}
-
-fn get_network(addr: SocketAddress) -> Network {
-    match addr.socket_addr().ip() {
-        std::net::IpAddr::V4(_) => Network::IpV4,
-        std::net::IpAddr::V6(addr_v6) => {
-            // TODO: in bitcoin, they also handle a bunch of other IPv6 address types that can
-            // be translated to IPv4, see CNetAddr::HasLinkedIPv4. Probably, we need to handle
-            // them too.
-            if addr_v6.to_ipv4().is_some() {
-                Network::IpV4
-            } else {
-                Network::IpV6
-            }
-        }
-    }
 }

@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    net::{IpAddr, Ipv6Addr, SocketAddr},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use rstest::rstest;
 
@@ -234,113 +231,6 @@ async fn basic_test(#[case] seed: Seed) {
         addresses_for_peer1_after_cache_exp_time,
         addresses_for_peer3_after_cache_exp_time
     );
-}
-
-#[tracing::instrument(skip(seed))]
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn different_network_test(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-
-    let bind_address = TestAddressMaker::new_random_address_with_rng(&mut rng);
-
-    let chain_config = Arc::new(chain::config::create_mainnet());
-    let p2p_config = Arc::new(make_p2p_config());
-    let time_getter = P2pBasicTestTimeGetter::new();
-
-    let (mut peer_mgr, mut cmd_receiver) =
-        setup_peer_mgr(&chain_config, &p2p_config, &time_getter, &mut rng);
-
-    let peer_ip_addr_v4 = TestAddressMaker::new_random_ipv4_addr_with_rng(&mut rng);
-    let peer_address_v4 =
-        SocketAddress::new(SocketAddr::new(IpAddr::V4(peer_ip_addr_v4), rng.gen()));
-    let peer_address_v4_as_v6 = SocketAddress::new(SocketAddr::new(
-        IpAddr::V6(peer_ip_addr_v4.to_ipv6_compatible()),
-        rng.gen(),
-    ));
-
-    let peer_address_v6 = {
-        // It looks like all v6 addresses that somehow correspond to a v4 address start with a zero byte or with 0x20.
-        // So, use anything that is not zero or 0x20.
-        let segments = [
-            0xFFFF_u16,
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-        ];
-        let addr: Ipv6Addr = segments.into();
-        SocketAddress::new(SocketAddr::new(IpAddr::V6(addr), rng.gen()))
-    };
-
-    let (peer_id, peer_info) = make_new_peer(&chain_config);
-    accept_conn(
-        &mut peer_mgr,
-        &mut cmd_receiver,
-        peer_address_v4,
-        bind_address,
-        &peer_info,
-    )
-    .await;
-
-    peer_mgr.handle_addr_list_request(peer_id);
-    let cmd = expect_recv!(cmd_receiver);
-    let addresses = expect_addresses_from(cmd, peer_id);
-
-    peer_mgr.connection_closed(peer_id);
-
-    // Remove the addresses from the db
-    for address in &addresses {
-        peer_mgr.peerdb.remove_address(
-            &SocketAddress::from_peer_address(address, *p2p_config.allow_discover_private_ips)
-                .unwrap(),
-        );
-    }
-
-    // Close and re-open the connection using peer_address_v4_as_v6.
-    peer_mgr.connection_closed(peer_id);
-
-    // Recreate peer id and info, just in case.
-    let (peer_id, peer_info) = make_new_peer(&chain_config);
-    accept_conn(
-        &mut peer_mgr,
-        &mut cmd_receiver,
-        peer_address_v4_as_v6,
-        bind_address,
-        &peer_info,
-    )
-    .await;
-
-    // Addr list request should return the same list.
-    peer_mgr.handle_addr_list_request(peer_id);
-    let cmd = expect_recv!(cmd_receiver);
-    let new_addresses = expect_addresses_from(cmd, peer_id);
-    assert_eq!(addresses, new_addresses);
-
-    // Close and re-open the connection using peer_address_v6.
-    peer_mgr.connection_closed(peer_id);
-
-    // Recreate peer id and info, just in case.
-    let (peer_id, peer_info) = make_new_peer(&chain_config);
-    accept_conn(
-        &mut peer_mgr,
-        &mut cmd_receiver,
-        peer_address_v6,
-        bind_address,
-        &peer_info,
-    )
-    .await;
-
-    // Addr list request should return a different list.
-    peer_mgr.handle_addr_list_request(peer_id);
-    let cmd = expect_recv!(cmd_receiver);
-    let new_addresses = expect_addresses_from(cmd, peer_id);
-    assert_ne!(addresses, new_addresses);
 }
 
 fn make_p2p_config() -> P2pConfig {
