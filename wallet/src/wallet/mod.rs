@@ -38,6 +38,7 @@ use common::chain::{
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
+use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
@@ -98,8 +99,8 @@ pub enum WalletError {
     NotImplemented(&'static str),
     #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
     UnsupportedTransactionOutput(Box<TxOutput>),
-    #[error("Unsupported input destination")] // TODO implement display for Destination
-    UnsupportedInputDestination(Destination),
+    #[error("Size estimation error: {0}")]
+    SizeEstimationError(#[from] SizeEstimationError),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
     #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]

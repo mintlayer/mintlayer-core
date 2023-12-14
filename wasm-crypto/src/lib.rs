@@ -31,6 +31,7 @@ use common::{
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::UnsignedIntType, per_thousand::PerThousand, Amount, BlockHeight, H256},
+    size_estimation::{input_signature_size, tx_size_with_outputs},
 };
 use crypto::key::{
     extended::{ExtendedKeyKind, ExtendedPrivateKey},
@@ -473,6 +474,38 @@ pub fn encode_input_for_account_outpoint(
         AccountSpending::DelegationBalance(delegation_id, amount),
     ));
     Ok(input.encode())
+}
+
+#[wasm_bindgen]
+pub fn estimate_transaction_size(
+    inputs: &[u8],
+    mut opt_utxos: &[u8],
+    mut outputs: &[u8],
+) -> Result<usize, Error> {
+    let mut tx_outputs = vec![];
+    while !outputs.is_empty() {
+        let output = TxOutput::decode(&mut outputs).map_err(|_| Error::InvalidOutput)?;
+        tx_outputs.push(output);
+    }
+
+    let size = tx_size_with_outputs(&tx_outputs);
+    let inputs_size = inputs.len();
+
+    let mut total_size = size + inputs_size;
+
+    while !opt_utxos.is_empty() {
+        let utxo = Option::<TxOutput>::decode(&mut opt_utxos).map_err(|_| Error::InvalidInput)?;
+        let signature_size = utxo
+            .as_ref()
+            .map(input_signature_size)
+            .transpose()
+            .map_err(|_| Error::InvalidInput)?
+            .unwrap_or(0);
+
+        total_size += signature_size;
+    }
+
+    Ok(total_size)
 }
 
 #[wasm_bindgen]

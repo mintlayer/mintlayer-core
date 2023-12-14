@@ -22,6 +22,9 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
+use common::size_estimation::{
+    input_signature_size, input_signature_size_from_destination, tx_size_with_outputs,
+};
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
@@ -33,12 +36,12 @@ use wallet_types::with_locked::WithLocked;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
-    get_tx_output_destination, make_address_output, make_address_output_from_delegation,
-    make_address_output_token, make_decomission_stake_pool_output, make_mint_token_outputs,
-    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
+    make_address_output, make_address_output_from_delegation, make_address_output_token,
+    make_decomission_stake_pool_output, make_mint_token_outputs, make_stake_output,
+    make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{SendRequest, WalletError, WalletResult};
+use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -365,11 +368,7 @@ impl Account {
                 let tx_input: TxInput = outpoint.into();
                 let input_size = serialization::Encode::encoded_size(&tx_input);
 
-                let destination = get_tx_output_destination(&txo).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                })?;
-
-                let inp_sig_size = input_signature_size(destination)?;
+                let inp_sig_size = input_signature_size(&txo)?;
 
                 let fee = current_fee_rate
                     .compute_fee(input_size + inp_sig_size)
@@ -460,7 +459,7 @@ impl Account {
             current_fee_rate
                 .compute_fee(
                     tx_size_with_outputs(outputs.as_slice())
-                        + input_signature_size(&pool_data.decommission_key)?
+                        + input_signature_size_from_destination(&pool_data.decommission_key)?
                         + serialization::Encode::encoded_size(&tx_input),
                 )
                 .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
@@ -508,7 +507,7 @@ impl Account {
         let network_fee: Amount = current_fee_rate
             .compute_fee(
                 tx_size_with_outputs(outputs.as_slice())
-                    + input_signature_size(&delegation_data.destination)?,
+                    + input_signature_size_from_destination(&delegation_data.destination)?,
             )
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
             .into();
@@ -1524,7 +1523,7 @@ fn group_preselected_inputs(
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination) in request.inputs().iter().zip(request.destinations()) {
         let input_size = serialization::Encode::encoded_size(&input);
-        let inp_sig_size = input_signature_size(destination)?;
+        let inp_sig_size = input_signature_size_from_destination(destination)?;
 
         let fee = current_fee_rate
             .compute_fee(input_size + inp_sig_size)
@@ -1744,30 +1743,6 @@ fn group_utxos_for_input<T, Grouped: Clone>(
 
     tokens_grouped.insert(Currency::Coin, coin_grouped);
     Ok(tokens_grouped)
-}
-
-/// Return the encoded size for a SignedTransaction with specified outputs and empty inputs and
-/// signatures
-pub fn tx_size_with_outputs(outputs: &[TxOutput]) -> usize {
-    let tx = SignedTransaction::new(
-        Transaction::new(1, vec![], outputs.into()).expect("should not fail"),
-        vec![],
-    )
-    .expect("should not fail");
-    serialization::Encode::encoded_size(&tx)
-}
-
-/// Return the encoded size of an input signature
-fn input_signature_size(destination: &Destination) -> WalletResult<usize> {
-    // Sizes calculated upfront
-    match destination {
-        Destination::Address(_) => Ok(103),
-        Destination::PublicKey(_) => Ok(69),
-        Destination::AnyoneCanSpend => Ok(2),
-        Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => Err(
-            WalletError::UnsupportedInputDestination(destination.clone()),
-        ),
-    }
 }
 
 /// Calculate the amount of fee that needs to be paid to add a change output
