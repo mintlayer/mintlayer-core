@@ -170,6 +170,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         disable_noise,
         boot_nodes,
         reserved_nodes,
+        whitelisted_addresses,
         max_inbound_connections,
         ban_threshold,
         ban_duration,
@@ -186,6 +187,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let disable_noise = options.p2p_disable_noise.or(disable_noise);
     let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);
     let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
+    let whitelisted_addresses = options.p2p_whitelist_addr.clone().or(whitelisted_addresses);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let ping_check_period = options.p2p_ping_check_period.or(ping_check_period);
@@ -202,6 +204,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         disable_noise,
         boot_nodes,
         reserved_nodes,
+        whitelisted_addresses,
         max_inbound_connections,
         ban_threshold,
         ban_duration,

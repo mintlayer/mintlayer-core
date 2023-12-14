@@ -486,14 +486,13 @@ where
 
     // TODO: this should probably be renamed to 'should_ignore_ban_score_adjustment' or something
     // similar, because it only makes sense in that particular context.
-    fn is_whitelisted_node(peer_role: PeerRole) -> bool {
+    fn is_whitelisted_node(&self, peer_role: PeerRole, address: &SocketAddress) -> bool {
         match peer_role {
             PeerRole::Inbound
             | PeerRole::OutboundFullRelay
             | PeerRole::OutboundBlockRelay
             | PeerRole::Feeler => {
-                // TODO: Add whitelisted IPs option and check it here
-                false
+                self.p2p_config.whitelisted_addresses.contains(&address.ip_addr())
             }
             PeerRole::OutboundManual => true,
         }
@@ -508,17 +507,22 @@ where
     /// If peer is banned, it is removed from the connected peers
     /// and its address is marked as banned.
     fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) {
-        let peer = match self.peers.get_mut(&peer_id) {
+        let peer = match self.peers.get(&peer_id) {
             Some(peer) => peer,
             None => return,
         };
 
-        if Self::is_whitelisted_node(peer.peer_role) {
+        if self.is_whitelisted_node(peer.peer_role, &peer.address) {
             log::info!(
                 "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
             );
             return;
         }
+
+        let peer = match self.peers.get_mut(&peer_id) {
+            Some(peer) => peer,
+            None => return,
+        };
 
         peer.score = peer.score.saturating_add(score);
 
@@ -546,7 +550,10 @@ where
             self.pending_outbound_connects
                 .get(&peer_address)
                 .map_or(false, |pending_connect| {
-                    Self::is_whitelisted_node(Self::determine_outbound_peer_role(pending_connect))
+                    self.is_whitelisted_node(
+                        Self::determine_outbound_peer_role(pending_connect),
+                        &peer_address,
+                    )
                 });
         if whitelisted_node {
             log::info!(

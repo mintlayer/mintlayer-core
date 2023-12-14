@@ -56,6 +56,7 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
+pub use address_tables::RandomKey;
 pub use storage::StorageVersion;
 pub use storage_load::open_storage;
 

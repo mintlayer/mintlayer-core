@@ -15,7 +15,12 @@
 
 //! The node command line options.
 
-use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
+use std::{
+    ffi::OsString,
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU64,
+    path::PathBuf,
+};
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
@@ -122,6 +127,10 @@ pub struct RunOptions {
     /// Optional list of reserved node addresses to connect.
     #[clap(long, value_name = "NODE")]
     pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
+
+    /// Optional list of whitelisted addresses.
+    #[clap(long, value_name = "ADDR")]
+    pub p2p_whitelist_addr: Option<Vec<IpAddr>>,
 
     /// Maximum allowed number of inbound connections.
     #[clap(long)]
