@@ -62,7 +62,6 @@ pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
 pub struct PeerTransactionSyncManager<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
-    time_getter: TimeGetter,
     common_services: Services,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
@@ -106,7 +105,6 @@ where
         Self {
             id: id.into(),
             p2p_config,
-            time_getter: time_getter.clone(),
             common_services,
             chainstate_handle,
             mempool_handle,
@@ -115,8 +113,8 @@ where
             sync_msg_receiver,
             local_event_receiver,
             known_transactions,
-            requested_transactions: RequestedTransactions::new(time_getter.clone()),
-            pending_transactions: PendingTransactions::new(time_getter),
+            requested_transactions: RequestedTransactions::new(time_getter),
+            pending_transactions: PendingTransactions::new(),
             observer,
         }
     }
@@ -191,7 +189,7 @@ where
                     self.add_known_transaction(txid);
 
                     // TODO: whitelisted peers can get txs without delay
-                    let now = self.time_getter.get_time().as_duration_since_epoch();
+                    let now = Instant::now();
                     let delay = TX_RELAY_DELAY_INTERVAL
                         .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                     self.pending_transactions.push(txid, now + delay);

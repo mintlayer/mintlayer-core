@@ -13,24 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp::Reverse, collections::BinaryHeap, time::Duration};
+use std::{cmp::Reverse, collections::BinaryHeap};
+use tokio::time::Instant;
 
-use common::{chain::Transaction, primitives::Id, time_getter::TimeGetter};
+use common::{chain::Transaction, primitives::Id};
 
 pub struct PendingTransactions {
-    time_getter: TimeGetter,
-    txs: BinaryHeap<Reverse<(Duration, Id<Transaction>)>>,
+    txs: BinaryHeap<Reverse<(Instant, Id<Transaction>)>>,
 }
 
 impl PendingTransactions {
-    pub fn new(time_getter: TimeGetter) -> Self {
+    pub fn new() -> Self {
         Self {
-            time_getter,
             txs: Default::default(),
         }
     }
 
-    pub fn push(&mut self, tx: Id<Transaction>, due_time: Duration) {
+    pub fn push(&mut self, tx: Id<Transaction>, due_time: Instant) {
         self.txs.push(Reverse((due_time, tx)));
     }
 
@@ -44,7 +43,7 @@ impl PendingTransactions {
     pub async fn due(&self) {
         match self.txs.peek() {
             Some(item) => {
-                let now = self.time_getter.get_time().as_duration_since_epoch();
+                let now = Instant::now();
                 let (due, _) = item.0;
                 if now < due {
                     tokio::time::sleep(due - now).await;
