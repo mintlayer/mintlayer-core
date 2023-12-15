@@ -34,7 +34,7 @@ use crate::{
     config::P2pConfig,
     peer_manager::{
         peerdb::{
-            address_data::{PURGE_REACHABLE_FAIL_COUNT, PURGE_UNREACHABLE_TIME},
+            address_data::{self, PURGE_REACHABLE_FAIL_COUNT, PURGE_UNREACHABLE_TIME},
             address_tables::RandomKey,
             storage::{KnownAddressState, PeerDbStorageRead},
         },
@@ -480,6 +480,111 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
         assert!(tried_addr_count <= max_addrs_in_one_table);
         assert!(new_addr_table(&peerdb).addr_count() <= max_addrs_in_one_table);
         assert_addr_consistency(&peerdb);
+    }
+}
+
+// Check that `select_non_reserved_outbound_addresses` selects roughly the same number of new and
+// tried addresses, even if the number of existing addresses differ significantly.
+// Note that this test can't be random, so we choose a predefined seed for it and repeat the
+// body several times.
+#[tracing::instrument]
+#[rstest]
+#[trace]
+fn new_tried_addr_selection_frequency() {
+    let mut rng = make_seedable_rng(Seed(123));
+
+    let bucket_size = 1000;
+    let bucket_count = 100;
+    let addr_count1 = 1000;
+    let addr_count2 = 100;
+    let count_to_select_range = 50..100;
+    let empty_addr_groups_set = BTreeSet::<_>::new();
+
+    for _ in 0..3 {
+        for (new_addr_count, tried_addr_count) in
+            [(addr_count1, addr_count2), (addr_count2, addr_count1)]
+        {
+            let db_store = peerdb_inmemory_store();
+            let time_getter = P2pBasicTestTimeGetter::new();
+            let chain_config = create_unit_test_config();
+
+            let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
+                addr_tables_bucket_size: bucket_size.into(),
+                new_addr_table_bucket_count: bucket_count.into(),
+                tried_addr_table_bucket_count: bucket_count.into(),
+                addr_tables_initial_random_key: Some(RandomKey::new_random_with_rng(&mut rng)),
+            }));
+
+            let mut peerdb = PeerDb::new(
+                &chain_config,
+                Arc::clone(&p2p_config),
+                time_getter.get_time_getter(),
+                db_store,
+            )
+            .unwrap();
+            // We'll be adding lots of addresses and the checks will cause a huge slowdown.
+            peerdb.address_tables.set_should_check_consistency(false);
+
+            let new_addrs = make_non_colliding_addresses(
+                peerdb.address_tables.new_addr_table(),
+                new_addr_count,
+                &mut rng,
+            );
+            let tried_addrs = make_non_colliding_addresses(
+                peerdb.address_tables.tried_addr_table(),
+                tried_addr_count,
+                &mut rng,
+            );
+
+            for addr in new_addrs {
+                peerdb.peer_discovered(addr);
+            }
+            for addr in tried_addrs {
+                peerdb.outbound_peer_connected(addr);
+                // Mark the address as disconnected, otherwise it won't be selected by
+                // select_non_reserved_outbound_addresses.
+                peerdb.outbound_peer_disconnected(addr);
+            }
+
+            // Advance time, so that previously connected addresses can be selected again.
+            time_getter.advance_time(address_data::MAX_DELAY_REACHABLE);
+
+            let mut total_selected_new_addrs = 0;
+            let mut total_selected_tried_addrs = 0;
+            for _ in 0..100 {
+                let count_to_select = rng.gen_range(count_to_select_range.clone());
+                let selected_addrs = peerdb.select_non_reserved_outbound_addresses_with_rng(
+                    &empty_addr_groups_set,
+                    count_to_select,
+                    &mut rng,
+                );
+
+                let mut selected_new_addrs = 0;
+                let mut selected_tried_addrs = 0;
+
+                for addr in selected_addrs {
+                    let is_in_new = peerdb.address_tables.is_in_new(&addr);
+                    let is_in_tried = peerdb.address_tables.is_in_tried(&addr);
+
+                    // Sanity check
+                    assert_ne!(is_in_new, is_in_tried);
+
+                    if is_in_new {
+                        selected_new_addrs += 1;
+                    } else {
+                        selected_tried_addrs += 1;
+                    }
+                }
+
+                total_selected_new_addrs += selected_new_addrs;
+                total_selected_tried_addrs += selected_tried_addrs;
+            }
+
+            let min = std::cmp::min(total_selected_new_addrs, total_selected_tried_addrs);
+            let max = std::cmp::max(total_selected_new_addrs, total_selected_tried_addrs);
+            let ratio = max as f64 / min as f64;
+            assert!(ratio <= 1.1);
+        }
     }
 }
 

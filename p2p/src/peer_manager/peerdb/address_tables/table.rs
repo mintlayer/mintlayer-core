@@ -52,6 +52,9 @@ pub struct Table {
     id_max: EntryId,
     /// Arbitrary value; this is used as an additional "key" to randomize bucket selection.
     random_key: RandomKey,
+    /// This is used to turn off consistency checks, which can be too heavy for some tests.
+    #[cfg(test)]
+    should_check_consistency: bool,
 }
 
 impl Table {
@@ -73,6 +76,8 @@ impl Table {
             addresses: BTreeMap::new(),
             random_key,
             id_max,
+            #[cfg(test)]
+            should_check_consistency: true,
         }
     }
 
@@ -232,9 +237,14 @@ impl Table {
         }
     }
 
+    #[cfg(test)]
+    pub fn set_should_check_consistency(&mut self, val: bool) {
+        self.should_check_consistency = val;
+    }
+
     fn check_consistency(&self) {
         #[cfg(test)]
-        {
+        if self.should_check_consistency {
             let mut entries_in_buckets = 0;
             for (bucket_idx, bucket) in self.buckets.rows().enumerate() {
                 for (bucket_pos, id) in bucket.iter().enumerate() {

@@ -176,6 +176,10 @@ impl AddressTables {
         self.new_addr_table.addr_iter()
     }
 
+    pub fn tried_addresses(&self) -> impl Iterator<Item = &SocketAddress> + '_ {
+        self.tried_addr_table.addr_iter()
+    }
+
     #[cfg(test)]
     pub fn new_addr_table(&self) -> &Table {
         &self.new_addr_table
@@ -184,6 +188,12 @@ impl AddressTables {
     #[cfg(test)]
     pub fn tried_addr_table(&self) -> &Table {
         &self.tried_addr_table
+    }
+
+    #[cfg(test)]
+    pub fn set_should_check_consistency(&mut self, val: bool) {
+        self.new_addr_table.set_should_check_consistency(val);
+        self.tried_addr_table.set_should_check_consistency(val);
     }
 }
 
