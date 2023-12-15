@@ -35,7 +35,8 @@ class RelayTransactions(BitcoinTestFramework):
         self.sync_all(self.nodes[0:2])
 
     def assert_mempool_contains_tx(self, n, tx_id):
-        for _ in range(5):
+        # there is random delay when relaying txs so we need to wait for a while
+        for _ in range(60):
             if self.nodes[n].mempool_contains_tx(tx_id):
                 break
             time.sleep(1)

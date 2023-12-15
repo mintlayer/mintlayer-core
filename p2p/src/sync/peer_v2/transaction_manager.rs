@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use crypto::random::make_pseudo_rng;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::{Instant, MissedTickBehavior},
@@ -47,7 +48,12 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::requested_transactions::RequestedTransactions;
+use super::{
+    pending_transactions::PendingTransactions, requested_transactions::RequestedTransactions,
+};
+
+// TODO: add smaller interval for outbound connections
+pub const TX_RELAY_DELAY_INTERVAL: Duration = Duration::from_secs(5);
 
 // TODO: Take into account the chain work when syncing.
 /// Transaction sync manager.
@@ -68,6 +74,9 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     /// This tracks transactions that we've requested from this peer but for which we haven't
     /// received a response yet.
     requested_transactions: RequestedTransactions,
+    /// Txs aren't relayed immediately but rather put into a collection to be propagated later
+    /// with random delay to make tracing transactions' origin harder
+    pending_transactions: PendingTransactions,
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
 }
@@ -105,6 +114,7 @@ where
             local_event_receiver,
             known_transactions,
             requested_transactions: RequestedTransactions::new(time_getter),
+            pending_transactions: PendingTransactions::new(),
             observer,
         }
     }
@@ -147,6 +157,12 @@ where
                     self.handle_local_event(event)?;
                 }
 
+                _ = self.pending_transactions.due() => {
+                    if let Some(new_tx) = self.pending_transactions.pop(){
+                        self.send_message(TransactionSyncMessage::NewTransaction(new_tx))?;
+                    }
+                }
+
                 _ = maintenance_interval.tick() => {}
             }
 
@@ -171,10 +187,14 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.send_message(TransactionSyncMessage::NewTransaction(txid))
-                } else {
-                    Ok(())
+
+                    // TODO: whitelisted peers should get txs without delay
+                    let now = Instant::now();
+                    let delay = TX_RELAY_DELAY_INTERVAL
+                        .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                    self.pending_transactions.push(txid, now + delay);
                 }
+                Ok(())
             }
         }
     }
