@@ -229,6 +229,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
             }
         };
 
+        // Note: here we want to select "new" and "tried" addresses with roughly equal probability.
+        // To do so, we first select "count" addresses of each kind, shuffle the results and then
+        // iteratively choose addresses from one of the vectors based on a randomly generated value.
         let mut selected_new =
             self.address_tables.new_addresses().filter(filter).choose_multiple(rng, count);
         selected_new.shuffle(rng);
