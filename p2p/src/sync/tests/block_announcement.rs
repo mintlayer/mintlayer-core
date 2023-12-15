@@ -517,10 +517,10 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
                 max_request_blocks_count: 1.into(),
 
                 msg_header_count_limit: Default::default(),
+                max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),
@@ -621,10 +621,10 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
                 max_request_blocks_count: 1.into(),
 
                 msg_header_count_limit: Default::default(),
+                max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),
@@ -722,10 +722,10 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
                 max_request_blocks_count: 2.into(),
 
                 msg_header_count_limit: Default::default(),
+                max_addr_list_response_address_count: Default::default(),
                 msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
                 max_peer_tx_announcements: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),

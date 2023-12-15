@@ -13,26 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{btree_map, BTreeMap},
-    hash::{Hash, Hasher},
-};
+use std::collections::{btree_map, BTreeMap};
 
 use p2p_types::socket_address::SocketAddress;
 use utils::array_2d::Array2d;
 
-use crate::peer_manager::address_groups::AddressGroup;
+use crate::peer_manager::{address_groups::AddressGroup, peerdb::salt::calc_hash64};
 
-use super::RandomKey;
-
-/// Calculate hash of a 'single' value.
-///
-/// Note: if multiple values are required to produce a single hash, pass them as a tuple.
-pub fn calc_hash<T: Hash>(val: &T) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    val.hash(&mut hasher);
-    hasher.finish()
-}
+use super::Salt;
 
 const BUCKETS_PER_GROUP: u64 = 8;
 
@@ -51,30 +39,25 @@ pub struct Table {
     /// to override it for testing.
     id_max: EntryId,
     /// Arbitrary value; this is used as an additional "key" to randomize bucket selection.
-    random_key: RandomKey,
+    salt: Salt,
     /// This is used to turn off consistency checks, which can be too heavy for some tests.
     #[cfg(test)]
     should_check_consistency: bool,
 }
 
 impl Table {
-    pub fn new(bucket_count: usize, bucket_size: usize, random_key: RandomKey) -> Self {
-        Self::new_generic(bucket_count, bucket_size, random_key, EntryId::MAX)
+    pub fn new(bucket_count: usize, bucket_size: usize, salt: Salt) -> Self {
+        Self::new_generic(bucket_count, bucket_size, salt, EntryId::MAX)
     }
 
-    fn new_generic(
-        bucket_count: usize,
-        bucket_size: usize,
-        random_key: RandomKey,
-        id_max: EntryId,
-    ) -> Self {
+    fn new_generic(bucket_count: usize, bucket_size: usize, salt: Salt, id_max: EntryId) -> Self {
         assert!(id_max as usize >= bucket_count * bucket_size);
 
         Self {
             // Fill "buckets" with "id_max" initially.
             buckets: Array2d::new(bucket_count, bucket_size, id_max),
             addresses: BTreeMap::new(),
-            random_key,
+            salt,
             id_max,
             #[cfg(test)]
             should_check_consistency: true,
@@ -91,18 +74,18 @@ impl Table {
     // addresses from the same addr group will end up in the same bucket.
     // Should we do something similar?
     fn bucket_idx(&self, addr: &SocketAddress) -> usize {
-        let addr_hash = calc_hash(&(self.random_key, addr));
+        let addr_hash = calc_hash64(&(self.salt, addr));
         let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
         // Note: addresses from a certain address group can be spread over at most BUCKETS_PER_GROUP
         // buckets.
-        let final_hash = calc_hash(&(self.random_key, addr_group, addr_hash % BUCKETS_PER_GROUP));
+        let final_hash = calc_hash64(&(self.salt, addr_group, addr_hash % BUCKETS_PER_GROUP));
 
         (final_hash % self.buckets.rows_count() as u64) as usize
     }
 
     fn bucket_pos(&self, addr: &SocketAddress, bucket_idx: usize) -> usize {
-        let hash = calc_hash(&(self.random_key, addr, bucket_idx));
+        let hash = calc_hash64(&(self.salt, addr, bucket_idx));
         (hash % self.buckets.cols_count() as u64) as usize
     }
 
@@ -378,7 +361,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn basic_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
+        let mut table = Table::new_generic(2, 2, Salt::from_u64(0), 4);
 
         let addr = make_random_address(&mut rng);
         let colliding_addr = make_colliding_address(&table, &addr);
@@ -420,7 +403,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_replace(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
+        let mut table = Table::new_generic(2, 2, Salt::from_u64(0), 4);
 
         let addr = make_random_address(&mut rng);
         let colliding_addr = make_colliding_address(&table, &addr);
@@ -448,7 +431,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_replace_if(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
+        let mut table = Table::new_generic(2, 2, Salt::from_u64(0), 4);
 
         let addr = make_random_address(&mut rng);
         let colliding_addr = make_colliding_address(&table, &addr);
@@ -506,7 +489,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_full_table(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
+        let mut table = Table::new_generic(2, 2, Salt::from_u64(0), 4);
 
         let addrs = make_non_colliding_addresses(&[&table], 4, &mut rng);
 
@@ -523,7 +506,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_id_rebuilding(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
+        let mut table = Table::new_generic(2, 2, Salt::from_u64(0), 4);
 
         let addrs = make_non_colliding_addresses(&[&table], 2, &mut rng);
 

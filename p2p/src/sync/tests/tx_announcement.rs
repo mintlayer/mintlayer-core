@@ -224,10 +224,10 @@ async fn too_many_announcements(#[case] seed: Seed) {
                 max_peer_tx_announcements: 1.into(),
 
                 msg_header_count_limit: Default::default(),
-                msg_max_locator_count: Default::default(),
                 max_request_blocks_count: Default::default(),
+                max_addr_list_response_address_count: Default::default(),
+                msg_max_locator_count: Default::default(),
                 max_message_size: Default::default(),
-                max_singular_unconnected_headers: Default::default(),
             },
 
             bind_addresses: Default::default(),

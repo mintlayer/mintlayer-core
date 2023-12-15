@@ -15,6 +15,7 @@
 
 //! Peer manager
 
+mod addr_list_response_cache;
 pub mod address_groups;
 pub mod dns_seed;
 pub mod peer_context;
@@ -74,6 +75,7 @@ use crate::{
 };
 
 use self::{
+    addr_list_response_cache::AddrListResponseCache,
     address_groups::AddressGroup,
     dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
@@ -179,9 +181,6 @@ const RESEND_OWN_ADDRESS_TO_PEER_PERIOD: Duration = Duration::from_secs(24 * 60 
 /// The interval at which to contact DNS seed servers.
 pub const PEER_MGR_DNS_RELOAD_INTERVAL: Duration = Duration::from_secs(60);
 
-/// How many addresses are allowed to be sent
-const MAX_ADDRESS_COUNT: usize = 1000;
-
 /// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
 pub const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
 /// Bucket size used to rate limit address announcements from a peer.
@@ -263,6 +262,9 @@ where
 
     peer_eviction_random_state: peers_eviction::RandomState,
 
+    /// Cached address list responses.
+    addr_list_response_cache: AddrListResponseCache,
+
     /// PeerManager's observer for use by tests.
     observer: Option<Box<dyn Observer + Send>>,
 
@@ -338,6 +340,7 @@ where
             time_getter.clone(),
             peerdb_storage,
         )?;
+        let salt = peerdb.salt();
         let now = time_getter.get_time();
         let next_feeler_connection_time =
             Self::choose_next_feeler_connection_time(&p2p_config, now);
@@ -356,6 +359,7 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
+            addr_list_response_cache: AddrListResponseCache::new(salt),
             observer,
             dns_seed,
             init_time: now,
@@ -378,9 +382,8 @@ where
 
     /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
     /// Private and local IPs are allowed if `allow_discover_private_ips` is true.
-    fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
-        SocketAddress::from_peer_address(address, *self.p2p_config.allow_discover_private_ips)
-            .is_some()
+    fn is_peer_address_valid(address: &PeerAddress, p2p_config: &P2pConfig) -> bool {
+        SocketAddress::from_peer_address(address, *p2p_config.allow_discover_private_ips).is_some()
     }
 
     /// Discover public addresses for this node after a new outbound connection is made
@@ -1119,7 +1122,7 @@ where
                     PeerDisconnectionDbAction::Keep => {}
                     PeerDisconnectionDbAction::RemoveIfOutbound => {
                         if peer.peer_role.is_outbound() {
-                            self.peerdb.remove_outbound_address(&peer.peer_address);
+                            self.peerdb.remove_address(&peer.peer_address);
                         }
                     }
                 }
@@ -1364,14 +1367,21 @@ where
             return;
         }
 
-        let addresses = self
-            .peerdb
-            .known_addresses()
-            .map(SocketAddress::as_peer_address)
-            .filter(|address| self.is_peer_address_valid(address))
-            .choose_multiple(&mut make_pseudo_rng(), MAX_ADDRESS_COUNT);
+        let max_addr_count = *self.p2p_config.protocol_config.max_addr_list_response_address_count;
 
-        assert!(addresses.len() <= MAX_ADDRESS_COUNT);
+        let now = self.time_getter.get_time();
+        let addresses = self
+            .addr_list_response_cache
+            .get_or_create(peer, now, || {
+                self.peerdb
+                    .known_addresses()
+                    .map(SocketAddress::as_peer_address)
+                    .filter(|address| Self::is_peer_address_valid(address, &self.p2p_config))
+                    .choose_multiple(&mut make_pseudo_rng(), max_addr_count)
+            })
+            .clone();
+
+        assert!(addresses.len() <= max_addr_count);
 
         Self::send_peer_message(
             &mut self.peer_connectivity_handle,
@@ -1390,7 +1400,8 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         ensure!(
-            addresses.len() <= MAX_ADDRESS_COUNT,
+            addresses.len()
+                <= *self.p2p_config.protocol_config.max_addr_list_response_address_count,
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(

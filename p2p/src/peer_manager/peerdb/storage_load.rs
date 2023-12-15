@@ -24,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    address_tables,
     config::PeerDbConfig,
+    salt::Salt,
     storage::{
         KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, StorageVersion,
     },
@@ -38,7 +38,7 @@ pub struct LoadedStorage {
     pub known_addresses: BTreeMap<SocketAddress, KnownAddressState>,
     pub banned_addresses: BTreeMap<BannableAddress, Time>,
     pub anchor_addresses: BTreeSet<SocketAddress>,
-    pub addr_tables_random_key: address_tables::RandomKey,
+    pub salt: Salt,
 }
 
 impl LoadedStorage {
@@ -64,20 +64,18 @@ impl LoadedStorage {
         storage: &S,
         peerdb_config: &PeerDbConfig,
     ) -> crate::Result<LoadedStorage> {
-        let addr_tables_random_key = peerdb_config
-            .addr_tables_initial_random_key
-            .unwrap_or_else(address_tables::RandomKey::new_random);
+        let salt = peerdb_config.salt.unwrap_or_else(Salt::new_random);
 
         let mut tx = storage.transaction_rw()?;
         tx.set_version(CURRENT_STORAGE_VERSION)?;
-        tx.set_addr_tables_random_key(addr_tables_random_key)?;
+        tx.set_salt(salt)?;
         tx.commit()?;
 
         Ok(LoadedStorage {
             known_addresses: BTreeMap::new(),
             banned_addresses: BTreeMap::new(),
             anchor_addresses: BTreeSet::new(),
-            addr_tables_random_key,
+            salt,
         })
     }
 
@@ -91,15 +89,15 @@ impl LoadedStorage {
 
         let anchor_addresses = tx.get_anchor_addresses()?.iter().copied().collect::<BTreeSet<_>>();
 
-        let addr_tables_random_key = tx.get_addr_tables_random_key()?.ok_or_else(|| {
-            P2pError::InvalidStorageState("Missing addr tables random key".to_owned())
-        })?;
+        let salt = tx
+            .get_salt()?
+            .ok_or_else(|| P2pError::InvalidStorageState("Missing salt".to_owned()))?;
 
         Ok(LoadedStorage {
             known_addresses,
             banned_addresses,
             anchor_addresses,
-            addr_tables_random_key,
+            salt,
         })
     }
 }
