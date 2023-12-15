@@ -385,14 +385,14 @@ where
 
     /// Discover public addresses for this node after a new outbound connection is made
     ///
-    /// *receiver_address* is this host socket address as seen and reported by remote peer.
+    /// `node_address_as_seen_by_peer` is this host socket address as seen and reported by remote peer.
     /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
     /// This won't work for majority of nodes but that should be accepted.
     fn discover_own_address(
         &mut self,
         peer_role: PeerRole,
         common_services: Services,
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     ) -> Option<SocketAddress> {
         let discover = match peer_role {
             PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
@@ -404,7 +404,7 @@ where
             return None;
         }
 
-        let receiver_address = receiver_address?;
+        let node_address_as_seen_by_peer = node_address_as_seen_by_peer?;
 
         // Take IP and use port numbers from all listening sockets (with same IP version)
         let discovered_own_addresses = self
@@ -412,23 +412,23 @@ where
             .local_addresses()
             .iter()
             .map(SocketAddress::as_peer_address)
-            .filter_map(
-                |listening_address| match (&receiver_address, listening_address) {
-                    (PeerAddress::Ip4(receiver), PeerAddress::Ip4(listener)) => {
+            .filter_map(|listening_address| {
+                match (&node_address_as_seen_by_peer, listening_address) {
+                    (PeerAddress::Ip4(seen_by_peer), PeerAddress::Ip4(listening)) => {
                         Some(PeerAddress::Ip4(PeerAddressIp4 {
-                            ip: receiver.ip,
-                            port: listener.port,
+                            ip: seen_by_peer.ip,
+                            port: listening.port,
                         }))
                     }
-                    (PeerAddress::Ip6(receiver), PeerAddress::Ip6(listener)) => {
+                    (PeerAddress::Ip6(seen_by_peer), PeerAddress::Ip6(listening)) => {
                         Some(PeerAddress::Ip6(PeerAddressIp6 {
-                            ip: receiver.ip,
-                            port: listener.port,
+                            ip: seen_by_peer.ip,
+                            port: listening.port,
                         }))
                     }
                     _ => None,
-                },
-            )
+                }
+            })
             .filter_map(|address| {
                 SocketAddress::from_peer_address(
                     &address,
@@ -532,11 +532,11 @@ where
         );
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_peer_ban_score_adjustment(peer.address, peer.score)
+            o.on_peer_ban_score_adjustment(peer.peer_address, peer.score)
         }
 
         if peer.score >= *self.p2p_config.ban_threshold {
-            let address = peer.address.as_bannable();
+            let address = peer.peer_address.as_bannable();
             self.ban(address);
         }
     }
@@ -577,7 +577,7 @@ where
             .peers
             .values()
             .filter_map(|peer| {
-                if peer.address.as_bannable() == address {
+                if peer.peer_address.as_bannable() == address {
                     Some(peer.info.peer_id)
                 } else {
                     None
@@ -878,19 +878,20 @@ where
     /// by the node as result of the peer manager maintenance.
     fn try_accept_connection(
         &mut self,
-        address: SocketAddress,
+        peer_address: SocketAddress,
+        bind_address: SocketAddress,
         peer_role: PeerRole,
         info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
 
-        self.validate_connection(&address, peer_role, &info)?;
+        self.validate_connection(&peer_address, peer_role, &info)?;
 
         self.peer_connectivity_handle.accept(peer_id)?;
 
         log::info!(
-            "new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {peer_role:?}, protocol_version: {:?}",
+            "new peer accepted, peer_id: {peer_id}, address: {peer_address:?}, role: {peer_role:?}, protocol_version: {:?}",
             info.protocol_version
         );
 
@@ -919,13 +920,17 @@ where
             &mut make_pseudo_rng(),
         );
 
-        let discovered_own_address =
-            self.discover_own_address(peer_role, info.common_services, receiver_address);
+        let discovered_own_address = self.discover_own_address(
+            peer_role,
+            info.common_services,
+            node_address_as_seen_by_peer,
+        );
 
         let peer = PeerContext {
             created_at: self.time_getter.get_time(),
             info,
-            address,
+            peer_address,
+            bind_address,
             peer_role,
             score: 0,
             sent_ping: None,
@@ -945,14 +950,8 @@ where
         let old_value = self.peers.insert(peer_id, peer);
         assert!(old_value.is_none());
 
-        match peer_role {
-            PeerRole::Inbound => {}
-            PeerRole::OutboundFullRelay
-            | PeerRole::OutboundBlockRelay
-            | PeerRole::OutboundManual
-            | PeerRole::Feeler => {
-                self.peerdb.outbound_peer_connected(address);
-            }
+        if peer_role.is_outbound() {
+            self.peerdb.outbound_peer_connected(peer_address);
         }
 
         if peer_role == PeerRole::OutboundBlockRelay {
@@ -964,7 +963,7 @@ where
                     | PeerRole::OutboundFullRelay
                     | PeerRole::OutboundManual
                     | PeerRole::Feeler => None,
-                    PeerRole::OutboundBlockRelay => Some(peer.address),
+                    PeerRole::OutboundBlockRelay => Some(peer.peer_address),
                 })
                 // Note: there may be more than outbound_block_relay_count block relay connections
                 // at a given moment, but the extra ones will soon be evicted. Since connections
@@ -975,7 +974,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_accepted(address, peer_role)
+            o.on_connection_accepted(peer_address, peer_role)
         }
 
         Ok(())
@@ -998,17 +997,18 @@ where
 
     fn accept_connection(
         &mut self,
-        address: SocketAddress,
+        peer_address: SocketAddress,
+        bind_address: SocketAddress,
         role: Role,
         info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     ) {
         let peer_id = info.peer_id;
 
         let (peer_role, response) = match role {
             Role::Inbound => (PeerRole::Inbound, None),
             Role::Outbound => {
-                let pending_connect = self.pending_outbound_connects.remove(&address).expect(
+                let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
                 let role = Self::determine_outbound_peer_role(&pending_connect);
@@ -1025,7 +1025,13 @@ where
             }
         };
 
-        let accept_res = self.try_accept_connection(address, peer_role, info, receiver_address);
+        let accept_res = self.try_accept_connection(
+            peer_address,
+            bind_address,
+            peer_role,
+            info,
+            node_address_as_seen_by_peer,
+        );
 
         if let Err(accept_err) = &accept_res {
             log::debug!("connection rejected for peer {peer_id}: {accept_err}");
@@ -1045,14 +1051,8 @@ where
                 log::error!("disconnect failed unexpectedly: {err:?}");
             }
 
-            match peer_role {
-                PeerRole::Inbound => {}
-                PeerRole::OutboundFullRelay
-                | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual
-                | PeerRole::Feeler => {
-                    self.peerdb.report_outbound_failure(address);
-                }
+            if peer_role.is_outbound() {
+                self.peerdb.report_outbound_failure(peer_address);
             }
         }
 
@@ -1103,17 +1103,11 @@ where
             log::info!(
                 "peer disconnected, peer_id: {}, address: {:?}",
                 peer.info.peer_id,
-                peer.address
+                peer.peer_address
             );
 
-            match peer.peer_role {
-                PeerRole::Inbound => {}
-                PeerRole::OutboundFullRelay
-                | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual
-                | PeerRole::Feeler => {
-                    self.peerdb.outbound_peer_disconnected(peer.address);
-                }
+            if peer.peer_role.is_outbound() {
+                self.peerdb.outbound_peer_disconnected(peer.peer_address);
             }
 
             if let Some(PendingDisconnect {
@@ -1123,15 +1117,11 @@ where
             {
                 match peerdb_action {
                     PeerDisconnectionDbAction::Keep => {}
-                    PeerDisconnectionDbAction::RemoveIfOutbound => match peer.peer_role {
-                        PeerRole::Inbound => {}
-                        PeerRole::OutboundFullRelay
-                        | PeerRole::OutboundBlockRelay
-                        | PeerRole::OutboundManual
-                        | PeerRole::Feeler => {
-                            self.peerdb.remove_outbound_address(&peer.address);
+                    PeerDisconnectionDbAction::RemoveIfOutbound => {
+                        if peer.peer_role.is_outbound() {
+                            self.peerdb.remove_outbound_address(&peer.peer_address);
                         }
-                    },
+                    }
                 }
 
                 if let Some(response_sender) = response_sender {
@@ -1172,7 +1162,8 @@ where
             let role = Self::determine_outbound_peer_role(pending_conn);
             (*addr, role)
         });
-        let connected = self.peers.values().map(|peer_ctx| (peer_ctx.address, peer_ctx.peer_role));
+        let connected =
+            self.peers.values().map(|peer_ctx| (peer_ctx.peer_address, peer_ctx.peer_role));
         connected.chain(pending)
     }
 
@@ -1548,30 +1539,50 @@ where
                 self.handle_incoming_message(peer_id, message);
             }
             ConnectivityEvent::InboundAccepted {
-                address,
+                peer_address,
+                bind_address,
                 peer_info,
-                receiver_address,
+                node_address_as_seen_by_peer,
             } => {
-                self.accept_connection(address, Role::Inbound, peer_info, receiver_address);
+                self.accept_connection(
+                    peer_address,
+                    bind_address,
+                    Role::Inbound,
+                    peer_info,
+                    node_address_as_seen_by_peer,
+                );
             }
             ConnectivityEvent::OutboundAccepted {
-                address,
+                peer_address,
+                bind_address,
                 peer_info,
-                receiver_address,
+                node_address_as_seen_by_peer,
             } => {
-                self.accept_connection(address, Role::Outbound, peer_info, receiver_address);
+                self.accept_connection(
+                    peer_address,
+                    bind_address,
+                    Role::Outbound,
+                    peer_info,
+                    node_address_as_seen_by_peer,
+                );
             }
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.connection_closed(peer_id);
             }
-            ConnectivityEvent::ConnectionError { address, error } => {
-                self.handle_outbound_error(address, error);
+            ConnectivityEvent::ConnectionError {
+                peer_address,
+                error,
+            } => {
+                self.handle_outbound_error(peer_address, error);
             }
             ConnectivityEvent::Misbehaved { peer_id, error } => {
                 self.adjust_peer_score(peer_id, error.ban_score());
             }
-            ConnectivityEvent::MisbehavedOnHandshake { address, error } => {
-                self.adjust_peer_score_on_failed_handshake(address, error.ban_score());
+            ConnectivityEvent::MisbehavedOnHandshake {
+                peer_address,
+                error,
+            } => {
+                self.adjust_peer_score_on_failed_handshake(peer_address, error.ban_score());
             }
         }
     }
@@ -1588,7 +1599,7 @@ where
             .values()
             .map(|context| ConnectedPeer {
                 peer_id: context.info.peer_id,
-                address: context.address,
+                address: context.peer_address,
                 peer_role: context.peer_role,
                 ban_score: context.score,
                 user_agent: context.info.user_agent.to_string(),
@@ -1613,19 +1624,15 @@ where
     }
 
     fn is_address_connected(&self, address: &SocketAddress) -> bool {
-        self.peers.values().any(|peer| peer.address == *address)
+        self.peers.values().any(|peer| peer.peer_address == *address)
     }
 
     /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)
     fn inbound_peer_count(&self) -> usize {
         self.peers
             .iter()
-            .filter(|(peer_id, peer)| match peer.peer_role {
-                PeerRole::Inbound => !self.pending_disconnects.contains_key(peer_id),
-                PeerRole::OutboundFullRelay
-                | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual
-                | PeerRole::Feeler => false,
+            .filter(|(peer_id, peer)| {
+                !peer.peer_role.is_outbound() && !self.pending_disconnects.contains_key(peer_id)
             })
             .count()
     }
@@ -1872,7 +1879,7 @@ where
             }
 
             // Advertise local address regularly
-            while next_time_resend_own_address < now {
+            while next_time_resend_own_address <= now {
                 self.resend_own_address_randomly();
 
                 // Pick a random outbound peer to resend the listening address to.

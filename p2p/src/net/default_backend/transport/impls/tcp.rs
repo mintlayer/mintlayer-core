@@ -19,7 +19,9 @@ use p2p_types::socket_address::SocketAddress;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    net::default_backend::transport::{PeerStream, TransportListener, TransportSocket},
+    net::default_backend::transport::{
+        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
+    },
     Result,
 };
 
@@ -110,7 +112,10 @@ impl TransportListener for TcpTransportListener {
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;
-        Ok((stream, SocketAddress::new(address)))
+
+        let address = SocketAddress::new(address);
+        debug_assert_eq!(stream.remote_address().ok(), Some(address));
+        Ok((stream, address))
     }
 
     fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
@@ -126,6 +131,16 @@ impl TransportListener for TcpTransportListener {
 pub type TcpTransportStream = TcpStream;
 
 impl PeerStream for TcpTransportStream {}
+
+impl ConnectedSocketInfo for TcpTransportStream {
+    fn local_address(&self) -> crate::Result<SocketAddress> {
+        Ok(SocketAddress::new(TcpStream::local_addr(self)?))
+    }
+
+    fn remote_address(&self) -> crate::Result<SocketAddress> {
+        Ok(SocketAddress::new(TcpStream::peer_addr(self)?))
+    }
+}
 
 #[cfg(test)]
 mod tests {

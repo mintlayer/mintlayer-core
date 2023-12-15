@@ -61,6 +61,15 @@ impl PeerRole {
         PeerRole::OutboundBlockRelay,
         PeerRole::OutboundManual,
     ];
+
+    pub fn is_outbound(&self) -> bool {
+        use PeerRole::*;
+
+        match self {
+            Inbound => false,
+            OutboundFullRelay | OutboundBlockRelay | OutboundManual | Feeler => true,
+        }
+    }
 }
 
 /// Peer information learned during handshaking
@@ -125,25 +134,31 @@ pub enum ConnectivityEvent {
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
-        address: SocketAddress,
+        peer_address: SocketAddress,
+
+        /// Bind address of this node's side of the connection.
+        bind_address: SocketAddress,
 
         /// Peer information
         peer_info: PeerInfo,
 
         /// Socket address of this node as seen by remote peer
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     },
 
     /// Inbound connection received
     InboundAccepted {
         /// Peer address
-        address: SocketAddress,
+        peer_address: SocketAddress,
+
+        /// Bind address of this node's side of the connection.
+        bind_address: SocketAddress,
 
         /// Peer information
         peer_info: PeerInfo,
 
         /// Socket address of this node as seen by remote peer
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
     },
 
     /// Outbound connection failed
@@ -152,7 +167,7 @@ pub enum ConnectivityEvent {
     // during handshake, an additional MisbehavedOnHandshake event will be produced.
     ConnectionError {
         /// Address that was dialed
-        address: SocketAddress,
+        peer_address: SocketAddress,
 
         /// Error that occurred
         error: P2pError,
@@ -184,7 +199,7 @@ pub enum ConnectivityEvent {
     // that happen during handshake as well.
     MisbehavedOnHandshake {
         /// Peer's address
-        address: SocketAddress,
+        peer_address: SocketAddress,
 
         /// Error that occurred
         error: P2pError,

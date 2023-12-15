@@ -89,7 +89,7 @@ pub enum PeerEvent {
         common_services: Services,
         user_agent: UserAgent,
         software_version: SemVer,
-        receiver_address: Option<PeerAddress>,
+        node_address_as_seen_by_peer: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
         /// For inbound connections that is what was received from remote peer.
@@ -129,7 +129,7 @@ pub enum HandshakeMessage {
         user_agent: UserAgent,
         software_version: SemVer,
 
-        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        /// Socket address of the remote peer as seen by the sending node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
 
         current_time: P2pTimestamp,
@@ -145,7 +145,7 @@ pub enum HandshakeMessage {
         user_agent: UserAgent,
         software_version: SemVer,
 
-        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        /// Socket address of the remote peer as seen by the sending node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
 
         current_time: P2pTimestamp,

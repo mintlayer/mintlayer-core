@@ -27,11 +27,11 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage},
     net::default_backend::{
-        transport::TransportSocket,
+        transport::{ConnectedSocketInfo, TransportSocket},
         types::{BackendEvent, PeerEvent},
     },
     protocol::{choose_common_protocol_version, ProtocolVersion},
-    types::{peer_address::PeerAddress, peer_id::PeerId},
+    types::peer_id::PeerId,
 };
 
 use super::{
@@ -62,9 +62,6 @@ pub struct Peer<T: TransportSocket> {
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
 
-    /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
-    receiver_address: Option<PeerAddress>,
-
     /// Channel sender for sending events to Backend
     peer_event_sender: mpsc::Sender<PeerEvent>,
 
@@ -91,7 +88,6 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
-        receiver_address: Option<PeerAddress>,
         peer_event_sender: mpsc::Sender<PeerEvent>,
         backend_event_receiver: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
@@ -105,7 +101,6 @@ where
             chain_config,
             p2p_config,
             socket,
-            receiver_address,
             peer_event_sender,
             backend_event_receiver,
             node_protocol_version,
@@ -156,6 +151,15 @@ where
 
     async fn handshake(&mut self) -> crate::Result<()> {
         let init_time = self.time_getter.get_time();
+        let peer_address = self.socket.inner_stream().remote_address()?;
+
+        // Sending the remote socket address makes no sense and can leak private information when using a proxy
+        let peer_address_to_send = if self.p2p_config.socks5_proxy.is_some() {
+            None
+        } else {
+            Some(peer_address.as_peer_address())
+        };
+
         match self.connection_info {
             ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
@@ -164,7 +168,7 @@ where
                     services: remote_services,
                     user_agent,
                     software_version,
-                    receiver_address,
+                    receiver_address: node_address_as_seen_by_peer,
                     current_time: remote_time,
                     handshake_nonce,
                 }) = self.socket.recv().await?
@@ -192,7 +196,7 @@ where
                         common_services,
                         user_agent,
                         software_version,
-                        receiver_address,
+                        node_address_as_seen_by_peer,
                         handshake_nonce,
                     })
                     .await?;
@@ -204,7 +208,7 @@ where
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
                         services: (*self.p2p_config.node_type).into(),
-                        receiver_address: self.receiver_address.clone(),
+                        receiver_address: peer_address_to_send,
                         current_time: P2pTimestamp::from_time(self.time_getter.get_time()),
                     }))
                     .await?;
@@ -223,7 +227,7 @@ where
                         services: local_services,
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
-                        receiver_address: self.receiver_address.clone(),
+                        receiver_address: peer_address_to_send,
                         current_time: P2pTimestamp::from_time(init_time),
                         handshake_nonce,
                     }))
@@ -235,7 +239,7 @@ where
                     user_agent,
                     software_version,
                     services: remote_services,
-                    receiver_address,
+                    receiver_address: node_address_as_seen_by_peer,
                     current_time: remote_time,
                 }) = self.socket.recv().await?
                 else {
@@ -257,7 +261,7 @@ where
                         common_services,
                         user_agent,
                         software_version,
-                        receiver_address,
+                        node_address_as_seen_by_peer,
                         handshake_nonce,
                     })
                     .await?;
@@ -443,7 +447,6 @@ mod tests {
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
-            None,
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
@@ -481,7 +484,7 @@ mod tests {
                 common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: *chain_config.software_version(),
-                receiver_address: None,
+                node_address_as_seen_by_peer: None,
                 handshake_nonce: 123,
             }
         );
@@ -528,7 +531,6 @@ mod tests {
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
-            None,
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
@@ -565,7 +567,7 @@ mod tests {
                 common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: *chain_config.software_version(),
-                receiver_address: None,
+                node_address_as_seen_by_peer: None,
                 handshake_nonce: 1,
             })
         );
@@ -609,7 +611,6 @@ mod tests {
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
-            None,
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
@@ -676,7 +677,6 @@ mod tests {
             chain_config,
             Arc::clone(&p2p_config),
             socket1,
-            None,
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
@@ -792,7 +792,6 @@ mod tests {
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
-            None,
             tx1,
             rx2,
             TEST_PROTOCOL_VERSION.into(),

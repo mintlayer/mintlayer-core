@@ -18,5 +18,5 @@ mod socket;
 mod stream;
 
 pub use listener::TransportListener;
-pub use socket::TransportSocket;
+pub use socket::{ConnectedSocketInfo, TransportSocket};
 pub use stream::PeerStream;

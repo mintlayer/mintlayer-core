@@ -18,12 +18,16 @@ use p2p_types::socket_address::SocketAddress;
 
 use crate::Result;
 
+use super::{ConnectedSocketInfo, PeerStream};
+
 /// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
 #[async_trait]
 pub trait TransportListener: Send {
-    type Stream;
+    type Stream: PeerStream + ConnectedSocketInfo;
 
     /// Accepts a new inbound connection.
+    ///
+    /// The returned address is the same as the one returned by `Stream::remote_address`.
     async fn accept(&mut self) -> Result<(Self::Stream, SocketAddress)>;
 
     /// Returns the local address of the listener.

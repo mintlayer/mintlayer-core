@@ -30,7 +30,7 @@ pub struct BufferedTranscoder<S> {
     message_codec: MessageCodec<Message>,
 }
 
-impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
+impl<S> BufferedTranscoder<S> {
     pub fn new(stream: S, max_message_size: usize) -> BufferedTranscoder<S> {
         let message_codec = MessageCodec::new(max_message_size);
         BufferedTranscoder {
@@ -40,6 +40,15 @@ impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
         }
     }
 
+    /// The inner stream. This is only accessible as an immutable reference, so it'll allow
+    /// to read some additional info that the concrete stream might provide, but won't allow
+    /// reading or writing the actual stream data.
+    pub fn inner_stream(&self) -> &S {
+        &self.stream
+    }
+}
+
+impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
     pub async fn send(&mut self, msg: Message) -> Result<()> {
         let mut buf = BytesMut::new();
         self.message_codec.encode(msg, &mut buf)?;

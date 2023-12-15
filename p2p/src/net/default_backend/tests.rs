@@ -92,12 +92,13 @@ async fn connect_to_remote_impl<A, T>(
     local_srv.connect(addr[0], None).unwrap();
 
     if let Ok(ConnectivityEvent::OutboundAccepted {
-        address,
+        peer_address,
+        bind_address: _,
         peer_info,
-        receiver_address: _,
+        node_address_as_seen_by_peer: _,
     }) = local_srv.poll_next().await
     {
-        assert_eq!(address, remote_srv.local_addresses()[0]);
+        assert_eq!(peer_address, remote_srv.local_addresses()[0]);
         let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
         assert_eq!(protocol_version, expected_common_protocol_version);
         assert_eq!(peer_info.network, *config.magic_bytes());
@@ -185,9 +186,10 @@ async fn accept_incoming_impl<A, T>(
     let res = local_srv.poll_next().await;
     match res.unwrap() {
         ConnectivityEvent::InboundAccepted {
-            address: _,
+            peer_address: _,
+            bind_address: _,
             peer_info,
-            receiver_address: _,
+            node_address_as_seen_by_peer: _,
         } => {
             let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
             assert_eq!(protocol_version, expected_common_protocol_version);
@@ -272,9 +274,10 @@ where
 
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
-            address: _,
+            peer_address: _,
+            bind_address: _,
             peer_info,
-            receiver_address: _,
+            node_address_as_seen_by_peer: _,
         } => {
             conn2.disconnect(peer_info.peer_id).unwrap();
         }
@@ -345,8 +348,12 @@ where
     conn1.connect(addr[0], None).unwrap();
 
     // ConnectionError should be reported
-    if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
-        assert_eq!(address, conn1.local_addresses()[0]);
+    if let Ok(ConnectivityEvent::ConnectionError {
+        peer_address,
+        error,
+    }) = conn1.poll_next().await
+    {
+        assert_eq!(peer_address, conn1.local_addresses()[0]);
         assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
     } else {
         panic!("invalid event received");
@@ -356,12 +363,13 @@ where
     let addr = conn2.local_addresses();
     conn1.connect(addr[0], None).unwrap();
     if let Ok(ConnectivityEvent::OutboundAccepted {
-        address,
+        peer_address,
+        bind_address: _,
         peer_info,
-        receiver_address: _,
+        node_address_as_seen_by_peer: _,
     }) = conn1.poll_next().await
     {
-        assert_eq!(address, conn2.local_addresses()[0]);
+        assert_eq!(peer_address, conn2.local_addresses()[0]);
         assert_eq!(
             peer_info.protocol_version,
             get_preferred_protocol_version_for_tests()
@@ -431,8 +439,11 @@ where
     let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
 
     match event {
-        ConnectivityEvent::ConnectionError { address, error: _ } => {
-            assert_eq!(address, addr[0]);
+        ConnectivityEvent::ConnectionError {
+            peer_address,
+            error: _,
+        } => {
+            assert_eq!(peer_address, addr[0]);
         }
         event => panic!("invalid event received: {event:?}"),
     }
@@ -511,11 +522,12 @@ async fn general_protocol_version_selection_impl<A, T>(
     let res1 = srv1.poll_next().await;
     match res1.unwrap() {
         ConnectivityEvent::OutboundAccepted {
-            address,
+            peer_address,
+            bind_address: _,
             peer_info,
-            receiver_address: _,
+            node_address_as_seen_by_peer: _,
         } => {
-            assert_eq!(address, srv2.local_addresses()[0]);
+            assert_eq!(peer_address, srv2.local_addresses()[0]);
             let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
             assert_eq!(protocol_version, expected_common_protocol_version);
             assert_eq!(peer_info.network, *config.magic_bytes());
@@ -529,9 +541,10 @@ async fn general_protocol_version_selection_impl<A, T>(
     let res2 = srv2.poll_next().await;
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
-            address: _,
+            peer_address: _,
+            bind_address: _,
             peer_info,
-            receiver_address: _,
+            node_address_as_seen_by_peer: _,
         } => {
             let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
             assert_eq!(protocol_version, expected_common_protocol_version);

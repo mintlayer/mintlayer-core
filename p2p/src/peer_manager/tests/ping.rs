@@ -33,7 +33,9 @@ use crate::{
         tests::{send_and_sync, utils::cmd_to_peer_man_msg},
         PeerManager,
     },
-    testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
+    testing_utils::{
+        peerdb_inmemory_store, TestTransportMaker, TestTransportTcp, TEST_PROTOCOL_VERSION,
+    },
     types::peer_id::PeerId,
     PeerManagerEvent,
 };
@@ -74,8 +76,12 @@ async fn ping_timeout() {
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let connectivity_handle =
-        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
+    let bind_address = TestTransportTcp::make_address();
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
+        vec![bind_address],
+        cmd_sender,
+        conn_event_receiver,
+    );
 
     let peer_manager = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
@@ -94,7 +100,8 @@ async fn ping_timeout() {
     // Notify about new inbound connection
     conn_event_sender
         .send(ConnectivityEvent::InboundAccepted {
-            address: "123.123.123.123:12345".parse().unwrap(),
+            peer_address: "123.123.123.123:12345".parse().unwrap(),
+            bind_address,
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
                 protocol_version: TEST_PROTOCOL_VERSION,
@@ -103,7 +110,7 @@ async fn ping_timeout() {
                 user_agent: p2p_config.user_agent.clone(),
                 common_services: NodeType::Full.into(),
             },
-            receiver_address: None,
+            node_address_as_seen_by_peer: None,
         })
         .unwrap();
 

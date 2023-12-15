@@ -19,6 +19,8 @@ use std::{
     time::Duration,
 };
 
+use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver};
+
 use common::{
     chain::{self, config},
     primitives::user_agent::mintlayer_core_user_agent,
@@ -26,7 +28,6 @@ use common::{
 use p2p_test_utils::{expect_future_val, expect_no_recv, P2pBasicTestTimeGetter};
 use p2p_types::socket_address::SocketAddress;
 use test_utils::assert_matches;
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver};
 
 use crate::{
     config::NodeType,
@@ -46,7 +47,7 @@ use crate::{
     },
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TEST_PROTOCOL_VERSION,
+        TestTransportMaker, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     tests::helpers::TestDnsSeed,
     types::peer_id::PeerId,
@@ -60,14 +61,14 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr = A::make_address();
+    let bind_address = A::make_address();
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
     let (mut pm, _peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) =
         make_peer_manager_custom::<T>(
             A::make_transport(),
-            addr,
+            bind_address,
             Arc::clone(&config),
             p2p_config,
             time_getter.get_time_getter(),
@@ -84,7 +85,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     };
-    pm.accept_connection(address, Role::Inbound, peer_info, None);
+    pm.accept_connection(address, bind_address, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
 
     let get_new_public_address = || loop {
@@ -133,6 +134,7 @@ async fn test_address_rate_limiter_channels() {
 fn test_addr_list_handling_inbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
+    let bind_address = TestTransportTcp::make_address();
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -164,6 +166,7 @@ fn test_addr_list_handling_inbound() {
     };
     pm.accept_connection(
         TestAddressMaker::new_random_address(),
+        bind_address,
         Role::Inbound,
         peer_info,
         None,
@@ -217,6 +220,7 @@ fn test_addr_list_handling_inbound() {
 fn test_addr_list_handling_outbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
+    let bind_address = TestTransportTcp::make_address();
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -263,7 +267,7 @@ fn test_addr_list_handling_outbound() {
         v => panic!("unexpected result: {v:?}"),
     }
 
-    pm.accept_connection(peer_address, Role::Outbound, peer_info, None);
+    pm.accept_connection(peer_address, bind_address, Role::Outbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
@@ -316,8 +320,8 @@ async fn resend_own_addresses() {
         vec!["1.2.3.4:3031".parse().unwrap(), "[2001:bc8:1600::1]:3031".parse().unwrap()];
 
     // Outbound connections normally use random ports
-    let outbound_address_1: std::net::SocketAddr = "1.2.3.4:12345".parse().unwrap();
-    let outbound_address_2: std::net::SocketAddr = "[2001:bc8:1600::1]:23456".parse().unwrap();
+    let outbound_addresses: Vec<SocketAddress> =
+        vec!["1.2.3.4:12345".parse().unwrap(), "[2001:bc8:1600::1]:23456".parse().unwrap()];
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
@@ -365,13 +369,15 @@ async fn resend_own_addresses() {
             }
         ) {}
 
-        let own_ip = if peer_index % 2 == 0 {
-            outbound_address_1
-        } else {
-            outbound_address_2
-        };
+        let addr_idx = peer_index % 2;
 
-        pm.accept_connection(peer_address, Role::Outbound, peer_info, Some(own_ip.into()));
+        pm.accept_connection(
+            peer_address,
+            listening_addresses[addr_idx],
+            Role::Outbound,
+            peer_info,
+            Some(outbound_addresses[addr_idx].as_peer_address()),
+        );
     }
     assert_eq!(pm.peers.len(), peer_count);
 

@@ -31,11 +31,20 @@ pub trait TransportSocket: Send + Sync + 'static {
     type Listener: TransportListener<Stream = Self::Stream>;
 
     /// A messages stream.
-    type Stream: PeerStream;
+    type Stream: PeerStream + ConnectedSocketInfo;
 
     /// Creates a new listener bound to the specified address.
     async fn bind(&self, address: Vec<SocketAddress>) -> Result<Self::Listener>;
 
     /// Returns a future that opens a connection to the given address.
     fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>>;
+}
+
+/// Additional information for a connected socket.
+pub trait ConnectedSocketInfo {
+    /// Local socket address.
+    fn local_address(&self) -> crate::Result<SocketAddress>;
+
+    /// Remote socket address.
+    fn remote_address(&self) -> crate::Result<SocketAddress>;
 }

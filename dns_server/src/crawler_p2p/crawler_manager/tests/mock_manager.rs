@@ -42,7 +42,7 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
-    testing_utils::TEST_PROTOCOL_VERSION,
+    testing_utils::{TestAddressMaker, TEST_PROTOCOL_VERSION},
     types::{
         bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
         peer_id::PeerId, services::Services, socket_address::SocketAddress,
@@ -81,6 +81,7 @@ pub struct MockStateRef {
     pub connected: Arc<Mutex<BTreeMap<SocketAddress, PeerId>>>,
     pub connection_attempts: Arc<Mutex<Vec<SocketAddress>>>,
     pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
+    pub bind_address: SocketAddress,
 }
 
 impl MockStateRef {
@@ -182,7 +183,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 self.state
                     .conn_tx
                     .send(ConnectivityEvent::ConnectionError {
-                        address,
+                        peer_address: address,
                         error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                     })
                     .unwrap();
@@ -192,13 +193,13 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                     let conn_event = match event {
                         ErraticNodeConnectError::ConnectionError(error) => {
                             ConnectivityEvent::ConnectionError {
-                                address,
+                                peer_address: address,
                                 error: error.clone(),
                             }
                         }
                         ErraticNodeConnectError::MisbehavedOnHandshake(error) => {
                             ConnectivityEvent::MisbehavedOnHandshake {
-                                address,
+                                peer_address: address,
                                 error: error.clone(),
                             }
                         }
@@ -222,9 +223,10 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 self.state
                     .conn_tx
                     .send(ConnectivityEvent::OutboundAccepted {
-                        address,
+                        peer_address: address,
+                        bind_address: self.state.bind_address,
                         peer_info,
-                        receiver_address: None,
+                        node_address_as_seen_by_peer: None,
                     })
                     .unwrap();
             }
@@ -303,6 +305,7 @@ pub fn test_crawler(
         connected: Default::default(),
         connection_attempts: Default::default(),
         conn_tx,
+        bind_address: TestAddressMaker::new_random_address(),
     };
 
     let conn = MockConnectivityHandle {
