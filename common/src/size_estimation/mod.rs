@@ -13,7 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::{Destination, SignedTransaction, Transaction, TxOutput};
+use crypto::key::PrivateKey;
+use serialization::Encode;
+
+use crate::chain::{
+    signature::{
+        inputsig::{
+            authorize_pubkey_spend::AuthorizedPublicKeySpend,
+            authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
+            standard_signature::StandardInputSignature, InputWitness,
+        },
+        sighash::sighashtype::SigHashType,
+    },
+    Destination, SignedTransaction, Transaction, TxOutput,
+};
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -27,15 +40,42 @@ pub fn input_signature_size(txo: &TxOutput) -> Result<usize, SizeEstimationError
     get_tx_output_destination(txo).map_or(Ok(0), input_signature_size_from_destination)
 }
 
+fn no_signature_size() -> usize {
+    InputWitness::NoSignature(None).encoded_size()
+}
+
+fn public_key_signature_size() -> usize {
+    let (private_key, _) = PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
+    let signature = private_key.sign_message(&[0; 32]).expect("should not fail");
+    let raw_signature = AuthorizedPublicKeySpend::new(signature).encode();
+    let standard = StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+        raw_signature,
+    );
+    InputWitness::Standard(standard).encoded_size()
+}
+
+fn address_signature_size() -> usize {
+    let (private_key, public_key) =
+        PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
+    let signature = private_key.sign_message(&[0; 32]).expect("should not fail");
+    let raw_signature = AuthorizedPublicKeyHashSpend::new(public_key, signature).encode();
+    let standard = StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+        raw_signature,
+    );
+    InputWitness::Standard(standard).encoded_size()
+}
+
 /// Return the encoded size of an input signature
 pub fn input_signature_size_from_destination(
     destination: &Destination,
 ) -> Result<usize, SizeEstimationError> {
     // Sizes calculated upfront
     match destination {
-        Destination::Address(_) => Ok(103),
-        Destination::PublicKey(_) => Ok(69),
-        Destination::AnyoneCanSpend => Ok(2),
+        Destination::Address(_) => Ok(address_signature_size()),
+        Destination::PublicKey(_) => Ok(public_key_signature_size()),
+        Destination::AnyoneCanSpend => Ok(no_signature_size()),
         Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => Err(
             SizeEstimationError::UnsupportedInputDestination(destination.clone()),
         ),
