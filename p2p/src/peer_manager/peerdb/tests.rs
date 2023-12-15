@@ -526,12 +526,12 @@ fn new_tried_addr_selection_frequency() {
             peerdb.address_tables.set_should_check_consistency(false);
 
             let new_addrs = make_non_colliding_addresses(
-                peerdb.address_tables.new_addr_table(),
+                &[peerdb.address_tables.new_addr_table()],
                 new_addr_count,
                 &mut rng,
             );
             let tried_addrs = make_non_colliding_addresses(
-                peerdb.address_tables.tried_addr_table(),
+                &[peerdb.address_tables.tried_addr_table()],
                 tried_addr_count,
                 &mut rng,
             );

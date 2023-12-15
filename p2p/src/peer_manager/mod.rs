@@ -515,7 +515,7 @@ where
             None => return,
         };
 
-        if self.is_whitelisted_node(peer.peer_role, &peer.address) {
+        if self.is_whitelisted_node(peer.peer_role, &peer.peer_address) {
             log::info!(
                 "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
             );

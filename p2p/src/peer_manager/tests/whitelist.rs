@@ -22,7 +22,7 @@ use crate::{
         types::{PeerInfo, PeerRole, Role},
     },
     peer_manager::{
-        peerdb::{storage::PeerDbStorageWrite, RandomKey, StorageVersion},
+        peerdb::{salt::Salt, storage::PeerDbStorageWrite, StorageVersion},
         peerdb_common::storage::{TransactionRw, Transactional},
         tests::make_peer_manager_custom,
         PeerManager,
@@ -111,7 +111,13 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_connection(address, Role::Inbound, peer_info, None);
+    pm2.accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info,
+        None,
+    );
 
     assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
 
@@ -196,7 +202,7 @@ where
 
         let mut tx = db.transaction_rw().unwrap();
         tx.set_version(StorageVersion::new(2)).unwrap();
-        tx.set_addr_tables_random_key(RandomKey::new_random()).unwrap();
+        tx.set_salt(Salt::new_random()).unwrap();
         tx.add_banned_address(&BannableAddress::new(addr1.ip_addr()), ban_until)
             .unwrap();
         tx.commit().unwrap();
@@ -218,7 +224,13 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    pm2.accept_connection(address, Role::Inbound, peer_info, None);
+    pm2.accept_connection(
+        address,
+        pm2.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info,
+        None,
+    );
 
     // address is whitelisted and still banned
     assert!(pm2.peerdb.is_address_banned(&addr1.as_bannable()));
@@ -260,6 +272,7 @@ async fn no_automatic_unban_for_whitelisted_noise() {
 fn manual_ban_overrides_whitelisting() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
     let address_1 = TestAddressMaker::new_random_address();
+    let address_2 = TestAddressMaker::new_random_address();
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![address_1.ip_addr()]));
@@ -267,8 +280,11 @@ fn manual_ban_overrides_whitelisting() {
     let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let connectivity_handle =
-        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_receiver);
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
+        vec![address_2],
+        cmd_sender,
+        conn_receiver,
+    );
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
@@ -289,7 +305,13 @@ fn manual_ban_overrides_whitelisting() {
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     };
-    pm.accept_connection(address_1, Role::Inbound, peer_info, None);
+    pm.accept_connection(
+        address_1,
+        pm.peer_connectivity_handle.local_addresses()[0],
+        Role::Inbound,
+        peer_info,
+        None,
+    );
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
