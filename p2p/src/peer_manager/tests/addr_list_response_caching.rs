@@ -252,6 +252,7 @@ fn make_p2p_config() -> P2pConfig {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -296,7 +297,7 @@ fn setup_peer_mgr(
     .unwrap();
 
     let addresses_in_db = make_non_colliding_addresses(
-        peer_mgr.peerdb.address_tables().new_addr_table(),
+        &[peer_mgr.peerdb.address_tables().new_addr_table()],
         *p2p_config.protocol_config.max_addr_list_response_address_count * 10,
         rng,
     );
