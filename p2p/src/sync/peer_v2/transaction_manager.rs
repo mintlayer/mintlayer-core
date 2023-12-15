@@ -75,7 +75,7 @@ pub struct PeerTransactionSyncManager<T: NetworkingService> {
     /// received a response yet.
     requested_transactions: RequestedTransactions,
     /// Txs aren't relayed immediately but rather put into a collection to be propagated later
-    /// with random delay to avoid tracking
+    /// with random delay to make tracing transactions' origin harder
     pending_transactions: PendingTransactions,
     /// SyncManager's observer for use by tests.
     observer: Option<BoxedObserver>,
