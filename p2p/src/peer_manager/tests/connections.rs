@@ -49,8 +49,8 @@ use crate::{
     },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
+        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -1118,11 +1118,20 @@ async fn feeler_connections_test_impl(seed: Seed) {
     )
     .unwrap();
 
-    let mut addresses = BTreeSet::new();
-    for _ in 0..10 {
-        let addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
-        peer_mgr.peerdb.peer_discovered(addr);
-        addresses.insert(addr);
+    // Note: need to make sure that the generated addresses won't collide with each other when
+    // put into either of the tables. Otherwise the checks below will fail, e.g. when a previously
+    // "tried" address gets moved back into "new".
+    let addresses = peerdb::test_utils::make_non_colliding_addresses(
+        &[
+            peer_mgr.peerdb.address_tables().new_addr_table(),
+            peer_mgr.peerdb.address_tables().tried_addr_table(),
+        ],
+        10,
+        &mut rng,
+    );
+    let mut addresses = BTreeSet::from_iter(addresses.into_iter());
+    for addr in &addresses {
+        peer_mgr.peerdb.peer_discovered(*addr);
     }
     // All the addresses are in the "new" table and none are in "tried".
     let peerdb_new_addresses = new_addr_table_as_set(&peer_mgr.peerdb);
@@ -1266,19 +1275,9 @@ async fn feeler_connections_test_impl(seed: Seed) {
     let peer_mgr = peer_mgr_join_handle.await.unwrap();
 
     let peerdb_new_addresses = new_addr_table_as_set(&peer_mgr.peerdb);
-    let unsuccessful_conn_addresses = peerdb::test_utils::filter_out_collisions(
-        peer_mgr.peerdb.address_tables().new_addr_table(),
-        unsuccessful_conn_addresses.iter().copied(),
-    )
-    .collect();
     assert_eq!(peerdb_new_addresses, unsuccessful_conn_addresses);
 
     let peerdb_tried_addresses = tried_addr_table_as_set(&peer_mgr.peerdb);
-    let successful_conn_addresses = peerdb::test_utils::filter_out_collisions(
-        peer_mgr.peerdb.address_tables().tried_addr_table(),
-        successful_conn_addresses.iter().copied(),
-    )
-    .collect();
     assert_eq!(peerdb_tried_addresses, successful_conn_addresses);
 }
 

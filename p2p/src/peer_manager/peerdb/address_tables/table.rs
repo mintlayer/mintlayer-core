@@ -281,7 +281,7 @@ pub mod test_utils {
     }
 
     pub fn make_non_colliding_addresses(
-        table: &Table,
+        tables: &[&Table],
         count: usize,
         rng: &mut impl Rng,
     ) -> Vec<SocketAddress> {
@@ -290,11 +290,13 @@ pub mod test_utils {
         while map.len() < count {
             let addr = make_random_address(rng);
 
-            let bucket_idx = table.bucket_idx(&addr);
-            let bucket_pos = table.bucket_pos(&addr, bucket_idx);
+            for (table_idx, table) in tables.iter().enumerate() {
+                let bucket_idx = table.bucket_idx(&addr);
+                let bucket_pos = table.bucket_pos(&addr, bucket_idx);
 
-            if let Entry::Vacant(entry) = map.entry((bucket_idx, bucket_pos)) {
-                entry.insert(addr);
+                if let Entry::Vacant(entry) = map.entry((table_idx, bucket_idx, bucket_pos)) {
+                    entry.insert(addr);
+                }
             }
         }
 
@@ -496,7 +498,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
 
-        let addrs = make_non_colliding_addresses(&table, 4, &mut rng);
+        let addrs = make_non_colliding_addresses(&[&table], 4, &mut rng);
 
         assert_eq!(*table.get_or_create_entry(&addrs[0]), addrs[0]);
         assert_eq!(*table.get_or_create_entry(&addrs[1]), addrs[1]);
@@ -513,7 +515,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let mut table = Table::new_generic(2, 2, RandomKey(0), 4);
 
-        let addrs = make_non_colliding_addresses(&table, 2, &mut rng);
+        let addrs = make_non_colliding_addresses(&[&table], 2, &mut rng);
 
         assert_eq!(table.next_id(), 0);
 

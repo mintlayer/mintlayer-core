@@ -245,8 +245,9 @@ fn remove_addr(#[case] seed: Seed) {
 
     let addr_count = 10;
 
-    let new_addrs = make_non_colliding_addresses(new_addr_table(&peerdb), addr_count, &mut rng);
-    let tried_addrs = make_non_colliding_addresses(tried_addr_table(&peerdb), addr_count, &mut rng);
+    let new_addrs = make_non_colliding_addresses(&[new_addr_table(&peerdb)], addr_count, &mut rng);
+    let tried_addrs =
+        make_non_colliding_addresses(&[tried_addr_table(&peerdb)], addr_count, &mut rng);
 
     let (new_addrs_to_remove, new_addrs_to_keep) = split_in_two_sets(&new_addrs, &mut rng);
     let (tried_addrs_to_remove, tried_addrs_to_keep) = split_in_two_sets(&tried_addrs, &mut rng);
@@ -305,8 +306,9 @@ fn remove_unreachable(#[case] seed: Seed) {
 
     let addr_count = 10;
 
-    let new_addrs = make_non_colliding_addresses(new_addr_table(&peerdb), addr_count, &mut rng);
-    let tried_addrs = make_non_colliding_addresses(tried_addr_table(&peerdb), addr_count, &mut rng);
+    let new_addrs = make_non_colliding_addresses(&[new_addr_table(&peerdb)], addr_count, &mut rng);
+    let tried_addrs =
+        make_non_colliding_addresses(&[tried_addr_table(&peerdb)], addr_count, &mut rng);
     let tried_addrs_as_set = tried_addrs.iter().copied().collect::<BTreeSet<_>>();
 
     for addr in &new_addrs {
