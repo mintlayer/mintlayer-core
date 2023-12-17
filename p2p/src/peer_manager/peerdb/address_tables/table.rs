@@ -89,10 +89,15 @@ impl Table {
         (hash % self.buckets.cols_count() as u64) as usize
     }
 
-    /// Get the table "entry" corresponding to the passed address.
-    pub fn entry(&self, addr: &SocketAddress) -> Option<&SocketAddress> {
+    fn bucket_coords(&self, addr: &SocketAddress) -> (usize, usize) {
         let bucket_idx = self.bucket_idx(addr);
         let bucket_pos = self.bucket_pos(addr, bucket_idx);
+        (bucket_idx, bucket_pos)
+    }
+
+    /// Get the table "entry" corresponding to the passed address.
+    pub fn entry(&self, addr: &SocketAddress) -> Option<&SocketAddress> {
+        let (bucket_idx, bucket_pos) = self.bucket_coords(addr);
         let entry_id = self.buckets[bucket_idx][bucket_pos];
         // No need to check if the id is less than id_max; if it's not,
         // it won't be in the table.
@@ -103,8 +108,7 @@ impl Table {
     // Note: the caller must make sure that the address that will be written to
     // the returned location has the same "bucket coordinates" as the passed address.
     fn get_or_create_entry(&mut self, addr: &SocketAddress) -> &mut SocketAddress {
-        let bucket_idx = self.bucket_idx(addr);
-        let bucket_pos = self.bucket_pos(addr, bucket_idx);
+        let (bucket_idx, bucket_pos) = self.bucket_coords(addr);
 
         if self.buckets[bucket_idx][bucket_pos] >= self.id_max {
             self.buckets[bucket_idx][bucket_pos] = self.allocate_id();
@@ -114,8 +118,7 @@ impl Table {
     }
 
     pub fn remove(&mut self, addr: &SocketAddress) {
-        let bucket_idx = self.bucket_idx(addr);
-        let bucket_pos = self.bucket_pos(addr, bucket_idx);
+        let (bucket_idx, bucket_pos) = self.bucket_coords(addr);
         let entry_id_ref = &mut self.buckets[bucket_idx][bucket_pos];
 
         match self.addresses.entry(*entry_id_ref) {
@@ -233,8 +236,7 @@ impl Table {
                 for (bucket_pos, id) in bucket.iter().enumerate() {
                     if *id < self.id_max {
                         let addr = self.addresses.get(id).expect("Id must be in the map");
-                        let actual_bucket_idx = self.bucket_idx(addr);
-                        let actual_bucket_pos = self.bucket_pos(addr, actual_bucket_idx);
+                        let (actual_bucket_idx, actual_bucket_pos) = self.bucket_coords(addr);
                         assert_eq!(actual_bucket_idx, bucket_idx);
                         assert_eq!(actual_bucket_pos, bucket_pos);
 
@@ -278,23 +280,33 @@ pub mod test_utils {
         count: usize,
         rng: &mut impl Rng,
     ) -> Vec<SocketAddress> {
-        let mut map = BTreeMap::new();
+        assert!(count != 0);
 
-        while map.len() < count {
+        let mut idx_set = BTreeSet::new();
+        let mut result = Vec::with_capacity(count);
+
+        loop {
             let addr = make_random_address(rng);
 
-            for (table_idx, table) in tables.iter().enumerate() {
-                let bucket_idx = table.bucket_idx(&addr);
-                let bucket_pos = table.bucket_pos(&addr, bucket_idx);
+            let non_colliding = tables.iter().enumerate().all(|(table_idx, table)| {
+                let (bucket_idx, bucket_pos) = table.bucket_coords(&addr);
+                idx_set.get(&(table_idx, bucket_idx, bucket_pos)).is_none()
+            });
 
-                if let Entry::Vacant(entry) = map.entry((table_idx, bucket_idx, bucket_pos)) {
-                    entry.insert(addr);
+            if non_colliding {
+                result.push(addr);
+
+                if result.len() == count {
+                    break;
+                }
+
+                for (table_idx, table) in tables.iter().enumerate() {
+                    let (bucket_idx, bucket_pos) = table.bucket_coords(&addr);
+                    idx_set.insert((table_idx, bucket_idx, bucket_pos));
                 }
             }
         }
 
-        let result = map.values().copied().collect::<Vec<_>>();
-        assert_eq!(result.len(), count);
         result
     }
 
@@ -305,8 +317,7 @@ pub mod test_utils {
         let mut map = BTreeMap::new();
 
         for addr in addresses {
-            let bucket_idx = table.bucket_idx(&addr);
-            let bucket_pos = table.bucket_pos(&addr, bucket_idx);
+            let (bucket_idx, bucket_pos) = table.bucket_coords(&addr);
 
             if let Entry::Vacant(entry) = map.entry((bucket_idx, bucket_pos)) {
                 entry.insert(addr);
@@ -317,16 +328,13 @@ pub mod test_utils {
     }
 
     pub fn make_colliding_address(table: &Table, addr: &SocketAddress) -> SocketAddress {
-        let bucket_idx = table.bucket_idx(addr);
-        let bucket_pos = table.bucket_pos(addr, bucket_idx);
+        let (bucket_idx, bucket_pos) = table.bucket_coords(addr);
 
         const MAX_ATTEMPTS: u32 = 1_000_000;
 
         for i in 0..MAX_ATTEMPTS {
             let other_addr = SocketAddress::new(SocketAddr::V4(SocketAddrV4::new(i.into(), 0)));
-
-            let other_bucket_idx = table.bucket_idx(&other_addr);
-            let other_bucket_pos = table.bucket_pos(&other_addr, other_bucket_idx);
+            let (other_bucket_idx, other_bucket_pos) = table.bucket_coords(&other_addr);
 
             if (other_bucket_idx, other_bucket_pos) == (bucket_idx, bucket_pos) {
                 return other_addr;
