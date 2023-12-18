@@ -666,7 +666,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
                     FROM ml_delegations
                     WHERE spend_destination = $1
-                )
+                ) AS sub
                 WHERE newest = 1;
                 "#,
                 &[&address.encode()],
@@ -895,7 +895,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT pool_id, data, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height) as oldest
                     FROM ml_pool_data
-                )
+                ) AS sub
                 WHERE oldest = 1
                 ORDER BY block_height DESC
                 OFFSET $1
@@ -941,7 +941,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT pool_id, data, pledge_amount, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
                     FROM ml_pool_data
-                )
+                ) AS sub
                 WHERE newest = 1
                 ORDER BY pledge_amount DESC
                 OFFSET $1
@@ -1161,7 +1161,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
                     FROM ml_utxo
                     WHERE address = $1
-                )
+                ) AS sub
                 WHERE newest = 1 AND spent = false;"#,
                 &[&address],
             )

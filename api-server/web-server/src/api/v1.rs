@@ -117,12 +117,14 @@ async fn get_block(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_block(block_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -238,12 +240,14 @@ pub async fn chain_at_height<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_main_chain_block_id(block_height)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -274,12 +278,14 @@ async fn best_block<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_best_block()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })
 }
@@ -304,12 +310,14 @@ async fn get_transaction(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_transaction_with_block(transaction_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -452,12 +460,14 @@ pub async fn address<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -468,12 +478,14 @@ pub async fn address<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_transactions(&address.to_string())
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -511,12 +523,14 @@ pub async fn address_utxos<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_available_utxos(&address.to_string())
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -545,14 +559,16 @@ pub async fn address_delegations<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_delegations_from_address(
             &address.decode_object(&state.chain_config).expect("already checked"),
         )
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -626,16 +642,19 @@ pub async fn pools<T: ApiServerStorage>(
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
 
-    let db_tx = state.db.transaction_ro().await.map_err(|_| {
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
     let pools = match sort {
-        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|_| {
+        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?,
         PoolSorting::ByPledge => {
-            db_tx.get_pool_data_with_largest_pledge(items, offset).await.map_err(|_| {
+            db_tx.get_pool_data_with_largest_pledge(items, offset).await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
                     ApiServerWebServerServerError::InternalServerError,
                 )
@@ -675,12 +694,14 @@ pub async fn pool<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_pool_data(pool_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -713,12 +734,14 @@ pub async fn pool_delegations<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_pool_delegations(pool_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -752,12 +775,14 @@ pub async fn delegation<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_delegation(delegation_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -790,12 +815,14 @@ pub async fn token<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_fungible_token_issuance(token_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -829,12 +856,14 @@ pub async fn nft<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_nft_token_issuance(nft_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
