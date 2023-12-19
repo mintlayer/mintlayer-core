@@ -1094,7 +1094,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .scan(0, |accumulated_size, (score, size)| {
                 *accumulated_size += size;
 
-                Some((*accumulated_size, score))
+                Some((*accumulated_size, *score))
             })
             .collect();
 
@@ -1111,7 +1111,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             points
                 .into_iter()
                 .map(|point| {
-                    let score = feerate_points::get_closest_value(&size_to_score, point)
+                    let score = feerate_points::find_interpolated_value(&size_to_score, point)
                         .expect("not empty");
                     score.to_feerate(min_feerate).map(|feerate| (point, feerate))
                 })

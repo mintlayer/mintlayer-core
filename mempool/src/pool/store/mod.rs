@@ -58,13 +58,13 @@ newtype! {
 }
 
 newtype! {
-    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
     pub struct DescendantScore(Fee);
 }
 
 impl DescendantScore {
     /// Converts a `DescendantScore` to a `FeeRate` using a minimum fee rate as a lower bound.
-    pub fn to_feerate(&self, min_feerate: FeeRate) -> Result<FeeRate, MempoolPolicyError> {
+    pub fn to_feerate(self, min_feerate: FeeRate) -> Result<FeeRate, MempoolPolicyError> {
         (Amount::from_atoms(self.into_atoms()) * 1000)
             .ok_or(MempoolPolicyError::FeeOverflow)
             .map(|amount| {

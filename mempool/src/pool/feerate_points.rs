@@ -14,24 +14,51 @@
 // limitations under the License.
 use std::collections::BTreeMap;
 
-pub fn get_closest_value<V: Copy>(size_to_score: &BTreeMap<usize, V>, key: usize) -> Option<V> {
-    match (
-        size_to_score.range(..=key).next_back(),
-        size_to_score.range(key..).next(),
-    ) {
-        (Some((&k1, &v1)), Some((&k2, &v2))) => {
-            let diff1 = key - k1;
-            let diff2 = k2 - key;
+use common::primitives::Amount;
 
-            if diff1 <= diff2 {
-                Some(v1)
-            } else {
-                Some(v2)
-            }
+use super::{fee::Fee, store::DescendantScore};
+
+pub fn linear_interpolation(x0: usize, y0: u128, x1: usize, y1: u128, x: usize) -> Option<u128> {
+    if x0 == x1 {
+        // Avoid division by zero
+        return if x0 == x { Some(y0) } else { None };
+    }
+
+    if x < x0 || x > x1 {
+        // The interpolation factor is outside the range
+        None
+    } else {
+        let scaled_v1 = y0 * (x1 - x) as u128;
+        let scaled_v2 = y1 * (x - x0) as u128;
+        let total_scale = (x1 - x0) as u128;
+
+        let interpolated_value = (scaled_v1 + scaled_v2) / total_scale;
+        Some(interpolated_value)
+    }
+}
+
+pub fn find_interpolated_value(
+    map: &BTreeMap<usize, DescendantScore>,
+    key: usize,
+) -> Option<DescendantScore> {
+    match map.get(&key) {
+        Some(value) => Some(*value),
+        None => {
+            let (k1, left_value) = map.range(..key).next_back()?;
+            let (k2, right_value) = map.range(key..).next()?;
+
+            let interpolated_value = linear_interpolation(
+                *k1,
+                left_value.into_atoms(),
+                *k2,
+                right_value.into_atoms(),
+                key,
+            )?;
+
+            Some(DescendantScore::new(Fee::new(Amount::from_atoms(
+                interpolated_value,
+            ))))
         }
-        (Some((_, &v1)), None) => Some(v1),
-        (None, Some((_, &v2))) => Some(v2),
-        (None, None) => None,
     }
 }
 
@@ -57,7 +84,6 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 
 #[cfg(test)]
 mod tests {
-    use crypto::random::distributions::Standard;
     use rstest::rstest;
     pub use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
 
@@ -94,59 +120,66 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_linear_interpolation_exact_key() {
+        let k1 = 0;
+        let v1 = 10;
+        let k2 = 10;
+        let v2 = 100;
+        let k3 = 5;
+
+        assert_eq!(linear_interpolation(k1, v1, k2, v2, k3), Some(55));
+    }
+
+    #[test]
+    fn test_linear_interpolation_invalid_parameters() {
+        // Same keys, invalid interpolation
+        assert_eq!(linear_interpolation(1, 10, 1, 10, 3), None);
+        assert_eq!(linear_interpolation(1, 10, 2, 20, 3), None);
+
+        // k1 == k2 == k3, should return v1
+        assert_eq!(linear_interpolation(1, 10, 1, 20, 1), Some(10));
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
     #[test]
-    fn test(#[case] seed: Seed) {
+    fn test_find_interpolated_value_exact_key(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut size_to_score = BTreeMap::new();
-
-        for _ in 0..rng.gen_range(0..10) {
-            size_to_score.insert(rng.gen::<usize>(), rng.gen::<u32>());
+        let mut map = BTreeMap::new();
+        for _ in 0..rng.gen_range(1..10) {
+            map.insert(
+                rng.gen::<usize>(),
+                DescendantScore::new(Fee::new(Amount::from_atoms(rng.gen_range(0..1000)))),
+            );
         }
 
-        let key = rng.gen_range(
-            *size_to_score.keys().next().unwrap()..*size_to_score.keys().last().unwrap(),
+        // check that all keys can be found and the returned value is the same as the one in the
+        // map
+        for key in map.keys() {
+            assert_eq!(find_interpolated_value(&map, *key), map.get(key).cloned());
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[test]
+    fn test_find_interpolated_value_interpolation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut map = BTreeMap::new();
+        let min = rng.gen_range(0..1000);
+        let max = rng.gen_range(min..2000);
+
+        map.insert(0, DescendantScore::new(Fee::new(Amount::from_atoms(min))));
+        map.insert(10, DescendantScore::new(Fee::new(Amount::from_atoms(max))));
+
+        assert_eq!(
+            find_interpolated_value(&map, 5),
+            Some(DescendantScore::new(Fee::new(Amount::from_atoms(
+                linear_interpolation(0, min, 10, max, 5).unwrap()
+            ))))
         );
-
-        let result = get_closest_value(&size_to_score, key);
-
-        if size_to_score.is_empty() {
-            assert!(result.is_none());
-        } else {
-            assert!(result.is_some());
-        }
-
-        if let Some(value) = result {
-            let (selected_key, selected_value) =
-                size_to_score.iter().find(|&(_, &v)| v == value).unwrap();
-            assert_eq!(*selected_value, value);
-
-            // Get the previous and next keys from the BTreeMap
-            let prev_key = size_to_score.range(..selected_key).next_back().map(|(&k, _)| k);
-            let next_key = size_to_score.range(selected_key..).skip(1).next().map(|(&k, _)| k);
-
-            // Check the differences between the selected key and the previous and next keys
-            if let Some(prev) = prev_key {
-                if *selected_key <= key {
-                    assert!(key - prev >= key - *selected_key);
-                } else if prev > key {
-                    assert!(prev - key >= *selected_key - key);
-                } else {
-                    assert!(key - prev >= *selected_key - key);
-                }
-            }
-
-            if let Some(next) = next_key {
-                if *selected_key >= key {
-                    assert!(next - key >= *selected_key - key);
-                } else if next < key {
-                    assert!(key - next >= key - *selected_key);
-                } else {
-                    assert!(next - key >= key - *selected_key);
-                }
-            }
-        }
     }
 }

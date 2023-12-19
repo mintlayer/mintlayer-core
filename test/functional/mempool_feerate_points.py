@@ -42,6 +42,35 @@ def generate_points(first, last, n) -> List[int]:
 
     return points
 
+def interpolate_value(dictionary, key):
+    if key in dictionary:
+        # If the key is present, return the corresponding value
+        return dictionary[key]
+    else:
+        # If the key is not present, find the keys immediately below and above it
+        keys_below = [k for k in dictionary.keys() if k < key]
+        keys_above = [k for k in dictionary.keys() if k > key]
+
+        # Find the nearest keys below and above
+        k1 = max(keys_below) if keys_below else None
+        k2 = min(keys_above) if keys_above else None
+
+        # If both keys are found, perform linear interpolation
+        if k1 is not None and k2 is not None:
+            v1 = dictionary[k1]
+            v2 = dictionary[k2]
+
+            # Calculate linearly interpolated value
+
+            scaled_v1 = v1 * (k2 - key);
+            scaled_v2 = v2 * (key - k1);
+            total_scale = k2 - k1;
+
+            return (scaled_v1 + scaled_v2) // total_scale;
+
+        # If no nearby keys are found, return None
+        return None
+
 class MempoolFeeratePointsTest(BitcoinTestFramework):
 
     def set_test_params(self):
@@ -106,14 +135,14 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
             node.mempool_submit_transaction(encoded_tx, {})
 
             tx_size = len(encoded_tx) // 2
-            feerate = (out_amount - to_transfer) // tx_size * 1000
+            feerate = (out_amount - to_transfer) // tx_size
             accumulated_size = accumulated_size + tx_size
             feerates[accumulated_size] = feerate
             if first is None:
                 first = accumulated_size
 
         accumulated_size = accumulated_size + 1
-        feerates[accumulated_size] = expected_lowest_feerate
+        feerates[accumulated_size] = expected_lowest_feerate / 1000
         last = accumulated_size
 
         if len(feerates) >= 10:
@@ -126,13 +155,12 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
         self.log.info(f"out: {feerates}")
 
         for (i, expected_point, (point, feerate)) in zip(range(10), points, feerate_points):
-            if expected_point in feerates:
-                idx = expected_point
-            else:
-                idx = int(round(expected_point / tx_size)) * tx_size
-            self.log.info(f"{idx} {point} {feerate}")
+            expected_feerate = interpolate_value(feerates, point)
+            assert expected_feerate is not None
+            expected_feerate *= 1000
+            self.log.info(f"{expected_point} {expected_feerate} {point} {feerate}")
             assert_equal(expected_point, point)
-            assert_equal(feerates[idx], feerate['amount_per_kb']['val'])
+            assert_equal(expected_feerate, feerate['amount_per_kb']['val'])
 
 
 if __name__ == '__main__':
