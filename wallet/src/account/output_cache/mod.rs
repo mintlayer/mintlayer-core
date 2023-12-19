@@ -33,6 +33,7 @@ use common::{
 };
 use itertools::Itertools;
 use pos_accounting::make_delegation_id;
+use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
     utxo_types::{get_utxo_state, UtxoState, UtxoStates},
@@ -1248,30 +1249,6 @@ fn wallet_tx_order(x: &WalletTx, y: &WalletTx) -> std::cmp::Ordering {
     }
 }
 
-fn sum_burned_token_amount(
-    outputs: &[TxOutput],
-    token_id: &TokenId,
-) -> Result<Amount, WalletError> {
-    let amount = outputs
-        .iter()
-        .filter_map(|output| match output {
-            TxOutput::Burn(OutputValue::TokenV1(tid, amount)) if tid == token_id => Some(*amount),
-            TxOutput::Transfer(_, _)
-            | TxOutput::Burn(_)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _)
-            | TxOutput::CreateStakePool(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => None,
-        })
-        .sum::<Option<Amount>>()
-        .ok_or(WalletError::OutputAmountOverflow);
-    amount
-}
-
 /// Check if the TxOutput is a v0 token
 fn is_v0_token_output(output: &TxOutput) -> bool {
     match output {
@@ -1412,10 +1389,15 @@ fn apply_total_supply_mutations_from_tx(
                         total_supply = total_supply.mint(*amount)?;
                     }
                 }
-                AccountCommand::UnmintTokens(token_id) => {
-                    let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                    total_supply = total_supply.unmint(amount)?;
-                }
+                AccountCommand::UnmintTokens(token_id) => match tx {
+                    WalletTx::Tx(tx) => {
+                        let total_burned =
+                            calculate_tokens_burned_in_outputs(tx.get_transaction(), token_id)
+                                .map_err(|_| WalletError::OutputAmountOverflow)?;
+                        total_supply = total_supply.unmint(total_burned)?;
+                    }
+                    WalletTx::Block(_) => {}
+                },
                 AccountCommand::LockTokenSupply(_) => {
                     total_supply = total_supply.lock()?;
                 }

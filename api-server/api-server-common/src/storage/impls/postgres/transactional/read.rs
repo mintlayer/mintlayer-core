@@ -14,14 +14,18 @@
 // limitations under the License.
 
 use common::{
-    chain::{Destination, GenBlock, TxOutput},
-    primitives::{BlockHeight, Id},
+    chain::{
+        tokens::{NftIssuance, TokenId},
+        Destination, GenBlock, TxOutput,
+    },
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+        FungibleTokenData, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -50,9 +54,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_address_balance(
         &self,
         address: &str,
-    ) -> Result<Option<common::primitives::Amount>, ApiServerStorageError> {
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_address_balance(address).await?;
+        let res = conn.get_address_balance(address, coin_or_token_id).await?;
 
         Ok(res)
     }
@@ -214,6 +219,26 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_delegations_from_address(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_fungible_token_issuance(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_nft_token_issuance(token_id).await?;
 
         Ok(res)
     }

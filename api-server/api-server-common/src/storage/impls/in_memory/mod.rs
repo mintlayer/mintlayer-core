@@ -16,14 +16,15 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
 };
 use common::{
     chain::{
+        tokens::{NftIssuance, TokenId},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 use std::{
@@ -38,7 +39,7 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
-    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, Amount>>,
+    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
@@ -46,6 +47,8 @@ struct ApiServerInMemoryStorage {
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
+    fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
+    nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: u32,
 }
@@ -63,6 +66,8 @@ impl ApiServerInMemoryStorage {
             transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
             address_utxos: BTreeMap::new(),
+            fungible_token_issuances: BTreeMap::new(),
+            nft_token_issuances: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
@@ -76,10 +81,16 @@ impl ApiServerInMemoryStorage {
         Ok(true)
     }
 
-    fn get_address_balance(&self, address: &str) -> Result<Option<Amount>, ApiServerStorageError> {
+    fn get_address_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.address_balance_table.get(address).map_or_else(
             || Ok(None),
-            |balance| Ok(balance.last_key_value().map(|(_, &v)| v)),
+            |balance| {
+                Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
+            },
         )
     }
 
@@ -298,6 +309,26 @@ impl ApiServerInMemoryStorage {
             })
             .collect())
     }
+
+    fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_issuances
+            .get(&token_id)
+            .map(|by_height| by_height.values().last().cloned().expect("not empty")))
+    }
+
+    fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        Ok(self
+            .nft_token_issuances
+            .get(&token_id)
+            .map(|by_height| by_height.values().last().cloned().expect("not empty")))
+    }
 }
 
 impl ApiServerInMemoryStorage {
@@ -355,12 +386,15 @@ impl ApiServerInMemoryStorage {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.address_balance_table
             .entry(address.to_string())
             .or_default()
-            .insert(block_height, amount);
+            .entry(block_height)
+            .or_default()
+            .insert(coin_or_token_id, amount);
 
         Ok(())
     }
@@ -493,6 +527,56 @@ impl ApiServerInMemoryStorage {
                     !v.is_empty()
                 });
             }
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.fungible_token_issuances
+            .entry(token_id)
+            .or_default()
+            .insert(block_height, issuance);
+        Ok(())
+    }
+
+    fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        self.nft_token_issuances
+            .entry(token_id)
+            .or_default()
+            .insert(block_height, issuance);
+        Ok(())
+    }
+
+    fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.fungible_token_issuances.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.nft_token_issuances.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
             !v.is_empty()
         });
 

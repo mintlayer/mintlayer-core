@@ -61,6 +61,10 @@ pub enum ApiServerWebServerNotFoundError {
     PoolNotFound,
     #[error("Delegation not found")]
     DelegationNotFound,
+    #[error("Token not found")]
+    TokenNotFound,
+    #[error("NFT not found")]
+    NftNotFound,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -91,6 +95,10 @@ pub enum ApiServerWebServerClientError {
     InvalidPoolsSortOrder,
     #[error("Invalid signed transaction")]
     InvalidSignedTransaction,
+    #[error("Invalid token Id")]
+    InvalidTokenId,
+    #[error("Invalid NFT Id")]
+    InvalidNftId,
 }
 
 #[allow(dead_code)]

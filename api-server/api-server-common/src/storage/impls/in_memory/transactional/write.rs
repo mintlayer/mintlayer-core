@@ -17,16 +17,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
+        tokens::{NftIssuance, TokenId},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, Delegation, Utxo,
+    ApiServerStorageWrite, Delegation, FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -58,9 +59,15 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.transaction.set_address_balance_at_height(address, amount, block_height)
+        self.transaction.set_address_balance_at_height(
+            address,
+            amount,
+            coin_or_token_id,
+            block_height,
+        )
     }
 
     async fn set_address_transactions_at_height(
@@ -155,6 +162,38 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_utxo_above_height(block_height)
     }
+
+    async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_fungible_token_issuance(token_id, block_height, issuance)
+    }
+
+    async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_nft_token_issuance(token_id, block_height, issuance)
+    }
+
+    async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_token_issuance_above_height(block_height)
+    }
+
+    async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_nft_issuance_above_height(block_height)
+    }
 }
 
 #[async_trait::async_trait]
@@ -170,8 +209,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.transaction.get_address_balance(address)
+        self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
     async fn get_address_transactions(
@@ -273,5 +313,19 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         self.transaction.get_delegations_from_address(address)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        self.transaction.get_fungible_token_issuance(token_id)
+    }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        self.transaction.get_nft_token_issuance(token_id)
     }
 }

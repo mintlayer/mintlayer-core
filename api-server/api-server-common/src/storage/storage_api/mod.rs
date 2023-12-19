@@ -17,10 +17,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
+        tokens::{
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
+            TokenTotalSupply,
+        },
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 use serialization::{Decode, Encode};
@@ -136,6 +140,50 @@ impl Utxo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct FungibleTokenData {
+    pub token_ticker: Vec<u8>,
+    pub number_of_decimals: u8,
+    pub metadata_uri: Vec<u8>,
+    pub circulating_supply: Amount,
+    pub total_supply: TokenTotalSupply,
+    pub is_locked: bool,
+    pub frozen: IsTokenFrozen,
+    pub authority: Destination,
+}
+
+impl FungibleTokenData {
+    pub fn mint_tokens(mut self, amount: Amount) -> Self {
+        self.circulating_supply = (self.circulating_supply + amount).expect("no overflow");
+        self
+    }
+
+    pub fn unmint_tokens(mut self, amount: Amount) -> Self {
+        self.circulating_supply = (self.circulating_supply - amount).expect("no underflow");
+        self
+    }
+
+    pub fn freeze(mut self, is_token_unfreezable: IsTokenUnfreezable) -> Self {
+        self.frozen = IsTokenFrozen::Yes(is_token_unfreezable);
+        self
+    }
+
+    pub fn unfreeze(mut self) -> Self {
+        self.frozen = IsTokenFrozen::No(IsTokenFreezable::Yes);
+        self
+    }
+
+    pub fn lock(mut self) -> Self {
+        self.is_locked = true;
+        self
+    }
+
+    pub fn change_authority(mut self, authority: Destination) -> Self {
+        self.authority = authority;
+        self
+    }
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -145,6 +193,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
     async fn get_address_transactions(
@@ -217,6 +266,16 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError>;
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError>;
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -240,6 +299,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
@@ -308,6 +368,30 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_nft_issuance_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

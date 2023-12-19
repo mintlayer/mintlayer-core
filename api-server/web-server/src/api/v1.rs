@@ -32,8 +32,8 @@ use axum::{
 };
 use common::{
     address::Address,
-    chain::{Block, Destination, SignedTransaction, Transaction},
-    primitives::{Amount, BlockHeight, Id, Idable, H256},
+    chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde_json::json;
@@ -90,7 +90,9 @@ pub fn routes<
         .route("/pool/:id", get(pool))
         .route("/pool/:id/delegations", get(pool_delegations));
 
-    router.route("/delegation/:id", get(delegation))
+    let router = router.route("/delegation/:id", get(delegation));
+
+    router.route("/token/:id", get(token)).route("/nft/:id", get(nft))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -115,12 +117,14 @@ async fn get_block(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_block(block_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -236,12 +240,14 @@ pub async fn chain_at_height<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_main_chain_block_id(block_height)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -272,12 +278,14 @@ async fn best_block<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_best_block()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })
 }
@@ -302,12 +310,14 @@ async fn get_transaction(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_transaction_with_block(transaction_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -450,12 +460,14 @@ pub async fn address<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_address_balance(&address.to_string())
+        .get_address_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -466,12 +478,14 @@ pub async fn address<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_transactions(&address.to_string())
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -509,12 +523,14 @@ pub async fn address_utxos<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_available_utxos(&address.to_string())
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -543,14 +559,16 @@ pub async fn address_delegations<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_delegations_from_address(
             &address.decode_object(&state.chain_config).expect("already checked"),
         )
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -624,16 +642,19 @@ pub async fn pools<T: ApiServerStorage>(
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
 
-    let db_tx = state.db.transaction_ro().await.map_err(|_| {
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
     let pools = match sort {
-        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|_| {
+        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?,
         PoolSorting::ByPledge => {
-            db_tx.get_pool_data_with_largest_pledge(items, offset).await.map_err(|_| {
+            db_tx.get_pool_data_with_largest_pledge(items, offset).await.map_err(|e| {
+                logging::log::error!("internal error: {e}");
                 ApiServerWebServerError::ServerError(
                     ApiServerWebServerServerError::InternalServerError,
                 )
@@ -673,12 +694,14 @@ pub async fn pool<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_pool_data(pool_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -711,12 +734,14 @@ pub async fn pool_delegations<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_pool_delegations(pool_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
@@ -750,12 +775,14 @@ pub async fn delegation<T: ApiServerStorage>(
         .db
         .transaction_ro()
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_delegation(delegation_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .ok_or(ApiServerWebServerError::NotFound(
@@ -772,4 +799,91 @@ pub async fn delegation<T: ApiServerStorage>(
             "no error in encoding"
         ).get(),
     })))
+}
+
+pub async fn token<T: ApiServerStorage>(
+    Path(token_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_str(&state.chain_config, &token_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?;
+
+    let token = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_fungible_token_issuance(token_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    Ok(Json(json!({
+        "authority": Address::new(&state.chain_config, &token.authority).expect(
+            "no error in encoding"
+        ).get(),
+        "is_locked": token.is_locked,
+        "circulating_supply": amount_to_json(token.circulating_supply),
+        "metadata_uri": token.metadata_uri,
+        "number_of_decimals": token.number_of_decimals,
+        "total_supply": token.total_supply,
+        "frozen": token.frozen,
+    })))
+}
+
+pub async fn nft<T: ApiServerStorage>(
+    Path(nft_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Option<Arc<impl TxSubmitClient>>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let nft_id = Address::from_str(&state.chain_config, &nft_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNftId)
+        })?;
+
+    let nft = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_nft_token_issuance(nft_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::NftNotFound,
+        ))?;
+
+    match nft {
+        NftIssuance::V0(nft) => Ok(Json(json!({
+            "authority": nft.metadata.creator
+                .map(|creator| Address::new(&state.chain_config, &Destination::PublicKey(creator.public_key))
+                .expect("no error in encoding")
+                .get().to_owned()
+            ),
+            "name": nft.metadata.name,
+            "description": nft.metadata.description,
+            "ticker": nft.metadata.ticker,
+            "icon_uri": nft.metadata.icon_uri,
+            "additional_metadata_uri": nft.metadata.additional_metadata_uri,
+            "media_uri": nft.metadata.media_uri,
+            "media_hash": nft.metadata.media_hash,
+        }))),
+    }
 }

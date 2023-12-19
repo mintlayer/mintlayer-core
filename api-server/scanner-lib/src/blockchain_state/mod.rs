@@ -16,26 +16,31 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, Utxo,
+    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
     address::Address,
     chain::{
-        block::ConsensusData, config::ChainConfig, output_value::OutputValue,
-        transaction::OutPointSourceId, AccountNonce, AccountSpending, Block, DelegationId,
-        Destination, GenBlock, Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        block::ConsensusData,
+        config::ChainConfig,
+        output_value::OutputValue,
+        tokens::{make_token_id, IsTokenFrozen, TokenIssuance},
+        transaction::OutPointSourceId,
+        AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
-use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
+use pos_accounting::{make_delegation_id, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
     sync::Arc,
 };
-use tx_verifier::transaction_verifier::distribute_pos_reward;
+use tx_verifier::transaction_verifier::{
+    calculate_tokens_burned_in_outputs, distribute_pos_reward,
+};
 
 use self::adapter::PoSAdapter;
 
@@ -196,7 +201,17 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     db_tx
         .del_pools_above_height(block_height)
         .await
-        .expect("Unable to disconnect address transactions");
+        .expect("Unable to disconnect pool data");
+
+    db_tx
+        .del_token_issuance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect token issuances");
+
+    db_tx
+        .del_nft_issuance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect nft issuances");
 
     Ok(())
 }
@@ -259,6 +274,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::CreateStakePool(pool_id, pool_data) => {
+                let staker = pool_data.staker();
                 let pool_data = PoolData::new(
                     pool_data.decommission_key().clone(),
                     pool_data.value(),
@@ -281,6 +297,31 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     &chain_config,
                 )
                 .await;
+
+                let address = Address::<Destination>::new(
+                    &chain_config,
+                    pool_data.decommission_destination(),
+                )
+                .expect("Unable to encode destination");
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &pool_data.pledge_amount(),
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
+
+                let staker_address = Address::<Destination>::new(&chain_config, staker)
+                    .expect("Unable to encode destination");
+                increase_address_amount(
+                    db_tx,
+                    &staker_address,
+                    &Amount::ZERO,
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
@@ -288,9 +329,26 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
                     match output_value {
-                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
                         OutputValue::Coin(amount) => {
-                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
                         }
                     }
                     set_utxo(
@@ -406,11 +464,10 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _),
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::IssueFungibleToken(_),
             ) => {}
-            Some(TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_)) => {
-                //TODO: add when we support tokens
-            }
             None => {}
         }
     }
@@ -498,11 +555,31 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                     updated_delegation.spend_destination(),
                 )
                 .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, &rewards, block_height).await;
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &rewards,
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
             }
 
-            let pool_data = adapter.get_pool_data(pool_id).expect("ok").expect("must exist");
+            let pool_data = adapter.get_pool_data_with_reward(pool_id).expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
+            let pool_reward = adapter.get_pool_reward(pool_id);
+
+            let address =
+                Address::<Destination>::new(&chain_config, pool_data.decommission_destination())
+                    .expect("Unable to encode address");
+            increase_address_amount(
+                db_tx,
+                &address,
+                &pool_reward,
+                CoinOrTokenId::Coin,
+                block_height,
+            )
+            .await;
         }
     }
 
@@ -520,7 +597,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         db_tx,
         block_height,
         transaction.transaction().inputs(),
-        transaction.transaction().get_id(),
+        transaction.transaction(),
     )
     .await
     .expect("Unable to update tables from transaction inputs");
@@ -544,15 +621,60 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
     inputs: &[TxInput],
-    tx_id: Id<Transaction>,
+    tx: &Transaction,
 ) -> Result<(), ApiServerStorageError> {
     let mut address_transactions: BTreeMap<Address<Destination>, BTreeSet<Id<Transaction>>> =
         BTreeMap::new();
 
     for input in inputs {
         match input {
-            // TODO: update token states
-            | TxInput::AccountCommand(_, _) => {}
+            TxInput::AccountCommand(_, cmd) => match cmd {
+                AccountCommand::MintTokens(token_id, amount) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.mint_tokens(*amount);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::UnmintTokens(token_id) => {
+                    let total_burned =
+                        calculate_tokens_burned_in_outputs(tx, token_id).expect("no overflow");
+
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.unmint_tokens(total_burned);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::FreezeToken(token_id, is_unfreezable) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.freeze(*is_unfreezable);
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::UnfreezeToken(token_id) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.unfreeze();
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::LockTokenSupply(token_id) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.lock();
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+                AccountCommand::ChangeTokenAuthority(token_id, destination) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.change_authority(destination.clone());
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                }
+            },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {
                     AccountSpending::DelegationBalance(delegation_id, amount) => {
@@ -576,7 +698,14 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             delegation.spend_destination(),
                         )
                         .expect("Unable to encode address");
-                        decrease_address_amount(db_tx, address, amount, block_height).await;
+                        decrease_address_amount(
+                            db_tx,
+                            address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
                     }
                 }
             }
@@ -603,21 +732,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::IssueFungibleToken(_) => {}
-                        TxOutput::CreateStakePool(pool_id, pool_data) => {
-                            let pool_data = PoolData::new(
-                                pool_data.decommission_key().clone(),
-                                pool_data.value(),
-                                pool_data.vrf_public_key().clone(),
-                                pool_data.margin_ratio_per_thousand(),
-                                pool_data.cost_per_block(),
-                            );
-
-                            db_tx
-                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
-                                .await
-                                .expect("unable to update pool data");
-                        }
-                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        TxOutput::CreateStakePool(pool_id, _)
+                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let pool_data = db_tx
                                 .get_pool_data(pool_id)
                                 .await?
@@ -628,6 +744,26 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 .set_pool_data_at_height(pool_id, &pool_data, block_height)
                                 .await
                                 .expect("unable to update pool data");
+
+                            let address = Address::<Destination>::new(
+                                &chain_config,
+                                pool_data.decommission_destination(),
+                            )
+                            .expect("Unable to encode destination");
+
+                            address_transactions
+                                .entry(address.clone())
+                                .or_default()
+                                .insert(tx.get_id());
+
+                            decrease_address_amount(
+                                db_tx,
+                                address,
+                                &pool_data.pledge_amount(),
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
                         }
                     }
                 }
@@ -652,7 +788,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::IssueFungibleToken(_)
                         | TxOutput::CreateStakePool(_, _)
                         | TxOutput::ProduceBlockFromStake(_, _) => {}
-                        TxOutput::IssueNft(_, _, destination) => match destination {
+                        TxOutput::IssueNft(token_id, _, destination) => match destination {
                             Destination::AnyoneCanSpend
                             | Destination::ClassicMultisig(_)
                             | Destination::ScriptHash(_) => {}
@@ -664,9 +800,16 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 address_transactions
                                     .entry(address.clone())
                                     .or_default()
-                                    .insert(tx_id);
+                                    .insert(tx.get_id());
 
-                                // TODO: update nft/token balance for address
+                                decrease_address_amount(
+                                    db_tx,
+                                    address,
+                                    &Amount::from_atoms(1),
+                                    CoinOrTokenId::TokenId(token_id),
+                                    block_height,
+                                )
+                                .await;
                             }
                         },
                         TxOutput::LockThenTransfer(output_value, destination, _)
@@ -682,15 +825,26 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 address_transactions
                                     .entry(address.clone())
                                     .or_default()
-                                    .insert(tx_id);
+                                    .insert(tx.get_id());
 
                                 match output_value {
-                                    OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                                    OutputValue::TokenV0(_) => {}
+                                    OutputValue::TokenV1(token_id, amount) => {
+                                        decrease_address_amount(
+                                            db_tx,
+                                            address,
+                                            &amount,
+                                            CoinOrTokenId::TokenId(token_id),
+                                            block_height,
+                                        )
+                                        .await;
+                                    }
                                     OutputValue::Coin(amount) => {
                                         decrease_address_amount(
                                             db_tx,
                                             address,
                                             &amount,
+                                            CoinOrTokenId::Coin,
                                             block_height,
                                         )
                                         .await;
@@ -735,8 +889,37 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
     for (idx, output) in outputs.iter().enumerate() {
         match output {
-            TxOutput::Burn(_) | TxOutput::DataDeposit(_) | TxOutput::IssueFungibleToken(_) => {}
-            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::IssueNft(_, _, _) => {
+            TxOutput::Burn(_) | TxOutput::DataDeposit(_) => {}
+            TxOutput::IssueFungibleToken(issuance) => {
+                let token_id = make_token_id(inputs).expect("should not fail");
+                let issuance = match issuance.as_ref() {
+                    TokenIssuance::V1(issuance) => FungibleTokenData {
+                        token_ticker: issuance.token_ticker.clone(),
+                        number_of_decimals: issuance.number_of_decimals,
+                        metadata_uri: issuance.metadata_uri.clone(),
+                        circulating_supply: Amount::ZERO,
+                        total_supply: issuance.total_supply,
+                        is_locked: false,
+                        frozen: IsTokenFrozen::No(issuance.is_freezable),
+                        authority: issuance.authority.clone(),
+                    },
+                };
+                db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;
+            }
+            TxOutput::IssueNft(token_id, issuance, _) => {
+                db_tx.set_nft_token_issuance(*token_id, block_height, *issuance.clone()).await?;
+                set_utxo(
+                    OutPointSourceId::Transaction(transaction_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
+            TxOutput::ProduceBlockFromStake(_, _) => {
                 set_utxo(
                     OutPointSourceId::Transaction(transaction_id),
                     idx,
@@ -804,8 +987,20 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
                         .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, &stake_pool_data.value(), block_height)
-                    .await;
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &stake_pool_data.value(),
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                let staker_address =
+                    Address::<Destination>::new(&chain_config, stake_pool_data.staker())
+                        .expect("Unable to encode address");
+                address_transactions.entry(staker_address).or_default().insert(transaction_id);
             }
             | TxOutput::DelegateStaking(amount, delegation_id) => {
                 // Update delegation pledge
@@ -826,7 +1021,8 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
                         .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, amount, block_height).await;
+                increase_address_amount(db_tx, &address, amount, CoinOrTokenId::Coin, block_height)
+                    .await;
 
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
@@ -850,9 +1046,26 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
                     match output_value {
-                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {}
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
                         OutputValue::Coin(amount) => {
-                            increase_address_amount(db_tx, &address, amount, block_height).await;
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
                         }
                     }
                     set_utxo(
@@ -906,10 +1119,11 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     address: &Address<Destination>,
     amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get())
+        .get_address_balance(address.get(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -917,7 +1131,7 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -926,10 +1140,11 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     address: Address<Destination>,
     amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get())
+        .get_address_balance(address.get(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -937,7 +1152,7 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, block_height)
+        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }

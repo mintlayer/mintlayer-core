@@ -17,15 +17,17 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
+        tokens::{NftIssuance, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
+    FungibleTokenData, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -39,8 +41,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
-        self.transaction.get_address_balance(address)
+        self.transaction.get_address_balance(address, coin_or_token_id)
     }
 
     async fn get_address_transactions(
@@ -146,5 +149,19 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         self.transaction.get_delegations_from_address(address)
+    }
+
+    async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        self.transaction.get_fungible_token_issuance(token_id)
+    }
+
+    async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        self.transaction.get_nft_token_issuance(token_id)
     }
 }

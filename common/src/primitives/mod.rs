@@ -37,6 +37,7 @@ pub use id::{Id, Idable, H256};
 pub use version_tag::VersionTag;
 
 use crate::chain::tokens::TokenId;
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
@@ -44,7 +45,7 @@ pub struct Fee(pub Amount);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode)]
 pub enum CoinOrTokenId {
     Coin,
     TokenId(TokenId),

@@ -25,6 +25,7 @@ pub struct PoSAdapter {
     delegations: BTreeMap<DelegationId, Delegation>,
 
     delegation_rewards: Vec<(DelegationId, Amount)>,
+    pool_rewards: BTreeMap<PoolId, Amount>,
 }
 
 impl PoSAdapter {
@@ -37,7 +38,25 @@ impl PoSAdapter {
             pools: BTreeMap::from_iter([(pool_id, pool_data)]),
             delegations,
             delegation_rewards: vec![],
+            pool_rewards: BTreeMap::new(),
         }
+    }
+
+    pub fn get_pool_reward(&self, pool_id: PoolId) -> Amount {
+        self.pool_rewards.get(&pool_id).copied().unwrap_or(Amount::ZERO)
+    }
+
+    pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
+        self.pools.get(&pool_id).map(|pool_data| {
+            let amount_to_add = self.get_pool_reward(pool_id);
+            PoolData::new(
+                pool_data.decommission_destination().clone(),
+                (pool_data.pledge_amount() + amount_to_add).expect("no overflow"),
+                pool_data.vrf_public_key().clone(),
+                pool_data.margin_ratio_per_thousand(),
+                pool_data.cost_per_block(),
+            )
+        })
     }
 
     pub fn rewards_per_delegation(&self) -> Vec<(DelegationId, Amount, Delegation)> {
@@ -152,15 +171,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
-        if let Some(pool_data) = self.pools.get_mut(&pool_id) {
-            *pool_data = PoolData::new(
-                pool_data.decommission_destination().clone(),
-                (pool_data.pledge_amount() + amount_to_add).expect("no overflow"),
-                pool_data.vrf_public_key().clone(),
-                pool_data.margin_ratio_per_thousand(),
-                pool_data.cost_per_block(),
-            );
-        }
+        self.pool_rewards.insert(pool_id, amount_to_add);
         Ok(())
     }
 

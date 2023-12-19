@@ -21,16 +21,19 @@ use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{
+        tokens::{NftIssuance, TokenId},
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
-    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, Utxo},
+    storage_api::{
+        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+    },
 };
 
 const VERSION_STR: &str = "version";
@@ -119,17 +122,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_address_balance(
         &self,
         address: &str,
+        coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.tx
             .query_opt(
                 r#"
                     SELECT amount
                     FROM ml_address_balance
-                    WHERE address = $1
+                    WHERE address = $1 AND coin_or_token_id = $2
                     ORDER BY block_height DESC
                     LIMIT 1;
                 "#,
-                &[&address],
+                &[&address, &coin_or_token_id.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -170,6 +174,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         address: &str,
         amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
@@ -177,12 +182,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_address_balance (address, block_height, amount)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (address, block_height)
-                    DO UPDATE SET amount = $3;
+                    INSERT INTO ml_address_balance (address, block_height, coin_or_token_id, amount)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (address, block_height, coin_or_token_id)
+                    DO UPDATE SET amount = $4;
                 "#,
-                &[&address.to_string(), &height, &amount.encode()],
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -370,8 +375,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_address_balance (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
                     amount bytea NOT NULL,
-                    PRIMARY KEY (address, block_height)
+                    PRIMARY KEY (address, block_height, coin_or_token_id)
                 );",
         )
         .await?;
@@ -426,6 +432,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     next_nonce bytea NOT NULL,
                     spend_destination bytea NOT NULL,
                     PRIMARY KEY (delegation_id, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_fungible_token (
+                    token_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    issuance bytea NOT NULL,
+                    PRIMARY KEY (token_id, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_nft_issuance (
+                    nft_id bytea NOT NULL,
+                    block_height bigint NOT NULL,
+                    issuance bytea NOT NULL,
+                    PRIMARY KEY (nft_id)
                 );",
         )
         .await?;
@@ -640,7 +666,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
                     FROM ml_delegations
                     WHERE spend_destination = $1
-                )
+                ) AS sub
                 WHERE newest = 1;
                 "#,
                 &[&address.encode()],
@@ -869,7 +895,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT pool_id, data, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height) as oldest
                     FROM ml_pool_data
-                )
+                ) AS sub
                 WHERE oldest = 1
                 ORDER BY block_height DESC
                 OFFSET $1
@@ -915,7 +941,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 FROM (
                     SELECT pool_id, data, pledge_amount, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
                     FROM ml_pool_data
-                )
+                ) AS sub
                 WHERE newest = 1
                 ORDER BY pledge_amount DESC
                 OFFSET $1
@@ -1135,7 +1161,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
                     FROM ml_utxo
                     WHERE address = $1
-                )
+                ) AS sub
                 WHERE newest = 1 AND spent = false;"#,
                 &[&address],
             )
@@ -1197,6 +1223,145 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute("DELETE FROM ml_utxo WHERE block_height > $1;", &[&height])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn set_fungible_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: FungibleTokenData,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_fungible_token (token_id, block_height, issuance) VALUES ($1, $2, $3)
+                    ON CONFLICT (token_id, block_height) DO UPDATE
+                    SET issuance = $3;",
+                &[&token_id.encode(), &height, &issuance.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_fungible_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<FungibleTokenData>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT issuance FROM ml_fungible_token WHERE token_id = $1
+                    ORDER BY block_height DESC
+                    LIMIT 1;",
+                &[&token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let issuance =
+            FungibleTokenData::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Token data for token id {} deserialization failed: {}",
+                    token_id, e
+                ))
+            })?;
+
+        Ok(Some(issuance))
+    }
+
+    pub async fn get_nft_token_issuance(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT issuance FROM ml_nft_issuance WHERE nft_id = $1
+                    ORDER BY block_height DESC
+                    LIMIT 1;",
+                &[&token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let issuance = NftIssuance::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Nft issuance data for nft id {} deserialization failed: {}",
+                token_id, e
+            ))
+        })?;
+
+        Ok(Some(issuance))
+    }
+
+    pub async fn set_nft_token_issuance(
+        &mut self,
+        token_id: TokenId,
+        block_height: BlockHeight,
+        issuance: NftIssuance,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_nft_issuance (nft_id, block_height, issuance) VALUES ($1, $2, $3);",
+                &[&token_id.encode(), &height, &issuance.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_token_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_fungible_token WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_nft_issuance WHERE block_height > $1;",
+                &[&height],
+            )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
