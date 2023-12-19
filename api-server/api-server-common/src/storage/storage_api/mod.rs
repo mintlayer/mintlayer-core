@@ -56,6 +56,8 @@ pub enum ApiServerStorageError {
     TxRwRollbackFailed(String),
     #[error("Invalid block received: {0}")]
     InvalidBlock(String),
+    #[error("Addressable error")]
+    AddressableError,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -85,8 +87,8 @@ impl Delegation {
         &self.spend_destination
     }
 
-    pub fn pool_id(&self) -> PoolId {
-        self.pool_id
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
     }
 
     pub fn balance(&self) -> &Amount {
@@ -97,18 +99,18 @@ impl Delegation {
         &self.next_nonce
     }
 
-    pub fn stake(&self, rewards: Amount) -> Self {
+    pub fn stake(self, rewards: Amount) -> Self {
         Self {
-            spend_destination: self.spend_destination.clone(),
+            spend_destination: self.spend_destination,
             pool_id: self.pool_id,
             balance: (self.balance + rewards).expect("no overflow"),
             next_nonce: self.next_nonce,
         }
     }
 
-    pub fn spend_share(&self, amount: Amount, nonce: AccountNonce) -> Self {
+    pub fn spend_share(self, amount: Amount, nonce: AccountNonce) -> Self {
         Self {
-            spend_destination: self.spend_destination.clone(),
+            spend_destination: self.spend_destination,
             pool_id: self.pool_id,
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),

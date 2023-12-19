@@ -65,7 +65,7 @@ impl PoSAdapter {
             .copied()
             .map(|(delegation_id, reward)| {
                 let data = self.delegations.get(&delegation_id).expect("must exist");
-                let updated_delegation = data.stake(reward);
+                let updated_delegation = data.clone().stake(reward);
                 (delegation_id, reward, updated_delegation)
             })
             .collect()
@@ -92,7 +92,7 @@ impl PoSAccountingView for PoSAdapter {
         delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
         let data = self.delegations.get(&delegation_id).map(|data| {
-            pos_accounting::DelegationData::new(data.pool_id(), data.spend_destination().clone())
+            pos_accounting::DelegationData::new(*data.pool_id(), data.spend_destination().clone())
         });
         Ok(data)
     }

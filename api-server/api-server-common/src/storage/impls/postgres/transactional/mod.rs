@@ -16,9 +16,11 @@
 pub mod read;
 pub mod write;
 
+use std::sync::Arc;
+
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use pos_accounting::PoolData;
@@ -40,6 +42,7 @@ pub struct ApiServerPostgresTransactionalRo<'a> {
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
         PooledConnection<'static, PostgresConnectionManager<NoTls>>,
     >,
+    chain_config: Arc<ChainConfig>,
     // Note: This exists to enforce that a transaction never outlives the database object,
     //       given that all connections have 'static lifetimes
     _marker: std::marker::PhantomData<&'a ()>,
@@ -51,11 +54,13 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
             PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         >,
+        chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
             connection: Some(connection),
             finished: false,
             db_tx_sender,
+            chain_config,
             _marker: std::marker::PhantomData,
         };
         tx.connection
@@ -117,7 +122,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data(pool_id).await?;
+        let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -151,6 +156,7 @@ pub struct ApiServerPostgresTransactionalRw<'a> {
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
         PooledConnection<'static, PostgresConnectionManager<NoTls>>,
     >,
+    chain_config: Arc<ChainConfig>,
     // Note: This exists to enforce that a transaction never outlives the database object,
     //       given that all connections have 'static lifetimes
     _marker: std::marker::PhantomData<&'a ()>,
@@ -176,11 +182,13 @@ impl<'a> ApiServerPostgresTransactionalRw<'a> {
         db_tx_sender: tokio::sync::mpsc::UnboundedSender<
             PooledConnection<'static, PostgresConnectionManager<NoTls>>,
         >,
+        chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
         let tx = Self {
             connection: Some(connection),
             finished: false,
             db_tx_sender,
+            chain_config,
             _marker: std::marker::PhantomData,
         };
         tx.connection

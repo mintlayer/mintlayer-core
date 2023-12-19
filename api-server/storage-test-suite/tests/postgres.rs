@@ -43,7 +43,7 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
         None,
         None,
         4,
-        &chain_config,
+        chain_config.clone(),
     )
     .await
     .unwrap();

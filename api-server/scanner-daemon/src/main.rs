@@ -39,7 +39,7 @@ pub async fn make_postgres_storage(
     postgres_password: Option<String>,
     postgres_database: Option<String>,
     postgres_max_connections: u32,
-    chain_config: &ChainConfig,
+    chain_config: Arc<ChainConfig>,
 ) -> Result<TransactionalApiServerPostgresStorage, ApiServerScannerError> {
     TransactionalApiServerPostgresStorage::new(
         &postgres_host,
@@ -176,7 +176,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
         postgres_config.postgres_password,
         postgres_config.postgres_database,
         postgres_config.postgres_max_connections,
-        &chain_config,
+        chain_config.clone(),
     )
     .await?;
 

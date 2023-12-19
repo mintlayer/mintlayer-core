@@ -18,10 +18,12 @@ pub mod transactional;
 mod queries;
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use bb8_postgres::bb8::Pool;
 use bb8_postgres::bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
+use common::chain::ChainConfig;
 use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::ApiServerStorageError;
@@ -37,6 +39,7 @@ pub struct TransactionalApiServerPostgresStorage {
     db_tx_conn_sender: tokio::sync::mpsc::UnboundedSender<
         PooledConnection<'static, PostgresConnectionManager<NoTls>>,
     >,
+    chain_config: Arc<ChainConfig>,
 }
 
 impl Drop for TransactionalApiServerPostgresStorage {
@@ -54,7 +57,7 @@ impl TransactionalApiServerPostgresStorage {
         passsword: Option<&str>,
         database: Option<&str>,
         max_connections: u32,
-        _chain_config: &common::chain::ChainConfig,
+        chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
         let password_part = match passsword {
             Some(p) => format!("password={}", p),
@@ -105,6 +108,7 @@ impl TransactionalApiServerPostgresStorage {
             pool,
             tx_dropper_joiner,
             db_tx_conn_sender: conn_tx,
+            chain_config,
         };
 
         Ok(result)
@@ -118,8 +122,12 @@ impl TransactionalApiServerPostgresStorage {
             .get_owned()
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRo::from_connection(conn, self.db_tx_conn_sender.clone())
-            .await
+        ApiServerPostgresTransactionalRo::from_connection(
+            conn,
+            self.db_tx_conn_sender.clone(),
+            self.chain_config.clone(),
+        )
+        .await
     }
 
     pub async fn begin_rw_transaction(
@@ -130,7 +138,11 @@ impl TransactionalApiServerPostgresStorage {
             .get_owned()
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRw::from_connection(conn, self.db_tx_conn_sender.clone())
-            .await
+        ApiServerPostgresTransactionalRw::from_connection(
+            conn,
+            self.db_tx_conn_sender.clone(),
+            self.chain_config.clone(),
+        )
+        .await
     }
 }
