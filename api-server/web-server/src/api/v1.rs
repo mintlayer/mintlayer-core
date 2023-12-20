@@ -330,12 +330,39 @@ pub async fn feerate<T: ApiServerStorage>(
         .map_err(|_| ApiServerWebServerClientError::InvalidInTopX)?
         .unwrap_or(DEFAULT_IN_TOP_X_MB);
 
-    let feerate = state.rpc.get_mempool_fee_rate(in_top_x_mb).await.map_err(|e| {
-        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::RpcError(e.to_string()))
-    })?;
+    let feerate_points: BTreeMap<_, _> = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_feerate_points()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .into_iter()
+        .map(|(size, feerate)| (size as usize, Amount::from_atoms(feerate.atoms_per_kb())))
+        .collect();
+
+    let (min_size, max_feerate) = feerate_points.first_key_value().expect("not empty");
+    let (max_size, min_feerate) = feerate_points.last_key_value().expect("not empty");
+    let feerate = match in_top_x_mb {
+        _ if in_top_x_mb <= *min_size => *max_feerate,
+        _ if in_top_x_mb >= *max_size => *min_feerate,
+        _ => mempool::find_interpolated_value(&feerate_points, in_top_x_mb).ok_or_else(|| {
+            logging::log::error!(
+                "internal error: could not calculate feerate {in_top_x_mb} {feerate_points:?}"
+            );
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?,
+    };
 
     Ok(Json(
-        serde_json::to_value(feerate.atoms_per_kb().to_string()).expect("should not fail"),
+        serde_json::to_value(feerate.into_atoms().to_string()).expect("should not fail"),
     ))
 }
 

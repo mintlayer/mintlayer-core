@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
@@ -301,6 +303,13 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
         let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await??;
+        Ok(res)
+    }
+
+    async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        // MIN(1) + 9 = 10, to keep it as const
+        const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
+        let res = self.mempool.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await??;
         Ok(res)
     }
 }

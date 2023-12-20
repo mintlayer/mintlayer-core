@@ -13,6 +13,7 @@ crypto = { path = '../../crypto/' }
 logging = { path = '../../logging'}
 pos_accounting = { path = '../../pos_accounting' }
 serialization = { path = "../../serialization" }
+mempool = { path = "../../mempool" }
 
 async-trait.workspace = true
 bb8-postgres = "0.8"

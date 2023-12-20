@@ -17,6 +17,7 @@ pos_accounting = { path = "../../pos_accounting" }
 utils = { path = "../../utils" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
 constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }
+mempool = { path = "../../mempool" }
 
 async-trait.workspace = true
 thiserror.workspace = true

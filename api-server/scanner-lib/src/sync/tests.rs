@@ -15,6 +15,7 @@
 
 use crate::blockchain_state::BlockchainState;
 
+use mempool::FeeRate;
 use serialization::Encode;
 
 use super::*;
@@ -94,6 +95,13 @@ impl LocalBlockchainState for MockLocalState {
         Ok((self.get_block_height(), self.get_best_block_id()))
     }
 
+    async fn update_mempool_feerate_points(
+        &mut self,
+        _feerate_points: Vec<(usize, FeeRate)>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     async fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
@@ -168,6 +176,13 @@ impl RemoteNode for MockRemoteNode {
             .chainstate
             .get_mainchain_blocks(from, max_count)
             .unwrap())
+    }
+
+    async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        Ok(vec![(
+            1,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
+        )])
     }
 }
 

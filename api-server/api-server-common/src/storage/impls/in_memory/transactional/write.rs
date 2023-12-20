@@ -23,6 +23,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
+use mempool::FeeRate;
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
@@ -194,6 +195,13 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_nft_issuance_above_height(block_height)
     }
+
+    async fn set_feerate_points(
+        &mut self,
+        feerate_points: Vec<(usize, FeeRate)>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_feerate_points(feerate_points)
+    }
 }
 
 #[async_trait::async_trait]
@@ -327,5 +335,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         token_id: TokenId,
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         self.transaction.get_nft_token_issuance(token_id)
+    }
+
+    async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
+        self.transaction.get_feerate_points()
     }
 }

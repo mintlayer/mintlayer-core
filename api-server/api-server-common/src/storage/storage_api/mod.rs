@@ -26,6 +26,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
+use mempool::FeeRate;
 use pos_accounting::PoolData;
 use serialization::{Decode, Encode};
 
@@ -276,6 +277,8 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         token_id: TokenId,
     ) -> Result<Option<NftIssuance>, ApiServerStorageError>;
+
+    async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -394,6 +397,11 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn del_nft_issuance_above_height(
         &mut self,
         block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_feerate_points(
+        &mut self,
+        feerate_points: Vec<(usize, FeeRate)>,
     ) -> Result<(), ApiServerStorageError>;
 }
 

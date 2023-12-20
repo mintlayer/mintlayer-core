@@ -26,6 +26,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
+use mempool::FeeRate;
 use pos_accounting::PoolData;
 use std::{
     cmp::Reverse,
@@ -50,6 +51,7 @@ struct ApiServerInMemoryStorage {
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
     best_block: (BlockHeight, Id<GenBlock>),
+    feerate_points: Vec<(u64, FeeRate)>,
     storage_version: u32,
 }
 
@@ -69,6 +71,7 @@ impl ApiServerInMemoryStorage {
             fungible_token_issuances: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
+            feerate_points: vec![(1, FeeRate::from_amount_per_kb(Amount::from_atoms(1)))],
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
         result
@@ -329,6 +332,10 @@ impl ApiServerInMemoryStorage {
             .get(&token_id)
             .map(|by_height| by_height.values().last().cloned().expect("not empty")))
     }
+
+    fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
+        Ok(self.feerate_points.clone())
+    }
 }
 
 impl ApiServerInMemoryStorage {
@@ -580,6 +587,17 @@ impl ApiServerInMemoryStorage {
             !v.is_empty()
         });
 
+        Ok(())
+    }
+
+    fn set_feerate_points(
+        &mut self,
+        feerate_points: Vec<(usize, FeeRate)>,
+    ) -> Result<(), ApiServerStorageError> {
+        self.feerate_points = feerate_points
+            .into_iter()
+            .map(|(size, feerate)| (size as u64, feerate))
+            .collect();
         Ok(())
     }
 }

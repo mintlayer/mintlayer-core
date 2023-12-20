@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use common::primitives::Amount;
 
-use super::{fee::Fee, store::DescendantScore};
+use super::fee::Fee;
 
 pub fn linear_interpolation(x0: usize, y0: u128, x1: usize, y1: u128, x: usize) -> Option<u128> {
     if x0 == x1 {
@@ -37,15 +37,17 @@ pub fn linear_interpolation(x0: usize, y0: u128, x1: usize, y1: u128, x: usize) 
     }
 }
 
-pub fn find_interpolated_value(
-    map: &BTreeMap<usize, DescendantScore>,
+pub fn find_interpolated_value<T: From<Fee> + Into<Fee> + Copy>(
+    map: &BTreeMap<usize, T>,
     key: usize,
-) -> Option<DescendantScore> {
+) -> Option<T> {
     match map.get(&key) {
         Some(value) => Some(*value),
         None => {
             let (k1, left_value) = map.range(..key).next_back()?;
             let (k2, right_value) = map.range(key..).next()?;
+            let left_value: Fee = (*left_value).into();
+            let right_value: Fee = (*right_value).into();
 
             let interpolated_value = linear_interpolation(
                 *k1,
@@ -55,9 +57,7 @@ pub fn find_interpolated_value(
                 key,
             )?;
 
-            Some(DescendantScore::new(Fee::new(Amount::from_atoms(
-                interpolated_value,
-            ))))
+            Some(Fee::new(Amount::from_atoms(interpolated_value)).into())
         }
     }
 }
@@ -86,6 +86,8 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 mod tests {
     use rstest::rstest;
     pub use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
+
+    use crate::pool::store::DescendantScore;
 
     use super::*;
 
@@ -158,7 +160,10 @@ mod tests {
         // check that all keys can be found and the returned value is the same as the one in the
         // map
         for key in map.keys() {
-            assert_eq!(find_interpolated_value(&map, *key), map.get(key).cloned());
+            assert_eq!(
+                find_interpolated_value::<DescendantScore>(&map, *key),
+                map.get(key).cloned()
+            );
         }
     }
 

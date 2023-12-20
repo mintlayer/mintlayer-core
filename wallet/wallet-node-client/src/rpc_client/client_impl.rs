@@ -258,4 +258,10 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+
+    async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        MempoolRpcClient::get_fee_rate_points(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
 }

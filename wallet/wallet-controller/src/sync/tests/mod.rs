@@ -342,6 +342,13 @@ impl NodeInterface for MockNode {
     async fn mempool_get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
         Ok(FeeRate::from_amount_per_kb(Amount::ZERO))
     }
+
+    async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        Ok(vec![(
+            1,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
+        )])
+    }
 }
 
 fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {

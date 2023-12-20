@@ -72,7 +72,7 @@ mod collect_txs;
 mod entry;
 pub mod fee;
 mod feerate;
-mod feerate_points;
+pub mod feerate_points;
 pub mod memory_usage_estimator;
 mod orphans;
 mod reorg;

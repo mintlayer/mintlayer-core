@@ -28,6 +28,7 @@ use crate::storage::{
         FungibleTokenData, Utxo,
     },
 };
+use mempool::FeeRate;
 use std::collections::BTreeMap;
 
 use common::chain::{DelegationId, PoolId, UtxoOutPoint};
@@ -239,6 +240,13 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_nft_token_issuance(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_feerate_points().await?;
 
         Ok(res)
     }

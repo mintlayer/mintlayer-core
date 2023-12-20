@@ -18,6 +18,7 @@ use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use mempool::FeeRate;
 use node_comm::{
     node_traits::NodeInterface,
     rpc_client::{NodeRpcClient, NodeRpcError},
@@ -39,6 +40,8 @@ pub trait RemoteNode {
         from: BlockHeight,
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error>;
+
+    async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error>;
 }
 
 #[async_trait::async_trait]
@@ -62,5 +65,9 @@ impl RemoteNode for NodeRpcClient {
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error> {
         self.get_mainchain_blocks(from, max_count).await
+    }
+
+    async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        self.mempool_get_fee_rate_points().await
     }
 }
