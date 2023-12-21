@@ -27,7 +27,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use mempool::FeeRate;
 use tokio_postgres::NoTls;
 
 use crate::storage::{
@@ -38,7 +37,6 @@ use crate::storage::{
 };
 
 const VERSION_STR: &str = "version";
-const FEERATE_POINTS_STR: &str = "feerate_points";
 
 pub struct QueryFromConnection<'a, 'b> {
     tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
@@ -1368,53 +1366,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
-    }
-
-    pub async fn set_feerate_points(
-        &mut self,
-        feerate_points: Vec<(usize, FeeRate)>,
-    ) -> Result<(), ApiServerStorageError> {
-        let feerate_points: Vec<_> = feerate_points
-            .into_iter()
-            .map(|(size, feerate)| (size as u64, feerate.atoms_per_kb()))
-            .collect();
-
-        self.tx
-            .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)",
-                &[&FEERATE_POINTS_STR, &feerate_points.encode()],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
-        Ok(())
-    }
-
-    pub async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
-        let row = self
-            .tx
-            .query_one(
-                "SELECT value FROM ml_misc_data WHERE name = 'version';",
-                &[],
-            )
-            .await
-            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        let data: Vec<u8> = row.get(0);
-
-        let feerate_points =
-            Vec::<(u64, Amount)>::decode_all(&mut data.as_slice()).map_err(|e| {
-                ApiServerStorageError::InvalidInitializedState(format!(
-                    "Version deserialization failed: {}",
-                    e
-                ))
-            })?;
-
-        let feerate_points = feerate_points
-            .into_iter()
-            .map(|(size, per_kb)| (size, FeeRate::from_amount_per_kb(per_kb)))
-            .collect();
-
-        Ok(feerate_points)
     }
 
     pub async fn get_block_aux_data(

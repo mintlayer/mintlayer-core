@@ -58,16 +58,6 @@ pub async fn sync_once(
     local_state: &mut impl LocalBlockchainState,
 ) -> Result<(), SyncError> {
     loop {
-        let feerate_points = rpc_client
-            .mempool_feerate_points()
-            .await
-            .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
-
-        local_state
-            .update_mempool_feerate_points(feerate_points)
-            .await
-            .map_err(|e| SyncError::LocalNode(e.to_string()))?;
-
         let chain_info = rpc_client
             .chainstate()
             .await

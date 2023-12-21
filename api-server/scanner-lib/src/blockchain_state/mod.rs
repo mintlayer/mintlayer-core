@@ -32,7 +32,6 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
-use mempool::FeeRate;
 use pos_accounting::{make_delegation_id, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -98,16 +97,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
         let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
         Ok(best_block)
-    }
-
-    async fn update_mempool_feerate_points(
-        &mut self,
-        feerate_points: Vec<(usize, FeeRate)>,
-    ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw().await.expect("Unable to connect to database");
-        db_tx.set_feerate_points(feerate_points).await?;
-        db_tx.commit().await?;
-        Ok(())
     }
 
     async fn scan_blocks(

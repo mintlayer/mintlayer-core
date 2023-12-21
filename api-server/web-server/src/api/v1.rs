@@ -33,12 +33,12 @@ use axum::{
 use common::{
     address::Address,
     chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{time::get_time, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
-use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc};
+use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc, time::Duration};
 
 use crate::ApiServerWebServerState;
 
@@ -321,6 +321,7 @@ pub async fn feerate<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const REFRESH_INTERVAL_SEC: u64 = 30;
     const IN_TOP_X_MB: &str = "in_top_x_mb";
     const DEFAULT_IN_TOP_X_MB: usize = 5;
     let in_top_x_mb = params
@@ -330,23 +331,42 @@ pub async fn feerate<T: ApiServerStorage>(
         .map_err(|_| ApiServerWebServerClientError::InvalidInTopX)?
         .unwrap_or(DEFAULT_IN_TOP_X_MB);
 
-    let feerate_points: BTreeMap<_, _> = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_feerate_points()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .into_iter()
-        .map(|(size, feerate)| (size as usize, Amount::from_atoms(feerate.atoms_per_kb())))
-        .collect();
+    let feerate_points = &state.cached_values.feerate_points;
+
+    let feerate_points: BTreeMap<_, _> = {
+        let current_time = get_time();
+        if (feerate_points.read().expect("should not fail normally").0
+            + Duration::from_secs(REFRESH_INTERVAL_SEC))
+        .expect("no overflow")
+            < current_time
+        {
+            let new_feerate_points = {
+                state.rpc.get_feerate_points().await.map_err(|e| {
+                    logging::log::error!("internal error: {e}");
+                    ApiServerWebServerError::ServerError(
+                        ApiServerWebServerServerError::InternalServerError,
+                    )
+                })?
+            };
+
+            let mut guard = feerate_points.write().expect("should not fail normally");
+            guard.0 = current_time;
+            guard.1 = new_feerate_points;
+            guard
+                .1
+                .iter()
+                .map(|(size, feerate)| (*size, Amount::from_atoms(feerate.atoms_per_kb())))
+                .collect()
+        } else {
+            feerate_points
+                .read()
+                .expect("should not fail normally")
+                .1
+                .iter()
+                .map(|(size, feerate)| (*size, Amount::from_atoms(feerate.atoms_per_kb())))
+                .collect()
+        }
+    };
 
     let (min_size, max_feerate) = feerate_points.first_key_value().expect("not empty");
     let (max_size, min_feerate) = feerate_points.last_key_value().expect("not empty");

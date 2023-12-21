@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::txoutput_to_json;
+use std::sync::RwLock;
+
+use api_web_server::{api::json_helpers::txoutput_to_json, CachedValues};
+use common::primitives::time::get_time;
 
 use crate::DummyRPC;
 
@@ -108,6 +111,9 @@ async fn no_reward(#[case] seed: Seed) {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
                     rpc: Arc::new(DummyRPC {}),
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
                 }
             };
 
@@ -206,6 +212,9 @@ async fn has_reward(#[case] seed: Seed) {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
                     rpc: Arc::new(DummyRPC {}),
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
                 }
             };
 

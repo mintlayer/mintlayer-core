@@ -23,7 +23,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use mempool::FeeRate;
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
@@ -164,9 +163,5 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         token_id: TokenId,
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         self.transaction.get_nft_token_issuance(token_id)
-    }
-
-    async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
-        self.transaction.get_feerate_points()
     }
 }

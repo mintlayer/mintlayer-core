@@ -95,13 +95,6 @@ impl LocalBlockchainState for MockLocalState {
         Ok((self.get_block_height(), self.get_best_block_id()))
     }
 
-    async fn update_mempool_feerate_points(
-        &mut self,
-        _feerate_points: Vec<(usize, FeeRate)>,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     async fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,

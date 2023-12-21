@@ -12,25 +12,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::collections::BTreeMap;
+use std::{
+    cmp::{Eq, Ord},
+    collections::BTreeMap,
+    ops::{Add, Div, Mul, Sub},
+};
 
 use common::primitives::Amount;
 
 use super::fee::Fee;
 
-pub fn linear_interpolation(x0: usize, y0: u128, x1: usize, y1: u128, x: usize) -> Option<u128> {
-    if x0 == x1 {
+pub fn linear_interpolation<X, Y>(p0: (X, Y), p1: (X, Y), x: X) -> Option<Y>
+where
+    X: Add<Output = X> + Sub<Output = X> + Eq + Ord + Copy,
+    Y: Mul<Output = Y> + Add<Output = Y> + Div<Output = Y> + Copy + From<X>,
+{
+    if p0.0 == p1.0 {
         // Avoid division by zero
-        return if x0 == x { Some(y0) } else { None };
+        return if p0.0 == x { Some(p0.1) } else { None };
     }
 
-    if x < x0 || x > x1 {
+    if x < p0.0 || x > p1.0 {
         // The interpolation factor is outside the range
         None
     } else {
-        let scaled_v1 = y0 * (x1 - x) as u128;
-        let scaled_v2 = y1 * (x - x0) as u128;
-        let total_scale = (x1 - x0) as u128;
+        let scaled_v1 = p0.1 * Y::from(p1.0 - x);
+        let scaled_v2 = p1.1 * Y::from(x - p0.0);
+        let total_scale = Y::from(p1.0 - p0.0);
 
         let interpolated_value = (scaled_v1 + scaled_v2) / total_scale;
         Some(interpolated_value)
@@ -50,11 +58,9 @@ pub fn find_interpolated_value<T: From<Fee> + Into<Fee> + Copy>(
             let right_value: Fee = (*right_value).into();
 
             let interpolated_value = linear_interpolation(
-                *k1,
-                left_value.into_atoms(),
-                *k2,
-                right_value.into_atoms(),
-                key,
+                (*k1 as u64, left_value.into_atoms()),
+                (*k2 as u64, right_value.into_atoms()),
+                key as u64,
             )?;
 
             Some(Fee::new(Amount::from_atoms(interpolated_value)).into())
@@ -130,17 +136,17 @@ mod tests {
         let v2 = 100;
         let k3 = 5;
 
-        assert_eq!(linear_interpolation(k1, v1, k2, v2, k3), Some(55));
+        assert_eq!(linear_interpolation((k1, v1), (k2, v2), k3), Some(55));
     }
 
     #[test]
     fn test_linear_interpolation_invalid_parameters() {
         // Same keys, invalid interpolation
-        assert_eq!(linear_interpolation(1, 10, 1, 10, 3), None);
-        assert_eq!(linear_interpolation(1, 10, 2, 20, 3), None);
+        assert_eq!(linear_interpolation((1, 10), (1, 10), 3), None);
+        assert_eq!(linear_interpolation((1, 10), (2, 20), 3), None);
 
         // k1 == k2 == k3, should return v1
-        assert_eq!(linear_interpolation(1, 10, 1, 20, 1), Some(10));
+        assert_eq!(linear_interpolation((1, 10), (1, 20), 1), Some(10));
     }
 
     #[rstest]
@@ -183,7 +189,7 @@ mod tests {
         assert_eq!(
             find_interpolated_value(&map, 5),
             Some(DescendantScore::new(Fee::new(Amount::from_atoms(
-                linear_interpolation(0, min, 10, max, 5).unwrap()
+                linear_interpolation((0_u64, min), (10, max), 5).unwrap()
             ))))
         );
     }

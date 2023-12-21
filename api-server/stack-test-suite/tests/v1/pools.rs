@@ -186,6 +186,9 @@ async fn ok(#[case] seed: Seed) {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 

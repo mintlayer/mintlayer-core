@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::RwLock;
+
+use api_web_server::CachedValues;
+use common::primitives::time::get_time;
+
 use crate::DummyRPC;
 
 use super::*;
@@ -244,6 +249,9 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 
@@ -461,6 +469,9 @@ async fn ok(#[case] seed: Seed) {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 

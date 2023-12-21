@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::RwLock;
+
+use api_web_server::CachedValues;
+use common::primitives::time::get_time;
 use mempool::FeeRate;
 
 use super::*;
@@ -50,22 +54,21 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let chain_config = Arc::new(create_unit_test_config());
-            let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-            let mut db_tx = storage.transaction_rw().await.unwrap();
-            db_tx
-                .set_feerate_points(vec![
-                    (1, FeeRate::from_amount_per_kb(Amount::from_atoms(1))),
-                    (100, FeeRate::from_amount_per_kb(Amount::from_atoms(100))),
-                ])
-                .await
-                .unwrap();
-            db_tx.commit().await.unwrap();
+            let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((
+                        get_time(),
+                        vec![
+                            (1, FeeRate::from_amount_per_kb(Amount::from_atoms(1))),
+                            (100, FeeRate::from_amount_per_kb(Amount::from_atoms(100))),
+                        ],
+                    )),
+                }),
             }
         };
 

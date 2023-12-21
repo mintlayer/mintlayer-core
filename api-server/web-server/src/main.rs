@@ -19,15 +19,19 @@ mod error;
 
 use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use api_web_server::{
-    api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState, TxSubmitClient,
+    api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState, CachedValues,
+    TxSubmitClient,
 };
 use clap::Parser;
-use common::chain::config::{Builder, ChainType};
+use common::{
+    chain::config::{Builder, ChainType},
+    primitives::time::Time,
+};
 use logging::log;
 use node_comm::make_rpc_client;
 use node_lib::default_rpc_config;
 use rpc::RpcAuthData;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 
 use crate::error::ApiServerWebServerInitError;
@@ -89,6 +93,9 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         db: Arc::new(storage),
         chain_config,
         rpc: Arc::new(rpc_client),
+        cached_values: Arc::new(CachedValues {
+            feerate_points: RwLock::new((Time::from_secs_since_epoch(0), vec![])),
+        }),
     };
 
     web_server(

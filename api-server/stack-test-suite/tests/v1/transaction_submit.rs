@@ -36,6 +36,9 @@ async fn dissabled_post_route() {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 
@@ -81,6 +84,9 @@ async fn invalid_transaction() {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 
@@ -132,6 +138,9 @@ async fn ok(#[case] seed: Seed) {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
                 rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
             }
         };
 

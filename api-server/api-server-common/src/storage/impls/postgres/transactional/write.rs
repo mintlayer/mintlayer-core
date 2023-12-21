@@ -23,7 +23,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
-use mempool::FeeRate;
 use pos_accounting::PoolData;
 
 use crate::storage::{
@@ -250,16 +249,6 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 
         Ok(())
     }
-
-    async fn set_feerate_points(
-        &mut self,
-        feerate_points: Vec<(usize, FeeRate)>,
-    ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_feerate_points(feerate_points).await?;
-
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -451,13 +440,6 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_nft_token_issuance(token_id).await?;
-
-        Ok(res)
-    }
-
-    async fn get_feerate_points(&self) -> Result<Vec<(u64, FeeRate)>, ApiServerStorageError> {
-        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_feerate_points().await?;
 
         Ok(res)
     }

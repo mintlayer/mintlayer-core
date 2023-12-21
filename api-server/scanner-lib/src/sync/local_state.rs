@@ -17,7 +17,6 @@ use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use mempool::FeeRate;
 
 /// An abstraction that represents the state of the API server locally.
 /// This state is updated by the sync process, which uses a RemoteNode to fetch new blocks.
@@ -38,10 +37,5 @@ pub trait LocalBlockchainState {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-    ) -> Result<(), Self::Error>;
-
-    async fn update_mempool_feerate_points(
-        &mut self,
-        feerate_points: Vec<(usize, FeeRate)>,
     ) -> Result<(), Self::Error>;
 }
