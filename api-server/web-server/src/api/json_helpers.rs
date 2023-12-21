@@ -15,8 +15,10 @@
 
 use common::{
     address::Address,
-    chain::{output_value::OutputValue, ChainConfig, Transaction, TxOutput},
-    primitives::Amount,
+    chain::{
+        block::ConsensusData, output_value::OutputValue, Block, ChainConfig, Transaction, TxOutput,
+    },
+    primitives::{Amount, Idable},
 };
 use serde_json::json;
 
@@ -138,6 +140,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
 
 pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::Value {
     json!({
+    "id": tx.get_id(),
     "version_byte": tx.version_byte(),
     "is_replaceable": tx.is_replaceable(),
     "flags": tx.flags(),
@@ -146,5 +149,26 @@ pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::V
     "inputs": tx.inputs(),
     "outputs": tx.outputs()
     .iter().map(|out| txoutput_to_json(out, chain_config)).collect::<Vec<_>>()
+    })
+}
+
+pub fn block_header_to_json(block: &Block) -> serde_json::Value {
+    let consensus_data = match block.header().header().consensus_data() {
+        ConsensusData::PoS(pos) => json!({"target": pos.compact_target()}),
+        ConsensusData::PoW(pow) => {
+            json!({
+                "nonce": pow.nonce(),
+                "bits": pow.bits(),
+            })
+        }
+        ConsensusData::None => serde_json::Value::Null,
+    };
+
+    json!({
+        "previous_block_id": block.prev_block_id(),
+        "timestamp": block.timestamp(),
+        "merkle_root": block.merkle_root(),
+        "witness_merkle_root": block.witness_merkle_root(),
+        "consensus_data": consensus_data,
     })
 }

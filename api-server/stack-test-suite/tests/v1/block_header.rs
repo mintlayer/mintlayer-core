@@ -13,6 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::block_header_to_json;
+use common::{
+    chain::{stakelock::StakePoolData, CoinUnit, PoolId},
+    primitives::{per_thousand::PerThousand, H256},
+};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+
 use crate::DummyRPC;
 
 use super::*;
@@ -61,50 +68,62 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(1..50);
-            let n_blocks = rng.gen_range(block_height..100);
 
-            let chain_config = create_unit_test_config();
+            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+            let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let staking_key = Destination::PublicKey(pk.clone());
+            let pool_data = StakePoolData::new(
+                Amount::from_atoms(initial_pledge),
+                staking_key.clone(),
+                vrf_pk,
+                staking_key.clone(),
+                PerThousand::new_from_rng(&mut rng),
+                Amount::from_atoms(rng.gen_range(0..100)),
+            );
+            let pool_id = PoolId::new(H256::random_using(&mut rng));
 
-            let chainstate_blocks = {
-                let mut tf = TestFramework::builder(&mut rng)
-                    .with_chain_config(chain_config.clone())
-                    .build();
+            let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+                Amount::from_atoms(initial_pledge * 2),
+                pool_id,
+                pool_data,
+            )
+            .build();
+            let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-                let chainstate_block_ids = tf
-                    .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
-                    .unwrap();
+            let target_block_time = tf.chain_config().target_block_spacing();
+            let prev_block_hash = tf.chain_config().genesis_block_id();
+            tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
-                // Need the "- 1" to account for the genesis block not in the vec
-                let block_id = chainstate_block_ids[block_height - 1];
-                let block = tf.block(tf.to_chain_block_id(&block_id));
+            let block = tf
+                .make_pos_block_builder(&mut rng)
+                .with_parent(prev_block_hash)
+                .with_block_signing_key(staking_sk.clone())
+                .with_stake_spending_key(staking_sk)
+                .with_vrf_key(vrf_sk.clone())
+                .with_stake_pool(pool_id)
+                .build();
+            tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
-                let expected_header = json!({
-                    "previous_block_id": block.prev_block_id().to_hash().encode_hex::<String>(),
-                    "timestamp": block.timestamp(),
-                    "merkle_root": block.merkle_root().encode_hex::<String>(),
-                    "witness_merkle_root": block.witness_merkle_root(),
-                });
+            let block_id = block.get_id();
 
-                _ = tx.send((block_id.to_hash().encode_hex::<String>(), expected_header));
+            let expected_header = block_header_to_json(&block);
 
-                chainstate_block_ids
-                    .iter()
-                    .map(|id| tf.block(tf.to_chain_block_id(id)))
-                    .collect::<Vec<_>>()
-            };
+            _ = tx.send((block_id.to_hash().encode_hex::<String>(), expected_header));
+
+            let chainstate_blocks = vec![block];
 
             let storage = {
-                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+                let mut storage = TransactionalApiServerInMemoryStorage::new(tf.chain_config());
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.initialize_storage(tf.chain_config()).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
             };
 
-            let chain_config = Arc::new(chain_config);
+            let chain_config = Arc::new(tf.chain_config());
             let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
             local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();

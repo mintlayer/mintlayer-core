@@ -13,7 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::{tx_to_json, txoutput_to_json};
+use api_web_server::api::json_helpers::{block_header_to_json, tx_to_json, txoutput_to_json};
+use common::{
+    chain::{stakelock::StakePoolData, CoinUnit, GenBlock, PoolId},
+    primitives::{per_thousand::PerThousand, H256},
+};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 
 use crate::DummyRPC;
 
@@ -66,97 +71,132 @@ async fn ok(#[case] seed: Seed) {
         let web_server_state = {
             let n_blocks = rng.gen_range(block_height..100);
 
-            let chain_config = create_unit_test_config();
+            let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
+            let (staking_sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let staking_key = Destination::PublicKey(pk.clone());
+            let pool_data = StakePoolData::new(
+                Amount::from_atoms(initial_pledge),
+                staking_key.clone(),
+                vrf_pk,
+                staking_key.clone(),
+                PerThousand::new_from_rng(&mut rng),
+                Amount::from_atoms(rng.gen_range(0..100)),
+            );
+            let pool_id = PoolId::new(H256::random_using(&mut rng));
+
+            let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+                Amount::from_atoms(initial_pledge * 2),
+                pool_id,
+                pool_data,
+            )
+            .build();
+            let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+            let target_block_time = tf.chain_config().target_block_spacing();
+            let mut prev_block_hash: Id<GenBlock> = tf.chain_config().genesis_block_id();
+
+            let chainstate_blocks: Vec<_> = (0..n_blocks)
+                .map(|_| {
+                    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+                    let block = tf
+                        .make_pos_block_builder(&mut rng)
+                        .with_parent(prev_block_hash)
+                        .with_block_signing_key(staking_sk.clone())
+                        .with_stake_spending_key(staking_sk.clone())
+                        .with_vrf_key(vrf_sk.clone())
+                        .with_stake_pool(pool_id)
+                        .build();
+                    prev_block_hash = block.get_id().into();
+                    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+                    block
+                })
+                .collect();
 
             let storage = {
-                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+                let chain_config = tf.chain_config();
+                let mut storage = TransactionalApiServerInMemoryStorage::new(chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.initialize_storage(chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
             };
 
-            // generate some n_blocks
-            let mut tf =
-                TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
-            let chainstate_block_ids = tf
-                .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
-                .unwrap();
-            let chainstate_blocks = chainstate_block_ids
-                .iter()
-                .map(|id| tf.block(tf.to_chain_block_id(id)))
-                .collect::<Vec<_>>();
-
-            // Scan those blocks
-            let chain_config = Arc::new(chain_config);
-            let mut local_node = BlockchainState::new(chain_config.clone(), storage);
-            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
-            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
-
             // Get the current block at block_height
             // Need the "- 1" to account for the genesis block not in the vec
-            let old_block_id = chainstate_block_ids[block_height - 1];
+            let old_block_id = chainstate_blocks.get(block_height - 1).unwrap().get_id().into();
             let block = tf.block(tf.to_chain_block_id(&old_block_id));
 
+            // Scan those blocks
+            let mut local_node = BlockchainState::new(tf.chain_config().clone(), storage);
+            local_node.scan_genesis(tf.chain_config().genesis_block()).await.unwrap();
+            local_node
+                .scan_blocks(BlockHeight::new(0), chainstate_blocks.clone())
+                .await
+                .unwrap();
+
             let old_expected_block = json!({
-                "header": {
-                    "previous_block_id": block.prev_block_id(),
-                    "merkle_root": block.merkle_root(),
-                    "witness_merkle_root": block.witness_merkle_root(),
-                    "timestamp": block.timestamp(),
-                },
+                "header": block_header_to_json(&block),
                 "body": {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, &chain_config))
+                        .map(|out| txoutput_to_json(out, tf.chain_config()))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
-                                        .map(|tx| tx_to_json(tx.transaction(), &chain_config))
+                                        .map(|tx| tx_to_json(tx.transaction(), tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
 
             // create a reorg
-            let parent_id = chainstate_block_ids[block_height - 2];
+            let parent_block = chainstate_blocks.get(block_height - 2).unwrap();
+            let mut prev_block_hash = parent_block.get_id().into();
             let count = rng.gen_range(block_height..=100);
-            tf.create_chain(&parent_id, count, &mut rng).unwrap();
-            let new_chainstate_block_ids =
-                tf.block_indexes.iter().skip(block_height - 2).map(|b| b.block_id());
+            tf.set_time_seconds_since_epoch(parent_block.timestamp().as_int_seconds());
 
-            let new_chainstate_blocks =
-                new_chainstate_block_ids.map(|id| tf.block(*id)).collect::<Vec<_>>();
+            let new_chainstate_blocks: Vec<_> = (block_height..count)
+                .map(|_| {
+                    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+                    let block = tf
+                        .make_pos_block_builder(&mut rng)
+                        .with_parent(prev_block_hash)
+                        .with_block_signing_key(staking_sk.clone())
+                        .with_stake_spending_key(staking_sk.clone())
+                        .with_vrf_key(vrf_sk.clone())
+                        .with_stake_pool(pool_id)
+                        .build();
+                    prev_block_hash = block.get_id().into();
+                    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+                    block
+                })
+                .collect();
+
+            let block = new_chainstate_blocks[0].clone();
+            let block_id = block.get_id();
+
             local_node
                 .scan_blocks(
-                    BlockHeight::new((block_height - 2) as u64),
+                    BlockHeight::new((block_height - 1) as u64),
                     new_chainstate_blocks,
                 )
                 .await
                 .unwrap();
 
-            // Need the "- 1" to account for the genesis block not in the vec
-            let block_id = chainstate_block_ids[block_height - 1];
-            let block = tf.block(tf.to_chain_block_id(&block_id));
-
             let new_expected_block = json!({
-                "header": {
-                    "previous_block_id": block.prev_block_id(),
-                    "merkle_root": block.merkle_root(),
-                    "witness_merkle_root": block.witness_merkle_root(),
-                    "timestamp": block.timestamp(),
-                },
+                "header": block_header_to_json(&block),
                 "body": {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, &chain_config))
+                        .map(|out| txoutput_to_json(out, tf.chain_config()))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
-                                        .map(|tx| tx_to_json(tx.transaction(), &chain_config))
+                                        .map(|tx| tx_to_json(tx.transaction(), tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
@@ -170,7 +210,7 @@ async fn ok(#[case] seed: Seed) {
 
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
-                chain_config,
+                chain_config: tf.chain_config().clone(),
                 rpc: None::<std::sync::Arc<DummyRPC>>,
             }
         };
