@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    api::json_helpers::{amount_to_json, tx_to_json},
+    api::json_helpers::{amount_to_json, block_header_to_json, tx_to_json},
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
@@ -140,12 +140,7 @@ pub async fn block<T: ApiServerStorage>(
     let block = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
-    "header": {
-        "previous_block_id": block.prev_block_id(),
-    "timestamp": block.timestamp(),
-        "merkle_root": block.merkle_root(),
-        "witness_merkle_root": block.witness_merkle_root(),
-    },
+    "header": block_header_to_json(&block),
     "body": {
         "reward": block.block_reward()
             .outputs()
@@ -167,12 +162,7 @@ pub async fn block_header<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
-    Ok(Json(json!({
-        "previous_block_id": block.prev_block_id(),
-        "timestamp": block.timestamp(),
-        "merkle_root": block.merkle_root(),
-        "witness_merkle_root": block.witness_merkle_root(),
-    })))
+    Ok(Json(block_header_to_json(&block)))
 }
 
 #[allow(clippy::unused_async)]
