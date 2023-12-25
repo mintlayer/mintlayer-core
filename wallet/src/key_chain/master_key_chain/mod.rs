@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::key_chain::account_key_chain::AccountKeyChain;
-use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND, LOOKAHEAD_SIZE};
+use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND};
 use common::chain::ChainConfig;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::derivable::Derivable;
@@ -130,6 +130,7 @@ impl MasterKeyChain {
         &self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         account_index: U31,
+        lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
         let root_key = Self::load_root_key(db_tx)?;
         AccountKeyChain::new_from_root_key(
@@ -137,7 +138,7 @@ impl MasterKeyChain {
             db_tx,
             root_key,
             account_index,
-            LOOKAHEAD_SIZE,
+            lookahead_size,
         )
     }
 }

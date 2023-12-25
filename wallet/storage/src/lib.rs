@@ -92,6 +92,7 @@ pub trait WalletStorageReadLocked {
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
     fn get_median_time(&self) -> Result<Option<BlockTimestamp>>;
+    fn get_lookahead_size(&self) -> Result<u32>;
 }
 
 /// Queries on persistent wallet data with access to encrypted data
@@ -142,6 +143,9 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     ) -> Result<()>;
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
+    fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
+    fn clear_public_keys(&mut self) -> Result<()>;
+    fn clear_addresses(&mut self) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::key_chain::MasterKeyChain;
+use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use common::chain::config::create_mainnet;
 use crypto::key::secp256k1::Secp256k1PublicKey;
 use rstest::rstest;
@@ -44,7 +44,7 @@ fn check_mine_methods(#[case] public: &str) {
     )
     .unwrap();
     let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     key_chain.top_up_all(&mut db_tx).unwrap();
     db_tx.commit().unwrap();

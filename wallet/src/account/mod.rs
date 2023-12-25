@@ -1509,6 +1509,14 @@ impl Account {
         self.output_cache
             .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
     }
+
+    pub fn top_up_addresses(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        self.key_chain.top_up_all(db_tx)?;
+        Ok(())
+    }
 }
 
 /// There are some preselected inputs like the Token account inputs with a nonce

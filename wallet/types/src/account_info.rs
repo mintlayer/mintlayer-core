@@ -68,6 +68,10 @@ impl AccountInfo {
         self.lookahead_size
     }
 
+    pub fn set_lookahead_size(&mut self, lookahead_size: u32) {
+        self.lookahead_size = lookahead_size
+    }
+
     pub fn best_block_height(&self) -> BlockHeight {
         self.best_block_height
     }

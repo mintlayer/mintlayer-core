@@ -69,6 +69,7 @@ mod well_known {
     declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
     declare_entry!(MedianTime: BlockTimestamp);
     declare_entry!(StoreChainInfo: ChainInfo);
+    declare_entry!(LookaheadSize: u32);
 }
 
 #[derive(PartialEq, Clone)]
@@ -261,6 +262,11 @@ macro_rules! impl_read_ops {
             fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
                 self.read_value::<well_known::MedianTime>()
             }
+
+            fn get_lookahead_size(&self) -> crate::Result<u32> {
+                let lookahead = self.read_value::<well_known::LookaheadSize>()?;
+                lookahead.ok_or(crate::Error::WalletDbInconsistentState)
+            }
         }
 
         impl<'st, B: storage::Backend> $TxType<'st, B> {
@@ -377,6 +383,24 @@ macro_rules! impl_write_ops {
                 transactions.into_iter().try_for_each(|id| self.del_transaction(&id))
             }
 
+            fn clear_public_keys(&mut self) -> crate::Result<()> {
+                let transactions: Vec<_> =
+                    self.storage.get::<db::DBPubKeys, _>().prefix_iter_keys(&())?.collect();
+
+                transactions.into_iter().try_for_each(|id| {
+                    self.storage.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
+                })
+            }
+
+            fn clear_addresses(&mut self) -> crate::Result<()> {
+                let transactions: Vec<_> =
+                    self.storage.get::<db::DBAddresses, _>().prefix_iter_keys(&())?.collect();
+
+                transactions.into_iter().try_for_each(|id| {
+                    self.storage.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
+                })
+            }
+
             fn set_account_unconfirmed_tx_counter(
                 &mut self,
                 id: &AccountId,
@@ -446,6 +470,10 @@ macro_rules! impl_write_ops {
 
             fn set_median_time(&mut self, median_time: BlockTimestamp) -> crate::Result<()> {
                 self.write_value::<well_known::MedianTime>(&median_time)
+            }
+
+            fn set_lookahead_size(&mut self, lookahead_size: u32) -> crate::Result<()> {
+                self.write_value::<well_known::LookaheadSize>(&lookahead_size)
             }
         }
 

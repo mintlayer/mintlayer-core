@@ -93,6 +93,8 @@ pub enum ControllerError<T: NodeInterface> {
     EndToEndEncryptionError(#[from] crypto::ephemeral_e2e::error::Error),
     #[error("The node is not in sync yet")]
     NodeNotInSyncYet,
+    #[error("Lookahead size cannot be 0")]
+    InvalidLookaheadSize,
 }
 
 #[derive(Clone, Copy)]
@@ -344,6 +346,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             ControllerError::StakingRunning
         );
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
+    }
+
+    /// Locks the wallet by making the encrypted private keys inaccessible.
+    ///
+    /// # Returns
+    ///
+    /// This method returns an error if the wallet is not encrypted.
+    pub fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<(), ControllerError<T>> {
+        utils::ensure!(lookahead_size > 0, ControllerError::InvalidLookaheadSize);
+
+        self.wallet
+            .set_lookahead_size(lookahead_size)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {

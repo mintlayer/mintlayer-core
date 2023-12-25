@@ -149,6 +149,9 @@ class WalletCliController:
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"selectaccount {account_index}\n")
 
+    async def set_lookahead_size(self, size: int) -> str:
+        return await self._write_command(f"setlookaheadsize {size}\n")
+
     async def new_public_key(self) -> bytes:
         public_key = await self._write_command("newpublickey\n")
 

@@ -98,6 +98,12 @@ pub enum WalletCommand {
     // Locks the private keys so they can't be used until they are unlocked again
     LockPrivateKeys,
 
+    /// Set the lookahead size for key generation
+    SetLookaheadSize {
+        // The new lookahead size
+        lookahead_size: u32,
+    },
+
     /// Returns the node chainstate
     ChainstateInfo,
 
@@ -677,6 +683,17 @@ impl CommandHandler {
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now locked.".to_owned(),
+                ))
+            }
+
+            WalletCommand::SetLookaheadSize { lookahead_size } => {
+                self.controller()?
+                    .set_lookahead_size(lookahead_size)
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(ConsoleCommand::Print(
+                    "Success. Lookahead size has been updated, will rescan the blockchain."
+                        .to_owned(),
                 ))
             }
 
