@@ -138,7 +138,7 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state).await.unwrap();
     });
 
-    let tx: HexEncoded<SignedTransaction> = TransactionBuilder::new()
+    let tx = TransactionBuilder::new()
         .add_input(
             TxInput::Utxo(UtxoOutPoint::new(
                 OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(&mut rng))),
@@ -146,10 +146,12 @@ async fn ok(#[case] seed: Seed) {
             )),
             empty_witness(&mut rng),
         )
-        .build()
-        .into();
+        .build();
 
-    let body = tx.to_string();
+    let tx_id = tx.transaction().get_id().to_hash().encode_hex::<String>();
+
+    let hex_tx: HexEncoded<SignedTransaction> = tx.into();
+    let body = hex_tx.to_string();
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener
@@ -165,7 +167,9 @@ async fn ok(#[case] seed: Seed) {
     assert_eq!(response.status(), 200);
 
     let body = response.text().await.unwrap();
-    assert!(body.is_empty());
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = body.as_object().unwrap();
+    assert_eq!(body.get("tx_id").unwrap(), &tx_id);
 
     task.abort();
 }

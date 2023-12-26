@@ -20,6 +20,7 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use hex::ToHex;
 use serde_json::json;
 
 pub fn amount_to_json(amount: Amount) -> serde_json::Value {
@@ -140,7 +141,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
 
 pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::Value {
     json!({
-    "id": tx.get_id(),
+    "id": tx.get_id().to_hash().encode_hex::<String>(),
     "version_byte": tx.version_byte(),
     "is_replaceable": tx.is_replaceable(),
     "flags": tx.flags(),
