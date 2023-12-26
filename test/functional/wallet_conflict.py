@@ -168,6 +168,8 @@ class WalletConflictTransaction(BitcoinTestFramework):
 
             # check that the mempool still has the transfer tx
             assert node.mempool_contains_tx(transfer_tx_id)
+            # abandon it from the wallet side so it is not rebroadcasted
+            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
 
             # create a block with the freeze token transaction
             self.generate_block([freeze_tx])
@@ -176,7 +178,6 @@ class WalletConflictTransaction(BitcoinTestFramework):
             # after the token is frozen the transfer token tx should be evicted by the mempool as conflicting
             # wait until mempool evicts the conflicting tx
             self.wait_until(lambda: not node.mempool_contains_tx(transfer_tx_id), timeout = 5)
-            assert_in("The transaction was marked as abandoned successfully", await wallet.abandon_transaction(transfer_tx_id))
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("The transaction was submitted successfully", await wallet.unfreeze_token(token_id))
