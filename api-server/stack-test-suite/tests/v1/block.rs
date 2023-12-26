@@ -158,7 +158,7 @@ async fn ok(#[case] seed: Seed) {
             let count = rng.gen_range(block_height..=100);
             tf.set_time_seconds_since_epoch(parent_block.timestamp().as_int_seconds());
 
-            let new_chainstate_blocks: Vec<_> = (block_height..count)
+            let new_chainstate_blocks: Vec<_> = (block_height - 1..count)
                 .map(|_| {
                     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
                     let block = tf
