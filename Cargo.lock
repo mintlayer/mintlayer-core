@@ -3523,6 +3523,7 @@ dependencies = [
  "logging",
  "mempool-types",
  "mockall",
+ "num-traits",
  "p2p-types",
  "parking_lot 0.12.1",
  "pos_accounting",

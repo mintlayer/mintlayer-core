@@ -1112,7 +1112,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 .into_iter()
                 .map(|point| {
                     let score = feerate_points::find_interpolated_value(&size_to_score, point)
-                        .expect("not empty");
+                        .ok_or(MempoolPolicyError::FeeOverflow)?;
                     score.to_feerate(min_feerate).map(|feerate| (point, feerate))
                 })
                 .collect()

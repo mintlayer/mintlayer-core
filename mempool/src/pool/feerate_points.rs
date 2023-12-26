@@ -15,8 +15,10 @@
 use std::{
     cmp::{Eq, Ord},
     collections::BTreeMap,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Div, Sub},
 };
+
+use num_traits::ops::checked::{CheckedAdd, CheckedMul};
 
 use common::primitives::Amount;
 
@@ -24,8 +26,8 @@ use super::fee::Fee;
 
 pub fn linear_interpolation<X, Y>(p0: (X, Y), p1: (X, Y), x: X) -> Option<Y>
 where
-    X: Add<Output = X> + Sub<Output = X> + Eq + Ord + Copy,
-    Y: Mul<Output = Y> + Add<Output = Y> + Div<Output = Y> + Copy + From<X>,
+    X: Sub<Output = X> + Eq + Ord + Copy,
+    Y: CheckedAdd<Output = Y> + CheckedMul<Output = Y> + Div<Output = Y> + Copy + From<X>,
 {
     if p0.0 == p1.0 {
         // Avoid division by zero
@@ -36,11 +38,11 @@ where
         // The interpolation factor is outside the range
         None
     } else {
-        let scaled_v1 = p0.1 * Y::from(p1.0 - x);
-        let scaled_v2 = p1.1 * Y::from(x - p0.0);
+        let scaled_v1 = p0.1.checked_mul(&Y::from(p1.0 - x))?;
+        let scaled_v2 = p1.1.checked_mul(&Y::from(x - p0.0))?;
         let total_scale = Y::from(p1.0 - p0.0);
 
-        let interpolated_value = (scaled_v1 + scaled_v2) / total_scale;
+        let interpolated_value = scaled_v1.checked_add(&scaled_v2)? / total_scale;
         Some(interpolated_value)
     }
 }
@@ -77,10 +79,10 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
     let mut points = Vec::with_capacity(n);
     points.push(first);
 
-    let step = (last - first) / (n - 1);
+    let distance = (last - first) as u128;
 
     for i in 1..(n - 1) {
-        points.push(first + step * i);
+        points.push(first + ((distance * i as u128) / (n - 1) as u128) as usize);
     }
 
     points.push(last);
@@ -91,7 +93,7 @@ pub fn generate_equidistant_span(first: usize, last: usize, n: usize) -> Vec<usi
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    pub use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
+    pub use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     use crate::pool::store::DescendantScore;
 
@@ -119,11 +121,10 @@ mod tests {
             assert_eq!(result.first(), Some(&first));
             assert_eq!(result.last(), Some(&last));
 
-            // Assert that the difference between elements is equal in the entire array except for the
-            // last element
-            let step = result[1] - result[0];
+            // assert that the difference between elements is equal or off by 1
+            let step = result[1] - result[0] + 1;
             for i in 1..(n - 1) {
-                assert_eq!(result[i] - result[i - 1], step);
+                assert!(result[i] - result[i - 1] <= step);
             }
         }
     }

@@ -33,10 +33,9 @@ def generate_points(first, last, n) -> List[int]:
         return [first]
 
     points = [first]
-    step = (last - first) // (n - 1)
 
     for i in range(1, n - 1):
-        points.append(first + step * i)
+        points.append(first + (last - first) * i // (n - 1))
 
     points.append(last)
 
