@@ -327,6 +327,8 @@ pub async fn submit_transaction<T: ApiServerStorage>(
         })?
         .take();
 
+    let tx_id = tx.transaction().get_id();
+
     state
         .rpc
         .expect("must be present if route is enabled")
@@ -338,7 +340,9 @@ pub async fn submit_transaction<T: ApiServerStorage>(
             ))
         })?;
 
-    Ok(())
+    Ok(Json(
+        json!({"tx_id": tx_id.to_hash().encode_hex::<String>()}),
+    ))
 }
 
 pub async fn transaction<T: ApiServerStorage>(
