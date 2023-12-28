@@ -159,7 +159,7 @@ where
     let reward_output = block
         .block_reward()
         .outputs()
-        .get(0)
+        .first()
         .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
 
     let vrf_pub_key = match reward_output {

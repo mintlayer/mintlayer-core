@@ -681,7 +681,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let tx1_parents = BTreeSet::default();
     let entry_1_ancestors = BTreeSet::default();
     let entry1 = TxMempoolEntry::new_from_data(
-        txs.get(0).unwrap().clone(),
+        txs.first().unwrap().clone(),
         fee,
         tx1_parents,
         entry_1_ancestors,
@@ -755,6 +755,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         mempool.store.add_tx_entry(entry)?;
     }
 
+    #[allow(clippy::get_first)]
     let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");
     let entry2 = mempool.store.get_entry(ids.get(1).expect("index")).expect("entry");
     let entry3 = mempool.store.get_entry(ids.get(2).expect("index")).expect("entry");

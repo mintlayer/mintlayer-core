@@ -110,12 +110,7 @@ fn prefix_iteration() {
 
         // Iterate over all decoded values
         let dbtx = store.transaction_ro().unwrap();
-        let items: Vec<_> = dbtx
-            .get::<Map2, _>()
-            .prefix_iter_decoded(&())
-            .unwrap()
-            .map(|(k, v)| (k, v))
-            .collect();
+        let items: Vec<_> = dbtx.get::<Map2, _>().prefix_iter_decoded(&()).unwrap().collect();
         assert_eq!(items, test_values_sorted);
         dbtx.close();
     });

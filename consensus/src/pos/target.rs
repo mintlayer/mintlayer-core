@@ -943,8 +943,8 @@ mod tests {
             };
 
             let pool_balance = Uint512::from_u64(pool_balance_generator(slot));
-            let target_u512: Uint512 = target.try_into().unwrap();
-            let current_hash: Uint512 = current_hash.try_into().unwrap();
+            let target_u512: Uint512 = target.into();
+            let current_hash: Uint512 = current_hash.into();
 
             // add block if hash satisfies the target
             if current_hash <= (target_u512 * pool_balance).unwrap() {

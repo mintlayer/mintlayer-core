@@ -305,7 +305,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     // Create a block with 1 tx and 0 outputs in txs
     let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
     let mut view = UtxosCache::new(&db).unwrap();
-    let tx = block.transactions().get(0).unwrap();
+    let tx = block.transactions().first().unwrap();
 
     let source = UtxoSource::Blockchain(BlockHeight::new(2));
     assert_eq!(

@@ -21,7 +21,7 @@ use crate::{
 
 // TODO: the argument to the function should be a utxo, right now it might be an account
 pub fn make_token_id(inputs: &[TxInput]) -> Option<TokenId> {
-    Some(TokenId::new(hash_encoded(inputs.get(0)?)))
+    Some(TokenId::new(hash_encoded(inputs.first()?)))
 }
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
