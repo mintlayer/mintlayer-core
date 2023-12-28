@@ -741,7 +741,7 @@ impl OutputCache {
                     }
                     let input0_outpoint = tx
                         .inputs()
-                        .get(0)
+                        .first()
                         .ok_or(WalletError::NoUtxos)?
                         .utxo_outpoint()
                         .ok_or(WalletError::NoUtxos)?;

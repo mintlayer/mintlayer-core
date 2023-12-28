@@ -967,7 +967,7 @@ fn mutate_first_input(
 ) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
 
-    let mutated_input = match updater.inputs.get(0).unwrap() {
+    let mutated_input = match updater.inputs.first().unwrap() {
         TxInput::Utxo(outpoint) => {
             if rng.gen::<bool>() {
                 TxInput::Utxo(UtxoOutPoint::new(outpoint.source_id(), rng.gen()))

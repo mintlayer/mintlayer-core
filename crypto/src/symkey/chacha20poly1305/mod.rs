@@ -275,7 +275,7 @@ mod test {
         let mut result = Vec::new();
 
         let mut current_batch_map: BTreeMap<String, Vec<u8>> = Default::default();
-        for (_line_num, line) in lines.into_iter().enumerate() {
+        for line in lines.into_iter() {
             let line = line.unwrap();
             let line = line.trim();
             if line.starts_with('#') {

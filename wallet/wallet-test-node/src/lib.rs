@@ -15,6 +15,8 @@
 
 //! Node suitable for wallet testing as a library
 
+#![allow(clippy::unwrap_used)]
+
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crypto::{key::PublicKey, random::Rng, vrf::VRFPublicKey};

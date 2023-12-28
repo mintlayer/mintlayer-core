@@ -74,7 +74,7 @@ impl OrphanBlocksPool {
         let next_block = self
             .orphan_by_prev_id
             .get(&(*block_id).into())
-            .map(|v| v.get(0).expect("This list should never be empty as we always delete empty vectors from the map"))
+            .map(|v| v.first().expect("This list should never be empty as we always delete empty vectors from the map"))
             .cloned();
         match next_block {
             Some(block) => self.del_one_deepest_child(&block.get_id()),

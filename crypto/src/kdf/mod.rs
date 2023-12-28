@@ -93,10 +93,9 @@ pub enum KdfChallenge {
     },
 }
 
-fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Result<Vec<u8>, KdfError> {
-    let len = len.try_into().map_err(|_| KdfError::InvalidSaltSize)?;
-    let salt: Vec<u8> = (0..len).map(|_| rng.gen::<u8>()).collect();
-    Ok(salt)
+fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Vec<u8> {
+    let len = len.get();
+    (0..len).map(|_| rng.gen::<u8>()).collect()
 }
 
 /// Recalculate a previously hashed password to recover an encryption key
@@ -145,7 +144,7 @@ pub fn hash_password<R: Rng + CryptoRng>(
             hash_length,
             salt_length,
         } => {
-            let salt = make_salt(rng, salt_length)?;
+            let salt = make_salt(rng, salt_length);
             let hashed_password = argon2::argon2id_hash(&config, &salt, hash_length, password)?;
             let result = KdfResult::Argon2id {
                 config,
@@ -192,8 +191,8 @@ pub mod test {
     #[case(Seed::from_entropy())]
     fn salt_generation(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let salt1 = make_salt(&mut rng, 32.try_into().unwrap()).unwrap();
-        let salt2 = make_salt(&mut rng, 32.try_into().unwrap()).unwrap();
+        let salt1 = make_salt(&mut rng, 32.try_into().unwrap());
+        let salt2 = make_salt(&mut rng, 32.try_into().unwrap());
         assert_eq!(salt1.len(), 32);
         assert_eq!(salt2.len(), 32);
         assert_ne!(salt1, salt2);

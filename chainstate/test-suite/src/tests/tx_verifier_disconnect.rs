@@ -62,7 +62,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
                 GenBlockId::Block(id) => id,
             };
             let block = tf.block(block_id);
-            let tx = block.transactions().get(0).unwrap();
+            let tx = block.transactions().first().unwrap();
             let tx_id = tx.transaction().get_id();
 
             // check if can be disconnected
@@ -84,7 +84,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             GenBlockId::Block(id) => id,
         };
         let block = tf.block(block_id);
-        let tx = block.transactions().get(0).unwrap();
+        let tx = block.transactions().first().unwrap();
         let tx_id = tx.transaction().get_id();
 
         assert!(verifier
