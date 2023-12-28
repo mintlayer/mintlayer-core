@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use p2p_types::socket_address::SocketAddress;
 use tokio::net::{TcpListener, TcpStream};
+use utils::tap_error_log::LogError;
 
 use crate::{
     net::default_backend::transport::{
@@ -46,6 +47,12 @@ impl TransportSocket for TcpTransportSocket {
     fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
         Box::pin(async move {
             let stream = TcpStream::connect(address.socket_addr()).await?;
+
+            let remote_address = stream
+                .remote_address()
+                .log_warn_pfx("remote_address failed when connecting to {address}")?;
+            debug_assert_eq!(remote_address, address);
+
             Ok(stream)
         })
     }
@@ -114,7 +121,12 @@ impl TransportListener for TcpTransportListener {
         let (stream, address) = tasks.select_next_some().await?;
 
         let address = SocketAddress::new(address);
-        debug_assert_eq!(stream.remote_address().ok(), Some(address));
+
+        let remote_address = stream
+            .remote_address()
+            .log_warn_pfx("remote_address failed when accepting connection from {address}")?;
+        debug_assert_eq!(remote_address, address);
+
         Ok((stream, address))
     }
 
