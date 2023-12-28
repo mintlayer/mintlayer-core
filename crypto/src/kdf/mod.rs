@@ -29,8 +29,6 @@ pub mod argon2;
 pub enum KdfError {
     #[error("Argon2 hashing error: {0}")]
     Argon2HashingFailed(#[from] ::argon2::Error),
-    #[error("Invalid salt size")]
-    InvalidSaltSize,
     #[error("Invalid hash size")]
     InvalidHashSize,
 }
