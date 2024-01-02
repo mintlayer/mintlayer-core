@@ -118,8 +118,7 @@ impl ChainType {
 
     fn dns_seeds(&self) -> Vec<&'static str> {
         match self {
-            // TODO: Specify actual values
-            ChainType::Mainnet => Vec::new(),
+            ChainType::Mainnet => vec!["seed.mintlayer.org", "seed2.mintlayer.org"],
             ChainType::Testnet => vec!["testnet-seed.mintlayer.org"],
             ChainType::Regtest => Vec::new(),
             ChainType::Signet => Vec::new(),

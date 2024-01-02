@@ -124,10 +124,14 @@ impl<'de> serde::Deserialize<'de> for DelegationId {
 
 pub fn pos_initial_difficulty(chain_type: ChainType) -> Uint256 {
     match chain_type {
-        // TODO: Decide what to use on Mainnet.
-        ChainType::Mainnet => unimplemented!(),
         // Note: Assuming that there is 1 initial staking pool in testnet the value for difficulty equals to
         // U256::MAX / min_stake_pool_pledge / block_time, dropping the least significant bytes for simplicity
+        ChainType::Mainnet => Uint256([
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000026,
+        ]),
         ChainType::Testnet => Uint256([
             0x0000000000000000,
             0x0000000000000000,

@@ -1275,7 +1275,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_mainnet());
+    let chain_config = Arc::new(create_regtest());
 
     let mut wallet = create_wallet(chain_config.clone());
 
@@ -1359,6 +1359,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             WithLocked::Unlocked,
         )
         .unwrap();
+
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         pool_amount,
