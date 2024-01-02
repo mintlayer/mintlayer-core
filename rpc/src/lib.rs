@@ -28,7 +28,7 @@ use jsonrpsee::{
 
 use logging::log;
 
-pub use error::{handle_result, Error, Result, RpcResult};
+pub use error::{handle_result, Error, RpcClientResult, RpcResult};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
@@ -94,7 +94,7 @@ impl Rpc {
 
         let http = {
             let http_server = ServerBuilder::new()
-                .set_middleware(middleware.clone())
+                .set_http_middleware(middleware.clone())
                 .http_only()
                 .build(http_bind_addr)
                 .await?;
@@ -175,13 +175,13 @@ impl<T> MakeHeaderValue<T> for RpcAuthData {
 
 pub type RpcHttpClient = HttpClient<SetRequestHeader<HttpBackend, RpcAuthData>>;
 
-pub fn new_http_client(host: String, rpc_auth: RpcAuthData) -> Result<RpcHttpClient> {
+pub fn new_http_client(host: String, rpc_auth: RpcAuthData) -> RpcClientResult<RpcHttpClient> {
     let middleware = tower::ServiceBuilder::new().layer(SetRequestHeaderLayer::overriding(
         header::AUTHORIZATION,
         rpc_auth,
     ));
 
-    HttpClientBuilder::default().set_middleware(middleware).build(host)
+    HttpClientBuilder::default().set_http_middleware(middleware).build(host)
 }
 
 fn make_http_header_value(username: &str, password: &str) -> http::HeaderValue {
@@ -257,15 +257,15 @@ mod tests {
         if http {
             let url = format!("http://{}", rpc.http_address());
             let client = new_http_client(url, RpcAuthData::None).unwrap();
-            let response: Result<String> =
+            let response: RpcClientResult<String> =
                 client.request("example_server_protocol_version", rpc_params!()).await;
             assert_eq!(response.unwrap(), "version1");
 
-            let response: Result<String> =
+            let response: RpcClientResult<String> =
                 client.request("some_subsystem_name", rpc_params!()).await;
             assert_eq!(response.unwrap(), "sub1");
 
-            let response: Result<u64> =
+            let response: RpcClientResult<u64> =
                 client.request("some_subsystem_add", rpc_params!(2, 5)).await;
             assert_eq!(response.unwrap(), 7);
         }

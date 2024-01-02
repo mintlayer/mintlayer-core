@@ -22,7 +22,7 @@ use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObject, ErrorObje
 
 /// The Result type with RPC-specific error.
 pub type RpcResult<T> = jsonrpsee::core::RpcResult<T>;
-pub type Result<T> = std::result::Result<T, jsonrpsee::core::Error>;
+pub type RpcClientResult<T> = std::result::Result<T, jsonrpsee::core::ClientError>;
 pub type Error = ErrorObjectOwned;
 
 /// Handle RPC result

@@ -28,9 +28,9 @@ pub enum NodeRpcError {
     #[error("Decoding error: {0}")]
     DecodingError(#[from] serialization::hex::HexError),
     #[error("Client creation error: {0}")]
-    ClientCreationError(jsonrpsee::core::Error),
+    ClientCreationError(jsonrpsee::core::ClientError),
     #[error("Response error: {0}")]
-    ResponseError(jsonrpsee::core::Error),
+    ResponseError(jsonrpsee::core::ClientError),
 }
 
 #[derive(Clone, Debug)]
