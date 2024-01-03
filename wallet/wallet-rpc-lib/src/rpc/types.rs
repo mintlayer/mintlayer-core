@@ -156,3 +156,8 @@ impl NewAccountInfo {
         Self { account, name }
     }
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TransactionOptions {
+    pub in_top_x_mb: usize,
+}

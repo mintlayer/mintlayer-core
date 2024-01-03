@@ -23,7 +23,7 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::{
     service::WalletControllerError,
-    types::{AmountString, BalanceInfo, NewAccountInfo, UtxoInfo},
+    types::{AmountString, BalanceInfo, NewAccountInfo, TransactionOptions, UtxoInfo},
 };
 
 use super::{
@@ -52,7 +52,7 @@ impl WalletRpcServer for WalletRpc {
 
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {
         let account_index = account_index.index()?;
-        let config = ControllerConfig { in_top_x_mb: 5 }; // TODO(PR)
+        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
         let (child_number, destination) = rpc::handle_result(
             self.wallet
                 .call_async(move |w| {
@@ -152,16 +152,19 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         address: String,
         amount_str: AmountString,
-        _options: EmptyArgs,
+        options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
         let amount = amount_str.amount(self.chain_config.coin_decimals())?;
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
         let acct = account_index.index()?;
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+        };
+
         rpc::handle_result(
             self.wallet
                 .call_async(move |controller| {
-                    let config = ControllerConfig { in_top_x_mb: 5 }; // TODO(PR) customize
                     Box::pin(async move {
                         controller
                             .synced_controller(acct, config)

@@ -23,7 +23,9 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use utils::{make_seedable_rng, rpc_params, ClientT, JsonValue, Seed, ACCOUNT0_ARG, ACCOUNT1_ARG};
-use wallet_rpc_lib::types::{AddressInfo, BalanceInfo, BlockInfo, EmptyArgs, NewAccountInfo};
+use wallet_rpc_lib::types::{
+    AddressInfo, BalanceInfo, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions,
+};
 
 #[rstest]
 #[case(test_utils::random::Seed::from_entropy())]
@@ -103,7 +105,8 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
         let to_send_amount_str =
             to_send_amount.into_fixedpoint_str(tf.wallet_service.chain_config().coin_decimals());
         let send_to_addr = acct1_addr.address;
-        let params = rpc_params!(ACCOUNT0_ARG, send_to_addr, to_send_amount_str, EmptyArgs {});
+        let options = TransactionOptions { in_top_x_mb: 3 };
+        let params = rpc_params!(ACCOUNT0_ARG, send_to_addr, to_send_amount_str, options);
         wallet_rpc.request("send_coins", params).await.unwrap()
     };
 

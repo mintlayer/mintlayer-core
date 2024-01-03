@@ -15,7 +15,7 @@
 
 use common::chain::SignedTransaction;
 
-use crate::types::{AmountString, NewAccountInfo, UtxoInfo};
+use crate::types::{AmountString, NewAccountInfo, TransactionOptions, UtxoInfo};
 
 use super::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, BalanceInfo, BlockInfo, EmptyArgs,
@@ -61,6 +61,6 @@ trait WalletRpc {
         account_index: AccountIndexArg,
         address: String,
         amount: AmountString,
-        options: EmptyArgs,
+        options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 }
