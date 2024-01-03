@@ -1218,12 +1218,7 @@ where
             match role {
                 PeerRole::Inbound => {}
                 PeerRole::OutboundManual => {
-                    // TODO: should we include manual peer connection in cur_outbound_conn_addr_groups,
-                    // in order to avoid opening new automatic connections to their address groups?
-                    // (Bitcoin does it).
-                    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
-                    // Note that this change will require adjusting expected connections numbers
-                    // in the "discovered_node" tests.
+                    cur_outbound_conn_addr_groups.insert(addr_group);
                 }
                 PeerRole::OutboundFullRelay => {
                     cur_outbound_full_relay_conn_count += 1;

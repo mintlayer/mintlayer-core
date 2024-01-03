@@ -103,6 +103,21 @@ impl TestTransportChannel {
         MpscChannelTransport::new_with_addr_in_group(addr_group_idx, addr_group_bit_offset)
     }
 }
+
+pub fn make_transport_with_local_addr_in_group(
+    group_idx: u32,
+) -> <TestTransportChannel as TestTransportMaker>::Transport {
+    let group_bits = crate::peer_manager::address_groups::IPV4_GROUP_BYTES * 8;
+
+    TestTransportChannel::make_transport_with_local_addr_in_group(
+        // Make sure that the most significant byte of the address is non-zero
+        // (all 0.x.x.x addresses get into AddressGroup::Private, but we want all
+        // addresses to be in different address groups).
+        group_idx + (1 << (group_bits - 1)),
+        group_bits as u32,
+    )
+}
+
 pub struct TestTransportNoise {}
 
 impl TestTransportMaker for TestTransportNoise {
