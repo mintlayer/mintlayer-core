@@ -289,7 +289,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 mod test {
     use super::*;
     use crate::{ChainstateConfig, DefaultTransactionVerificationStrategy};
-    use rpc::Result;
+    use rpc::RpcCallResult;
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -342,10 +342,10 @@ mod test {
                 _ => panic!("expected a json value with a string"),
             };
 
-            let res: Result<Value> = rpc.call("chainstate_block_id_at_height", [0u32]).await;
+            let res: RpcCallResult<Value> = rpc.call("chainstate_block_id_at_height", [0u32]).await;
             assert!(matches!(res, Ok(Value::String(hash)) if hash == genesis_hash));
 
-            let res: Result<Value> = rpc.call("chainstate_block_id_at_height", [1u32]).await;
+            let res: RpcCallResult<Value> = rpc.call("chainstate_block_id_at_height", [1u32]).await;
             assert!(matches!(res, Ok(Value::Null)));
         })
         .await
