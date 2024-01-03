@@ -15,20 +15,23 @@
 
 use common::chain::SignedTransaction;
 
-use crate::types::UtxoInfo;
+use crate::types::{AmountString, NewAccountInfo, UtxoInfo};
 
 use super::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, BalanceInfo, BlockInfo, EmptyArgs,
     HexEncoded, TxOptionsOverrides,
 };
 
-#[rpc::rpc(server, client)]
+#[rpc::rpc(server)]
 trait WalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
     #[method(name = "best_block")]
     async fn best_block(&self, options: EmptyArgs) -> rpc::RpcResult<BlockInfo>;
+
+    #[method(name = "create_account")]
+    async fn create_account(&self, options: EmptyArgs) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "get_issued_addresses")]
     async fn get_issued_addresses(
@@ -57,7 +60,7 @@ trait WalletRpc {
         &self,
         account_index: AccountIndexArg,
         address: String,
-        amount: String,
+        amount: AmountString,
         options: EmptyArgs,
     ) -> rpc::RpcResult<()>;
 }

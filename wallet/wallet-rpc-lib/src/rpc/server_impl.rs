@@ -17,10 +17,14 @@ use std::collections::BTreeMap;
 
 use common::{address::Address, chain::SignedTransaction, primitives::Amount};
 use utils::shallow_clone::ShallowClone;
-use wallet_controller::{ControllerConfig, ControllerError, NodeInterface, UtxoStates};
+use wallet::account::Currency;
+use wallet_controller::{ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes};
 use wallet_types::with_locked::WithLocked;
 
-use crate::types::{BalanceInfo, UtxoInfo};
+use crate::{
+    service::WalletControllerError,
+    types::{AmountString, BalanceInfo, NewAccountInfo, UtxoInfo},
+};
 
 use super::{
     types::{
@@ -39,6 +43,11 @@ impl WalletRpcServer for WalletRpc {
     async fn best_block(&self, _: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
         let res = rpc::handle_result(self.wallet.call(|w| w.best_block()).await)?;
         Ok(BlockInfo::from_tuple(res))
+    }
+
+    async fn create_account(&self, _: EmptyArgs) -> rpc::RpcResult<NewAccountInfo> {
+        let (num, name) = rpc::handle_result(self.wallet.call(|w| w.create_account(None)).await)?;
+        Ok(NewAccountInfo::new(num, name))
     }
 
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {
@@ -78,20 +87,56 @@ impl WalletRpcServer for WalletRpc {
     async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<BalanceInfo> {
         let account_idx = account_index.index()?;
         let with_locked = WithLocked::Unlocked; // TODO make user-defined
-        let balances: BTreeMap<_, _> = rpc::handle_result(
+        let coin_decimals = self.chain_config.coin_decimals();
+
+        let balances: BalanceInfo = rpc::handle_result(
             self.wallet
-                .call(move |controller| {
-                    controller
-                        .readonly_controller(account_idx)
-                        .get_balance(UtxoStates::ALL, with_locked)
+                .call_async(move |w| {
+                    Box::pin(async move {
+                        let mut amounts = w
+                            .readonly_controller(account_idx)
+                            .get_balance(UtxoStates::ALL, with_locked)?;
+
+                        let coins = amounts.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
+                        let coins = AmountString::new(coins, coin_decimals);
+
+                        let tokens = {
+                            let mut tokens = BTreeMap::new();
+                            for (curr, amt) in amounts {
+                                match curr {
+                                    Currency::Coin => panic!("Coins removed in the previous step"),
+                                    Currency::Token(tok_id) => {
+                                        let decimals =
+                                            w.get_token_number_of_decimals(tok_id).await?;
+                                        tokens.insert(tok_id, AmountString::new(amt, decimals));
+                                    }
+                                }
+                            }
+                            tokens
+                        };
+
+                        Ok::<_, WalletControllerError>(BalanceInfo::new(coins, tokens))
+                    })
                 })
                 .await,
         )?;
-        Ok(BalanceInfo::from_map(balances))
+        Ok(balances)
     }
 
-    async fn get_utxos(&self, _account_index: AccountIndexArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
-        todo!()
+    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
+        let account_idx = account_index.index()?;
+        let utxos: Vec<_> = rpc::handle_result(
+            self.wallet
+                .call(move |w| {
+                    w.readonly_controller(account_idx).get_utxos(
+                        UtxoTypes::ALL,
+                        UtxoStates::ALL,
+                        WithLocked::Any,
+                    )
+                })
+                .await,
+        )?;
+        Ok(utxos.into_iter().map(UtxoInfo::from_tuple).collect())
     }
 
     async fn submit_raw_transaction(
@@ -106,11 +151,10 @@ impl WalletRpcServer for WalletRpc {
         &self,
         account_index: AccountIndexArg,
         address: String,
-        amount: String,
+        amount_str: AmountString,
         _options: EmptyArgs,
     ) -> rpc::RpcResult<()> {
-        let amount = Amount::from_fixedpoint_str(&amount, self.chain_config.coin_decimals())
-            .ok_or(RpcError::InvalidCoinAmount)?;
+        let amount = amount_str.amount(self.chain_config.coin_decimals())?;
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
         let acct = account_index.index()?;

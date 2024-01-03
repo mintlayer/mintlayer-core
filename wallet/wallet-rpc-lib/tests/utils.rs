@@ -18,14 +18,18 @@
 use std::{sync::Arc, time::Duration};
 
 use common::primitives::BlockHeight;
-use crypto::random::Rng;
 use test_utils::{test_dir::TestRoot, test_root};
 use wallet_rpc_lib::{
     config::WalletServiceConfig, types::AccountIndexArg, WalletHandle, WalletService,
 };
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
 
+pub use crypto::random::Rng;
+pub use jsonrpsee::{core::client::ClientT, core::JsonValue, rpc_params};
+pub use test_utils::random::{make_seedable_rng, Seed};
+
 pub const ACCOUNT0_ARG: AccountIndexArg = AccountIndexArg { account: 0 };
+pub const ACCOUNT1_ARG: AccountIndexArg = AccountIndexArg { account: 1 };
 
 pub struct TestFramework {
     pub wallet_service: WalletService,

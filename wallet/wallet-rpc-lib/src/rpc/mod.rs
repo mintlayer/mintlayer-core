@@ -20,7 +20,7 @@ pub mod types;
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
-pub use interface::{WalletRpcClient, WalletRpcServer};
+pub use interface::WalletRpcServer;
 pub use rpc::{rpc_creds::RpcCreds, Rpc, RpcAuthData};
 
 use crate::{service::NodeRpcClient, WalletHandle, WalletRpcConfig};

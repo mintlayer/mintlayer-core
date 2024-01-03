@@ -17,7 +17,7 @@ pub mod config;
 mod rpc;
 mod service;
 
-pub use rpc::{RpcAuthData, RpcCreds, WalletRpcClient, WalletRpcServer, types};
+pub use rpc::{types, RpcAuthData, RpcCreds, WalletRpcServer};
 pub use service::{WalletHandle, WalletResult, WalletService};
 
 use std::time::Duration;

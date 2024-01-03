@@ -53,7 +53,7 @@ pub const MNEMONIC: &str = concat!(
     "prison submit rescue pool panic unable enact oven trap lava floor toward",
 );
 
-fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
+pub fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
     <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
         .expect("Decoding shouldn't fail")

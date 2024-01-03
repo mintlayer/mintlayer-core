@@ -19,14 +19,26 @@ use std::collections::BTreeMap;
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, Destination, GenBlock, UtxoOutPoint},
+    chain::{tokens::TokenId, Destination, GenBlock, TxOutput, UtxoOutPoint},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serialization::hex_encoded::HexEncoded;
-use wallet::account::Currency;
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AmountString(pub String);
+
+impl AmountString {
+    pub fn new(amt: Amount, decimals: u8) -> Self {
+        Self(amt.into_fixedpoint_str(decimals))
+    }
+
+    pub fn amount(&self, decimals: u8) -> Result<Amount, RpcError> {
+        Amount::from_fixedpoint_str(&self.0, decimals).ok_or(RpcError::InvalidCoinAmount)
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -38,6 +50,9 @@ pub enum RpcError {
 
     #[error("Invalid address")]
     InvalidAddress,
+
+    #[error("Malformed amount")]
+    MalformedAmount,
 }
 
 impl From<RpcError> for rpc::Error {
@@ -107,28 +122,37 @@ impl AddressWithUsageInfo {
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BalanceInfo {
-    pub coins: Amount,
-    pub tokens: BTreeMap<TokenId, Amount>,
+    pub coins: AmountString,
+    pub tokens: BTreeMap<TokenId, AmountString>,
 }
 
 impl BalanceInfo {
-    pub fn from_map(mut amounts: BTreeMap<Currency, Amount>) -> Self {
-        let coins = amounts.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-        let token_entry = |(curr, amt)| match curr {
-            Currency::Coin => panic!("Coins removed in the previous step"),
-            Currency::Token(tok_id) => (tok_id, amt),
-        };
-        let tokens = amounts.into_iter().map(token_entry).collect();
+    pub fn new(coins: AmountString, tokens: BTreeMap<TokenId, AmountString>) -> Self {
         Self { coins, tokens }
     }
 }
 
-// TODO(PR) use outputs directly
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct UtxoInfo {
-    pub outpoint: HexEncoded<UtxoOutPoint>,
-    pub amount: Amount,
-    pub currency: Currency,
-    //pub timelock: OutputTimeLock, // TODO
-    // TODO extend with more info
+    pub outpoint: UtxoOutPoint,
+    pub output: TxOutput,
+}
+
+impl UtxoInfo {
+    pub fn from_tuple((outpoint, output): (UtxoOutPoint, TxOutput)) -> Self {
+        Self { outpoint, output }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NewAccountInfo {
+    pub account: u32,
+    pub name: Option<String>,
+}
+
+impl NewAccountInfo {
+    pub fn new(account: U31, name: Option<String>) -> Self {
+        let account = account.into_u32();
+        Self { account, name }
+    }
 }

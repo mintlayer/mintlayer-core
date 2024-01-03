@@ -22,7 +22,7 @@ use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 pub use wallet_controller::NodeRpcClient;
 
-use worker::{WalletController, WalletControllerError};
+pub use worker::{WalletController, WalletControllerError};
 
 pub use handle::WalletHandle;
 
