@@ -22,6 +22,7 @@ pub use error::ApiServerWebServerError;
 use common::{
     chain::{ChainConfig, SignedTransaction},
     primitives::time::Time,
+    time_getter::TimeGetter,
 };
 use mempool::FeeRate;
 use node_comm::{
@@ -48,15 +49,15 @@ impl TxSubmitClient for NodeRpcClient {
     }
 }
 
-#[derive(Debug)]
 pub struct CachedValues {
     pub feerate_points: RwLock<(Time, Vec<(usize, FeeRate)>)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ApiServerWebServerState<T, R> {
     pub db: T,
     pub chain_config: Arc<ChainConfig>,
     pub rpc: R,
     pub cached_values: Arc<CachedValues>,
+    pub time_getter: TimeGetter,
 }

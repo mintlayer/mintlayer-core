@@ -279,6 +279,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 
@@ -521,6 +522,7 @@ async fn ok(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 

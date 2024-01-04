@@ -138,6 +138,7 @@ async fn get_block_failed(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 
@@ -244,6 +245,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 
@@ -369,6 +371,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 
@@ -482,6 +485,7 @@ async fn ok(#[case] seed: Seed) {
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 

@@ -96,6 +96,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         cached_values: Arc::new(CachedValues {
             feerate_points: RwLock::new((Time::from_secs_since_epoch(0), vec![])),
         }),
+        time_getter: Default::default(),
     };
 
     web_server(

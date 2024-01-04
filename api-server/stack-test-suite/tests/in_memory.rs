@@ -57,6 +57,7 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
                 cached_values: Arc::new(CachedValues {
                     feerate_points: RwLock::new((get_time(), vec![])),
                 }),
+                time_getter: Default::default(),
             }
         };
 

@@ -104,6 +104,7 @@ async fn chain_genesis() {
                     cached_values: Arc::new(CachedValues {
                         feerate_points: RwLock::new((get_time(), vec![])),
                     }),
+                    time_getter: Default::default(),
                 }
             };
 

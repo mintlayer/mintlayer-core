@@ -33,7 +33,7 @@ use axum::{
 use common::{
     address::Address,
     chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
-    primitives::{time::get_time, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde_json::json;
@@ -321,7 +321,7 @@ pub async fn feerate<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    const REFRESH_INTERVAL_SEC: u64 = 30;
+    const REFRESH_INTERVAL_SEC: Duration = Duration::from_secs(30);
     const IN_TOP_X_MB: &str = "in_top_x_mb";
     const DEFAULT_IN_TOP_X_MB: usize = 5;
     let in_top_x_mb = params
@@ -334,12 +334,10 @@ pub async fn feerate<T: ApiServerStorage>(
     let feerate_points = &state.cached_values.feerate_points;
 
     let feerate_points: BTreeMap<_, _> = {
-        let current_time = get_time();
-        if (feerate_points.read().expect("should not fail normally").0
-            + Duration::from_secs(REFRESH_INTERVAL_SEC))
-        .expect("no overflow")
-            < current_time
-        {
+        let current_time = state.time_getter.get_time();
+        let last_cache_time = feerate_points.read().expect("asd").0;
+
+        if (last_cache_time + REFRESH_INTERVAL_SEC).expect("no overflow") < current_time {
             let new_feerate_points = {
                 state.rpc.get_feerate_points().await.map_err(|e| {
                     logging::log::error!("internal error: {e}");
@@ -370,15 +368,17 @@ pub async fn feerate<T: ApiServerStorage>(
 
     let (min_size, max_feerate) = feerate_points.first_key_value().expect("not empty");
     let (max_size, min_feerate) = feerate_points.last_key_value().expect("not empty");
-    let feerate = match in_top_x_mb {
-        _ if in_top_x_mb <= *min_size => *max_feerate,
-        _ if in_top_x_mb >= *max_size => *min_feerate,
-        _ => mempool::find_interpolated_value(&feerate_points, in_top_x_mb).ok_or_else(|| {
+    let feerate = if in_top_x_mb <= *min_size {
+        *max_feerate
+    } else if in_top_x_mb >= *max_size {
+        *min_feerate
+    } else {
+        mempool::find_interpolated_value(&feerate_points, in_top_x_mb).ok_or_else(|| {
             logging::log::error!(
                 "internal error: could not calculate feerate {in_top_x_mb} {feerate_points:?}"
             );
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?,
+        })?
     };
 
     Ok(Json(
