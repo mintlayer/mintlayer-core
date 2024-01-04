@@ -1,5 +1,5 @@
 Here we have helper docker files that allow us to run multiple nodes on the same machine
-in order to check that the updated p2p protocol works correctly, in addition to these nodes being expected to connect to the public network.
+in order to check that the p2p protocol works correctly after an upgrade.
 
 ### Usage:
 

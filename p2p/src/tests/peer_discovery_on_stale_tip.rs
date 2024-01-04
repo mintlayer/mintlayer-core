@@ -28,10 +28,7 @@ use test_utils::random::Seed;
 use crate::{
     config::P2pConfig,
     net::types::PeerRole,
-    peer_manager::{
-        address_groups::AddressGroup, PeerManagerConfig, PEER_MGR_DNS_RELOAD_INTERVAL,
-        PEER_MGR_HEARTBEAT_INTERVAL_MAX,
-    },
+    peer_manager::{self, address_groups::AddressGroup, PeerManagerConfig},
     sync::test_helpers::make_new_block,
     testing_utils::{
         make_transport_with_local_addr_in_group, TestTransportChannel, TestTransportMaker,
@@ -170,7 +167,7 @@ async fn peer_discovery_on_stale_tip_impl(
 
     node_group.set_dns_seed_addresses(&node_addresses);
 
-    time_getter.advance_time(PEER_MGR_DNS_RELOAD_INTERVAL);
+    time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
     // Wait until the maximum number of outbound connections is established.
     wait_for_max_outbound_connections(&node_group).await;
@@ -224,7 +221,7 @@ async fn peer_discovery_on_stale_tip_impl(
         .wait_for_block_propagation_advance_time(
             nodes_count,
             new_block_id,
-            PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+            peer_manager::HEARTBEAT_INTERVAL_MAX,
         )
         .await;
 
@@ -363,7 +360,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     // First, announce only one extra node and make sure the main node makes a OutboundFullRelay
     // connection to it.
     main_node.set_dns_seed_addresses(vec![extra_nodes_addresses[0]]);
-    time_getter.advance_time(PEER_MGR_DNS_RELOAD_INTERVAL);
+    time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
     node_wait_for_connection_to(&main_node, &time_getter, extra_nodes_addresses[0]).await;
     main_node
@@ -381,13 +378,13 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     };
     // Now announce all extra nodes.
     main_node.set_dns_seed_addresses(all_dns_addresses);
-    time_getter.advance_time(PEER_MGR_DNS_RELOAD_INTERVAL);
+    time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
     // Wait for a while, giving main node's peer manager time to connect to other nodes
     // (which it shouldn't do).
     for _ in 0..5 {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
+        time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
     }
 
     // Sanity check - the tip is not stale yet
@@ -459,6 +456,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
+        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),
@@ -522,7 +520,7 @@ async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>
             outbound_block_relay_peers_count =
                 peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
 
-            node_group.time_getter().advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
+            node_group.time_getter().advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
         }
     }
 
@@ -548,7 +546,7 @@ async fn wait_for_connections_to_impl(
             break;
         }
 
-        time_getter.advance_time(PEER_MGR_HEARTBEAT_INTERVAL_MAX);
+        time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

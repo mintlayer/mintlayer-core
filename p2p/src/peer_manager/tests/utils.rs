@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_agent};
 use tokio::sync::mpsc;
 
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -22,8 +23,13 @@ use p2p_types::PeerId;
 use test_utils::assert_matches_return_val;
 
 use crate::{
+    config::NodeType,
     message::PeerManagerMessage,
-    net::default_backend::types::{CategorizedMessage, Command},
+    net::{
+        default_backend::types::{CategorizedMessage, Command},
+        types::PeerInfo,
+    },
+    testing_utils::TEST_PROTOCOL_VERSION,
 };
 
 pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {
@@ -53,5 +59,16 @@ pub async fn recv_command_advance_time(
                 break other;
             }
         }
+    }
+}
+
+pub fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
+    PeerInfo {
+        peer_id,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
     }
 }

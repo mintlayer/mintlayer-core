@@ -169,6 +169,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         socks5_proxy,
         disable_noise,
         boot_nodes,
+        boot_nodes_will_stall,
         reserved_nodes,
         whitelisted_addresses,
         max_inbound_connections,
@@ -186,6 +187,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let socks5_proxy = options.p2p_socks5_proxy.clone().or(socks5_proxy);
     let disable_noise = options.p2p_disable_noise.or(disable_noise);
     let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);
+    let boot_nodes_will_stall = options.p2p_boot_nodes_will_stall.or(boot_nodes_will_stall);
     let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
     let whitelisted_addresses = options.p2p_whitelist_addr.clone().or(whitelisted_addresses);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
@@ -203,6 +205,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         socks5_proxy,
         disable_noise,
         boot_nodes,
+        boot_nodes_will_stall,
         reserved_nodes,
         whitelisted_addresses,
         max_inbound_connections,

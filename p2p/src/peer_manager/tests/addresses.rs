@@ -19,10 +19,11 @@ use std::{
     time::Duration,
 };
 
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver};
+use logging::log;
+use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 
 use common::{
-    chain::{self, config},
+    chain::{self, config, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
 use p2p_test_utils::{expect_future_val, expect_no_recv, P2pBasicTestTimeGetter};
@@ -30,20 +31,24 @@ use p2p_types::socket_address::SocketAddress;
 use test_utils::assert_matches;
 
 use crate::{
-    config::NodeType,
-    message::{AnnounceAddrRequest, PeerManagerMessage},
+    config::{NodeType, P2pConfig},
+    message::{AddrListRequest, AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::{
             transport::{MpscChannelTransport, TcpTransportSocket},
-            types::{CategorizedMessage, Command},
+            types::{CategorizedMessage, Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
-        types::{PeerInfo, Role},
+        types::{ConnectivityEvent, PeerInfo, Role},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        tests::{make_peer_manager_custom, utils::cmd_to_peer_man_msg},
-        OutboundConnectType, PeerManager, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+        self,
+        tests::{
+            make_peer_manager_custom,
+            utils::{cmd_to_peer_man_msg, make_peer_info},
+        },
+        OutboundConnectType, PeerManager, DNS_SEED_QUERY_INTERVAL,
     },
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
@@ -546,6 +551,109 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty() {
     assert!(addresses.get(&predefined_peer_address).is_none());
 }
 
+// 1) Configure the peer manager with a non-empty dns seed and non-empty peerdb.
+// 2) Check that it attempts to connect to the address in the peerdb, and not to the seeded one;
+// make the connection succeed.
+// 3) Advance the time, so that the peer manager might consider querying the dns seed.
+// The dns seed should not be queried.
+#[tracing::instrument]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dont_use_dns_seed_if_connections_exist() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let local_bind_address = TestAddressMaker::new_random_address();
+    let existing_address = TestAddressMaker::new_random_address();
+    let seeded_peer_address = TestAddressMaker::new_random_address();
+
+    let chain_config = Arc::new(chain::config::create_unit_test_config());
+
+    let p2p_config = Arc::new(P2pConfig {
+        ping_check_period: Duration::ZERO.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        boot_nodes_will_stall: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, peer_mgr_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
+
+    let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_mgr_event_receiver,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+        None,
+        Box::new(TestDnsSeed::new(Arc::new(Mutex::new(vec![
+            seeded_peer_address,
+        ])))),
+    )
+    .unwrap();
+
+    peer_mgr.peerdb.peer_discovered(existing_address);
+
+    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
+        let mut peer_mgr = peer_mgr;
+        let _ = peer_mgr.run_internal(None).await;
+        peer_mgr
+    });
+
+    // Connection to existing_address is requested
+    let cmd =
+        expect_future_val!(recv_command_advance_time(&mut cmd_receiver, &time_getter)).unwrap();
+    assert_matches!(
+        cmd,
+        Command::Connect {
+            address,
+            local_services_override: _,
+        } if address == existing_address
+    );
+
+    let _ = accept_outbound_connection(
+        &conn_event_sender,
+        &mut cmd_receiver,
+        &existing_address,
+        &local_bind_address,
+        &chain_config,
+    )
+    .await;
+
+    time_getter.advance_time(DNS_SEED_QUERY_INTERVAL * 2);
+
+    expect_no_recv!(cmd_receiver);
+
+    drop(conn_event_sender);
+    drop(peer_mgr_event_sender);
+
+    let peer_mgr = peer_mgr_join_handle.await.unwrap();
+    let addresses: BTreeSet<_> = peer_mgr.peerdb().known_addresses().cloned().collect();
+    // existing_address is in the db, but seeded_peer_address is not.
+    assert!(addresses.get(&existing_address).is_some());
+    assert!(addresses.get(&seeded_peer_address).is_none());
+}
+
 async fn recv_command_advance_time(
     cmd_receiver: &mut UnboundedReceiver<Command>,
     time_getter: &P2pBasicTestTimeGetter,
@@ -553,7 +661,41 @@ async fn recv_command_advance_time(
     super::utils::recv_command_advance_time(
         cmd_receiver,
         time_getter,
-        PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+        peer_manager::HEARTBEAT_INTERVAL_MAX,
     )
     .await
+}
+
+async fn accept_outbound_connection(
+    conn_event_sender: &UnboundedSender<ConnectivityEvent>,
+    cmd_receiver: &mut UnboundedReceiver<Command>,
+    peer_address: &SocketAddress,
+    local_bind_address: &SocketAddress,
+    chain_config: &ChainConfig,
+) -> PeerId {
+    let peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::OutboundAccepted {
+            peer_address: *peer_address,
+            bind_address: *local_bind_address,
+            peer_info: make_peer_info(peer_id, chain_config),
+            node_address_as_seen_by_peer: None,
+        })
+        .unwrap();
+
+    log::debug!("Expecting Command::Accept");
+    let cmd = cmd_receiver.recv().await.unwrap();
+    assert_eq!(cmd, Command::Accept { peer_id });
+
+    log::debug!("Expecting AddrListRequest");
+    let cmd = cmd_receiver.recv().await.unwrap();
+    assert_eq!(
+        cmd,
+        Command::SendMessage {
+            peer_id,
+            message: Message::AddrListRequest(AddrListRequest {})
+        }
+    );
+
+    peer_id
 }

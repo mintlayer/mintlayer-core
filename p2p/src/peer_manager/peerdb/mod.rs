@@ -575,6 +575,14 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.anchor_addresses = anchor_addresses;
     }
 
+    pub fn known_addresses_count(&self) -> usize {
+        self.addresses.len()
+    }
+
+    pub fn is_known_address(&self, address: &SocketAddress) -> bool {
+        self.addresses.contains_key(address)
+    }
+
     #[cfg(test)]
     pub fn address_tables(&self) -> &AddressTables {
         &self.address_tables
@@ -592,4 +600,21 @@ mod tests;
 #[cfg(test)]
 pub mod test_utils {
     pub use super::address_tables::test_utils::*;
+
+    use super::*;
+
+    pub fn make_non_colliding_addresses_for_peer_db<S: PeerDbStorage>(
+        peer_db: &PeerDb<S>,
+        count: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<SocketAddress> {
+        make_non_colliding_addresses(
+            &[
+                peer_db.address_tables().new_addr_table(),
+                peer_db.address_tables().tried_addr_table(),
+            ],
+            count,
+            rng,
+        )
+    }
 }

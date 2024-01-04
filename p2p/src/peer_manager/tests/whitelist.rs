@@ -57,6 +57,7 @@ fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig 
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
+        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses,
         ban_threshold: Default::default(),

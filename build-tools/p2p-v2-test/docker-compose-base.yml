@@ -1,0 +1,13 @@
+services:
+  node:
+    build:
+      context: ../..
+      dockerfile: build-tools/p2p-v2-test/Dockerfile
+    command: bash -c "
+        node-daemon testnet \
+            --http-rpc-addr 0.0.0.0:$RPC_PORT \
+            $(dig +short $NODES_LIST | xargs printf '--p2p-boot-node %s ') \
+            --p2p-boot-nodes-will-stall true \
+      "
+    environment:
+      - RUST_LOG
