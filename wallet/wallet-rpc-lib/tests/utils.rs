@@ -25,7 +25,7 @@ use wallet_rpc_lib::{
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
 
 pub use crypto::random::Rng;
-pub use jsonrpsee::{core::client::ClientT, core::JsonValue, rpc_params};
+pub use jsonrpsee::{core::client::ClientT, core::JsonValue};
 pub use test_utils::random::{make_seedable_rng, Seed};
 
 pub const ACCOUNT0_ARG: AccountIndexArg = AccountIndexArg { account: 0 };

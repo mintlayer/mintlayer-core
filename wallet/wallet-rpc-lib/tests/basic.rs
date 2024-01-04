@@ -22,7 +22,7 @@ use common::{
     chain::{Block, UtxoOutPoint},
     primitives::{Amount, BlockHeight, Id},
 };
-use utils::{make_seedable_rng, rpc_params, ClientT, JsonValue, Seed, ACCOUNT0_ARG, ACCOUNT1_ARG};
+use utils::{make_seedable_rng, ClientT, JsonValue, Seed, ACCOUNT0_ARG, ACCOUNT1_ARG};
 use wallet_rpc_lib::types::{
     AddressInfo, BalanceInfo, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions,
 };
@@ -39,8 +39,7 @@ async fn startup_shutdown(#[case] seed: Seed) {
 
     let rpc_client = tf.rpc_client();
     let genesis_id = tf.wallet_service.chain_config().genesis_block_id();
-    let best_block: BlockInfo =
-        rpc_client.request("best_block", rpc_params!(EmptyArgs {})).await.unwrap();
+    let best_block: BlockInfo = rpc_client.request("best_block", [EmptyArgs {}]).await.unwrap();
     assert_eq!(best_block.id, genesis_id);
     assert_eq!(best_block.height, BlockHeight::new(0));
 
@@ -60,22 +59,20 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
 
     // Create a new account
     let addr_result: Result<AddressInfo, _> =
-        wallet_rpc.request("issue_address", rpc_params!(ACCOUNT1_ARG)).await;
+        wallet_rpc.request("issue_address", [ACCOUNT1_ARG]).await;
     assert!(addr_result.is_err());
     let new_acct: NewAccountInfo =
-        wallet_rpc.request("create_account", rpc_params!(EmptyArgs {})).await.unwrap();
+        wallet_rpc.request("create_account", [EmptyArgs {}]).await.unwrap();
     assert_eq!(new_acct.account, 1);
     let acct1_addr: AddressInfo =
-        wallet_rpc.request("issue_address", rpc_params!(ACCOUNT1_ARG)).await.unwrap();
+        wallet_rpc.request("issue_address", [ACCOUNT1_ARG]).await.unwrap();
     log::info!("acct1_addr: {acct1_addr:?}");
 
     // Get balance info
-    let balances: BalanceInfo =
-        wallet_rpc.request("get_balance", rpc_params!(ACCOUNT0_ARG)).await.unwrap();
+    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
     let coins_before = balances.coins.amount(coin_decimals).unwrap();
     log::info!("Balances: {balances:?}");
-    let utxos: JsonValue =
-        wallet_rpc.request("get_utxos", rpc_params!(ACCOUNT0_ARG)).await.unwrap();
+    let utxos: JsonValue = wallet_rpc.request("get_utxos", [ACCOUNT0_ARG]).await.unwrap();
     log::info!("UTXOs: {utxos:#}");
     let utxos = utxos.as_array().unwrap();
     assert_eq!(utxos.len(), 2);
@@ -106,18 +103,16 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
             to_send_amount.into_fixedpoint_str(tf.wallet_service.chain_config().coin_decimals());
         let send_to_addr = acct1_addr.address;
         let options = TransactionOptions { in_top_x_mb: 3 };
-        let params = rpc_params!(ACCOUNT0_ARG, send_to_addr, to_send_amount_str, options);
+        let params = (ACCOUNT0_ARG, send_to_addr, to_send_amount_str, options);
         wallet_rpc.request("send_coins", params).await.unwrap()
     };
 
-    let balances: BalanceInfo =
-        wallet_rpc.request("get_balance", rpc_params!(ACCOUNT0_ARG)).await.unwrap();
+    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
     let coins_after = balances.coins.amount(coin_decimals).unwrap();
     assert!(coins_after <= (coins_before / 2).unwrap());
     assert!(coins_after >= (coins_before / 3).unwrap());
 
-    let balances: BalanceInfo =
-        wallet_rpc.request("get_balance", rpc_params!(ACCOUNT1_ARG)).await.unwrap();
+    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT1_ARG]).await.unwrap();
     log::info!("acct1 balances: {balances:?}");
 
     tf.stop().await;
@@ -134,8 +129,7 @@ async fn no_hexified_destination(#[case] seed: Seed) {
     let wallet_rpc = tf.rpc_client();
 
     // Get balance info
-    let utxos: JsonValue =
-        wallet_rpc.request("get_utxos", rpc_params!(ACCOUNT0_ARG)).await.unwrap();
+    let utxos: JsonValue = wallet_rpc.request("get_utxos", [ACCOUNT0_ARG]).await.unwrap();
     log::debug!("UTXOs: {utxos:#}");
     let utxos_string = utxos.to_string();
 
