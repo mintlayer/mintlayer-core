@@ -284,8 +284,6 @@ where
     last_ping_check_time: Option<Time>,
     /// The time after which a new feeler connection can be established.
     next_feeler_connection_time: Time,
-    /// If true, we've already loaded the predefined addresses into peerdb.
-    predefined_addresses_already_loaded: bool,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -368,7 +366,6 @@ where
             last_dns_query_time: None,
             last_ping_check_time: None,
             next_feeler_connection_time,
-            predefined_addresses_already_loaded: false,
         })
     }
 
@@ -1792,7 +1789,6 @@ where
         for addr in self.chain_config.predefined_peer_addresses() {
             self.peerdb.peer_discovered(SocketAddress::new(*addr));
         }
-        self.predefined_addresses_already_loaded = true;
     }
 
     /// Runs the `PeerManager` event loop.
