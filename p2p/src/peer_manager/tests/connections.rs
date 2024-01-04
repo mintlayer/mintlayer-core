@@ -49,8 +49,9 @@ use crate::{
     },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
+        make_transport_with_local_addr_in_group, peerdb_inmemory_store, test_p2p_config,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -907,7 +908,8 @@ async fn connection_reserved_node_channel() {
 
 // Verify that peers announce own addresses and are discovered by other peers.
 // All listening addresses are discovered and multiple connections are made.
-async fn discovered_node<A, T>()
+// All peers are in the same address group
+async fn discovered_node_same_address_group<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
@@ -957,14 +959,14 @@ where
 
     let bind_addresses = timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
-    let reserved_nodes = bind_addresses
+    let reserved_nodes: Vec<_> = bind_addresses
         .iter()
         .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
         .collect();
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
-        reserved_nodes,
+        reserved_nodes: reserved_nodes.clone(),
         allow_discover_private_ips: true.into(),
 
         bind_addresses: Default::default(),
@@ -993,11 +995,6 @@ where
         time_getter.get_time_getter(),
     )
     .await;
-
-    let reserved_nodes = bind_addresses
-        .iter()
-        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
-        .collect();
 
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
@@ -1040,15 +1037,22 @@ where
             get_connected_peers(&peer_mgr_event_sender2),
             get_connected_peers(&peer_mgr_event_sender3)
         );
-        let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+
+        // Since outbound connections are random, we don't know which peer will connect first.
+        let counts = {
+            let mut counts =
+                [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+            counts.sort();
+            counts
+        };
 
         // There should be:
-        // - 2 outbound and 2 inbound connections to/from reserved peers.
-        // - 3 outbound connections to the discovered addresses
-        //   (each peer can make only one outbound connection because all discovered addresses are in the same address group).
-        // - 3 inbound connections to the discovered addresses.
-        // Since outbound connections are random, we don't know which peer will get 4 connections.
-        if counts == [3, 3, 4] || counts == [3, 4, 3] || counts == [4, 3, 3] {
+        // - 1 outbound and 2 inbound connections to/from reserved peer.
+        // - 1 outbound and 1 inbound connections from one of the peers to reserved.
+        // - 1 outbound connections to the reserved peer.
+        // No connections are made to discovered peers because they are in the same group and are already
+        // covered by reserved connections which are treated as manual.
+        if counts == [1, 2, 3] {
             break;
         }
 
@@ -1065,19 +1069,325 @@ where
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_tcp() {
-    discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
+    discovered_node_same_address_group::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_noise() {
-    discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+    discovered_node_same_address_group::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_channel() {
-    discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
+    discovered_node_same_address_group::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
+}
+
+// Create 3 peers and make one of them a reserved node.
+// Put reserved node in a separate address group.
+#[tracing::instrument]
+#[tokio::test]
+async fn discovered_node_2_groups() {
+    let chain_config = Arc::new(config::create_mainnet());
+    let time_getter = P2pBasicTestTimeGetter::new();
+
+    // Start the first peer manager
+    let p2p_config_1 = Arc::new(P2pConfig {
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(1),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_1,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    // Get the first peer manager's bind address
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    peer_mgr_event_sender1
+        .send(PeerManagerEvent::GetBindAddresses(response_sender))
+        .unwrap();
+
+    let bind_addresses = timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap();
+    assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes: Vec<_> = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
+
+    // Start the second peer manager and let it know about the first peer using reserved
+    let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes: reserved_nodes.clone(),
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(2),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_2,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    // Start the third peer manager and let it know about the first peer using reserved
+    let p2p_config_3 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(2),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_3,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    let started_at = Instant::now();
+
+    // All peers should discover each other
+    loop {
+        let connected_peers = tokio::join!(
+            get_connected_peers(&peer_mgr_event_sender1),
+            get_connected_peers(&peer_mgr_event_sender2),
+            get_connected_peers(&peer_mgr_event_sender3)
+        );
+        let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+
+        // There should be:
+        // - 2 outbound and 2 inbound connections to/from reserved peers.
+        // - 1 outbound and 2 inbound connections for one of the non-reserved peers.
+        // - 2 outbound and 1 inbound connections to the other non-reserved peer.
+        // Since outbound connections are random, we don't know which peer will connect first.
+        if counts == [3, 3, 4] || counts == [3, 4, 3] || counts == [4, 3, 3] {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        time_getter.advance_time(Duration::from_millis(1000));
+
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(60),
+            "Unexpected peer counts: {counts:?}"
+        );
+    }
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn discovered_node_separate_groups() {
+    let chain_config = Arc::new(config::create_mainnet());
+    let time_getter = P2pBasicTestTimeGetter::new();
+
+    // Start the first peer manager
+    let p2p_config_1 = Arc::new(P2pConfig {
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(1),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_1,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    // Get the first peer manager's bind address
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
+    peer_mgr_event_sender1
+        .send(PeerManagerEvent::GetBindAddresses(response_sender))
+        .unwrap();
+
+    let bind_addresses = timeout(Duration::from_secs(1), response_receiver).await.unwrap().unwrap();
+    assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes: Vec<_> = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
+
+    // Start the second peer manager and let it know about the first peer using reserved
+    let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes: reserved_nodes.clone(),
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(2),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_2,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    // Start the third peer manager and let it know about the first peer using reserved
+    let p2p_config_3 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: None,
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    });
+    let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
+        run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
+            make_transport_with_local_addr_in_group(3),
+            TestTransportChannel::make_address(),
+            Arc::clone(&chain_config),
+            p2p_config_3,
+            time_getter.get_time_getter(),
+        )
+        .await;
+
+    let started_at = Instant::now();
+
+    // All peers should discover each other
+    loop {
+        let connected_peers = tokio::join!(
+            get_connected_peers(&peer_mgr_event_sender1),
+            get_connected_peers(&peer_mgr_event_sender2),
+            get_connected_peers(&peer_mgr_event_sender3)
+        );
+        let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+
+        // Each peer has 2 outbound and 2 inbound connections with 2 other peers
+        if counts == [4, 4, 4] {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        time_getter.advance_time(Duration::from_millis(1000));
+
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(60),
+            "Unexpected peer counts: {counts:?}"
+        );
+    }
 }
 
 // 1) Configure the peer manager to only allow 1 full outbound connection. Make it discover

@@ -29,11 +29,14 @@ use crate::{
     config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, PeerManagerConfig, PEER_MGR_DNS_RELOAD_INTERVAL,
+        address_groups::AddressGroup, PeerManagerConfig, PEER_MGR_DNS_RELOAD_INTERVAL,
         PEER_MGR_HEARTBEAT_INTERVAL_MAX,
     },
     sync::test_helpers::make_new_block,
-    testing_utils::{TestTransportChannel, TestTransportMaker, TEST_PROTOCOL_VERSION},
+    testing_utils::{
+        make_transport_with_local_addr_in_group, TestTransportChannel, TestTransportMaker,
+        TEST_PROTOCOL_VERSION,
+    },
     tests::helpers::{PeerManagerNotification, TestNode, TestNodeGroup},
 };
 
@@ -470,20 +473,6 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         user_agent: mintlayer_core_user_agent(),
         protocol_config: Default::default(),
     }
-}
-
-fn make_transport_with_local_addr_in_group(
-    group_idx: u32,
-) -> <TestTransportChannel as TestTransportMaker>::Transport {
-    let group_bits = peer_manager::address_groups::IPV4_GROUP_BYTES * 8;
-
-    TestTransportChannel::make_transport_with_local_addr_in_group(
-        // Make sure that the most significant byte of the address is non-zero
-        // (all 0.x.x.x addresses get into AddressGroup::Private, but we want all
-        // addresses to be in different address groups).
-        group_idx + (1 << (group_bits - 1)),
-        group_bits as u32,
-    )
 }
 
 async fn start_node(
