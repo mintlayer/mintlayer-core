@@ -169,7 +169,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
         time_passed += sec_to_pass;
     }
 
-    // after the refresh iterval we will get the new feerates
+    // after the refresh interval we will get the new feerates
     let response = reqwest::get(format!(
         "http://{}:{}/api/v1/feerate?in_top_x_mb={in_top_x_mb}",
         addr.ip(),
