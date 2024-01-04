@@ -1737,7 +1737,7 @@ where
                         // and the user has told us that they won't give us fresh blocks.
                         //
                         // Note that this is mainly needed to speed up the startup of the test
-                        // nodes in build-tools/p2p-v2-test; those nodes always start with a boot_nodes
+                        // nodes in build-tools/p2p-test; those nodes always start with a boot_nodes
                         // list that contains addresses of their siblings, so they all will have
                         // peers but won't be able to obtain blocks until stale_tip_time_diff
                         // has elapsed, which is 30 min by default.

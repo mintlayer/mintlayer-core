@@ -68,7 +68,7 @@ pub struct P2pConfigFile {
     pub boot_nodes: Option<Vec<IpOrSocketAddress>>,
     /// If true, the node will assume that the nodes specified in `boot_nodes` won't be able
     /// to provide it with fresh blocks.
-    /// This is used by p2p-v2-test, where `boot_nodes` are other test nodes
+    /// This is used by p2p-test, where `boot_nodes` are other test nodes
     /// that have no knowledge about nodes on the public network. Setting this to
     /// true will force the node to make a dns seed query early if its peerdb only contains
     /// addresses specified via `boot_nodes`.
