@@ -348,11 +348,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
-    /// Locks the wallet by making the encrypted private keys inaccessible.
+    /// Sets the lookahead size for key generation
     ///
     /// # Returns
     ///
-    /// This method returns an error if the wallet is not encrypted.
+    /// This method returns an error if you try to set lookahead size to 0
     pub fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<(), ControllerError<T>> {
         utils::ensure!(lookahead_size > 0, ControllerError::InvalidLookaheadSize);
 

@@ -367,12 +367,9 @@ impl<B: storage::Backend> Wallet<B> {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
             WALLET_VERSION_V1 => {
                 Self::migration_v2(db, chain_config.clone())?;
-                Self::migration_v3(db, chain_config)?;
-                Self::migration_v4(db)?;
             }
             WALLET_VERSION_V2 => {
-                Self::migration_v3(db, chain_config)?;
-                Self::migration_v4(db)?;
+                Self::migration_v3(db, chain_config.clone())?;
             }
             WALLET_VERSION_V3 => {
                 Self::migration_v4(db)?;
@@ -383,7 +380,7 @@ impl<B: storage::Backend> Wallet<B> {
             }
         }
 
-        Ok(())
+        Self::check_and_migrate_db(db, chain_config)
     }
 
     fn validate_chain_info(
