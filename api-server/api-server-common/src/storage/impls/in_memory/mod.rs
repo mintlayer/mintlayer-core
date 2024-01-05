@@ -187,7 +187,8 @@ impl ApiServerInMemoryStorage {
             .iter()
             .filter_map(|(delegation_id, delegation)| {
                 let delegation = delegation.values().last().expect("must be present");
-                (delegation.pool_id() == pool_id).then_some((*delegation_id, delegation.clone()))
+                (*delegation.pool_id() == pool_id)
+                    .then_some((delegation_id.to_owned(), delegation.clone()))
             })
             .collect())
     }
@@ -305,7 +306,8 @@ impl ApiServerInMemoryStorage {
             .iter()
             .filter_map(|(delegation_id, by_height)| {
                 let last = by_height.values().last().expect("not empty");
-                (last.spend_destination() == address).then_some((*delegation_id, last.clone()))
+                (last.spend_destination() == address)
+                    .then_some((delegation_id.to_owned(), last.clone()))
             })
             .collect())
     }

@@ -53,7 +53,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         args.postgres_config.postgres_password.as_deref(),
         args.postgres_config.postgres_database.as_deref(),
         args.postgres_config.postgres_max_connections,
-        &chain_config,
+        chain_config.clone(),
     )
     .await
     .map_err(ApiServerWebServerInitError::PostgresConnectionError)?;

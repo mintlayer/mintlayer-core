@@ -16,7 +16,7 @@
 use common::{
     chain::{
         tokens::{NftIssuance, TokenId},
-        Destination, GenBlock, TxOutput,
+        DelegationId, Destination, GenBlock, PoolId, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -30,7 +30,7 @@ use crate::storage::{
 };
 use std::collections::BTreeMap;
 
-use common::chain::{DelegationId, PoolId, UtxoOutPoint};
+use common::chain::UtxoOutPoint;
 use pos_accounting::PoolData;
 
 use super::{ApiServerPostgresTransactionalRo, CONN_ERR};
@@ -107,7 +107,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, crate::storage::storage_api::ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_delegation(delegation_id).await?;
+        let res = conn.get_delegation(delegation_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -117,7 +117,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_delegation_shares(pool_id).await?;
+        let res = conn.get_pool_delegation_shares(pool_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -147,10 +147,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
     async fn get_pool_data(
         &self,
-        pool_id: common::chain::PoolId,
+        pool_id: PoolId,
     ) -> Result<Option<PoolData>, crate::storage::storage_api::ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data(pool_id).await?;
+        let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -161,7 +161,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_latest_pool_data(len, offset).await?;
+        let res = conn.get_latest_pool_data(len, offset, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -172,7 +172,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data_with_largest_pledge(len, offset).await?;
+        let res = conn.get_pool_data_with_largest_pledge(len, offset, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -218,7 +218,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_delegations_from_address(address).await?;
+        let res = conn.get_delegations_from_address(address, &self.chain_config).await?;
 
         Ok(res)
     }

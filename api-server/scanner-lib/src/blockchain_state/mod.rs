@@ -695,7 +695,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .expect("Unable to update delegation");
                         let address = Address::<Destination>::new(
                             &chain_config,
-                            delegation.spend_destination(),
+                            new_delegation.spend_destination(),
                         )
                         .expect("Unable to encode address");
                         decrease_address_amount(

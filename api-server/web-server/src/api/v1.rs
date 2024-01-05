@@ -789,7 +789,7 @@ pub async fn delegation<T: ApiServerStorage>(
         ).get(),
         "balance": delegation.balance(),
         "next_nonce": delegation.next_nonce(),
-        "pool_id": Address::new(&state.chain_config, &delegation.pool_id()).expect(
+        "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
             "no error in encoding"
         ).get(),
     })))

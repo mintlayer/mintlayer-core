@@ -113,7 +113,8 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_delegation_at_height(delegation_id, delegation, block_height).await?;
+        conn.set_delegation_at_height(delegation_id, delegation, block_height, &self.chain_config)
+            .await?;
 
         Ok(())
     }
@@ -158,7 +159,8 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.set_pool_data_at_height(pool_id, pool_data, block_height).await?;
+        conn.set_pool_data_at_height(pool_id, pool_data, block_height, &self.chain_config)
+            .await?;
 
         Ok(())
     }
@@ -317,7 +319,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         delegation_id: DelegationId,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_delegation(delegation_id).await?;
+        let res = conn.get_delegation(delegation_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -347,7 +349,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data(pool_id).await?;
+        let res = conn.get_pool_data(pool_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -358,7 +360,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_latest_pool_data(len, offset).await?;
+        let res = conn.get_latest_pool_data(len, offset, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -369,7 +371,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data_with_largest_pledge(len, offset).await?;
+        let res = conn.get_pool_data_with_largest_pledge(len, offset, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -379,7 +381,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         pool_id: PoolId,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_delegation_shares(pool_id).await?;
+        let res = conn.get_pool_delegation_shares(pool_id, &self.chain_config).await?;
 
         Ok(res)
     }
@@ -419,7 +421,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         address: &Destination,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_delegations_from_address(address).await?;
+        let res = conn.get_delegations_from_address(address, &self.chain_config).await?;
 
         Ok(res)
     }

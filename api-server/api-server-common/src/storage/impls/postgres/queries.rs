@@ -20,6 +20,7 @@ use pos_accounting::PoolData;
 use serialization::{DecodeAll, Encode};
 
 use common::{
+    address::Address,
     chain::{
         tokens::{NftIssuance, TokenId},
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -414,7 +415,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml_pool_data (
-                    pool_id bytea NOT NULL,
+                    pool_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     pledge_amount TEXT NOT NULL,
                     data bytea NOT NULL,
@@ -425,10 +426,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml_delegations (
-                    delegation_id bytea NOT NULL,
+                    delegation_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
-                    pool_id bytea NOT NULL,
-                    balance bytea NOT NULL,
+                    pool_id TEXT NOT NULL,
+                    balance TEXT NOT NULL,
                     next_nonce bytea NOT NULL,
                     spend_destination bytea NOT NULL,
                     PRIMARY KEY (delegation_id, block_height)
@@ -597,7 +598,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_delegation(
         &mut self,
         delegation_id: DelegationId,
+        chain_config: &ChainConfig,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
+        let delegation_id = Address::new(chain_config, &delegation_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
             .tx
             .query_opt(
@@ -606,7 +610,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 WHERE delegation_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml_delegations WHERE delegation_id = $1);
                 "#,
-                &[&delegation_id.encode()],
+                &[&delegation_id.get()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -616,22 +620,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => return Ok(None),
         };
 
-        let pool_id: Vec<u8> = data.get(0);
-        let balance: Vec<u8> = data.get(1);
+        let pool_id: String = data.get(0);
+        let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?
+            .decode_object(chain_config)
+            .expect("already checked");
+        let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
         let next_nonce: Vec<u8> = data.get(3);
 
-        let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
+        let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
             ApiServerStorageError::DeserializationError(format!(
-                "Delegation {} deserialization failed: {}",
-                delegation_id, e
-            ))
-        })?;
-
-        let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Delegation {} deserialization failed: {}",
-                delegation_id, e
+                "Delegation {delegation_id} Deserialization failed invalid balance {balance}"
             ))
         })?;
 
@@ -657,6 +657,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_delegations_from_address(
         &mut self,
         address: &Destination,
+        chain_config: &ChainConfig,
     ) -> Result<Vec<(DelegationId, Delegation)>, ApiServerStorageError> {
         let rows = self
             .tx
@@ -676,28 +677,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         rows.into_iter()
             .map(|row| {
-                let delegation_id: Vec<u8> = row.get(0);
-                let pool_id: Vec<u8> = row.get(1);
-                let balance: Vec<u8> = row.get(2);
+                let delegation_id: String = row.get(0);
+                let delegation_id = Address::<DelegationId>::from_str(chain_config, &delegation_id)
+                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                    .decode_object(chain_config)
+                    .expect("already checked");
+                let pool_id: String = row.get(1);
+                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                    .decode_object(chain_config)
+                    .expect("already checked");
+                let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
                 let next_nonce: Vec<u8> = row.get(4);
 
-                let delegation_id = DelegationId::decode_all(&mut delegation_id.as_slice())
-                    .map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "Delegation deserialization failed: {e}",
-                        ))
-                    })?;
-
-                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
+                let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
                     ApiServerStorageError::DeserializationError(format!(
-                        "Delegation deserialization failed: {e}",
-                    ))
-                })?;
-
-                let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "Delegation deserialization failed: {e}",
+                "Delegation {delegation_id} Deserialization failed invalid balance {balance}"
                     ))
                 })?;
 
@@ -726,8 +722,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         delegation_id: DelegationId,
         delegation: &Delegation,
         block_height: BlockHeight,
+        chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let pool_id = Address::new(chain_config, delegation.pool_id())
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let delegation_id = Address::new(chain_config, &delegation_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
             .execute(
@@ -738,10 +739,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6;
                 "#,
                 &[
-                    &delegation_id.encode(),
+                    &delegation_id.get(),
                     &height,
-                    &delegation.pool_id().encode(),
-                    &delegation.balance().encode(),
+                    &pool_id.get(),
+                    &amount_to_str(*delegation.balance()),
                     &delegation.spend_destination().encode(),
                     &delegation.next_nonce().encode(),
                 ],
@@ -789,7 +790,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_pool_delegation_shares(
         &mut self,
         pool_id: PoolId,
+        chain_config: &ChainConfig,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
+        let pool_id_str = Address::new(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query(
                 r#"SELECT delegation_id, balance, spend_destination, next_nonce
@@ -800,42 +804,39 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                                                             WHERE pool_id = $1
                                                             GROUP BY delegation_id)
                 "#,
-                &[&pool_id.encode()],
+                &[&pool_id_str.get()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
             .map(|row| {
-                let delegation_id: Vec<u8> = row.get(0);
-                let balance: Vec<u8> = row.get(1);
+                let delegation_id_str: String = row.get(0);
+                let delegation_id =
+                    Address::<DelegationId>::from_str(chain_config, &delegation_id_str)
+                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                        .decode_object(chain_config)
+                        .expect("already checked");
+                let balance: String = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
                 let next_nonce: Vec<u8> = row.get(3);
 
-                let delegation_id = DelegationId::decode_all(&mut delegation_id.as_slice())
-                    .map_err(|e| {
-                        ApiServerStorageError::DeserializationError(format!(
-                            "DelegationId for PoolId {} deserialization failed: {}",
-                            pool_id, e
-                        ))
-                    })?;
-                let balance = Amount::decode_all(&mut balance.as_slice()).map_err(|e| {
+                let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
                     ApiServerStorageError::DeserializationError(format!(
-                        "Amount for PoolId {} deserialization failed: {}",
-                        pool_id, e
+                "Delegation {delegation_id_str} Deserialization failed invalid balance {balance}"
                     ))
                 })?;
                 let spend_destination = Destination::decode_all(&mut spend_destination.as_slice())
                     .map_err(|e| {
                         ApiServerStorageError::DeserializationError(format!(
                             "Amount for PoolId {} deserialization failed: {}",
-                            pool_id, e
+                            pool_id_str, e
                         ))
                     })?;
                 let next_nonce =
                     AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
                         ApiServerStorageError::DeserializationError(format!(
                             "Delegation {} deserialization failed: {}",
-                            delegation_id, e
+                            delegation_id_str, e
                         ))
                     })?;
 
@@ -850,7 +851,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_pool_data(
         &mut self,
         pool_id: PoolId,
+        chain_config: &ChainConfig,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
+        let pool_id = Address::new(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query_opt(
                 r#"
@@ -860,7 +864,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ORDER BY block_height DESC
                 LIMIT 1;
             "#,
-                &[&pool_id.encode()],
+                &[&pool_id.get()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -885,6 +889,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         len: u32,
         offset: u32,
+        chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
@@ -907,13 +912,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
             .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
-                let pool_id: Vec<u8> = row.get(0);
-                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "Pool Id deserialization failed: {}",
-                        e
-                    ))
-                })?;
+                let pool_id: String = row.get(0);
+                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                    .decode_object(chain_config)
+                    .expect("already checked");
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -931,6 +934,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         len: u32,
         offset: u32,
+        chain_config: &ChainConfig,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let len = len as i64;
         let offset = offset as i64;
@@ -953,13 +957,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
             .into_iter()
             .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
-                let pool_id: Vec<u8> = row.get(0);
-                let pool_id = PoolId::decode_all(&mut pool_id.as_slice()).map_err(|e| {
-                    ApiServerStorageError::DeserializationError(format!(
-                        "Pool Id deserialization failed: {}",
-                        e
-                    ))
-                })?;
+                let pool_id: String = row.get(0);
+                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                    .map_err(|_| ApiServerStorageError::AddressableError)?
+                    .decode_object(chain_config)
+                    .expect("already checked");
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -978,9 +980,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: PoolId,
         pool_data: &PoolData,
         block_height: BlockHeight,
+        chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
         let amount_str = amount_to_str(pool_data.pledge_amount());
+        let pool_id = Address::new(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
             .execute(
@@ -988,7 +993,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     INSERT INTO ml_pool_data (pool_id, block_height, pledge_amount, data)
                     VALUES ($1, $2, $3, $4)
                 "#,
-                &[&pool_id.encode(), &height, &amount_str, &pool_data.encode()],
+                &[&pool_id.get(), &height, &amount_str, &pool_data.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
