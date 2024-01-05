@@ -353,11 +353,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     /// # Returns
     ///
     /// This method returns an error if you try to set lookahead size to 0
-    pub fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<(), ControllerError<T>> {
+    pub fn set_lookahead_size(
+        &mut self,
+        lookahead_size: u32,
+        force_reduce: bool,
+    ) -> Result<(), ControllerError<T>> {
         utils::ensure!(lookahead_size > 0, ControllerError::InvalidLookaheadSize);
 
         self.wallet
-            .set_lookahead_size(lookahead_size)
+            .set_lookahead_size(lookahead_size, force_reduce)
             .map_err(ControllerError::WalletError)
     }
 

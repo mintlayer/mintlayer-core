@@ -178,6 +178,8 @@ pub enum WalletError {
     DataDepositToBig(usize, usize),
     #[error("Cannot deposit empty data")]
     EmptyDataDeposit,
+    #[error("Cannot reduce lookahead size to {0} as it is below the last known used key {1}")]
+    ReducedLookaheadSize(u32, u32),
 }
 
 /// Result type used for the wallet
@@ -550,7 +552,23 @@ impl<B: storage::Backend> Wallet<B> {
         self.db.unlock_private_keys(password).map_err(WalletError::from)
     }
 
-    pub fn set_lookahead_size(&mut self, lookahead_size: u32) -> WalletResult<()> {
+    pub fn set_lookahead_size(
+        &mut self,
+        lookahead_size: u32,
+        force_reduce: bool,
+    ) -> WalletResult<()> {
+        let last_used = self.accounts.values().fold(None, |last, acc| {
+            let usage = acc.get_addresses_usage();
+            std::cmp::max(last, usage.last_used().map(U31::into_u32))
+        });
+
+        if let Some(last_used) = last_used {
+            ensure!(
+                last_used < lookahead_size || force_reduce,
+                WalletError::ReducedLookaheadSize(lookahead_size, last_used)
+            );
+        }
+
         let mut db_tx = self.db.transaction_rw(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
         let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;

@@ -131,18 +131,20 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
 
             lower_size = random.randint(1, 2)
-            assert_in("Success. Lookahead size has been updated, will rescan the blockchain.", await wallet.set_lookahead_size(lower_size))
+            assert_in(f"Cannot reduce lookahead size to {lower_size} as it is below the last known used key {num_addresses-1}", await wallet.set_lookahead_size(lower_size, False))
+
+            assert_in("Success. Lookahead size has been updated, will rescan the blockchain.", await wallet.set_lookahead_size(lower_size, True))
 
             assert_in("Success", await wallet.sync())
             assert_in(f"Coins amount: 0", await wallet.get_balance())
 
             higher_size = random.randint(num_addresses, num_addresses * 2)
-            assert_in("Success. Lookahead size has been updated, will rescan the blockchain.", await wallet.set_lookahead_size(higher_size))
+            assert_in("Success. Lookahead size has been updated, will rescan the blockchain.", await wallet.set_lookahead_size(higher_size, False))
 
             assert_in("Success", await wallet.sync())
             assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
 
-            assert_in("Lookahead size cannot be 0", await wallet.set_lookahead_size(0))
+            assert_in("Lookahead size cannot be 0", await wallet.set_lookahead_size(0, False))
 
 
 

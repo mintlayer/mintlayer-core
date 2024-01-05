@@ -3529,7 +3529,13 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     assert_eq!(coins, block1_amount);
 
     let less_than_last_used = rng.gen_range(1..=last_used);
-    wallet.set_lookahead_size(less_than_last_used).unwrap();
+    let err = wallet.set_lookahead_size(less_than_last_used, false).unwrap_err();
+    assert_eq!(
+        err,
+        WalletError::ReducedLookaheadSize(less_than_last_used, last_used)
+    );
+
+    wallet.set_lookahead_size(less_than_last_used, true).unwrap();
 
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
@@ -3539,7 +3545,7 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     assert_eq!(usage.last_issued(), None);
 
     let more_than_last_used = rng.gen_range(last_used + 1..100);
-    wallet.set_lookahead_size(more_than_last_used).unwrap();
+    wallet.set_lookahead_size(more_than_last_used, false).unwrap();
 
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
     let coins = get_coin_balance_for_acc(&wallet, DEFAULT_ACCOUNT_INDEX);
