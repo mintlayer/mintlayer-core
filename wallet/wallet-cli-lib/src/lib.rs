@@ -25,7 +25,7 @@ type CliController = wallet_controller::RpcController<wallet::wallet_events::Wal
 use std::sync::Arc;
 
 use cli_event_loop::Event;
-use commands::WalletCommand;
+use commands::{StakingCommand, WalletCommand};
 use common::chain::{
     config::{regtest_options::regtest_chain_config, ChainType},
     ChainConfig,
@@ -137,7 +137,7 @@ pub async fn run(
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::StartStaking,
+                command: WalletCommand::Staking(StakingCommand::Start),
                 res_tx,
             })
             .expect("should not fail");

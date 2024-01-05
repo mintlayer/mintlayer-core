@@ -272,10 +272,10 @@ class WalletCliController:
         return await self._write_command("syncwallet\n")
 
     async def start_staking(self) -> str:
-        return await self._write_command(f"startstaking\n")
+        return await self._write_command(f"staking start\n")
 
     async def stop_staking(self) -> str:
-        return await self._write_command(f"stopstaking\n")
+        return await self._write_command(f"staking stop\n")
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("showreceiveaddresses\n")

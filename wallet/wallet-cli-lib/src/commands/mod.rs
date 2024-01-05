@@ -18,7 +18,7 @@ mod helper_types;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use chainstate::TokenIssuanceError;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use common::{
     address::Address,
     chain::{
@@ -52,6 +52,18 @@ use self::helper_types::{
     CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
     CliWithLocked,
 };
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum StakingCommand {
+    /// Start staking
+    Start,
+
+    /// Stop staking
+    Stop,
+
+    /// Pool balance
+    PoolBalance { pool_id: String },
+}
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -151,14 +163,8 @@ pub enum WalletCommand {
         account_index: U31,
     },
 
-    /// Start staking
-    StartStaking,
-
-    StopStaking,
-
-    StakePoolBalance {
-        pool_id: String,
-    },
+    #[clap(subcommand)]
+    Staking(StakingCommand),
 
     /// Submit a block to be included in the chain
     ///
@@ -763,35 +769,8 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::StartStaking => {
-                self.get_synced_controller()
-                    .await?
-                    .start_staking()
-                    .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print(
-                    "Staking started successfully".to_owned(),
-                ))
-            }
-
-            WalletCommand::StopStaking => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller.stop_staking(selected_account).map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
-            }
-
-            WalletCommand::StakePoolBalance { pool_id } => {
-                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                let balance_opt = rpc_client
-                    .get_stake_pool_balance(pool_id)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
-                match balance_opt {
-                    Some(balance) => Ok(ConsoleCommand::Print(print_coin_amount(
-                        chain_config,
-                        balance,
-                    ))),
-                    None => Ok(ConsoleCommand::Print("Not found".to_owned())),
-                }
+            WalletCommand::Staking(command) => {
+                self.handle_staking_command(command, chain_config, rpc_client).await
             }
 
             WalletCommand::SubmitBlock { block } => {
@@ -1458,6 +1437,44 @@ impl CommandHandler {
             WalletCommand::History => Ok(ConsoleCommand::PrintHistory),
             WalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
             WalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
+        }
+    }
+
+    async fn handle_staking_command(
+        &mut self,
+        command: StakingCommand,
+        chain_config: &Arc<ChainConfig>,
+        rpc_client: &NodeRpcClient,
+    ) -> Result<ConsoleCommand, WalletCliError> {
+        match command {
+            StakingCommand::Start => {
+                self.get_synced_controller()
+                    .await?
+                    .start_staking()
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Staking started successfully".to_owned(),
+                ))
+            }
+            StakingCommand::Stop => {
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller.stop_staking(selected_account).map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+            StakingCommand::PoolBalance { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
+                let balance_opt = rpc_client
+                    .get_stake_pool_balance(pool_id)
+                    .await
+                    .map_err(WalletCliError::RpcError)?;
+                match balance_opt {
+                    Some(balance) => Ok(ConsoleCommand::Print(print_coin_amount(
+                        chain_config,
+                        balance,
+                    ))),
+                    None => Ok(ConsoleCommand::Print("Not found".to_owned())),
+                }
+            }
         }
     }
 }
