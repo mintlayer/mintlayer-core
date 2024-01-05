@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::block_header_to_json;
+use api_web_server::{api::json_helpers::block_header_to_json, CachedValues};
 use common::{
     chain::{stakelock::StakePoolData, CoinUnit, PoolId},
-    primitives::{per_thousand::PerThousand, H256},
+    primitives::{per_thousand::PerThousand, time::get_time, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use std::sync::RwLock;
 
 use crate::DummyRPC;
 
@@ -131,11 +132,15 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     let (block_id, expected_header) = rx.await.unwrap();

@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -66,6 +66,7 @@ mockall::mock! {
         fn get_max_size(&self) -> MempoolMaxSize;
         fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
         fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error>;
+        fn get_fee_rate_points(&self, num_points: NonZeroUsize) -> Result<Vec<(usize, FeeRate)>, Error>;
 
         fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);
         fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent);

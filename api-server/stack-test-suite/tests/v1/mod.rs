@@ -22,6 +22,7 @@ mod block_reward;
 mod block_transaction_ids;
 mod chain_at_height;
 mod chain_tip;
+mod feerate;
 mod helpers;
 mod nft;
 mod pool;
@@ -41,7 +42,7 @@ use api_server_common::storage::{
 };
 use api_web_server::{
     api::{json_helpers::txoutput_to_json, web_server},
-    ApiServerWebServerState,
+    ApiServerWebServerState, CachedValues,
 };
 use chainstate::BlockSource;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
@@ -57,13 +58,16 @@ use common::{
         transaction::output::timelock::OutputTimeLock,
         Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{time::get_time, Amount, BlockHeight, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use hex::ToHex;
 use rstest::rstest;
 use serde_json::json;
-use std::{net::TcpListener, sync::Arc};
+use std::{
+    net::TcpListener,
+    sync::{Arc, RwLock},
+};
 use test_utils::random::{make_seedable_rng, Rng, Seed};
 
 #[tokio::test]
@@ -96,11 +100,15 @@ async fn chain_genesis() {
                 ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: Arc::clone(&chain_config),
-                    rpc: None::<std::sync::Arc<DummyRPC>>,
+                    rpc: Arc::new(DummyRPC {}),
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
+                    time_getter: Default::default(),
                 }
             };
 
-            web_server(listener, web_server_state).await
+            web_server(listener, web_server_state, true).await
         }
     });
 

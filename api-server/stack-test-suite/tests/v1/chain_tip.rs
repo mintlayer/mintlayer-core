@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::RwLock;
+
+use api_web_server::CachedValues;
+use common::primitives::time::get_time;
+
 use crate::DummyRPC;
 
 use super::*;
@@ -43,11 +48,15 @@ async fn at_genesis() {
                 ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: chain_config.clone(),
-                    rpc: None::<std::sync::Arc<DummyRPC>>,
+                    rpc: Arc::new(DummyRPC {}),
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
+                    time_getter: Default::default(),
                 }
             };
 
-            web_server(listener, web_server_state).await
+            web_server(listener, web_server_state, true).await
         }
     });
 
@@ -131,11 +140,15 @@ async fn height_n(#[case] seed: Seed) {
                 ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::clone(&chain_config),
-                    rpc: None::<std::sync::Arc<DummyRPC>>,
+                    rpc: Arc::new(DummyRPC {}),
+                    cached_values: Arc::new(CachedValues {
+                        feerate_points: RwLock::new((get_time(), vec![])),
+                    }),
+                    time_getter: Default::default(),
                 }
             };
 
-            web_server(listener, web_server_state).await
+            web_server(listener, web_server_state, true).await
         }
     });
 

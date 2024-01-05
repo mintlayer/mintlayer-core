@@ -16,19 +16,28 @@
 mod v1;
 
 use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
-use api_web_server::{api::web_server, ApiServerWebServerState, TxSubmitClient};
-use common::chain::{config::create_unit_test_config, SignedTransaction};
-use std::{net::TcpListener, sync::Arc};
+use api_web_server::{api::web_server, ApiServerWebServerState, CachedValues, TxSubmitClient};
+use common::{
+    chain::{config::create_unit_test_config, SignedTransaction},
+    primitives::time::get_time,
+};
+use mempool::FeeRate;
+use node_comm::rpc_client::NodeRpcError;
+use std::{
+    net::TcpListener,
+    sync::{Arc, RwLock},
+};
 
 struct DummyRPC {}
 
 #[async_trait::async_trait]
 impl TxSubmitClient for DummyRPC {
-    async fn submit_tx(
-        &self,
-        _: SignedTransaction,
-    ) -> Result<(), node_comm::rpc_client::NodeRpcError> {
+    async fn submit_tx(&self, _: SignedTransaction) -> Result<(), NodeRpcError> {
         Ok(())
+    }
+
+    async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
+        Ok(vec![])
     }
 }
 
@@ -44,11 +53,15 @@ pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest
             ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
-                rpc: Some(Arc::new(DummyRPC {})),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
             }
         };
 
-        web_server(listener, web_server_state).await.unwrap();
+        web_server(listener, web_server_state, true).await.unwrap();
     });
 
     // Given that the listener port is open, this will block until a

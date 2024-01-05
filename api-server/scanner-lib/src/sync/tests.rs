@@ -15,6 +15,7 @@
 
 use crate::blockchain_state::BlockchainState;
 
+use mempool::FeeRate;
 use serialization::Encode;
 
 use super::*;
@@ -168,6 +169,13 @@ impl RemoteNode for MockRemoteNode {
             .chainstate
             .get_mainchain_blocks(from, max_count)
             .unwrap())
+    }
+
+    async fn mempool_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
+        Ok(vec![(
+            1,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(1)),
+        )])
     }
 }
 

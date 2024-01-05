@@ -52,7 +52,8 @@ pub fn web_server<
     R: TxSubmitClient + Send + Sync + 'static,
 >(
     socket: TcpListener,
-    state: ApiServerWebServerState<Arc<T>, Option<Arc<R>>>,
+    state: ApiServerWebServerState<Arc<T>, Arc<R>>,
+    enable_post_endpoints: bool,
 ) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
     let cors_layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
@@ -61,7 +62,7 @@ pub fn web_server<
 
     let routes = Router::new()
         .route("/", get(server_status))
-        .nest("/api/v1", api::v1::routes(state.rpc.is_some()))
+        .nest("/api/v1", api::v1::routes(enable_post_endpoints))
         .fallback(bad_request)
         .with_state(state)
         .layer(cors_layer);

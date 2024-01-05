@@ -17,6 +17,7 @@ utils = { path = "../../utils" }
 rpc = { path = "../../rpc" }
 node-comm = { path = "../../wallet/wallet-node-client" }
 node-lib = { path = "../../node-lib" }
+mempool = { path = "../../mempool" }
 
 axum.workspace = true
 async-trait.workspace = true

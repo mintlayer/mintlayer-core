@@ -24,7 +24,7 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
@@ -87,6 +87,10 @@ pub trait MempoolInterface: Send + Sync {
     /// Get the fee rate such that it would put the new transaction in the top X MB of the mempool
     /// making it less likely to get rejected or trimmed in the case the mempool is full
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error>;
+
+    /// Get the fee rate at multiple uniformly distributed points along the mempool's transactions
+    fn get_fee_rate_points(&self, num_points: NonZeroUsize)
+        -> Result<Vec<(usize, FeeRate)>, Error>;
 
     /// Notify mempool given peer has disconnected
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);

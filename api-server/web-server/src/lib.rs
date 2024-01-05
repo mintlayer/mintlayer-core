@@ -19,16 +19,23 @@ pub mod error;
 
 pub use error::ApiServerWebServerError;
 
-use common::chain::{ChainConfig, SignedTransaction};
+use common::{
+    chain::{ChainConfig, SignedTransaction},
+    primitives::time::Time,
+    time_getter::TimeGetter,
+};
+use mempool::FeeRate;
 use node_comm::{
     node_traits::NodeInterface,
     rpc_client::{NodeRpcClient, NodeRpcError},
 };
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[async_trait::async_trait]
 pub trait TxSubmitClient {
     async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError>;
+
+    async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError>;
 }
 
 #[async_trait::async_trait]
@@ -36,11 +43,21 @@ impl TxSubmitClient for NodeRpcClient {
     async fn submit_tx(&self, tx: SignedTransaction) -> Result<(), NodeRpcError> {
         self.submit_transaction(tx).await
     }
+
+    async fn get_feerate_points(&self) -> Result<Vec<(usize, FeeRate)>, NodeRpcError> {
+        self.mempool_get_fee_rate_points().await
+    }
 }
 
-#[derive(Debug, Clone)]
+pub struct CachedValues {
+    pub feerate_points: RwLock<(Time, Vec<(usize, FeeRate)>)>,
+}
+
+#[derive(Clone)]
 pub struct ApiServerWebServerState<T, R> {
     pub db: T,
     pub chain_config: Arc<ChainConfig>,
     pub rpc: R,
+    pub cached_values: Arc<CachedValues>,
+    pub time_getter: TimeGetter,
 }

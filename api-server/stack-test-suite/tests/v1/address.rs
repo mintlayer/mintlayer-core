@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::RwLock;
+
+use api_web_server::CachedValues;
+use common::primitives::time::get_time;
+
 use crate::DummyRPC;
 
 use super::*;
@@ -243,11 +248,15 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     for (address, expected_balance) in rx.await.unwrap() {
@@ -460,11 +469,15 @@ async fn ok(#[case] seed: Seed) {
             ApiServerWebServerState {
                 db: Arc::new(local_node.storage().clone_storage().await),
                 chain_config: Arc::clone(&chain_config),
-                rpc: None::<std::sync::Arc<DummyRPC>>,
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state, true).await
     });
 
     for (address, expected_values) in rx.await.unwrap() {
