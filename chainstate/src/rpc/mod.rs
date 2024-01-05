@@ -53,7 +53,7 @@ trait ChainstateRpc {
 
     /// Returns a json-encoded serialized block with the given id.
     #[method(name = "get_block_json")]
-    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>>;
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>>;
 
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
@@ -145,7 +145,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         Ok(block.map(HexEncoded::new))
     }
 
-    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>> {
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>> {
         let both: Option<(Block, BlockIndex)> = rpc::handle_result(
             self.call(move |this| {
                 let block = this.get_block(id);
@@ -171,7 +171,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
         let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
 
-        Ok(result)
+        let result = result.map(|res| serde_json::from_str::<serde_json::Value>(&res));
+
+        let result = result.transpose();
+
+        rpc::handle_result(result)
     }
 
     async fn get_mainchain_blocks(
