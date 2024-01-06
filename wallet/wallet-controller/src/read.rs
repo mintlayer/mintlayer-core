@@ -23,7 +23,7 @@ use common::{
         ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id},
+    primitives::{id::WithId, Amount, DecimalAmount, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use futures::{stream::FuturesUnordered, TryStreamExt};
@@ -40,7 +40,7 @@ use wallet_types::{
     BlockInfo, KeychainUsageState,
 };
 
-use crate::ControllerError;
+use crate::{types::Balances, ControllerError};
 
 pub struct ReadOnlyController<'a, T> {
     wallet: &'a DefaultWallet,
@@ -81,6 +81,34 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                 with_locked,
             )
             .map_err(ControllerError::WalletError)
+    }
+
+    pub async fn get_decimal_balance(
+        &self,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Balances, ControllerError<T>> {
+        let mut balances = self.get_balance(utxo_states, with_locked)?;
+
+        let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
+        let coins = DecimalAmount::from_amount_minimal(coins, self.chain_config.coin_decimals());
+
+        let mut tokens = BTreeMap::new();
+        for (currency, amount) in balances {
+            let token_id = match currency {
+                Currency::Coin => panic!("Removed just above"),
+                Currency::Token(token_id) => token_id,
+            };
+
+            let info = super::fetch_token_info(&self.rpc_client, token_id).await?;
+            let decimals = info.token_number_of_decimals();
+            tokens.insert(
+                token_id,
+                DecimalAmount::from_amount_minimal(amount, decimals),
+            );
+        }
+
+        Ok(Balances::new(coins, tokens))
     }
 
     pub fn get_utxos(

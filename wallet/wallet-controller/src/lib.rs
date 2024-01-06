@@ -19,6 +19,7 @@ pub mod mnemonic;
 pub mod read;
 mod sync;
 pub mod synced_controller;
+pub mod types;
 
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
@@ -359,13 +360,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         token_id: TokenId,
     ) -> Result<RPCTokenInfo, ControllerError<T>> {
-        self.rpc_client
-            .get_token_info(token_id)
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
-                token_id,
-            )))
+        fetch_token_info(&self.rpc_client, token_id).await
     }
 
     pub async fn generate_block_by_pool(
@@ -653,4 +648,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 .expect("Sleep intervals cannot be this large");
         }
     }
+}
+
+pub async fn fetch_token_info<T: NodeInterface>(
+    rpc_client: &T,
+    token_id: TokenId,
+) -> Result<RPCTokenInfo, ControllerError<T>> {
+    rpc_client
+        .get_token_info(token_id)
+        .await
+        .map_err(ControllerError::NodeCallError)?
+        .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
+            token_id,
+        )))
 }
