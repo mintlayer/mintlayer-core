@@ -15,11 +15,9 @@
 
 use common::chain::SignedTransaction;
 
-use crate::types::{AmountString, NewAccountInfo, TransactionOptions, UtxoInfo};
-
-use super::types::{
-    AccountIndexArg, AddressInfo, AddressWithUsageInfo, BalanceInfo, BlockInfo, EmptyArgs,
-    HexEncoded, TxOptionsOverrides,
+use crate::types::{
+    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
+    EmptyArgs, HexEncoded, NewAccountInfo, TransactionOptions, TxOptionsOverrides, UtxoInfo,
 };
 
 #[rpc::rpc(server)]
@@ -43,7 +41,7 @@ trait WalletRpc {
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo>;
 
     #[method(name = "get_balance")]
-    async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<BalanceInfo>;
+    async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Balances>;
 
     #[method(name = "get_utxos")]
     async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<UtxoInfo>>;
@@ -60,7 +58,7 @@ trait WalletRpc {
         &self,
         account_index: AccountIndexArg,
         address: String,
-        amount: AmountString,
+        amount: DecimalAmount,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 }

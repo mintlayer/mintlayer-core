@@ -24,7 +24,7 @@ use common::{
 };
 use utils::{make_seedable_rng, ClientT, JsonValue, Seed, ACCOUNT0_ARG, ACCOUNT1_ARG};
 use wallet_rpc_lib::types::{
-    AddressInfo, BalanceInfo, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions,
+    AddressInfo, Balances, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions,
 };
 
 #[rstest]
@@ -69,8 +69,8 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
     log::info!("acct1_addr: {acct1_addr:?}");
 
     // Get balance info
-    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
-    let coins_before = balances.coins.amount(coin_decimals).unwrap();
+    let balances: Balances = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
+    let coins_before = balances.coins().to_amount(coin_decimals).unwrap();
     log::info!("Balances: {balances:?}");
     let utxos: JsonValue = wallet_rpc.request("get_utxos", [ACCOUNT0_ARG]).await.unwrap();
     log::info!("UTXOs: {utxos:#}");
@@ -107,12 +107,12 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
         wallet_rpc.request("send_coins", params).await.unwrap()
     };
 
-    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
-    let coins_after = balances.coins.amount(coin_decimals).unwrap();
+    let balances: Balances = wallet_rpc.request("get_balance", [ACCOUNT0_ARG]).await.unwrap();
+    let coins_after = balances.coins().to_amount(coin_decimals).unwrap();
     assert!(coins_after <= (coins_before / 2).unwrap());
     assert!(coins_after >= (coins_before / 3).unwrap());
 
-    let balances: BalanceInfo = wallet_rpc.request("get_balance", [ACCOUNT1_ARG]).await.unwrap();
+    let balances: Balances = wallet_rpc.request("get_balance", [ACCOUNT1_ARG]).await.unwrap();
     log::info!("acct1 balances: {balances:?}");
 
     tf.stop().await;

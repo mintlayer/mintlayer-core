@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -15,23 +15,18 @@
 
 use std::collections::BTreeMap;
 
-use common::{address::Address, chain::SignedTransaction, primitives::Amount};
+use common::{address::Address, chain::SignedTransaction};
 use utils::shallow_clone::ShallowClone;
-use wallet::account::Currency;
 use wallet_controller::{ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes};
 use wallet_types::with_locked::WithLocked;
 
 use crate::{
-    service::WalletControllerError,
-    types::{AmountString, BalanceInfo, NewAccountInfo, TransactionOptions, UtxoInfo},
-};
-
-use super::{
+    rpc::{WalletRpc, WalletRpcServer},
     types::{
-        AccountIndexArg, AddressInfo, AddressWithUsageInfo, BlockInfo, EmptyArgs, HexEncoded,
-        RpcError, TxOptionsOverrides,
+        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
+        EmptyArgs, HexEncoded, NewAccountInfo, RpcError, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo,
     },
-    WalletRpc, WalletRpcServer,
 };
 
 #[async_trait::async_trait]
@@ -84,38 +79,16 @@ impl WalletRpcServer for WalletRpc {
         Ok(result)
     }
 
-    async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<BalanceInfo> {
+    async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Balances> {
         let account_idx = account_index.index()?;
         let with_locked = WithLocked::Unlocked; // TODO make user-defined
-        let coin_decimals = self.chain_config.coin_decimals();
 
-        let balances: BalanceInfo = rpc::handle_result(
+        let balances: Balances = rpc::handle_result(
             self.wallet
                 .call_async(move |w| {
                     Box::pin(async move {
-                        let mut amounts = w
-                            .readonly_controller(account_idx)
-                            .get_balance(UtxoStates::ALL, with_locked)?;
-
-                        let coins = amounts.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-                        let coins = AmountString::new(coins, coin_decimals);
-
-                        let tokens = {
-                            let mut tokens = BTreeMap::new();
-                            for (curr, amt) in amounts {
-                                match curr {
-                                    Currency::Coin => panic!("Coins removed in the previous step"),
-                                    Currency::Token(tok_id) => {
-                                        let decimals =
-                                            w.get_token_number_of_decimals(tok_id).await?;
-                                        tokens.insert(tok_id, AmountString::new(amt, decimals));
-                                    }
-                                }
-                            }
-                            tokens
-                        };
-
-                        Ok::<_, WalletControllerError>(BalanceInfo::new(coins, tokens))
+                        let c = w.readonly_controller(account_idx);
+                        c.get_decimal_balance(UtxoStates::ALL, with_locked).await
                     })
                 })
                 .await,
@@ -151,10 +124,11 @@ impl WalletRpcServer for WalletRpc {
         &self,
         account_index: AccountIndexArg,
         address: String,
-        amount_str: AmountString,
+        amount_str: DecimalAmount,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let amount = amount_str.amount(self.chain_config.coin_decimals())?;
+        let decimals = self.chain_config.coin_decimals();
+        let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
         let acct = account_index.index()?;

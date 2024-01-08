@@ -15,30 +15,16 @@
 
 //! Types supporting the RPC interface
 
-use std::collections::BTreeMap;
-
 use common::{
     address::Address,
-    chain::{tokens::TokenId, Destination, GenBlock, TxOutput, UtxoOutPoint},
-    primitives::{Amount, BlockHeight, Id},
+    chain::{Destination, GenBlock, TxOutput, UtxoOutPoint},
+    primitives::{BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serialization::hex_encoded::HexEncoded;
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AmountString(pub String);
-
-impl AmountString {
-    pub fn new(amt: Amount, decimals: u8) -> Self {
-        Self(amt.into_fixedpoint_str(decimals))
-    }
-
-    pub fn amount(&self, decimals: u8) -> Result<Amount, RpcError> {
-        Amount::from_fixedpoint_str(&self.0, decimals).ok_or(RpcError::InvalidCoinAmount)
-    }
-}
+pub use wallet_controller::types::{Balances, DecimalAmount};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -50,9 +36,6 @@ pub enum RpcError {
 
     #[error("Invalid address")]
     InvalidAddress,
-
-    #[error("Malformed amount")]
-    MalformedAmount,
 }
 
 impl From<RpcError> for rpc::Error {
@@ -117,18 +100,6 @@ impl AddressWithUsageInfo {
             index: child_number.to_string(),
             used,
         }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BalanceInfo {
-    pub coins: AmountString,
-    pub tokens: BTreeMap<TokenId, AmountString>,
-}
-
-impl BalanceInfo {
-    pub fn new(coins: AmountString, tokens: BTreeMap<TokenId, AmountString>) -> Self {
-        Self { coins, tokens }
     }
 }
 
