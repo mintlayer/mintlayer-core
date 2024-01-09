@@ -93,22 +93,23 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
         let coins = DecimalAmount::from_amount_minimal(coins, self.chain_config.coin_decimals());
 
-        let mut tokens = BTreeMap::new();
-        for (currency, amount) in balances {
-            let token_id = match currency {
-                Currency::Coin => panic!("Removed just above"),
-                Currency::Token(token_id) => token_id,
-            };
+        let tasks: FuturesUnordered<_> = balances
+            .into_iter()
+            .map(|(currency, amount)| async move {
+                let token_id = match currency {
+                    Currency::Coin => panic!("Removed just above"),
+                    Currency::Token(token_id) => token_id,
+                };
 
-            let info = super::fetch_token_info(&self.rpc_client, token_id).await?;
-            let decimals = info.token_number_of_decimals();
-            tokens.insert(
-                token_id,
-                DecimalAmount::from_amount_minimal(amount, decimals),
-            );
-        }
+                super::fetch_token_info(&self.rpc_client, token_id).await.map(|info| {
+                    let decimals = info.token_number_of_decimals();
+                    let amount = DecimalAmount::from_amount_minimal(amount, decimals);
+                    (token_id, amount)
+                })
+            })
+            .collect();
 
-        Ok(Balances::new(coins, tokens))
+        Ok(Balances::new(coins, tasks.try_collect().await?))
     }
 
     pub fn get_utxos(
