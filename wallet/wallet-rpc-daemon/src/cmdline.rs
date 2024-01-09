@@ -46,7 +46,12 @@ pub struct Args {
     wallet_rpc_address: Option<String>,
 
     /// Chain type to use
-    #[arg(long, value_name("TYPE"), value_parser(parse_chain_type))]
+    #[arg(
+        long,
+        value_name("TYPE"),
+        value_parser(parse_chain_type),
+        default_value("mainnet")
+    )]
     chain_type: ChainType,
 
     /// RPC address of the node to connect to
