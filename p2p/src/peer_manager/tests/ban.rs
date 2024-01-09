@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use crate::{
     config::NodeType,
+    message::{AddrListResponse, PeerManagerMessage},
     net::{
         default_backend::{types::Command, ConnectivityHandle},
         types::{services::Service, PeerInfo, PeerRole, Role},
@@ -33,6 +34,7 @@ use crate::{
 };
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use test_utils::assert_matches;
 
 use crate::{
     error::{P2pError, PeerError},
@@ -437,4 +439,194 @@ fn ban_and_disconnect() {
         Err(_) => {}
         v => panic!("unexpected command: {v:?}"),
     }
+}
+
+// Test that banned peers are not announced
+#[tracing::instrument]
+#[test]
+fn ban_and_announce() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let bind_address = TestTransportTcp::make_address();
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_receiver);
+
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_receiver,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let peer_id_1 = PeerId::new();
+    let address_1 = TestAddressMaker::new_random_address();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_1,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
+    };
+    pm.accept_connection(address_1, bind_address, Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 1);
+
+    match cmd_receiver.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    let peer_id_2 = PeerId::new();
+    let address_2 = TestAddressMaker::new_random_address();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_2,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
+    };
+    pm.accept_connection(address_2, bind_address, Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 2);
+
+    // Peer is accepted by the peer manager
+    match cmd_receiver.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_2 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
+    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_sender));
+    ban_receiver.try_recv().unwrap().unwrap();
+
+    // Peer is disconnected by the peer manager
+    match cmd_receiver.try_recv() {
+        Ok(Command::Disconnect { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_receiver.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    pm.handle_announce_addr_request(peer_id_1, address_1.as_peer_address());
+
+    // No more messages including announcement
+    match cmd_receiver.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+}
+
+// Test that banned peers are not included into address list response
+#[tracing::instrument]
+#[tokio::test]
+async fn ban_and_request_addresses() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let bind_address = TestTransportTcp::make_address();
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_receiver);
+
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_receiver,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let peer_id_1 = PeerId::new();
+    let address_1 = TestAddressMaker::new_random_address();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_1,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
+    };
+    pm.accept_connection(address_1, bind_address, Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 1);
+
+    match cmd_receiver.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // call handle_announce_addr_request to store address_1 in the db
+    pm.handle_announce_addr_request(peer_id_1, address_1.as_peer_address());
+
+    let peer_id_2 = PeerId::new();
+    let address_2 = TestAddressMaker::new_random_address();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_2,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::Full.into(),
+    };
+    pm.accept_connection(address_2, bind_address, Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 2);
+
+    // Peer is accepted by the peer manager
+    match cmd_receiver.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_2 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // call handle_announce_addr_request to store address_2 in the db
+    pm.handle_announce_addr_request(peer_id_2, address_2.as_peer_address());
+    let cmd = cmd_receiver.try_recv().unwrap();
+    let (_, peer_msg) = crate::peer_manager::tests::utils::cmd_to_peer_man_msg(cmd);
+    assert_matches!(peer_msg, PeerManagerMessage::AnnounceAddrRequest(_));
+
+    let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
+    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_sender));
+    ban_receiver.try_recv().unwrap().unwrap();
+
+    // Peer is disconnected by the peer manager
+    match cmd_receiver.try_recv() {
+        Ok(Command::Disconnect { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_receiver.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    pm.handle_addr_list_request(peer_id_2);
+
+    let cmd = p2p_test_utils::expect_recv!(cmd_receiver);
+    let (peer_id, peer_msg) = crate::peer_manager::tests::utils::cmd_to_peer_man_msg(cmd);
+    assert_eq!(peer_id, peer_id_2);
+    // check that address_1 won't get into the response
+    assert_eq!(
+        peer_msg,
+        PeerManagerMessage::AddrListResponse(AddrListResponse {
+            addresses: vec![address_2.as_peer_address()]
+        })
+    );
 }

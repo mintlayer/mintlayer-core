@@ -449,7 +449,9 @@ where
     /// `peer_id` must be from the connected peer.
     fn announce_address(&mut self, peer_id: PeerId, address: SocketAddress) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
-        if !peer.announced_addresses.contains(&address) {
+        if !peer.announced_addresses.contains(&address)
+            && !self.peerdb.is_address_banned(&address.as_bannable())
+        {
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -1370,6 +1372,7 @@ where
             .get_or_create(peer, now, || {
                 self.peerdb
                     .known_addresses()
+                    .filter(|address| !self.peerdb.is_address_banned(&(*address).as_bannable()))
                     .map(SocketAddress::as_peer_address)
                     .filter(|address| Self::is_peer_address_valid(address, &self.p2p_config))
                     .choose_multiple(&mut make_pseudo_rng(), max_addr_count)
