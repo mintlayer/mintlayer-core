@@ -27,7 +27,7 @@ pub struct ApiServerWebServerConfig {
     /// Network
     /// Default: `testnet`
     /// Options: `mainnet`, `testnet`, `regtest`, `signet`
-    #[clap(long, value_enum, default_value_t = Network::Testnet)]
+    #[clap(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// The optional network address and port to listen on

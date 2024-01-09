@@ -229,7 +229,7 @@ async fn initialize(
 
 /// Processes options and potentially runs the node.
 pub async fn setup(options: Options) -> Result<NodeSetupResult> {
-    let command = options.command.clone().unwrap_or(Command::Testnet(RunOptions::default()));
+    let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
     match command {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();

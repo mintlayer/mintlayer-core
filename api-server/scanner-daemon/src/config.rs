@@ -20,7 +20,7 @@ use std::net::SocketAddr;
 #[derive(Parser, Debug)]
 pub struct ApiServerScannerArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Testnet)]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// Optional RPC address
