@@ -388,6 +388,7 @@ where
             let random_pool_data = PoolData::new(
                 Destination::PublicKey(pk),
                 amount_to_stake,
+                Amount::ZERO,
                 vrf_pk,
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
@@ -417,6 +418,7 @@ where
             let random_pool_data2 = PoolData::new(
                 Destination::PublicKey(pk),
                 amount_to_stake,
+                Amount::ZERO,
                 vrf_pk,
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
@@ -473,6 +475,7 @@ where
             let random_pool_data_new = PoolData::new(
                 Destination::PublicKey(pk),
                 amount_to_stake,
+                Amount::ZERO,
                 vrf_pk,
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,

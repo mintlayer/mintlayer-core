@@ -93,7 +93,7 @@ pub fn distribute_pos_reward<
     let total_owner_reward = (pool_owner_reward + unallocated_reward)
         .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
     let increase_pool_balance_undo =
-        accounting_adapter.increase_pool_pledge_amount(pool_id, total_owner_reward)?;
+        accounting_adapter.increase_owner_reward(pool_id, total_owner_reward)?;
 
     let undos = delegation_undos
         .into_iter()
@@ -341,6 +341,7 @@ mod tests {
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
+            Amount::ZERO,
             vrf_pk.clone(),
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
@@ -348,7 +349,8 @@ mod tests {
         let expected_owner_reward = Amount::from_atoms(150);
         let expected_pool_data_a = PoolData::new(
             Destination::AnyoneCanSpend,
-            (pledged_amount + expected_owner_reward).unwrap(),
+            pledged_amount,
+            expected_owner_reward,
             vrf_pk,
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
@@ -482,6 +484,7 @@ mod tests {
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             original_pledged_amount,
+            Amount::ZERO,
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
             mpt,
             cost_per_block,
@@ -512,12 +515,12 @@ mod tests {
             distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
         };
 
-        let new_pledge_amount = accounting_adapter
+        let pool_owner_reward = accounting_adapter
             .accounting_delta()
             .get_pool_data(pool_id)
             .unwrap()
             .unwrap()
-            .pledge_amount();
+            .owner_reward();
 
         // check that the whole reward is added to the balance
         let expected_pool_balance = (original_pool_balance + reward).unwrap();
@@ -546,7 +549,7 @@ mod tests {
         assert_eq!(
             reward,
             amount_sum!(
-                (new_pledge_amount - original_pledged_amount).unwrap(),
+                pool_owner_reward,
                 delegation_1_reward.unwrap_or(Amount::ZERO),
                 delegation_2_reward.unwrap_or(Amount::ZERO)
             )
@@ -608,13 +611,15 @@ mod tests {
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
+            Amount::ZERO,
             vrf_pk.clone(),
             mpt,
             cost_per_block,
         );
         let expected_pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
-            (pledged_amount + reward).unwrap(),
+            pledged_amount,
+            reward,
             vrf_pk,
             mpt,
             cost_per_block,
@@ -676,13 +681,15 @@ mod tests {
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
+            Amount::ZERO,
             vrf_pk.clone(),
             mpt,
             cost_per_block,
         );
         let expected_pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
-            (pledged_amount + reward).unwrap(),
+            pledged_amount,
+            reward,
             vrf_pk,
             mpt,
             cost_per_block,
@@ -739,13 +746,15 @@ mod tests {
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
+            Amount::ZERO,
             vrf_pk.clone(),
             mpt,
             cost_per_block,
         );
         let expected_pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
-            (pledged_amount + reward).unwrap(),
+            pledged_amount,
+            reward,
             vrf_pk,
             mpt,
             cost_per_block,

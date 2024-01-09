@@ -275,13 +275,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             }
             TxOutput::CreateStakePool(pool_id, pool_data) => {
                 let staker = pool_data.staker();
-                let pool_data = PoolData::new(
-                    pool_data.decommission_key().clone(),
-                    pool_data.value(),
-                    pool_data.vrf_public_key().clone(),
-                    pool_data.margin_ratio_per_thousand(),
-                    pool_data.cost_per_block(),
-                );
+                let pool_data: PoolData = pool_data.as_ref().clone().into();
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &pool_data, block_height)
@@ -961,14 +955,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
                 // Create pool pledge
-
-                let new_pool_data = PoolData::new(
-                    stake_pool_data.decommission_key().clone(),
-                    stake_pool_data.value(),
-                    stake_pool_data.vrf_public_key().clone(),
-                    stake_pool_data.margin_ratio_per_thousand(),
-                    stake_pool_data.cost_per_block(),
-                );
+                let new_pool_data: PoolData = stake_pool_data.as_ref().clone().into();
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)

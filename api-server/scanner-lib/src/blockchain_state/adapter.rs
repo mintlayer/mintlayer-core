@@ -25,6 +25,7 @@ pub struct PoSAdapter {
     delegations: BTreeMap<DelegationId, Delegation>,
 
     delegation_rewards: Vec<(DelegationId, Amount)>,
+    // FIXME: this field is obsolete now
     pool_rewards: BTreeMap<PoolId, Amount>,
 }
 
@@ -48,10 +49,11 @@ impl PoSAdapter {
 
     pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
         self.pools.get(&pool_id).map(|pool_data| {
-            let amount_to_add = self.get_pool_reward(pool_id);
+            let reward = self.get_pool_reward(pool_id);
             PoolData::new(
                 pool_data.decommission_destination().clone(),
-                (pool_data.pledge_amount() + amount_to_add).expect("no overflow"),
+                pool_data.pledge_amount(),
+                reward,
                 pool_data.vrf_public_key().clone(),
                 pool_data.margin_ratio_per_thousand(),
                 pool_data.cost_per_block(),
@@ -167,6 +169,14 @@ impl PoSAccountingOperations<()> for PoSAdapter {
     }
 
     fn increase_pool_pledge_amount(
+        &mut self,
+        _pool_id: PoolId,
+        _amount_to_add: Amount,
+    ) -> Result<(), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn increase_owner_reward(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,

@@ -93,8 +93,8 @@ pub enum Error {
     PledgeAmountAdditionError,
     #[error("Undo of increase pledge amount failed as pool balance is not in storage")]
     InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound,
-    #[error("Undo of increase pledge amount failed as pool data is not in storage")]
-    InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound,
+    #[error("Undo of increase owner reward failed as pool balance is not in storage")]
+    InvariantErrorIncreaseOwnerRewardUndoFailedPoolBalanceNotFound,
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

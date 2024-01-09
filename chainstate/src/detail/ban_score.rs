@@ -434,7 +434,7 @@ impl BanScore for pos_accounting::Error {
             E::IncreasePledgeAmountOfNonexistingPool => 100,
             E::PledgeAmountAdditionError => 100,
             E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 100,
-            E::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound => 100,
+            E::InvariantErrorIncreaseOwnerRewardUndoFailedPoolBalanceNotFound => 100,
             E::DelegationDeletionFailedIdDoesNotExist => 100,
             E::DelegationDeletionFailedBalanceNonZero => 100,
             E::DelegationDeletionFailedPoolsShareNonZero => 100,
