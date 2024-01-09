@@ -119,7 +119,6 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[ignore = "Translation of hexified values to bech32m not yet implemented"]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn no_hexified_destination(#[case] seed: Seed) {

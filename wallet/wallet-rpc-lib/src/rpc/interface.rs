@@ -17,7 +17,7 @@ use common::chain::SignedTransaction;
 
 use crate::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
-    EmptyArgs, HexEncoded, NewAccountInfo, TransactionOptions, TxOptionsOverrides, UtxoInfo,
+    EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, TransactionOptions, TxOptionsOverrides,
 };
 
 #[rpc::rpc(server)]
@@ -44,7 +44,7 @@ trait WalletRpc {
     async fn get_balance(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Balances>;
 
     #[method(name = "get_utxos")]
-    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<UtxoInfo>>;
+    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>>;
 
     #[method(name = "submit_raw_transaction")]
     async fn submit_raw_transaction(

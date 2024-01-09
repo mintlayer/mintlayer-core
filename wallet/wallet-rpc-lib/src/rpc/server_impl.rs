@@ -15,7 +15,10 @@
 
 use std::collections::BTreeMap;
 
-use common::{address::Address, chain::SignedTransaction};
+use common::{
+    address::{dehexify::to_dehexified_json, Address},
+    chain::SignedTransaction,
+};
 use utils::shallow_clone::ShallowClone;
 use wallet_controller::{ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes};
 use wallet_types::with_locked::WithLocked;
@@ -24,8 +27,8 @@ use crate::{
     rpc::{WalletRpc, WalletRpcServer},
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
-        EmptyArgs, HexEncoded, NewAccountInfo, RpcError, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo,
+        EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, RpcError, TransactionOptions,
+        TxOptionsOverrides, UtxoInfo,
     },
 };
 
@@ -96,7 +99,7 @@ impl WalletRpcServer for WalletRpc {
         Ok(balances)
     }
 
-    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
+    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>> {
         let account_idx = account_index.index()?;
         let utxos: Vec<_> = rpc::handle_result(
             self.wallet
@@ -109,7 +112,13 @@ impl WalletRpcServer for WalletRpc {
                 })
                 .await,
         )?;
-        Ok(utxos.into_iter().map(UtxoInfo::from_tuple).collect())
+
+        let result = utxos
+            .into_iter()
+            .map(|utxo| to_dehexified_json(&self.chain_config, UtxoInfo::from_tuple(utxo)))
+            .collect::<Result<Vec<_>, _>>();
+
+        rpc::handle_result(result)
     }
 
     async fn submit_raw_transaction(

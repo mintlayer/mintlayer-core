@@ -27,7 +27,7 @@ use self::types::block::RpcBlock;
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
-    address::dehexify::dehexify_all_addresses,
+    address::dehexify::to_dehexified_json,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, DelegationId, PoolId,
@@ -35,7 +35,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::RpcResult;
-use serialization::{hex_encoded::HexEncoded, json_encoded::JsonEncoded};
+use serialization::hex_encoded::HexEncoded;
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -159,7 +159,6 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await,
         )?;
         let rpc_blk = both.map(|(block, block_index)| RpcBlock::new(block, block_index));
-        let result = rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string());
 
         let chain_config: Arc<ChainConfig> = rpc::handle_result(
             self.call(move |this| {
@@ -169,11 +168,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await,
         )?;
 
-        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
-
-        let result = result.map(|res| serde_json::from_str::<serde_json::Value>(&res));
-
-        let result = result.transpose();
+        let result = rpc_blk.map(|rpc_blk| to_dehexified_json(&chain_config, rpc_blk)).transpose();
 
         rpc::handle_result(result)
     }

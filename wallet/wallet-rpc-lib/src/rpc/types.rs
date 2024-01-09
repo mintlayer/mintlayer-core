@@ -23,6 +23,7 @@ use common::{
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
+pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{Balances, DecimalAmount};
 
