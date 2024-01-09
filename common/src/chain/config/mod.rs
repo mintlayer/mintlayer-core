@@ -650,7 +650,7 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
-    let genesis_message = String::new();
+    let genesis_message = "TestnetStartOne".to_string();
 
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::Transfer(
