@@ -7318,6 +7318,7 @@ dependencies = [
  "node-comm",
  "p2p-types",
  "rstest",
+ "serde",
  "serialization",
  "test-utils",
  "thiserror",

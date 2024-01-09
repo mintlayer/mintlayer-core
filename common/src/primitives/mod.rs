@@ -15,6 +15,7 @@
 
 pub mod amount;
 pub mod compact;
+pub mod decimal_amount;
 pub mod encoding;
 pub mod error;
 pub mod height;
@@ -31,6 +32,7 @@ mod hash_encoded;
 
 pub use amount::Amount;
 pub use compact::Compact;
+pub use decimal_amount::DecimalAmount;
 pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
 pub use height::{BlockCount, BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};

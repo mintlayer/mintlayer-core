@@ -15,7 +15,7 @@
 
 mod helper_types;
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{fmt::Write, path::PathBuf, str::FromStr, sync::Arc};
 
 use chainstate::TokenIssuanceError;
 use clap::Parser;
@@ -25,16 +25,14 @@ use common::{
         tokens::{Metadata, TokenCreator},
         Block, ChainConfig, SignedTransaction, Transaction, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::ensure;
-use wallet::{
-    account::Currency, version::get_version, wallet_events::WalletEventsNoOp, WalletError,
-};
+use wallet::{version::get_version, wallet_events::WalletEventsNoOp, WalletError};
 use wallet_controller::{
     read::ReadOnlyController, synced_controller::SyncedController, ControllerConfig,
     ControllerError, NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
@@ -48,9 +46,8 @@ use crate::{
 
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_coin_amount, parse_pool_id, parse_token_amount,
-    parse_token_id, parse_utxo_outpoint, print_coin_amount, print_token_amount, to_per_thousand,
-    CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
-    CliWithLocked,
+    parse_token_id, parse_utxo_outpoint, print_coin_amount, to_per_thousand, CliIsFreezable,
+    CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -1025,38 +1022,23 @@ impl CommandHandler {
                 utxo_states,
                 with_locked,
             } => {
-                let mut balances = self
+                let (coins, tokens) = self
                     .get_readonly_controller()?
-                    .get_balance(
+                    .get_decimal_balance(
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .map_err(WalletCliError::Controller)?;
-                let coin_balance = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-                let mut output = String::new();
-                for (currency, amount) in
-                    std::iter::once((Currency::Coin, coin_balance)).chain(balances.into_iter())
-                {
-                    let out = match currency {
-                        Currency::Token(token_id) => {
-                            let token_number_of_decimals = self
-                                .controller()?
-                                .get_token_number_of_decimals(token_id)
-                                .await
-                                .map_err(WalletCliError::Controller)?;
-                            format!(
-                                "Token: {} amount: {}",
-                                Address::new(chain_config, &token_id)
-                                    .expect("Encoding token id should never fail"),
-                                print_token_amount(token_number_of_decimals, amount)
-                            )
-                        }
-                        Currency::Coin => {
-                            format!("Coins amount: {}", print_coin_amount(chain_config, amount))
-                        }
-                    };
-                    output.push_str(&out);
-                    output.push('\n');
+                    .await
+                    .map_err(WalletCliError::Controller)?
+                    .into_coins_and_tokens();
+
+                let mut output = format!("Coins amount: {coins}\n");
+
+                for (token_id, amount) in tokens {
+                    let token_id = Address::new(chain_config, &token_id)
+                        .expect("Encoding token id should never fail");
+                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                        .expect("Writing to a memory buffer should not fail");
                 }
                 output.pop();
 

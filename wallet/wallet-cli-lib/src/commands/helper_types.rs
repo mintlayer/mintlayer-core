@@ -285,10 +285,6 @@ pub fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
-pub fn print_token_amount(token_number_of_decimals: u8, value: Amount) -> String {
-    value.into_fixedpoint_str(token_number_of_decimals)
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
