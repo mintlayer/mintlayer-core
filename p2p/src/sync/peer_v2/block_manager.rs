@@ -45,8 +45,9 @@ use crate::{
     peer_manager_event::PeerDisconnectionDbAction,
     sync::{
         chainstate_handle::ChainstateHandle,
+        peer_activity::PeerActivity,
         peer_common::{choose_peers_best_block, handle_message_processing_result},
-        types::PeerActivity,
+        sync_status::PeerBlockSyncStatus,
         LocalEvent,
     },
     types::peer_id::PeerId,
@@ -163,13 +164,18 @@ where
 
     async fn main_loop(&mut self) -> Result<()> {
         let stalling_timeout = *self.p2p_config.sync_stalling_timeout;
+        let last_sync_status = self.get_sync_status();
 
         if self.common_services.has_service(Service::Blocks) {
             log::debug!("[peer id = {}] Asking for headers initially", self.id());
             self.request_headers().await?;
         }
 
+        self.handle_sync_status_change(&last_sync_status)?;
+
         loop {
+            let last_sync_status = self.get_sync_status();
+
             tokio::select! {
                 message = self.sync_msg_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
@@ -191,9 +197,30 @@ where
                     if self.peer_activity.earliest_expected_activity_time().is_some() => {}
             }
 
+            self.handle_sync_status_change(&last_sync_status)?;
+
             // Run on each loop iteration, so it's easier to test
             self.handle_stalling_interval().await;
         }
+    }
+
+    fn get_sync_status(&self) -> PeerBlockSyncStatus {
+        PeerBlockSyncStatus {
+            expecting_blocks_since: self.peer_activity.expecting_blocks_since(),
+        }
+    }
+
+    fn handle_sync_status_change(&self, prev_sync_status: &PeerBlockSyncStatus) -> Result<()> {
+        let cur_sync_status = self.get_sync_status();
+
+        if cur_sync_status != *prev_sync_status {
+            self.peer_mgr_event_sender.send(PeerManagerEvent::PeerBlockSyncStatusUpdate {
+                peer_id: self.id(),
+                new_status: cur_sync_status,
+            })?;
+        }
+
+        Ok(())
     }
 
     fn send_message(&mut self, message: BlockSyncMessage) -> Result<()> {
@@ -679,13 +706,7 @@ where
             block_id
         );
 
-        // Clear the block expectation time, because we've received a block.
-        // The code below will set it again if needed.
-        self.peer_activity.set_expecting_blocks_since(None);
-
-        if self.incoming.requested_blocks.front().is_some_and(|id| id == &block.get_id()) {
-            self.incoming.requested_blocks.pop_front();
-        } else {
+        if self.incoming.requested_blocks.front() != Some(&block.get_id()) {
             let idx = self.incoming.requested_blocks.iter().position(|id| id == &block.get_id());
             // Note: we treat wrongly ordered blocks in the same way as unsolicited ones, i.e.
             // we don't remove their ids from the list.
@@ -705,6 +726,14 @@ where
                     ProtocolError::UnsolicitedBlockReceived(block.get_id()),
                 ));
             }
+        }
+
+        self.incoming.requested_blocks.pop_front();
+
+        if self.incoming.requested_blocks.is_empty() {
+            self.peer_activity.set_expecting_blocks_since(None);
+        } else {
+            self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
         let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
@@ -768,9 +797,6 @@ where
                 // Download remaining blocks.
                 self.request_blocks(headers)?;
             }
-        } else {
-            // We expect additional blocks from the peer, update the timestamp.
-            self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
         Ok(())

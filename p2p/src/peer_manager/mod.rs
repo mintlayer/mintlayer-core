@@ -66,6 +66,7 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
+    sync::sync_status::PeerBlockSyncStatus,
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
@@ -847,6 +848,7 @@ where
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
             &self.p2p_config.peer_manager_config,
+            self.time_getter.get_time(),
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -858,6 +860,7 @@ where
         if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
             self.eviction_candidates(PeerRole::OutboundFullRelay),
             &self.p2p_config.peer_manager_config,
+            self.time_getter.get_time(),
         ) {
             log::info!("full relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -957,6 +960,7 @@ where
             discovered_own_address,
             last_tip_block_time: None,
             last_tx_time: None,
+            block_sync_status: PeerBlockSyncStatus::new(),
         };
 
         Self::send_own_address_to_peer(&mut self.peer_connectivity_handle, &peer);
@@ -1264,7 +1268,7 @@ where
         // TODO: in bitcoin they also try to create an extra outbound full relay connection
         // to an address in a reachable network in which there are no outbound full relay or
         // manual connections (see CConnman::MaybePickPreferredNetwork for reference).
-        // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
+        // See https://github.com/mintlayer/mintlayer-core/issues/1433
 
         for address in &new_full_relay_conn_addresses {
             let addr_group = AddressGroup::from_peer_address(&address.as_peer_address());
@@ -1507,6 +1511,15 @@ where
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
                     log::debug!("new transaction {txid} received from peer {peer_id}");
                     peer.last_tx_time = Some(self.time_getter.get_time());
+                }
+            }
+            PeerManagerEvent::PeerBlockSyncStatusUpdate {
+                peer_id,
+                new_status: status,
+            } => {
+                if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    log::debug!("Block sync status update received from peer {peer_id}, new status is {status:?}");
+                    peer.block_sync_status = status;
                 }
             }
             PeerManagerEvent::GetPeerCount(response_sender) => {

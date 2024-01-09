@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_agent};
+use logging::log;
 use tokio::sync::mpsc;
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::PeerId;
+use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
+use p2p_types::{services::Service, socket_address::SocketAddress, PeerId};
 use test_utils::assert_matches_return_val;
 
 use crate::{
@@ -30,6 +31,7 @@ use crate::{
         types::PeerInfo,
     },
     testing_utils::TEST_PROTOCOL_VERSION,
+    tests::helpers::PeerManagerNotification,
 };
 
 pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {
@@ -62,7 +64,7 @@ pub async fn recv_command_advance_time(
     }
 }
 
-pub fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
+pub fn make_full_relay_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
     PeerInfo {
         peer_id,
         protocol_version: TEST_PROTOCOL_VERSION,
@@ -71,4 +73,42 @@ pub fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     }
+}
+
+pub fn make_block_relay_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
+    PeerInfo {
+        peer_id,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: [Service::Blocks].as_slice().into(),
+    }
+}
+
+pub fn expect_connect_cmd(cmd: &Command, addresses: &mut BTreeSet<SocketAddress>) -> SocketAddress {
+    match cmd {
+        Command::Connect {
+            address,
+            local_services_override: _,
+        } => {
+            log::debug!("Connection attempt to {address} detected");
+            assert!(addresses.contains(address));
+            addresses.remove(address);
+            *address
+        }
+        cmd => {
+            panic!("Unexpected command received: {cmd:?}");
+        }
+    }
+}
+
+pub async fn wait_for_heartbeat(
+    peer_mgr_notification_receiver: &mut mpsc::UnboundedReceiver<PeerManagerNotification>,
+) {
+    wait_for_recv(
+        peer_mgr_notification_receiver,
+        &PeerManagerNotification::Heartbeat,
+    )
+    .await;
 }

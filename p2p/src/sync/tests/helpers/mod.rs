@@ -254,25 +254,43 @@ impl TestNode {
         expect_no_recv!(self.error_receiver);
     }
 
-    /// Receives the `AdjustPeerScore` event from the peer manager.
+    /// Expect an `AdjustPeerScore` event from the peer manager.
+    /// PeerBlockSyncStatusUpdate events are ignored.
     pub async fn receive_adjust_peer_score_event(&mut self) -> (PeerId, u32) {
-        match self.peer_manager_event_receiver.recv().await.unwrap() {
-            PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
-                sender.send(Ok(()));
-                (peer, score)
+        let future = async {
+            loop {
+                match self.peer_manager_event_receiver.recv().await.unwrap() {
+                    PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
+                        sender.send(Ok(()));
+                        break (peer, score);
+                    }
+                    PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {}
+                    e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+                }
             }
-            e => panic!("Unexpected peer manager event: {e:?}"),
-        }
+        };
+
+        expect_future_val!(future)
     }
 
+    /// Expect a `Disconnect` event from the peer manager.
+    /// PeerBlockSyncStatusUpdate events are ignored.
     pub async fn receive_disconnect_peer_event(&mut self, id: PeerId) {
-        match self.peer_manager_event_receiver.recv().await.unwrap() {
-            PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
-                assert_eq!(id, peer_id);
-                sender.send(Ok(()));
+        let future = async {
+            loop {
+                match self.peer_manager_event_receiver.recv().await.unwrap() {
+                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
+                        assert_eq!(id, peer_id);
+                        sender.send(Ok(()));
+                        break;
+                    }
+                    PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {}
+                    e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+                }
             }
-            e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
-        }
+        };
+
+        expect_future_val!(future);
     }
 
     pub async fn receive_peer_manager_events(
@@ -280,11 +298,27 @@ impl TestNode {
         mut events: BTreeSet<PeerManagerEventDesc>,
     ) {
         while !events.is_empty() {
-            let event = self.peer_manager_event_receiver.recv().await.unwrap();
+            let event = expect_recv!(self.peer_manager_event_receiver);
             assert!(
                 events.remove(&(&event).into()),
                 "Unexpected peer manager event: {event:?}"
             );
+        }
+    }
+
+    pub async fn receive_or_ignore_peer_manager_events(
+        &mut self,
+        mut events: BTreeSet<PeerManagerEventDesc>,
+        should_ignore: impl Fn(&PeerManagerEvent) -> bool,
+    ) {
+        while !events.is_empty() {
+            let event = expect_recv!(self.peer_manager_event_receiver);
+            if !should_ignore(&event) {
+                assert!(
+                    events.remove(&(&event).into()),
+                    "Unexpected peer manager event: {event:?}"
+                );
+            }
         }
     }
 
@@ -303,7 +337,8 @@ impl TestNode {
         .unwrap_err();
     }
 
-    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewChainstateTip/NewValidTransactionReceived messages)
+    /// Panics if there is an event from the peer manager (except for "informational" messages,
+    /// like NewTipReceived/NewChainstateTip etc).
     // TODO: Rename the function
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
@@ -326,7 +361,8 @@ impl TestNode {
                     }
                     PeerManagerEvent::NewTipReceived { .. }
                     | PeerManagerEvent::NewChainstateTip(_)
-                    | PeerManagerEvent::NewValidTransactionReceived { .. } => {
+                    | PeerManagerEvent::NewValidTransactionReceived { .. }
+                    | PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {
                         // Ignored
                     }
                 }
@@ -564,7 +600,10 @@ pub enum PeerManagerEventDesc {
     GetPeerCount,
     GetBindAddresses,
     GetConnectedPeers,
-    AdjustPeerScore(PeerId, u32),
+    AdjustPeerScore {
+        peer_id: PeerId,
+        score: u32,
+    },
     NewTipReceived {
         peer_id: PeerId,
         block_id: Id<Block>,
@@ -573,6 +612,13 @@ pub enum PeerManagerEventDesc {
     NewValidTransactionReceived {
         peer_id: PeerId,
         txid: Id<Transaction>,
+    },
+    PeerBlockSyncStatusUpdate {
+        peer_id: PeerId,
+        // Note: we don't include PeerBlockSyncStatus here, because the purpose of
+        // PeerManagerEventDesc is to be able to easily form a set of expected values and those
+        // values must be easy to predict. Currently, PeerBlockSyncStatus only contains a Time
+        // value, which may be hard to predict, depending on the test.
     },
     AddReserved(IpOrSocketAddress),
     RemoveReserved(IpOrSocketAddress),
@@ -593,7 +639,10 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::GetBindAddresses(_) => PeerManagerEventDesc::GetBindAddresses,
             PeerManagerEvent::GetConnectedPeers(_) => PeerManagerEventDesc::GetConnectedPeers,
             PeerManagerEvent::AdjustPeerScore(peer_id, score, _) => {
-                PeerManagerEventDesc::AdjustPeerScore(*peer_id, *score)
+                PeerManagerEventDesc::AdjustPeerScore {
+                    peer_id: *peer_id,
+                    score: *score,
+                }
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
                 PeerManagerEventDesc::NewTipReceived {
@@ -610,6 +659,10 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
                     txid: *txid,
                 }
             }
+            PeerManagerEvent::PeerBlockSyncStatusUpdate {
+                peer_id,
+                new_status: _,
+            } => PeerManagerEventDesc::PeerBlockSyncStatusUpdate { peer_id: *peer_id },
             PeerManagerEvent::AddReserved(addr, _) => {
                 PeerManagerEventDesc::AddReserved(addr.clone())
             }

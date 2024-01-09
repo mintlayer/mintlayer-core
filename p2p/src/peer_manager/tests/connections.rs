@@ -46,7 +46,7 @@ use crate::{
         peerdb::{self, config::PeerDbConfig},
         tests::{
             get_connected_peers, run_peer_manager,
-            utils::{make_peer_info, recv_command_advance_time},
+            utils::{expect_connect_cmd, make_full_relay_peer_info, recv_command_advance_time},
         },
         MaxInboundConnections, PeerManager, PeerManagerConfig,
     },
@@ -1475,14 +1475,14 @@ async fn feeler_connections_test_impl(seed: Seed) {
 
     log::debug!("Expecting normal outbound connection attempt");
     let cmd = cmd_receiver.recv().await.unwrap();
-    let outbound_peer_addr = expect_connect(&cmd, &mut addresses);
+    let outbound_peer_addr = expect_connect_cmd(&cmd, &mut addresses);
 
     let outbound_peer_id = PeerId::new();
     conn_event_sender
         .send(ConnectivityEvent::OutboundAccepted {
             peer_address: outbound_peer_addr,
             bind_address,
-            peer_info: make_peer_info(outbound_peer_id, &chain_config),
+            peer_info: make_full_relay_peer_info(outbound_peer_id, &chain_config),
             node_address_as_seen_by_peer: None,
         })
         .unwrap();
@@ -1522,7 +1522,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
             recv_command_advance_time(&mut cmd_receiver, &time_getter, feeler_connections_interval)
                 .await
                 .unwrap();
-        let addr = expect_connect(&cmd, &mut addresses);
+        let addr = expect_connect_cmd(&cmd, &mut addresses);
         let is_last_addr = addresses.is_empty();
         let should_succeed = {
             let rand_bool = rng.gen_bool(0.5);
@@ -1547,7 +1547,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
                 .send(ConnectivityEvent::OutboundAccepted {
                     peer_address: addr,
                     bind_address,
-                    peer_info: make_peer_info(cur_peer_id, &chain_config),
+                    peer_info: make_full_relay_peer_info(cur_peer_id, &chain_config),
                     node_address_as_seen_by_peer: None,
                 })
                 .unwrap();
@@ -1665,23 +1665,6 @@ mod feeler_connections_test_utils {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
-        }
-    }
-
-    pub fn expect_connect(cmd: &Command, addresses: &mut BTreeSet<SocketAddress>) -> SocketAddress {
-        match cmd {
-            Command::Connect {
-                address,
-                local_services_override: _,
-            } => {
-                log::debug!("Connection attempt to {address} detected");
-                assert!(addresses.contains(address));
-                addresses.remove(address);
-                *address
-            }
-            cmd => {
-                panic!("Unexpected command received: {cmd:?}");
-            }
         }
     }
 

@@ -280,24 +280,48 @@ pub mod test_utils {
         count: usize,
         rng: &mut impl Rng,
     ) -> Vec<SocketAddress> {
+        make_non_colliding_addresses_impl(tables, count, false, rng)
+    }
+
+    pub fn make_non_colliding_addresses_in_distinct_addr_groups(
+        tables: &[&Table],
+        count: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<SocketAddress> {
+        make_non_colliding_addresses_impl(tables, count, true, rng)
+    }
+
+    fn make_non_colliding_addresses_impl(
+        tables: &[&Table],
+        count: usize,
+        in_distinct_addr_groups: bool,
+        rng: &mut impl Rng,
+    ) -> Vec<SocketAddress> {
         assert!(count != 0);
 
         let mut idx_set = BTreeSet::new();
+        let mut addr_groups = BTreeSet::new();
         let mut result = Vec::with_capacity(count);
 
         loop {
             let addr = make_random_address(rng);
+            let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
             let non_colliding = tables.iter().enumerate().all(|(table_idx, table)| {
                 let (bucket_idx, bucket_pos) = table.bucket_coords(&addr);
                 idx_set.get(&(table_idx, bucket_idx, bucket_pos)).is_none()
             });
 
-            if non_colliding {
+            if non_colliding && (!in_distinct_addr_groups || addr_groups.get(&addr_group).is_none())
+            {
                 result.push(addr);
 
                 if result.len() == count {
                     break;
+                }
+
+                if in_distinct_addr_groups {
+                    addr_groups.insert(addr_group);
                 }
 
                 for (table_idx, table) in tables.iter().enumerate() {

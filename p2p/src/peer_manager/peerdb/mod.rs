@@ -613,4 +613,19 @@ pub mod test_utils {
             rng,
         )
     }
+
+    pub fn make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups<S: PeerDbStorage>(
+        peer_db: &PeerDb<S>,
+        count: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<SocketAddress> {
+        make_non_colliding_addresses_in_distinct_addr_groups(
+            &[
+                peer_db.address_tables().new_addr_table(),
+                peer_db.address_tables().tried_addr_table(),
+            ],
+            count,
+            rng,
+        )
+    }
 }

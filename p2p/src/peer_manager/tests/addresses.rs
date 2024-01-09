@@ -46,7 +46,7 @@ use crate::{
         self,
         tests::{
             make_peer_manager_custom,
-            utils::{cmd_to_peer_man_msg, make_peer_info},
+            utils::{cmd_to_peer_man_msg, make_full_relay_peer_info},
         },
         OutboundConnectType, PeerManager, DNS_SEED_QUERY_INTERVAL,
     },
@@ -677,7 +677,7 @@ async fn accept_outbound_connection(
         .send(ConnectivityEvent::OutboundAccepted {
             peer_address: *peer_address,
             bind_address: *local_bind_address,
-            peer_info: make_peer_info(peer_id, chain_config),
+            peer_info: make_full_relay_peer_info(peer_id, chain_config),
             node_address_as_seen_by_peer: None,
         })
         .unwrap();

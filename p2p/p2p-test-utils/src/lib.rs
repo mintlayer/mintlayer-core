@@ -31,6 +31,7 @@ use logging::log;
 use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
+use tokio::sync::mpsc;
 use utils::atomics::SeqCstAtomicU64;
 
 use crate::panic_handling::get_panic_notification;
@@ -218,4 +219,16 @@ macro_rules! expect_no_recv {
     ($receiver:expr) => {
         $crate::expect_no_future_val!($receiver.recv())
     };
+}
+
+pub async fn wait_for_recv<T: Eq>(receiver: &mut mpsc::UnboundedReceiver<T>, value: &T) {
+    let wait_loop = async {
+        loop {
+            if receiver.recv().await.unwrap() == *value {
+                break;
+            }
+        }
+    };
+
+    expect_future_val!(wait_loop);
 }

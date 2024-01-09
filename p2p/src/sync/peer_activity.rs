@@ -30,11 +30,11 @@ impl PeerActivity {
         }
     }
 
-    pub fn expecting_headers_since(&mut self) -> Option<Time> {
+    pub fn expecting_headers_since(&self) -> Option<Time> {
         self.expecting_headers_since
     }
 
-    pub fn expecting_blocks_since(&mut self) -> Option<Time> {
+    pub fn expecting_blocks_since(&self) -> Option<Time> {
         self.expecting_blocks_since
     }
 

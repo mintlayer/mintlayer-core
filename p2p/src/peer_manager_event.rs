@@ -24,7 +24,7 @@ use p2p_types::{
 
 use crate::{
     interface::types::ConnectedPeer, peer_manager::PeerManagerQueryInterface,
-    types::peer_id::PeerId, utils::oneshot_nofail,
+    sync::sync_status::PeerBlockSyncStatus, types::peer_id::PeerId, utils::oneshot_nofail,
 };
 
 #[derive(Debug)]
@@ -87,6 +87,12 @@ pub enum PeerManagerEvent {
     NewValidTransactionReceived {
         peer_id: PeerId,
         txid: Id<Transaction>,
+    },
+
+    /// PeerBlockSyncStatus has changed for the specified peer.
+    PeerBlockSyncStatusUpdate {
+        peer_id: PeerId,
+        new_status: PeerBlockSyncStatus,
     },
 
     AddReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
