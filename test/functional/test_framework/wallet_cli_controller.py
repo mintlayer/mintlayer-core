@@ -100,7 +100,7 @@ class WalletCliController:
 
     async def _write_command(self, cmd: str) -> str:
         encoded_cmd = cmd.encode()
-        self.wallet_commands_file.write(b"writhing command: ")
+        self.wallet_commands_file.write(b"writing command: ")
         self.wallet_commands_file.write(encoded_cmd)
         self.process.stdin.write(encoded_cmd)
         await self.process.stdin.drain()
@@ -108,17 +108,17 @@ class WalletCliController:
 
     async def create_wallet(self) -> str:
         wallet_file = os.path.join(self.node.datadir, "wallet")
-        return await self._write_command(f"createwallet {wallet_file} store-seed-phrase\n")
+        return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase\n")
 
     async def recover_wallet(self, mnemonic: str) -> str:
         wallet_file = os.path.join(self.node.datadir, "recovered_wallet")
-        return await self._write_command(f"createwallet {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
+        return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
 
     async def close_wallet(self) -> str:
-        return await self._write_command("closewallet\n")
+        return await self._write_command("wallet-close\n")
 
     async def show_seed_phrase(self) -> Optional[str]:
-        output = await self._write_command("showseedphrase\n")
+        output = await self._write_command("wallet-show-seed-phrase\n")
         if output.startswith("The stored seed phrase is"):
             mnemonic = output[output.find("\"") + 1:-1]
             return mnemonic
@@ -126,61 +126,61 @@ class WalletCliController:
         return None
 
     async def encrypt_private_keys(self, password: str) -> str:
-        return await self._write_command(f"encryptprivatekeys {password}\n")
+        return await self._write_command(f"encryption-encrypt-private-keys {password}\n")
 
     async def unlock_private_keys(self, password: str) -> str:
-        return await self._write_command(f"unlockprivatekeys {password}\n")
+        return await self._write_command(f"encryption-unlock-private-keys {password}\n")
 
     async def lock_private_keys(self) -> str:
-        return await self._write_command(f"lockprivatekeys\n")
+        return await self._write_command(f"encryption-lock-private-keys\n")
 
     async def remove_private_keys_encryption(self) -> str:
-        return await self._write_command(f"removeprivatekeysencryption\n")
+        return await self._write_command(f"encryption-disable-private-keys-encryption\n")
 
     async def get_best_block_height(self) -> str:
-        return await self._write_command("bestblockheight\n")
+        return await self._write_command("node-best-block-height\n")
 
     async def get_best_block(self) -> str:
-        return await self._write_command("bestblock\n")
+        return await self._write_command("node-best-block\n")
 
     async def create_new_account(self, name: Optional[str] = '') -> str:
-        return await self._write_command(f"createnewaccount {name}\n")
+        return await self._write_command(f"account-create {name}\n")
 
     async def select_account(self, account_index: int) -> str:
-        return await self._write_command(f"selectaccount {account_index}\n")
+        return await self._write_command(f"account-select {account_index}\n")
 
     async def set_lookahead_size(self, size: int, force_reduce: bool) -> str:
         i_know_what_i_am_doing = "i-know-what-i-am-doing" if force_reduce else ""
-        return await self._write_command(f"setlookaheadsize {size} {i_know_what_i_am_doing}\n")
+        return await self._write_command(f"wallet-set-lookahead-size {size} {i_know_what_i_am_doing}\n")
 
     async def new_public_key(self) -> bytes:
-        public_key = await self._write_command("newpublickey\n")
+        public_key = await self._write_command("address-new-public-key\n")
 
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
     async def new_address(self) -> str:
-        return await self._write_command(f"newaddress\n")
+        return await self._write_command(f"address-new\n")
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        output = await self._write_command(f"listutxo {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+        output = await self._write_command(f"transaction-list-owned-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
 
         pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{0x([^}]*)\}[^}]*index:\s*(\d+)'
         matches = re.findall(pattern, output, re.DOTALL)
         return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
 
     async def get_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"gettransaction {tx_id}\n")
+        return await self._write_command(f"transaction-get {tx_id}\n")
 
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"getrawsignedtransaction {tx_id}\n")
+        return await self._write_command(f"transaction-get-signed-raw {tx_id}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
-        return await self._write_command(f"sendtoaddress {address} {amount} {' '.join(map(str, selected_utxos))}\n")
+        return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return await self._write_command(f"sendtokenstoaddress {token_id} {address} {amount}\n")
+        return await self._write_command(f"token-send {token_id} {address} {amount}\n")
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -189,29 +189,29 @@ class WalletCliController:
                               destination_address: str,
                               token_supply: str = 'unlimited',
                               is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
-        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
+        output = await self._write_command(f'token-issue-new "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
         if output.startswith("A new token has been issued with ID"):
             return output[output.find(':')+2:], None
 
         return None, output
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return await self._write_command(f"minttokens {token_id} {address} {amount}\n")
+        return await self._write_command(f"token-mint {token_id} {address} {amount}\n")
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return await self._write_command(f"unminttokens {token_id} {amount}\n")
+        return await self._write_command(f"token-unmint {token_id} {amount}\n")
 
     async def lock_token_supply(self, token_id: str) -> str:
-        return await self._write_command(f"locktokensupply {token_id}\n")
+        return await self._write_command(f"token-lock-supply {token_id}\n")
 
     async def freeze_token(self, token_id: str, is_unfreezable: str) -> str:
-        return await self._write_command(f"freezetoken {token_id} {is_unfreezable}\n")
+        return await self._write_command(f"token-freeze {token_id} {is_unfreezable}\n")
 
     async def unfreeze_token(self, token_id: str) -> str:
-        return await self._write_command(f"unfreezetoken {token_id}\n")
+        return await self._write_command(f"token-unfreeze {token_id}\n")
 
     async def change_token_authority(self, token_id: str, new_authority: str) -> str:
-        return await self._write_command(f"changetokenauthority {token_id} {new_authority}\n")
+        return await self._write_command(f"token-change-authority {token_id} {new_authority}\n")
 
     async def issue_new_nft(self,
                             destination_address: str,
@@ -223,7 +223,7 @@ class WalletCliController:
                             icon_uri: Optional[str] = '',
                             media_uri: Optional[str] = '',
                             additional_metadata_uri: Optional[str] = ''):
-        output = await self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
+        output = await self._write_command(f"token-nft-issue-new {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
         if output.startswith("A new NFT has been issued with ID"):
             return output[output.find(':')+2:]
 
@@ -235,24 +235,24 @@ class WalletCliController:
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
                                 decommission_key: Optional[str] = '') -> str:
-        return await self._write_command(f"createstakepool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
+        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
-        return await self._write_command(f"decommissionstakepool {pool_id}\n")
+        return await self._write_command(f"staking-decommission-pool {pool_id}\n")
 
     async def list_pool_ids(self) -> List[PoolData]:
-        output = await self._write_command("listpoolids\n")
+        output = await self._write_command("staking-list-pool-ids\n")
         pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, int(balance)) for pool_id, balance in matches]
 
     async def list_created_blocks_ids(self) -> List[str]:
-        output =  await self._write_command("listcreatedblocksids\n")
+        output =  await self._write_command("staking-list-created-block-ids\n")
         pattern = r'Id<GenBlock>\{0x([^}]*)\}'
         return re.findall(pattern, output)
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
-        output = await self._write_command(f"createdelegation {address} {pool_id}\n")
+        output = await self._write_command(f"delegation-create {address} {pool_id}\n")
         pattern = r'Delegation id: ([a-zA-Z0-9]+)'
         match = re.search(pattern, output)
         if match:
@@ -261,36 +261,36 @@ class WalletCliController:
             return None
 
     async def stake_delegation(self, amount: int, delegation_id: str) -> str:
-        return await self._write_command(f"delegatestaking {amount} {delegation_id}\n")
+        return await self._write_command(f"delegation-stake {amount} {delegation_id}\n")
 
     async def list_delegation_ids(self) -> List[DelegationData]:
-        output = await self._write_command("listdelegationids\n")
+        output = await self._write_command("delegation-list-ids\n")
         pattern = r'Delegation Id: ([a-zA-Z0-9]+), Balance: (\d+)'
         matches = re.findall(pattern, output)
         return [DelegationData(delegation_id, int(balance)) for delegation_id, balance in matches]
 
     async def deposit_data(self, data: str) -> str:
-        return await self._write_command(f"depositdata \"{data}\"\n")
+        return await self._write_command(f"address-deposit-data \"{data}\"\n")
 
     async def sync(self) -> str:
-        return await self._write_command("syncwallet\n")
+        return await self._write_command("wallet-sync\n")
 
     async def start_staking(self) -> str:
-        return await self._write_command(f"startstaking\n")
+        return await self._write_command(f"staking-start\n")
 
     async def stop_staking(self) -> str:
-        return await self._write_command(f"stopstaking\n")
+        return await self._write_command(f"staking-stop\n")
 
     async def get_addresses_usage(self) -> str:
-        return await self._write_command("showreceiveaddresses\n")
+        return await self._write_command("address-show\n")
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
-        return await self._write_command(f"getbalance {with_locked} {' '.join(utxo_states)}\n")
+        return await self._write_command(f"address-balance {with_locked} {' '.join(utxo_states)}\n")
 
     async def list_pending_transactions(self) -> List[str]:
-        output = await self._write_command(f"listpendingtransactions\n")
+        output = await self._write_command(f"transaction-list-pending\n")
         pattern = r'id: Id<Transaction>\{0x([^}]*)\}'
         return re.findall(pattern, output)
 
     async def abandon_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"abandontransaction {tx_id}\n")
+        return await self._write_command(f"transaction-abandon {tx_id}\n")

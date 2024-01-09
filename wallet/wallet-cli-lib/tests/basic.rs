@@ -27,10 +27,10 @@ async fn wallet_cli_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test = CliTestFramework::setup(&mut rng).await;
 
-    let output = test.exec("nodeversion");
+    let output = test.exec("node-version");
     assert_eq!(output, env!("CARGO_PKG_VERSION"));
 
-    let output = test.exec("bestblockheight");
+    let output = test.exec("node-best-block-height");
     assert_eq!(output, "0");
 
     test.shutdown().await;
@@ -54,15 +54,15 @@ async fn wallet_cli_file(#[case] seed: Seed) {
         .to_owned();
 
     assert!(test
-        .exec(&format!("createwallet \"{file_name}\" store-seed-phrase"))
+        .exec(&format!("wallet-create \"{file_name}\" store-seed-phrase"))
         .starts_with("New wallet created successfully\n"));
-    assert_eq!(test.exec("closewallet"), "Successfully closed the wallet.");
+    assert_eq!(test.exec("wallet-close"), "Successfully closed the wallet.");
 
     assert_eq!(
-        test.exec(&format!("openwallet \"{file_name}\"")),
+        test.exec(&format!("wallet-open \"{file_name}\"")),
         "Wallet loaded successfully"
     );
-    assert_eq!(test.exec("closewallet"), "Successfully closed the wallet.");
+    assert_eq!(test.exec("wallet-close"), "Successfully closed the wallet.");
 
     test.shutdown().await;
 }
@@ -77,8 +77,8 @@ async fn produce_blocks(#[case] seed: Seed) {
 
     test.create_genesis_wallet();
 
-    assert_eq!(test.exec("getbalance"), "Coins amount: 99960000");
-    assert_eq!(test.exec("generateblocks 20"), "Success");
+    assert_eq!(test.exec("address-balance"), "Coins amount: 99960000");
+    assert_eq!(test.exec("node-generate-blocks 20"), "Success");
 
     test.shutdown().await;
 }

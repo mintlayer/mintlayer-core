@@ -125,7 +125,7 @@ pub async fn run(
             .send(Event::HandleCommand {
                 command: WalletCommand::OpenWallet {
                     wallet_path,
-                    password: wallet_password,
+                    encryption_password: wallet_password,
                 },
                 res_tx,
             })
