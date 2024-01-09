@@ -54,28 +54,6 @@ use self::helper_types::{
 #[derive(Debug, Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum WalletCommand {
-    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
-    #[clap(name = "encryption-encrypt-private-keys")]
-    EncryptPrivateKeys {
-        /// The new encryption password
-        password: String,
-    },
-
-    /// Remove any existing encryption, expects the wallet to be unlocked
-    #[clap(name = "encryption-disable-private-keys-encryption")]
-    RemovePrivateKeysEncryption,
-
-    /// Unlocks the private keys for usage.
-    #[clap(name = "encryption-unlock-private-keys")]
-    UnlockPrivateKeys {
-        /// The current encryption password.
-        password: String,
-    },
-
-    /// Locks the private keys so they can't be used until they are unlocked again
-    #[clap(name = "encryption-lock-private-keys")]
-    LockPrivateKeys,
-
     /// Creates a new account with an optional name.
     /// Returns an error if the last created account does not have a transaction history.
     #[clap(name = "account-create")]
@@ -401,6 +379,29 @@ pub enum WalletCommand {
         /// the new wallet can lose track of known addresses and balance
         i_know_what_i_am_doing: Option<CliForceReduce>,
     },
+
+    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
+    #[clap(name = "wallet-encrypt-private-keys")]
+    EncryptPrivateKeys {
+        /// The new encryption password
+        password: String,
+    },
+
+    /// Completely and totally remove any existing encryption, expects the wallet to be unlocked.
+    /// WARNING: After this, your wallet file will be USABLE BY ANYONE without a password.
+    #[clap(name = "wallet-disable-private-keys-encryption")]
+    RemovePrivateKeysEncryption,
+
+    /// Unlocks the private keys for usage.
+    #[clap(name = "wallet-unlock-private-keys")]
+    UnlockPrivateKeys {
+        /// The current encryption password.
+        password: String,
+    },
+
+    /// Locks the private keys so they can't be used until they are unlocked again
+    #[clap(name = "wallet-lock-private-keys")]
+    LockPrivateKeys,
 
     /// Node version
     #[clap(name = "node-version")]

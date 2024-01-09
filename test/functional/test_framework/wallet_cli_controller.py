@@ -126,16 +126,16 @@ class WalletCliController:
         return None
 
     async def encrypt_private_keys(self, password: str) -> str:
-        return await self._write_command(f"encryption-encrypt-private-keys {password}\n")
+        return await self._write_command(f"wallet-encrypt-private-keys {password}\n")
 
     async def unlock_private_keys(self, password: str) -> str:
-        return await self._write_command(f"encryption-unlock-private-keys {password}\n")
+        return await self._write_command(f"wallet-unlock-private-keys {password}\n")
 
     async def lock_private_keys(self) -> str:
-        return await self._write_command(f"encryption-lock-private-keys\n")
+        return await self._write_command(f"wallet-lock-private-keys\n")
 
     async def remove_private_keys_encryption(self) -> str:
-        return await self._write_command(f"encryption-disable-private-keys-encryption\n")
+        return await self._write_command(f"wallet-disable-private-keys-encryption\n")
 
     async def get_best_block_height(self) -> str:
         return await self._write_command("node-best-block-height\n")
