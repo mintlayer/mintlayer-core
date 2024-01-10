@@ -612,7 +612,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         tx: SignedTransaction,
     ) -> Result<(), ControllerError<T>> {
         self.rpc_client
-            .submit_transaction(tx.clone())
+            .submit_transaction(tx.clone(), Default::default())
             .await
             .map_err(ControllerError::NodeCallError)?;
 

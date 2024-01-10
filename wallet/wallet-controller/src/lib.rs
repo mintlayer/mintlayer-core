@@ -24,6 +24,7 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
+use futures::never::Never;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -32,7 +33,6 @@ use std::{
     time::Duration,
 };
 
-use mempool::tx_accumulator::PackingStrategy;
 use read::ReadOnlyController;
 use sync::InSync;
 use synced_controller::SyncedController;
@@ -55,6 +55,7 @@ use crypto::{
     random::{make_pseudo_rng, make_true_rng, Rng},
 };
 use logging::log;
+use mempool::tx_accumulator::PackingStrategy;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -578,7 +579,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
+    pub async fn run(&mut self) -> Result<Never, ControllerError<T>> {
         let mut rebroadcast_txs_timer = get_time();
         let staking_started = self.staking_started.clone();
 
@@ -634,7 +635,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 Ok(txs) => {
                     for tx in txs {
                         let tx_id = tx.transaction().get_id();
-                        let res = self.rpc_client.submit_transaction(tx).await;
+                        let res = self.rpc_client.submit_transaction(tx, Default::default()).await;
                         if let Err(e) = res {
                             log::warn!("Rebroadcasting for tx {tx_id} failed: {e}");
                         }

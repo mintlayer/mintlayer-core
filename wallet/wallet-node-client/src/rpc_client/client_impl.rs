@@ -24,7 +24,9 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
-use mempool::{rpc::MempoolRpcClient, tx_accumulator::PackingStrategy, FeeRate};
+use mempool::{
+    rpc::MempoolRpcClient, tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate,
+};
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
@@ -183,8 +185,12 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        let options = mempool::tx_options::TxOptionsOverrides::default();
+
+    async fn submit_transaction(
+        &self,
+        tx: SignedTransaction,
+        options: TxOptionsOverrides,
+    ) -> Result<(), Self::Error> {
         let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into(), options)
             .await
             .map_err(NodeRpcError::ResponseError)?;

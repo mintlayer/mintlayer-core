@@ -112,6 +112,13 @@ impl Rpc {
     pub fn http_address(&self) -> &SocketAddr {
         &self.http.0
     }
+
+    pub async fn shutdown(self) {
+        match self.http.1.stop() {
+            Ok(()) => self.http.1.stopped().await,
+            Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -127,10 +134,7 @@ impl subsystem::Subsystem for Rpc {
     }
 
     async fn shutdown(self) {
-        match self.http.1.stop() {
-            Ok(()) => self.http.1.stopped().await,
-            Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
-        }
+        self.shutdown().await
     }
 }
 

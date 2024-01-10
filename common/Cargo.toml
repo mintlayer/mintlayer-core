@@ -29,6 +29,7 @@ once_cell.workspace = true
 parity-scale-codec.workspace = true
 ref-cast.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 static_assertions.workspace = true
 thiserror.workspace = true
 variant_count.workspace = true
@@ -43,7 +44,6 @@ bitcoin-bech32.workspace = true
 expect-test.workspace = true
 proptest.workspace = true
 rstest.workspace = true
-serde_json.workspace = true
 serde_test.workspace = true
 serial_test.workspace = true
 

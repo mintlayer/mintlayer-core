@@ -1,0 +1,18 @@
+[package]
+name = "wallet-rpc-daemon"
+license.workspace = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+rpc = { path = "../../rpc" }
+utils = { path = "../../utils" }
+wallet-rpc-lib = { path = "../wallet-rpc-lib" }
+
+clap.workspace = true
+thiserror.workspace = true
+tokio.workspace = true

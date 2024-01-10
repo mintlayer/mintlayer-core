@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serialization::json_encoded::JsonEncoded;
+
 use crate::chain::{tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId};
 
 use super::hexified::HexifiedAddress;
@@ -25,6 +27,15 @@ pub fn dehexify_all_addresses(conf: &ChainConfig, input: &str) -> String {
     let result = HexifiedAddress::<TokenId>::replace_with_address(conf, &result).to_string();
 
     result
+}
+
+pub fn to_dehexified_json<T: serde::Serialize>(
+    conf: &ChainConfig,
+    object: T,
+) -> serde_json::Result<serde_json::Value> {
+    // TODO: It would be more robust to do the transformation on the `serde_json::Value` directly.
+    let json_str = JsonEncoded::new(object).to_string();
+    serde_json::from_str(&dehexify_all_addresses(conf, &json_str))
 }
 
 // TODO: add tests that create blocks, and ensure the replacement in json works properly.
