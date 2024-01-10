@@ -156,7 +156,6 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
-            boot_nodes_will_stall: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
 
@@ -284,7 +283,6 @@ async fn disconnect(#[case] seed: Seed) {
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
-            boot_nodes_will_stall: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),
@@ -353,7 +351,6 @@ async fn slow_response(#[case] seed: Seed) {
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
-            boot_nodes_will_stall: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),

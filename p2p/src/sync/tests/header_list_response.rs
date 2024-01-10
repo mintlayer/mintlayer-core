@@ -216,7 +216,6 @@ async fn disconnect() {
             socks5_proxy: Default::default(),
             disable_noise: Default::default(),
             boot_nodes: Default::default(),
-            boot_nodes_will_stall: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),

@@ -32,7 +32,7 @@ use std::{
 use futures::never::Never;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
+    socket_address::SocketAddress, IsGlobalIp,
 };
 use tokio::sync::mpsc;
 
@@ -138,6 +138,19 @@ pub struct PeerManagerConfig {
     /// The minimum interval between feeler connections.
     pub feeler_connections_interval: FeelerConnectionsInterval,
 
+    /// If true, the node will perform an early dns query if the peer db doesn't contain
+    /// any global addresses at startup (more precisely, the ones for which is_global_unicast_ip
+    /// returns true).
+    ///
+    /// Note that this is mainly needed to speed up the startup of the test
+    /// nodes in build-tools/p2p-test. Those nodes always start with a boot_nodes
+    /// list that contains addresses of their siblings, which are always some private ips;
+    /// therefore, they all will have peers from the beginning, which will prevent normal
+    /// dns queries, but will be unable to obtain blocks until stale_tip_time_diff has elapsed,
+    /// which is 30 min by default. Setting this option to true will force the peer manager
+    /// to perform an early dns query in such a situation.
+    pub force_dns_query_if_no_global_addresses_known: ForceDnsQueryIfNoGlobalAddressesKnown,
+
     /// Peer db configuration.
     pub peerdb_config: PeerDbConfig,
 }
@@ -169,6 +182,7 @@ make_config_setting!(
     Duration::from_secs(2 * 60)
 );
 make_config_setting!(EnableFeelerConnections, bool, true);
+make_config_setting!(ForceDnsQueryIfNoGlobalAddressesKnown, bool, false);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -1699,50 +1713,27 @@ where
         (now >= next_heartbeat_min_time && is_early_heartbeat) || now >= next_heartbeat_max_time
     }
 
-    /// Return true if peerdb only contains the addresses from p2p_config.boot_nodes.
-    fn only_boot_nodes_in_peerdb(&self) -> bool {
-        if self.peerdb.known_addresses_count() > self.p2p_config.boot_nodes.len() {
-            return false;
-        }
-
-        let boot_nodes_in_peerdb = self
-            .p2p_config
-            .boot_nodes
-            .iter()
-            .filter(|addr| {
-                self.peerdb.is_known_address(&ip_or_socket_address_to_peer_address(
-                    addr,
-                    &self.chain_config,
-                ))
-            })
-            .count();
-        boot_nodes_in_peerdb == self.peerdb.known_addresses_count()
-    }
-
     /// Determine whether we need to query the dns seed.
     ///
     /// Note that we avoid querying dns seeds unless really necessary in order to reduce their
     /// influence on the network topology (which can be bad if one of the seeds is compromised).
     fn dns_seed_query_needed(&self) -> bool {
-        if self.last_dns_query_time.is_none()
-            && (
-                // If the peer db is empty, it makes sense to query the seed immediately, instead of
-                // waiting for DNS_SEED_QUERY_INTERVAL to pass.
-                self.peerdb.known_addresses_count() == 0
-                    || (
-                        // Also query it immediately if the peer db only contains boot nodes
-                        // and the user has told us that they won't give us fresh blocks.
-                        //
-                        // Note that this is mainly needed to speed up the startup of the test
-                        // nodes in build-tools/p2p-test; those nodes always start with a boot_nodes
-                        // list that contains addresses of their siblings, so they all will have
-                        // peers but won't be able to obtain blocks until stale_tip_time_diff
-                        // has elapsed, which is 30 min by default.
-                        *self.p2p_config.boot_nodes_will_stall && self.only_boot_nodes_in_peerdb()
-                    )
-            )
-        {
-            return true;
+        if self.last_dns_query_time.is_none() {
+            // If the peer db is empty, it makes sense to perform the first query immediately,
+            // instead of waiting for DNS_SEED_QUERY_INTERVAL to pass.
+            if self.peerdb.known_addresses_count() == 0 {
+                return true;
+            }
+
+            // Check whether the dns query should be forced.
+            if *self.p2p_config.peer_manager_config.force_dns_query_if_no_global_addresses_known {
+                let have_global_addrs =
+                    self.peerdb.known_addresses().any(|addr| addr.ip_addr().is_global_unicast_ip());
+
+                if !have_global_addrs {
+                    return true;
+                }
+            }
         }
 
         let last_time = self.last_dns_query_time.unwrap_or(self.init_time);

@@ -56,7 +56,6 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Vec::new(),
-        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Vec::new(),
         whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),

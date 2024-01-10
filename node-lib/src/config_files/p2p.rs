@@ -66,13 +66,6 @@ pub struct P2pConfigFile {
     pub disable_noise: Option<bool>,
     /// Optional list of boot node addresses to connect.
     pub boot_nodes: Option<Vec<IpOrSocketAddress>>,
-    /// If true, the node will assume that the nodes specified in `boot_nodes` won't be able
-    /// to provide it with fresh blocks.
-    /// This is used by p2p-test, where `boot_nodes` are other test nodes
-    /// that have no knowledge about nodes on the public network. Setting this to
-    /// true will force the node to make a dns seed query early if its peerdb only contains
-    /// addresses specified via `boot_nodes`.
-    pub boot_nodes_will_stall: Option<bool>,
     /// Optional list of reserved node addresses to connect.
     pub reserved_nodes: Option<Vec<IpOrSocketAddress>>,
     /// Optional list of whitelisted addresses.
@@ -96,6 +89,9 @@ pub struct P2pConfigFile {
     pub sync_stalling_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
+    /// If true, the node will perform an early dns query if the peer db doesn't contain
+    /// any global addresses at startup.
+    pub force_dns_query_if_no_global_addresses_known: Option<bool>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -105,7 +101,6 @@ impl From<P2pConfigFile> for P2pConfig {
             socks5_proxy,
             disable_noise,
             boot_nodes,
-            boot_nodes_will_stall,
             reserved_nodes,
             whitelisted_addresses,
             max_inbound_connections,
@@ -117,6 +112,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ping_timeout,
             sync_stalling_timeout,
             node_type,
+            force_dns_query_if_no_global_addresses_known,
         } = config_file;
 
         P2pConfig {
@@ -124,7 +120,6 @@ impl From<P2pConfigFile> for P2pConfig {
             socks5_proxy,
             disable_noise,
             boot_nodes: boot_nodes.unwrap_or_default(),
-            boot_nodes_will_stall: boot_nodes_will_stall.into(),
             reserved_nodes: reserved_nodes.unwrap_or_default(),
             whitelisted_addresses: whitelisted_addresses.unwrap_or_default(),
             ban_threshold: ban_threshold.into(),
@@ -163,6 +158,9 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 enable_feeler_connections: Default::default(),
                 feeler_connections_interval: Default::default(),
+
+                force_dns_query_if_no_global_addresses_known:
+                    force_dns_query_if_no_global_addresses_known.into(),
 
                 peerdb_config: Default::default(),
             },

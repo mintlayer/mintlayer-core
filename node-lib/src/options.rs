@@ -124,13 +124,6 @@ pub struct RunOptions {
     #[clap(long, value_name = "NODE")]
     pub p2p_boot_node: Option<Vec<IpOrSocketAddress>>,
 
-    /// If true, the node will assume that the nodes specified via `boot_node` won't be able
-    /// to provide it with fresh blocks; this will cause it to make a dns seed query earlier than
-    /// usual if the only nodes it knows about are those specified via `boot_node`.
-    #[clap(long)]
-    #[arg(hide = true)]
-    pub p2p_boot_nodes_will_stall: Option<bool>,
-
     /// Optional list of reserved node addresses to connect.
     #[clap(long, value_name = "NODE")]
     pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
@@ -168,6 +161,12 @@ pub struct RunOptions {
     /// If a large difference is detected, the peer will be disconnected.
     #[clap(long)]
     pub p2p_max_clock_diff: Option<u64>,
+
+    /// If true, the node will perform an early dns query if the peer db doesn't contain
+    /// any global addresses at startup.
+    #[clap(long)]
+    #[arg(hide = true)]
+    pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
     /// A maximum tip age in seconds.
     ///

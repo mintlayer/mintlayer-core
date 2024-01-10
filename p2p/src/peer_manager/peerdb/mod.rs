@@ -579,10 +579,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.addresses.len()
     }
 
-    pub fn is_known_address(&self, address: &SocketAddress) -> bool {
-        self.addresses.contains_key(address)
-    }
-
     #[cfg(test)]
     pub fn address_tables(&self) -> &AddressTables {
         &self.address_tables

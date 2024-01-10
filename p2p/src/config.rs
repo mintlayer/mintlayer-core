@@ -26,7 +26,6 @@ use crate::{
     protocol::ProtocolConfig,
 };
 
-make_config_setting!(BootNodesWillStall, bool, false);
 make_config_setting!(BanThreshold, u32, 100);
 // BanDuration is only 30 mins as a compromise between banning for a longer period of time
 // and not banning at all with alternative approaches such as discouragement
@@ -80,10 +79,6 @@ pub struct P2pConfig {
     /// Optional list of initial node addresses.
     /// Boot node addresses are added to PeerDb as regular discovered addresses.
     pub boot_nodes: Vec<IpOrSocketAddress>,
-    /// If true, the node will assume that the nodes specified in `boot_nodes` won't be able
-    /// to provide it with fresh blocks. This will force it to make a dns seed query earlier
-    /// if the only peer addresses that it knows about are those in `boot_nodes`.
-    pub boot_nodes_will_stall: BootNodesWillStall,
     /// Optional list of reserved node addresses.
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.

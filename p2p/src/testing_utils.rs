@@ -273,7 +273,6 @@ pub fn test_p2p_config() -> P2pConfig {
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),
@@ -300,7 +299,6 @@ pub fn test_p2p_config_with_peer_mgr_config(peer_manager_config: PeerManagerConf
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),
@@ -337,6 +335,7 @@ pub fn test_p2p_config_with_peer_db_config(peerdb_config: PeerDbConfig) -> P2pCo
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
     })
 }
 

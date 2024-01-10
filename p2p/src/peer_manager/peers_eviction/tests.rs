@@ -1002,6 +1002,7 @@ fn config_with_block_relay_conn_limits(
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
     }
 }
@@ -1030,6 +1031,7 @@ fn config_with_full_relay_conn_limits(
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
     }
 }
@@ -1055,6 +1057,7 @@ fn config_with_no_outbound_conn_limits() -> PeerManagerConfig {
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
     }
 }

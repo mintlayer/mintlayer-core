@@ -7,7 +7,7 @@ services:
         node-daemon testnet \
             --http-rpc-addr 0.0.0.0:$RPC_PORT \
             $(dig +short $NODES_LIST | xargs printf '--p2p-boot-node %s ') \
-            --p2p-boot-nodes-will-stall true \
+            --p2p-force-dns-query-if-no-global-addresses-known true \
       "
     environment:
       - RUST_LOG

@@ -119,6 +119,7 @@ async fn peer_discovery_on_stale_tip_impl(
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
 
         peerdb_config: Default::default(),
     };
@@ -280,6 +281,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         max_inbound_connections: Default::default(),
         outbound_block_relay_connection_min_age: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
@@ -305,6 +307,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_block_relay_connection_min_age: Default::default(),
         outbound_full_relay_connection_min_age: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
         peerdb_config: Default::default(),
     };
     let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
@@ -456,7 +459,6 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        boot_nodes_will_stall: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
         ban_threshold: Default::default(),
