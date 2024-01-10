@@ -21,6 +21,7 @@ wallet-types = { path = "../types" }
 
 anyhow.workspace = true
 async-trait.workspace = true
+clap.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 serde.workspace = true

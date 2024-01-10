@@ -17,15 +17,23 @@
 
 use common::{
     address::Address,
-    chain::{Destination, GenBlock, TxOutput, UtxoOutPoint},
-    primitives::{BlockHeight, Id},
+    chain::{
+        block::timestamp::BlockTimestamp, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+        TxOutput, UtxoOutPoint,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::key::{
+    hdkd::{child_number::ChildNumber, u31::U31},
+    PublicKey,
+};
+use serialization::hex::HexEncode;
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{Balances, DecimalAmount};
+use wallet_types::wallet_tx;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -37,6 +45,12 @@ pub enum RpcError {
 
     #[error("Invalid address")]
     InvalidAddress,
+
+    #[error("Failed to parse margin_ratio_per_thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
+    InvalidMarginRatio,
+
+    #[error("Invalid pool ID")]
+    InvalidPoolId,
 }
 
 impl From<RpcError> for rpc::Error {
@@ -104,6 +118,19 @@ impl AddressWithUsageInfo {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PublicKeyInfo {
+    pub public_key: String,
+}
+
+impl PublicKeyInfo {
+    pub fn new(pub_key: PublicKey) -> Self {
+        Self {
+            public_key: pub_key.hex_encode(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct UtxoInfo {
     pub outpoint: UtxoOutPoint,
@@ -132,4 +159,57 @@ impl NewAccountInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionOptions {
     pub in_top_x_mb: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PoolInfo {
+    pub pool_id: String,
+    pub balance: DecimalAmount,
+    pub height: BlockHeight,
+    pub block_timestamp: BlockTimestamp,
+}
+
+impl PoolInfo {
+    pub fn new(
+        pool_id: PoolId,
+        block_info: wallet_tx::BlockInfo,
+        balance: Amount,
+        chain_config: &ChainConfig,
+    ) -> Self {
+        let decimals = chain_config.coin_decimals();
+        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+
+        Self {
+            pool_id: Address::new(chain_config, &pool_id).expect("addressable").get().to_owned(),
+            balance,
+            height: block_info.height,
+            block_timestamp: block_info.timestamp,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NewDelegation {
+    pub delegation_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DelegationInfo {
+    pub delegation_id: String,
+    pub balance: DecimalAmount,
+}
+
+impl DelegationInfo {
+    pub fn new(delegation_id: DelegationId, balance: Amount, chain_config: &ChainConfig) -> Self {
+        let decimals = chain_config.coin_decimals();
+        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+
+        Self {
+            delegation_id: Address::new(chain_config, &delegation_id)
+                .expect("addressable")
+                .get()
+                .to_owned(),
+            balance,
+        }
+    }
 }

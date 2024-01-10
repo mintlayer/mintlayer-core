@@ -3683,12 +3683,14 @@ version = "0.2.0"
 dependencies = [
  "clap",
  "libtest-mimic",
+ "logging",
  "node-lib",
  "thiserror",
  "tokio",
  "utils",
  "wallet-address-generator-lib",
  "wallet-cli-lib",
+ "wallet-rpc-lib",
 ]
 
 [[package]]
@@ -7496,6 +7498,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clap",
  "common",
  "crypto",
  "futures",
@@ -7568,6 +7571,7 @@ dependencies = [
  "itertools 0.12.0",
  "parity-scale-codec",
  "rstest",
+ "serde",
  "serialization",
  "storage",
  "test-utils",

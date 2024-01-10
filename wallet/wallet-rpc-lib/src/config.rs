@@ -15,7 +15,10 @@
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
-use common::chain::config::{ChainConfig, ChainType};
+use common::chain::config::{
+    regtest_options::{regtest_chain_config, ChainConfigOptions},
+    ChainConfig, ChainType,
+};
 use rpc::{rpc_creds::RpcCreds, RpcAuthData};
 
 /// Configuration options for the wallet service
@@ -34,14 +37,21 @@ pub struct WalletServiceConfig {
 }
 
 impl WalletServiceConfig {
-    pub fn new(chain_type: ChainType, wallet_file: PathBuf) -> Self {
-        let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
-        Self {
+    pub fn new(
+        chain_type: ChainType,
+        wallet_file: PathBuf,
+        chain_config_options: ChainConfigOptions,
+    ) -> anyhow::Result<Self> {
+        let chain_config = match chain_type {
+            ChainType::Regtest => Arc::new(regtest_chain_config(&chain_config_options)?),
+            _ => Arc::new(common::chain::config::Builder::new(chain_type).build()),
+        };
+        Ok(Self {
             chain_config,
             wallet_file,
             node_rpc_address: None,
             node_credentials: RpcAuthData::None,
-        }
+        })
     }
 
     pub fn with_custom_chain_config(mut self, chain_config: Arc<ChainConfig>) -> Self {

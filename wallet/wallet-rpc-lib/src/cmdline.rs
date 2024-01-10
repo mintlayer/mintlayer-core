@@ -17,13 +17,14 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use common::chain::config::ChainType;
+use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use rpc::{
     rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
 };
 use utils::ensure;
-use wallet_rpc_lib::config::{WalletRpcConfig, WalletServiceConfig};
+
+use crate::config::{WalletRpcConfig, WalletServiceConfig};
 
 /// Service providing an RPC interface to a wallet
 #[derive(Parser)]
@@ -92,6 +93,9 @@ pub struct Args {
     /// Enable running the wallet service without RPC authentication
     #[arg(long, conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]))]
     rpc_no_authentication: bool,
+
+    #[clap(flatten)]
+    chain_config: ChainConfigOptions,
 }
 
 impl Args {
@@ -108,6 +112,7 @@ impl Args {
             rpc_username,
             rpc_password,
             rpc_no_authentication,
+            chain_config,
         } = self;
 
         let ws_config = {
@@ -119,7 +124,8 @@ impl Args {
                 _ => panic!("Should not happen due to arg constraints"),
             };
 
-            WalletServiceConfig::new(chain_type, wallet_file)
+            WalletServiceConfig::new(chain_type, wallet_file, chain_config)
+                .map_err(|err| ConfigError::InvalidChainConfigOption(err.to_string()))?
                 .apply_option(WalletServiceConfig::with_node_rpc_address, node_rpc_address)
                 .with_node_credentials(node_credentials)
         };
@@ -164,6 +170,9 @@ pub enum ConfigError {
 
     #[error("Invalid wallet RPC bind address: {0}")]
     InvalidRpcBindAddr(std::net::AddrParseError),
+
+    #[error("Invalid chain config option: {0}")]
+    InvalidChainConfigOption(String),
 }
 
 #[derive(thiserror::Error, Debug)]

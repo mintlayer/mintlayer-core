@@ -91,6 +91,7 @@ default-members = [
   "wallet",
   "wallet/wallet-cli",
   "wallet/wallet-address-generator",
+  "wallet/wallet-rpc-daemon",
 ]
 
 [dependencies]

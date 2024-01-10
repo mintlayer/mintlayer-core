@@ -14,7 +14,7 @@
 // limitations under the License.
 
 /// Enum used to specify whether to include locked balance/utxos for wallet commands
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum WithLocked {
     Any,
     Unlocked,
