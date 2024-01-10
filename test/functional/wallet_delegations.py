@@ -62,9 +62,10 @@ GENESIS_VRF_PRIVATE_KEY = (
 
 GENESIS_POOL_ID_ADDR = "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v"
 
-class WalletSubmitTransaction(BitcoinTestFramework):
+class WalletDelegationsCLI(BitcoinTestFramework):
 
     def set_test_params(self):
+        self.wallet_controller = WalletCliController
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
@@ -285,7 +286,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new wallet
             await wallet.create_wallet()
 
@@ -345,6 +346,8 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_equal(pools[0].balance, 40000)
 
             assert_in("Success", await wallet.select_account(1))
+            balance = await wallet.get_balance()
+            assert_in("Coins amount: 100", balance)
             delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             assert delegation_id is not None
             transactions = node.mempool_transactions()
@@ -444,4 +447,4 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
 
 if __name__ == '__main__':
-    WalletSubmitTransaction().main()
+    WalletDelegationsCLI().main()
