@@ -53,6 +53,7 @@ pub async fn start(
     } = config;
 
     rpc::Builder::new(bind_addr, auth_credentials)
+        .with_method_list("list_methods")
         .register(WalletRpc::new(wallet_handle, node_rpc, chain_config).into_rpc())
         .build()
         .await

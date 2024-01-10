@@ -44,6 +44,7 @@ pub struct Builder {
     http_bind_address: SocketAddr,
     methods: Methods,
     creds: Option<RpcCreds>,
+    method_list_name: Option<&'static str>,
 }
 
 impl Builder {
@@ -55,6 +56,7 @@ impl Builder {
             http_bind_address,
             methods: Methods::new(),
             creds,
+            method_list_name: None,
         }
     }
 
@@ -64,9 +66,37 @@ impl Builder {
         self
     }
 
+    /// Add a method that lists all methods
+    pub fn with_method_list(mut self, method_name: &'static str) -> Self {
+        self.method_list_name = Some(method_name);
+        self
+    }
+
     /// Build the RPC server and get the RPC object
-    pub async fn build(self) -> anyhow::Result<Rpc> {
+    pub async fn build(mut self) -> anyhow::Result<Rpc> {
+        if let Some(method_list_name) = self.method_list_name {
+            let module = Self::create_method_list_module(&self.methods, method_list_name)?;
+            self.methods.merge(module)?;
+        }
+
         Rpc::new(&self.http_bind_address, self.methods, self.creds).await
+    }
+
+    /// Create an RPC module that contains a method to query the names of RPC methods
+    fn create_method_list_module(
+        methods: &Methods,
+        method_list_name: &'static str,
+    ) -> Result<jsonrpsee::RpcModule<()>, jsonrpsee::server::RegisterMethodError> {
+        let method_names = {
+            let mut method_names: Vec<_> =
+                std::iter::once(method_list_name).chain(methods.method_names()).collect();
+            method_names.sort_unstable();
+            method_names
+        };
+
+        let mut module = jsonrpsee::RpcModule::new(());
+        module.register_method(method_list_name, move |_params, &()| method_names.clone())?;
+        Ok(module)
     }
 }
 
@@ -242,6 +272,28 @@ mod tests {
         fn add(&self, a: u64, b: u64) -> RpcResult<u64> {
             Ok(a + b)
         }
+    }
+
+    #[tokio::test]
+    async fn method_list() -> anyhow::Result<()> {
+        let http_bind_address = "127.0.0.1:0".parse::<SocketAddr>().unwrap();
+
+        let rpc = Builder::new(http_bind_address, None)
+            .with_method_list("method_list")
+            .register(SubsystemRpcImpl.into_rpc())
+            .build()
+            .await?;
+
+        let url = format!("http://{}", rpc.http_address());
+        let client = new_http_client(url, RpcAuthData::None).unwrap();
+        let response: RpcClientResult<Vec<String>> = client.request("method_list", [(); 0]).await;
+        assert_eq!(
+            response.unwrap(),
+            vec!["method_list", "some_subsystem_add", "some_subsystem_name"]
+        );
+
+        subsystem::Subsystem::shutdown(rpc).await;
+        Ok(())
     }
 
     #[rstest]
