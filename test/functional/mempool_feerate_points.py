@@ -144,7 +144,7 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
         feerates[accumulated_size] = expected_lowest_feerate / 1000
         last = accumulated_size
 
-        if len(feerates) >= 10:
+        if len(feerates) > 10:
             points = generate_points(first, last, 10)
         else:
             points = sorted([size for size in feerates])
