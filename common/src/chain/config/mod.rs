@@ -127,9 +127,18 @@ impl ChainType {
 
     fn predefined_peer_addresses(&self) -> Vec<SocketAddr> {
         match self {
-            // TODO: Specify actual values
-            ChainType::Mainnet => Vec::new(),
-            ChainType::Testnet => Vec::new(),
+            ChainType::Mainnet => {
+                vec![
+                    "51.159.232.144:3030".parse().expect("Cannot fail"),
+                    "172.232.50.132:3030".parse().expect("Cannot fail"),
+                ]
+            }
+            ChainType::Testnet => {
+                vec![
+                    "51.15.103.154:13030".parse().expect("Cannot fail"),
+                    "51.15.59.248:13030".parse().expect("Cannot fail"),
+                ]
+            }
             ChainType::Regtest => Vec::new(),
             ChainType::Signet => Vec::new(),
         }
