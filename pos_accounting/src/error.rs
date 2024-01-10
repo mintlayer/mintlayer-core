@@ -91,6 +91,8 @@ pub enum Error {
     IncreasePledgeAmountOfNonexistingPool,
     #[error("Pledge amount addition error")]
     PledgeAmountAdditionError,
+    #[error("Pledge amount addition error")]
+    PoolOwnerBalanceOverflow,
     #[error("Undo of increase pledge amount failed as pool balance is not in storage")]
     InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound,
     #[error("Undo of increase owner reward failed as pool balance is not in storage")]

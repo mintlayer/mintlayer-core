@@ -238,7 +238,7 @@ pub trait ApiServerStorageRead: Sync {
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError>;
 
-    async fn get_pool_data_with_largest_pledge(
+    async fn get_pool_data_with_largest_owner_balance(
         &self,
         len: u32,
         offset: u32,

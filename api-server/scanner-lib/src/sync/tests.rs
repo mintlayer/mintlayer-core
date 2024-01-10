@@ -577,7 +577,7 @@ async fn basic_sync_real_state(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let pool_pledge = local_state
+    let owner_balance = local_state
         .storage()
         .transaction_ro()
         .await
@@ -586,7 +586,8 @@ async fn basic_sync_real_state(#[case] seed: Seed) {
         .await
         .unwrap()
         .unwrap()
-        .pledge_amount();
+        .owner_balance()
+        .unwrap();
 
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = tf
@@ -614,8 +615,8 @@ async fn basic_sync_real_state(#[case] seed: Seed) {
         .unwrap()
         .unwrap();
 
-    // after decommission the pool pledge is 0
-    assert_eq!(decommissioned_pool.pledge_amount(), Amount::ZERO);
+    // after decommission the pool owner balance is 0
+    assert_eq!(decommissioned_pool.owner_balance().unwrap(), Amount::ZERO);
     let address = Address::<Destination>::new(
         tf.chain_config(),
         decommissioned_pool.decommission_destination(),
@@ -633,7 +634,7 @@ async fn basic_sync_real_state(#[case] seed: Seed) {
         .unwrap()
         .unwrap_or(Amount::ZERO);
 
-    assert_eq!(balance, pool_pledge);
+    assert_eq!(balance, owner_balance);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -683,7 +684,7 @@ async fn sync_and_compare(
     let tx = local_state.storage().transaction_ro().await.unwrap();
     let scanner_data = tx.get_pool_data(pool_id).await.unwrap().unwrap();
 
-    assert_eq!(node_data.pledge_amount(), scanner_data.pledge_amount());
+    assert_eq!(node_data.owner_balance(), scanner_data.owner_balance());
 
     let address =
         Address::<Destination>::new(tf.chain_config(), scanner_data.decommission_destination())
@@ -695,7 +696,7 @@ async fn sync_and_compare(
         .unwrap()
         .unwrap_or(Amount::ZERO);
 
-    assert_eq!(balance, scanner_data.pledge_amount());
+    assert_eq!(balance, scanner_data.owner_balance().unwrap());
 
     let node_delegations = tf
         .chainstate

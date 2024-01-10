@@ -86,12 +86,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_latest_pool_ids(len, offset)
     }
 
-    async fn get_pool_data_with_largest_pledge(
+    async fn get_pool_data_with_largest_owner_balance(
         &self,
         len: u32,
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
-        self.transaction.get_pool_data_with_largest_pledge(len, offset)
+        self.transaction.get_pool_data_with_largest_owner_balance(len, offset)
     }
 
     async fn get_transaction(

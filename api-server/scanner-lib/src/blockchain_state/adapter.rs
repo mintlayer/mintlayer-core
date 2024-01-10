@@ -23,10 +23,6 @@ use std::collections::BTreeMap;
 pub struct PoSAdapter {
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, Delegation>,
-
-    delegation_rewards: Vec<(DelegationId, Amount)>,
-    // FIXME: this field is obsolete now
-    pool_rewards: BTreeMap<PoolId, Amount>,
 }
 
 impl PoSAdapter {
@@ -38,39 +34,15 @@ impl PoSAdapter {
         Self {
             pools: BTreeMap::from_iter([(pool_id, pool_data)]),
             delegations,
-            delegation_rewards: vec![],
-            pool_rewards: BTreeMap::new(),
         }
     }
 
-    pub fn get_pool_reward(&self, pool_id: PoolId) -> Amount {
-        self.pool_rewards.get(&pool_id).copied().unwrap_or(Amount::ZERO)
+    pub fn get_pool_data(&self, pool_id: PoolId) -> Option<PoolData> {
+        self.pools.get(&pool_id).cloned()
     }
 
-    pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
-        self.pools.get(&pool_id).map(|pool_data| {
-            let reward = self.get_pool_reward(pool_id);
-            PoolData::new(
-                pool_data.decommission_destination().clone(),
-                pool_data.pledge_amount(),
-                reward,
-                pool_data.vrf_public_key().clone(),
-                pool_data.margin_ratio_per_thousand(),
-                pool_data.cost_per_block(),
-            )
-        })
-    }
-
-    pub fn rewards_per_delegation(&self) -> Vec<(DelegationId, Amount, Delegation)> {
-        self.delegation_rewards
-            .iter()
-            .copied()
-            .map(|(delegation_id, reward)| {
-                let data = self.delegations.get(&delegation_id).expect("must exist");
-                let updated_delegation = data.clone().stake(reward);
-                (delegation_id, reward, updated_delegation)
-            })
-            .collect()
+    pub fn delegations_iter(&self) -> impl Iterator<Item = (&DelegationId, &Delegation)> {
+        self.delegations.iter()
     }
 }
 
@@ -85,8 +57,8 @@ impl PoSAccountingView for PoSAdapter {
         Ok(self.pools.get(&pool_id).cloned())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        Ok(self.pools.get(&pool_id).map(|data| data.pledge_amount()))
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
     }
 
     fn get_delegation_data(
@@ -144,7 +116,15 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), pos_accounting::Error> {
-        self.delegation_rewards.push((delegation_target, amount_to_delegate));
+        let updated_delegation = self
+            .delegations
+            .get(&delegation_target)
+            .expect("must exist")
+            .clone()
+            .stake(amount_to_delegate);
+
+        self.delegations.insert(delegation_target, updated_delegation);
+
         Ok(())
     }
 
@@ -181,7 +161,16 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
-        self.pool_rewards.insert(pool_id, amount_to_add);
+        let updated_pool = self
+            .pools
+            .get(&pool_id)
+            .expect("must exist")
+            .clone()
+            .increase_owner_reward(amount_to_add)
+            .expect("no overflow");
+
+        self.pools.insert(pool_id, updated_pool);
+
         Ok(())
     }
 

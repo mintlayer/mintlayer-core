@@ -76,7 +76,7 @@ impl InMemoryPoSAccounting {
     }
 
     #[cfg(test)]
-    pub(crate) fn check_consistancy(&self) {
+    pub(crate) fn check_consistency(&self) {
         // pool_balance and pool_data must contain the same keys
 
         assert_eq!(self.pool_balances.len(), self.pool_data.len());
@@ -111,11 +111,7 @@ impl InMemoryPoSAccounting {
                 .expect("Delegation balance must not overflow");
             assert_eq!(
                 Some(*pool_balance),
-                common::amount_sum!(
-                    pool_data.pledge_amount(),
-                    pool_data.owner_reward(),
-                    total_delegations_balance
-                ),
+                pool_data.owner_balance().expect("no overflow") + total_delegations_balance,
                 "Pledge amount and delegations don't add up to pool balance {}",
                 pool_id
             );

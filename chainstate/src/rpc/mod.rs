@@ -98,8 +98,8 @@ trait ChainstateRpc {
     #[method(name = "stake_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
-    #[method(name = "stake_pool_pledge")]
-    async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
+    #[method(name = "stake_pool_owner_balance")]
+    async fn stake_pool_owner_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
     #[method(name = "delegation_share")]
     async fn delegation_share(
@@ -229,11 +229,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         rpc::handle_result(self.call(move |this| this.get_stake_pool_balance(pool_id)).await)
     }
 
-    async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>> {
+    async fn stake_pool_owner_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>> {
         rpc::handle_result(
             self.call(move |this| {
                 this.get_stake_pool_data(pool_id)
-                    .map(|opt| opt.map(|data| data.pledge_amount()))
+                    .map(|opt| opt.map(|data| data.owner_balance()).transpose())
             })
             .await,
         )

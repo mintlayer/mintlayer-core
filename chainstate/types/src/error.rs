@@ -46,6 +46,8 @@ pub enum PropertyQueryError {
     StakePoolDataNotFound(PoolId),
     #[error("Failed to read data of pool {0}")]
     StakePoolDataReadError(PoolId),
+    #[error("Stake pool {0} owner balance overflow")]
+    StakePoolOwnerBalanceOverflow(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
     #[error("Failed to read balance of pool {0}")]

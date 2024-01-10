@@ -96,7 +96,7 @@ fn simulation_test_db(#[case] seed: Seed) {
             random_delegation,
             random_delegation_balance,
         );
-        storage.check_consistancy();
+        storage.check_consistency();
     }
 }
 
@@ -128,7 +128,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
             random_delegation_balance,
         );
         db.batch_write_delta(delta.consume()).unwrap();
-        storage.check_consistancy();
+        storage.check_consistency();
     }
 }
 
@@ -142,7 +142,7 @@ fn perform_random_operation(
 ) {
     // If it fires it means that number of actions in PoSAccountingOperations has changed
     // and the following match needs to be updated
-    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 7);
+    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 8);
 
     match rng.gen_range(0..11) {
         // create new pool
@@ -204,8 +204,17 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
+        // increase owner reward
+        10..=11 => {
+            if let Some(pool_id) = random_pool {
+                let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
+
+                let undo = op.increase_owner_reward(pool_id, amount_to_add).unwrap();
+                undos.push(undo);
+            }
+        }
         // delete delegation
-        10 => {
+        12 => {
             if let Some((delegation_id, delegation_data)) = random_delegation {
                 if !op.pool_exists(*delegation_data.source_pool()).unwrap()
                     && op.get_delegation_balance(delegation_id).unwrap().unwrap_or(Amount::ZERO)
@@ -217,7 +226,7 @@ fn perform_random_operation(
             }
         }
         // undo
-        11 => {
+        13 => {
             if let Some(undo) = undos.pop() {
                 op.undo(undo).unwrap();
             }

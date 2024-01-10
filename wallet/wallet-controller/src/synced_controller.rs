@@ -557,7 +557,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         let staker_balance = self
             .rpc_client
-            .get_stake_pool_pledge(pool_id)
+            .get_stake_pool_owner_balance(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)?
             .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(

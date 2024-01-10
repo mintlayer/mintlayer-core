@@ -63,6 +63,10 @@ impl PoolData {
         self.owner_reward
     }
 
+    pub fn owner_balance(&self) -> Result<Amount, Error> {
+        (self.pledge_amount + self.owner_reward).ok_or(Error::PoolOwnerBalanceOverflow)
+    }
+
     pub fn vrf_public_key(&self) -> &VRFPublicKey {
         &self.vrf_public_key
     }
@@ -77,6 +81,7 @@ impl PoolData {
 
     pub fn decommission_pool(mut self) -> Self {
         self.pledge_amount = Amount::ZERO;
+        self.owner_reward = Amount::ZERO;
         self
     }
 

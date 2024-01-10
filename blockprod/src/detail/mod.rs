@@ -631,7 +631,12 @@ fn generate_finalize_block_data(
                 .ok_or(ConsensusPoSError::PropertyQueryError(
                     PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
                 ))?
-                .pledge_amount();
+                .owner_balance()
+                .map_err(|_| {
+                    ConsensusPoSError::PropertyQueryError(
+                        PropertyQueryError::StakePoolOwnerBalanceOverflow(pos_input_data.pool_id()),
+                    )
+                })?;
 
             let pool_balance = chainstate_handle
                 .get_stake_pool_balance(pos_input_data.pool_id())

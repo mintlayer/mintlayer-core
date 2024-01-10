@@ -252,7 +252,10 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
-    async fn get_stake_pool_pledge(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    async fn get_stake_pool_owner_balance(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Amount>, Self::Error> {
         unreachable!()
     }
 

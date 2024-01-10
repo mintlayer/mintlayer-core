@@ -292,6 +292,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationSharesSubtractionError => 100,
             E::PledgeValueToSignedError => 100,
             E::PledgeAmountAdditionError => 100,
+            E::PoolOwnerBalanceOverflow => 100,
 
             // Not undo-ing in mempool
             E::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists => 0,

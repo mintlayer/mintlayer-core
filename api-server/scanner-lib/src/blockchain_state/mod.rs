@@ -300,7 +300,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 increase_address_amount(
                     db_tx,
                     &address,
-                    &pool_data.pledge_amount(),
+                    &pool_data.owner_balance().expect("no overflow"),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
@@ -418,14 +418,14 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
     let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
 
-    let pledge_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
+    let owner_balance_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
     // only used for checks for attempted to print money but we don't need to check that here
     let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        pledge_getter,
+        owner_balance_getter,
         delegation_balance_getter,
         tx.inputs(),
         &inputs_utxos,
@@ -448,8 +448,12 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let amount =
-                    db_tx.get_pool_data(*pool_id).await?.expect("should exist").pledge_amount();
+                let amount = db_tx
+                    .get_pool_data(*pool_id)
+                    .await?
+                    .expect("should exist")
+                    .owner_balance()
+                    .expect("no overflow");
                 pools.insert(*pool_id, amount);
             }
             Some(
@@ -540,40 +544,42 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
                 .expect("no error");
 
-            for (delegation_id, rewards, updated_delegation) in adapter.rewards_per_delegation() {
+            for (delegation_id, updated_delegation) in adapter.delegations_iter() {
                 db_tx
-                    .set_delegation_at_height(delegation_id, &updated_delegation, block_height)
+                    .set_delegation_at_height(*delegation_id, updated_delegation, block_height)
                     .await?;
+
                 let address = Address::<Destination>::new(
                     &chain_config,
                     updated_delegation.spend_destination(),
                 )
                 .expect("Unable to encode address");
-                increase_address_amount(
-                    db_tx,
-                    &address,
-                    &rewards,
-                    CoinOrTokenId::Coin,
-                    block_height,
-                )
-                .await;
+                db_tx
+                    .set_address_balance_at_height(
+                        address.get(),
+                        *updated_delegation.balance(),
+                        CoinOrTokenId::Coin,
+                        block_height,
+                    )
+                    .await
+                    .expect("Unable to update balance");
             }
 
-            let pool_data = adapter.get_pool_data_with_reward(pool_id).expect("must exist");
+            let pool_data = adapter.get_pool_data(pool_id).expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
-            let pool_reward = adapter.get_pool_reward(pool_id);
 
             let address =
                 Address::<Destination>::new(&chain_config, pool_data.decommission_destination())
                     .expect("Unable to encode address");
-            increase_address_amount(
-                db_tx,
-                &address,
-                &pool_reward,
-                CoinOrTokenId::Coin,
-                block_height,
-            )
-            .await;
+            db_tx
+                .set_address_balance_at_height(
+                    address.get(),
+                    pool_data.owner_balance().expect("no overflow"),
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await
+                .expect("Unable to update balance");
         }
     }
 
@@ -753,7 +759,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             decrease_address_amount(
                                 db_tx,
                                 address,
-                                &pool_data.pledge_amount(),
+                                &pool_data.owner_balance().expect("no overflow"),
                                 CoinOrTokenId::Coin,
                                 block_height,
                             )

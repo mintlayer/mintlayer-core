@@ -504,15 +504,16 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         assert_eq!(Some(amount_to_delegate), delegation_balance);
 
         // decommission the pool
-        let pledged_balance =
+        let owner_balance =
             PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tf.storage, pool_id)
                 .unwrap()
                 .unwrap()
-                .pledge_amount();
+                .owner_balance()
+                .unwrap();
         let tx = TransactionBuilder::new()
             .add_input(stake_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
-                OutputValue::Coin(pledged_balance),
+                OutputValue::Coin(owner_balance),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(1),
             ))

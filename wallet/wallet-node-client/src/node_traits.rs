@@ -51,7 +51,10 @@ pub trait NodeInterface {
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
-    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+    async fn get_stake_pool_owner_balance(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Amount>, Self::Error>;
     async fn get_delegation_share(
         &self,
         pool_id: PoolId,
