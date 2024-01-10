@@ -77,21 +77,21 @@ pub struct Args {
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
     #[arg(long, value_name("PATH"), conflicts_with_all(["rpc_username", "rpc_password"]))]
-    pub rpc_cookie_file: Option<PathBuf>,
+    rpc_cookie_file: Option<PathBuf>,
 
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
     #[arg(long, value_name("USER"), requires("rpc_password"))]
-    pub rpc_username: Option<String>,
+    rpc_username: Option<String>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
     #[arg(long, value_name("PASS"), requires("rpc_username"))]
-    pub rpc_password: Option<String>,
+    rpc_password: Option<String>,
 
     /// Enable running the wallet service without RPC authentication
     #[arg(long, conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]))]
-    pub rpc_no_authentication: bool,
+    rpc_no_authentication: bool,
 }
 
 impl Args {
