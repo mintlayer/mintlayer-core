@@ -66,7 +66,7 @@ impl TransactionalApiServerPostgresStorage {
 
         let database_part = match database {
             Some(d) => format!("dbname={}", d),
-            None => "".to_string(),
+            None => format!("dbname=mintlayer-{}", chain_config.chain_type().name()),
         };
 
         let config_str =

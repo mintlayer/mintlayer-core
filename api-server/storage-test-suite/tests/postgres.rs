@@ -30,6 +30,10 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
 
     let mut podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
         .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
+        .with_env(
+            "POSTGRES_DB",
+            format!("mintlayer-{}", chain_config.chain_type().name()).as_str(),
+        )
         .with_port_mapping(None, 5432);
 
     podman.run();
