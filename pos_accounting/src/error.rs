@@ -87,10 +87,8 @@ pub enum Error {
     InvariantErrorDelegationUndoFailedDataNotFound,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
-    #[error("Increase pledge amount of nonexisting pool")]
-    IncreasePledgeAmountOfNonexistingPool,
-    #[error("Pledge amount addition error")]
-    PledgeAmountAdditionError,
+    #[error("Increase staker rewards of nonexisting pool")]
+    IncreaseStakerRewardsOfNonexistingPool,
     #[error("Staker balance addition error")]
     StakerBalanceOverflow,
     #[error("Undo of increase pledge amount failed as pool balance is not in storage")]

@@ -148,14 +148,6 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         unimplemented!()
     }
 
-    fn increase_pool_pledge_amount(
-        &mut self,
-        _pool_id: PoolId,
-        _amount_to_add: Amount,
-    ) -> Result<(), pos_accounting::Error> {
-        unimplemented!()
-    }
-
     fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,

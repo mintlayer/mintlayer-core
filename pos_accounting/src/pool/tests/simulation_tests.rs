@@ -142,7 +142,7 @@ fn perform_random_operation(
 ) {
     // If it fires it means that number of actions in PoSAccountingOperations has changed
     // and the following match needs to be updated
-    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 8);
+    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 7);
 
     match rng.gen_range(0..11) {
         // create new pool
@@ -195,17 +195,8 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        // increase pool pledge
-        8..=9 => {
-            if let Some(pool_id) = random_pool {
-                let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
-
-                let undo = op.increase_pool_pledge_amount(pool_id, amount_to_add).unwrap();
-                undos.push(undo);
-            }
-        }
         // increase staker reward
-        10..=11 => {
+        8..=9 => {
             if let Some(pool_id) = random_pool {
                 let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
 
@@ -214,7 +205,7 @@ fn perform_random_operation(
             }
         }
         // delete delegation
-        12 => {
+        10 => {
             if let Some((delegation_id, delegation_data)) = random_delegation {
                 if !op.pool_exists(*delegation_data.source_pool()).unwrap()
                     && op.get_delegation_balance(delegation_id).unwrap().unwrap_or(Amount::ZERO)
@@ -226,7 +217,7 @@ fn perform_random_operation(
             }
         }
         // undo
-        13 => {
+        11 => {
             if let Some(undo) = undos.pop() {
                 op.undo(undo).unwrap();
             }

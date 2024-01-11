@@ -85,15 +85,8 @@ impl PoolData {
         self
     }
 
-    pub fn increase_pledge_amount(mut self, reward: Amount) -> Result<Self, Error> {
-        self.pledge_amount =
-            (self.pledge_amount + reward).ok_or(Error::PledgeAmountAdditionError)?;
-        Ok(self)
-    }
-
     pub fn increase_staker_rewards(mut self, reward: Amount) -> Result<Self, Error> {
-        self.staker_rewards =
-            (self.staker_rewards + reward).ok_or(Error::PledgeAmountAdditionError)?;
+        self.staker_rewards = (self.staker_rewards + reward).ok_or(Error::StakerBalanceOverflow)?;
         Ok(self)
     }
 }

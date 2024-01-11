@@ -25,9 +25,8 @@ use crate::{
         helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
-            IncreaseStakerRewardsUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
-            SpendFromShareUndo,
+            DelegationDataUndo, DeleteDelegationIdUndo, IncreaseStakerRewardsUndo,
+            PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -85,30 +84,6 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
         }))
     }
 
-    fn increase_pool_pledge_amount(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<PoSAccountingUndo, Error> {
-        let pool_data = self
-            .store
-            .get_pool_data(pool_id)?
-            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
-
-        let new_pool_data = pool_data.clone().increase_pledge_amount(amount_to_add)?;
-        self.store.set_pool_data(pool_id, &new_pool_data)?;
-
-        self.add_balance_to_pool(pool_id, amount_to_add)?;
-
-        Ok(PoSAccountingUndo::IncreasePledgeAmount(
-            IncreasePledgeAmountUndo {
-                pool_id,
-                amount_added: amount_to_add,
-                data_undo: PoolDataUndo::Data(Box::new(pool_data)),
-            },
-        ))
-    }
-
     fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
@@ -117,7 +92,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
         let pool_data = self
             .store
             .get_pool_data(pool_id)?
-            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
+            .ok_or(Error::IncreaseStakerRewardsOfNonexistingPool)?;
 
         let new_pool_data = pool_data.clone().increase_staker_rewards(amount_to_add)?;
         self.store.set_pool_data(pool_id, &new_pool_data)?;
@@ -255,9 +230,8 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
-            PoSAccountingUndo::IncreasePledgeAmount(undo) => self.undo_increase_pledge_amount(undo),
             PoSAccountingUndo::IncreaseStakerRewards(undo) => {
-                self.undo_increase_staker_reward(undo)
+                self.undo_increase_staker_rewards(undo)
             }
         }
     }
@@ -391,24 +365,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         Ok(())
     }
 
-    fn undo_increase_pledge_amount(&mut self, undo: IncreasePledgeAmountUndo) -> Result<(), Error> {
-        let data_undo = match undo.data_undo {
-            PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
-        if self.store.get_pool_balance(undo.pool_id)?.is_none() {
-            return Err(Error::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound);
-        }
-
-        self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;
-
-        self.store.set_pool_data(undo.pool_id, &data_undo)?;
-
-        Ok(())
-    }
-
-    fn undo_increase_staker_reward(
+    fn undo_increase_staker_rewards(
         &mut self,
         undo: IncreaseStakerRewardsUndo,
     ) -> Result<(), Error> {

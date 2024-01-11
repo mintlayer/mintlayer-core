@@ -26,9 +26,8 @@ use crate::{
         helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
-            IncreaseStakerRewardsUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
-            SpendFromShareUndo,
+            DelegationDataUndo, DeleteDelegationIdUndo, IncreaseStakerRewardsUndo,
+            PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -91,32 +90,6 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
         }))
     }
 
-    fn increase_pool_pledge_amount(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<PoSAccountingUndo, Error> {
-        let pool_data = self
-            .get_pool_data(pool_id)?
-            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
-
-        self.add_balance_to_pool(pool_id, amount_to_add)?;
-
-        let new_pool_data = pool_data.clone().increase_pledge_amount(amount_to_add)?;
-        let data_undo = self.data.pool_data.merge_delta_data_element(
-            pool_id,
-            DataDelta::new(Some(pool_data), Some(new_pool_data)),
-        )?;
-
-        Ok(PoSAccountingUndo::IncreasePledgeAmount(
-            IncreasePledgeAmountUndo {
-                pool_id,
-                amount_added: amount_to_add,
-                data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
-            },
-        ))
-    }
-
     fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
@@ -124,7 +97,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_data = self
             .get_pool_data(pool_id)?
-            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
+            .ok_or(Error::IncreaseStakerRewardsOfNonexistingPool)?;
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
@@ -270,7 +243,6 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
-            PoSAccountingUndo::IncreasePledgeAmount(undo) => self.undo_increase_pledge_amount(undo),
             PoSAccountingUndo::IncreaseStakerRewards(undo) => {
                 self.undo_increase_staker_balance(undo)
             }
@@ -396,18 +368,6 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         }
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
-
-        Ok(())
-    }
-
-    fn undo_increase_pledge_amount(&mut self, undo: IncreasePledgeAmountUndo) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
-        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
-        self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;
 
         Ok(())
     }

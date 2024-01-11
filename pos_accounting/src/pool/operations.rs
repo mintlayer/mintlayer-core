@@ -74,13 +74,6 @@ pub struct SpendFromShareUndo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct IncreasePledgeAmountUndo {
-    pub(crate) pool_id: PoolId,
-    pub(crate) amount_added: Amount,
-    pub(crate) data_undo: PoolDataUndo,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct IncreaseStakerRewardsUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) amount_added: Amount,
@@ -96,7 +89,6 @@ pub enum PoSAccountingUndo {
     DeleteDelegationId(DeleteDelegationIdUndo),
     DelegateStaking(DelegateStakingUndo),
     SpendFromShare(SpendFromShareUndo),
-    IncreasePledgeAmount(IncreasePledgeAmountUndo),
     IncreaseStakerRewards(IncreaseStakerRewardsUndo),
 }
 
@@ -106,12 +98,6 @@ pub trait PoSAccountingOperations<U> {
     fn create_pool(&mut self, pool_id: PoolId, pool_data: PoolData) -> Result<U, Error>;
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<U, Error>;
-
-    fn increase_pool_pledge_amount(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<U, Error>;
 
     fn increase_staker_rewards(
         &mut self,

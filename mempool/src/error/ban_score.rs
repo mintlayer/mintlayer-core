@@ -267,7 +267,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationDeletionFailedPoolStillExists => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
-            E::IncreasePledgeAmountOfNonexistingPool => 0,
+            E::IncreaseStakerRewardsOfNonexistingPool => 0,
 
             // Accounting error has to be inspected further
             E::AccountingError(err) => err.mempool_ban_score(),
@@ -291,7 +291,6 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationSharesAdditionError => 100,
             E::DelegationSharesSubtractionError => 100,
             E::PledgeValueToSignedError => 100,
-            E::PledgeAmountAdditionError => 100,
             E::StakerBalanceOverflow => 100,
 
             // Not undo-ing in mempool
