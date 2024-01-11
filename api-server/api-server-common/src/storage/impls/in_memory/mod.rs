@@ -344,6 +344,26 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn reinitialize_storage(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        self.block_table.clear();
+        self.block_aux_data_table.clear();
+        self.address_balance_table.clear();
+        self.address_transactions_table.clear();
+        self.delegation_table.clear();
+        self.main_chain_blocks_table.clear();
+        self.pool_data_table.clear();
+        self.transaction_table.clear();
+        self.utxo_table.clear();
+        self.address_utxos.clear();
+        self.fungible_token_issuances.clear();
+        self.nft_token_issuances.clear();
+
+        self.initialize_storage(chain_config)
+    }
+
     fn del_address_balance_above_height(
         &mut self,
         block_height: BlockHeight,
