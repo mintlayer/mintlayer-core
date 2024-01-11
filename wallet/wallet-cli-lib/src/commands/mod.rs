@@ -63,6 +63,31 @@ pub enum WalletCommand {
     #[clap(name = "account-select")]
     SelectAccount { account_index: U31 },
 
+    /// Lists all the utxos owned by this account
+    #[clap(name = "account-utxos")]
+    ListUtxo {
+        /// The type of utxo to be listed. Default is "all".
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+        /// Whether to include locked outputs. Default is "unlocked"
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+
+    /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
+    #[clap(name = "account-balance")]
+    GetBalance {
+        /// Whether to include locked outputs (outputs that cannot be spend and need time to mature)
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of utxos to be included (confirmed, unconfirmed, etc)
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+
     /// Issue a new non-fungible token (NFT) from scratch
     #[clap(name = "token-nft-issue-new")]
     IssueNewNft {
@@ -141,7 +166,7 @@ pub enum WalletCommand {
     /// Freezing the token (by token authority) forbids any operation with all the tokens (except for the optional unfreeze).
     ///
     /// After a token is frozen, no transfers, spends, or any other operation can be done.
-    /// This wallet must own the authority keys to be able to freeze.
+    /// This wallet (and selected account) must own the authority keys to be able to freeze.
     #[clap(name = "token-freeze")]
     FreezeToken {
         /// The token id of the token to be frozen.
@@ -153,7 +178,7 @@ pub enum WalletCommand {
     /// By unfreezing the token all operations are available for the tokens again.
     ///
     /// Notice that this is only possible if the tokens were made to be unfreezable during freezing.
-    /// This wallet must own the authority keys to be able to unfreeze.
+    /// This wallet (and selected account) must own the authority keys to be able to unfreeze.
     #[clap(name = "token-unfreeze")]
     UnfreezeToken {
         /// The token id of the token to be unfrozen.
@@ -169,17 +194,6 @@ pub enum WalletCommand {
         address: String,
         /// The amount of tokens to be sent
         amount: String,
-    },
-
-    /// Get the total balance in this wallet. See available options to include more categories, like locked coins.
-    #[clap(name = "address-balance")]
-    GetBalance {
-        /// Whether to include locked outputs (outputs that cannot be spend and need time to mature)
-        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
-        with_locked: CliWithLocked,
-        /// The state of utxos to be included (confirmed, unconfirmed, etc)
-        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
-        utxo_states: Vec<CliUtxoState>,
     },
 
     /// Generate a new unused address
@@ -233,7 +247,7 @@ pub enum WalletCommand {
         pool_id: String,
     },
 
-    /// List delegation ids controlled by this wallet with their balances
+    /// List delegation ids controlled by the selected account in this wallet with their balances
     #[clap(name = "delegation-list-ids")]
     ListDelegationIds,
 
@@ -258,15 +272,15 @@ pub enum WalletCommand {
         delegation_id: String,
     },
 
-    /// List ids of pools that are controlled by this wallet
+    /// List ids of pools that are controlled by the selected account in this wallet
     #[clap(name = "staking-list-pool-ids")]
     ListPoolIds,
 
-    /// Start staking, assuming there are staking pools in this wallet.
+    /// Start staking, assuming there are staking pools in the selected account in this wallet.
     #[clap(name = "staking-start")]
     StartStaking,
 
-    /// Stop staking, assuming there are staking pools staking currently in this wallet.
+    /// Stop staking, assuming there are staking pools staking currently in the selected account in this wallet.
     #[clap(name = "staking-stop")]
     StopStaking,
 
@@ -274,7 +288,7 @@ pub enum WalletCommand {
     #[clap(name = "staking-pool-balance")]
     StakePoolBalance { pool_id: String },
 
-    /// List the blocks created by this wallet through staking/mining/etc
+    /// List the blocks created by the selected account in this wallet through staking/mining/etc
     #[clap(name = "staking-list-created-block-ids")]
     ListCreatedBlocksIds,
 
@@ -306,16 +320,17 @@ pub enum WalletCommand {
         margin_ratio_per_thousand: String,
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.
-        /// If not provided, this wallet will control both decommission and staking. This is not recommended.
+        /// If not provided, the selected account in this wallet will control both decommission and staking.
+        /// This is NOT RECOMMENDED.
         decommission_key: Option<HexEncoded<PublicKey>>,
     },
 
     /// Decommission a staking pool, given its id. This assumes that the decommission key is owned
-    /// by this wallet.
+    /// by the selected account in this wallet.
     #[clap(name = "staking-decommission-pool")]
     DecommissionStakePool {
         /// The pool id of the pool to be decommissioned.
-        /// Notice that this only works if this wallet owns the decommission key.
+        /// Notice that this only works if the selected account in this wallet owns the decommission key.
         pool_id: String,
     },
 
@@ -349,7 +364,7 @@ pub enum WalletCommand {
     #[clap(name = "wallet-close")]
     CloseWallet,
 
-    /// Rescan the blockchain and re-detect all operations related to this wallet
+    /// Rescan the blockchain and re-detect all operations related to the selected account in this wallet
     #[clap(name = "wallet-rescan")]
     Rescan,
 
@@ -535,20 +550,6 @@ pub enum WalletCommand {
     GetRawSignedTransaction {
         /// Transaction id, encoded in hex
         transaction_id: HexEncoded<Id<Transaction>>,
-    },
-
-    /// Lists all the utxos owned by this wallet
-    #[clap(name = "transaction-list-owned-utxos")]
-    ListUtxo {
-        /// The type of utxo to be listed. Default is "all".
-        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
-        utxo_type: CliUtxoTypes,
-        /// Whether to include locked outputs. Default is "unlocked"
-        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
-        with_locked: CliWithLocked,
-        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
-        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
-        utxo_states: Vec<CliUtxoState>,
     },
 
     /// Print command history in the wallet for this execution

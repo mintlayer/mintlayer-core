@@ -77,7 +77,7 @@ async fn produce_blocks(#[case] seed: Seed) {
 
     test.create_genesis_wallet();
 
-    assert_eq!(test.exec("address-balance"), "Coins amount: 99960000");
+    assert_eq!(test.exec("account-balance"), "Coins amount: 99960000");
     assert_eq!(test.exec("node-generate-blocks 20"), "Success");
 
     test.shutdown().await;
