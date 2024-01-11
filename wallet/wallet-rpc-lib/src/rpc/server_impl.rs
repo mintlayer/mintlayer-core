@@ -27,6 +27,7 @@ use wallet_types::{wallet_tx, with_locked::WithLocked};
 
 use crate::{
     rpc::{WalletRpc, WalletRpcServer},
+    service::WalletManagement,
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation, PoolInfo,
@@ -40,6 +41,38 @@ impl WalletRpcServer for WalletRpc {
         rpc::handle_result(self.wallet.shallow_clone().stop())
     }
 
+    async fn create_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.wallet
+                .manage_async(WalletManagement::Create {
+                    wallet_path: path.into(),
+                    whether_to_store_seed_phrase: store_seed_phrase,
+                    mnemonic,
+                })
+                .await,
+        )
+    }
+
+    async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.wallet
+                .manage_async(WalletManagement::Open {
+                    wallet_path: path.into(),
+                    password,
+                })
+                .await,
+        )
+    }
+
+    async fn close_wallet(&self) -> rpc::RpcResult<()> {
+        rpc::handle_result(self.wallet.manage_async(WalletManagement::Close).await)
+    }
+
     async fn sync(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(
             self.wallet
@@ -49,7 +82,7 @@ impl WalletRpcServer for WalletRpc {
     }
 
     async fn best_block(&self, _: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
-        let res = rpc::handle_result(self.wallet.call(|w| w.best_block()).await)?;
+        let res = rpc::handle_result(self.wallet.call(|w| Ok(w.best_block())).await)?;
         Ok(BlockInfo::from_tuple(res))
     }
 

@@ -51,6 +51,18 @@ pub enum RpcError {
 
     #[error("Invalid pool ID")]
     InvalidPoolId,
+
+    #[error("Invalid mnemonic: {0}")]
+    InvalidMnemonic(wallet_controller::mnemonic::Error),
+
+    #[error("Wallet error: {0}")]
+    Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+
+    #[error("RPC error: {0}")]
+    RpcError(node_comm::rpc_client::NodeRpcError),
+
+    #[error("No wallet opened")]
+    NoWalletOpened,
 }
 
 impl From<RpcError> for rpc::Error {

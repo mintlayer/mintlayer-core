@@ -31,6 +31,20 @@ trait WalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
+    #[method(name = "create_wallet")]
+    async fn create_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "open_wallet")]
+    async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()>;
+
+    #[method(name = "close_wallet")]
+    async fn close_wallet(&self) -> rpc::RpcResult<()>;
+
     #[method(name = "sync")]
     async fn sync(&self) -> rpc::RpcResult<()>;
 

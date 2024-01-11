@@ -22,7 +22,7 @@ use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 pub use wallet_controller::NodeRpcClient;
 
-pub use worker::{WalletController, WalletControllerError};
+pub use worker::{WalletController, WalletControllerError, WalletManagement};
 
 pub use handle::WalletHandle;
 
@@ -59,27 +59,38 @@ impl WalletService {
             wallet_controller::make_rpc_client(rpc_address, config.node_credentials).await?
         };
 
-        let wallet = {
-            // TODO: Allow user to set password (config file only)
-            let wallet_password = None;
-            WalletController::open_wallet(
-                chain_config.shallow_clone(),
-                config.wallet_file,
-                wallet_password,
-            )?
-        };
+        let controller = if let Some(wallet_file) = &config.wallet_file {
+            let wallet = {
+                // TODO: Allow user to set password (config file only)
+                let wallet_password = None;
+                WalletController::open_wallet(
+                    chain_config.shallow_clone(),
+                    wallet_file,
+                    wallet_password,
+                )?
+            };
 
-        let controller = WalletController::new(
-            chain_config.shallow_clone(),
-            node_rpc.clone(),
-            wallet,
-            wallet::wallet_events::WalletEventsNoOp,
-        )
-        .await?;
+            Some(
+                WalletController::new(
+                    chain_config.shallow_clone(),
+                    node_rpc.clone(),
+                    wallet,
+                    wallet::wallet_events::WalletEventsNoOp,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
 
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let task = worker::WalletWorker::spawn(controller, command_rx);
+        let task = worker::WalletWorker::spawn(
+            controller,
+            command_rx,
+            chain_config.clone(),
+            node_rpc.clone(),
+        );
 
         Ok(WalletService {
             task,

@@ -13,12 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::ControlFlow;
+use std::{ops::ControlFlow, path::PathBuf, sync::Arc};
 
+use common::chain::ChainConfig;
 use futures::{future::BoxFuture, never::Never};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot::Sender},
+    task::JoinHandle,
+};
 
 use logging::log;
+use wallet_controller::{ControllerError, NodeInterface, NodeRpcClient};
+use wallet_types::seed_phrase::StoreSeedPhrase;
+
+use crate::types::RpcError;
 
 pub type WalletController =
     wallet_controller::RpcController<wallet::wallet_events::WalletEventsNoOp>;
@@ -27,11 +35,27 @@ pub type WalletControllerError =
 pub type CommandReceiver = mpsc::UnboundedReceiver<WalletCommand>;
 pub type CommandSender = mpsc::UnboundedSender<WalletCommand>;
 
-type CommandFn = dyn Send + FnOnce(&mut WalletController) -> BoxFuture<()>;
+type CommandFn = dyn Send + FnOnce(&mut Option<WalletController>) -> BoxFuture<()>;
+
+pub enum WalletManagement {
+    Create {
+        wallet_path: PathBuf,
+        whether_to_store_seed_phrase: bool,
+        mnemonic: Option<String>,
+    },
+    Open {
+        wallet_path: PathBuf,
+        password: Option<String>,
+    },
+    Close,
+}
 
 pub enum WalletCommand {
     /// Make the controller perform an action
     Call(Box<CommandFn>),
+
+    /// Manage the Wallet itself, i.e. Create/Open/Close
+    Manage(WalletManagement, Sender<Result<(), RpcError>>),
 
     /// Shutdown the wallet service task
     Stop,
@@ -39,20 +63,34 @@ pub enum WalletCommand {
 
 /// Represents the wallet worker task. It handles external commands and keeps the wallet in sync.
 pub struct WalletWorker {
-    controller: WalletController,
+    controller: Option<WalletController>,
     command_rx: CommandReceiver,
+    chain_config: Arc<ChainConfig>,
+    node_rpc: NodeRpcClient,
 }
 
 impl WalletWorker {
-    fn new(controller: WalletController, command_rx: CommandReceiver) -> Self {
+    fn new(
+        controller: Option<WalletController>,
+        command_rx: CommandReceiver,
+        chain_config: Arc<ChainConfig>,
+        node_rpc: NodeRpcClient,
+    ) -> Self {
         Self {
             controller,
             command_rx,
+            chain_config,
+            node_rpc,
         }
     }
 
-    pub fn spawn(controller: WalletController, request_rx: CommandReceiver) -> JoinHandle<()> {
-        tokio::spawn(Self::new(controller, request_rx).event_loop())
+    pub fn spawn(
+        controller: Option<WalletController>,
+        request_rx: CommandReceiver,
+        chain_config: Arc<ChainConfig>,
+        node_rpc: NodeRpcClient,
+    ) -> JoinHandle<()> {
+        tokio::spawn(Self::new(controller, request_rx, chain_config, node_rpc).event_loop())
     }
 
     async fn event_loop(mut self) {
@@ -86,6 +124,40 @@ impl WalletWorker {
                 call(&mut self.controller).await;
                 ControlFlow::Continue(())
             }
+            Some(WalletCommand::Manage(command, tx)) => {
+                match command {
+                    WalletManagement::Create {
+                        wallet_path,
+                        whether_to_store_seed_phrase,
+                        mnemonic,
+                    } => match self
+                        .create_wallet(wallet_path, whether_to_store_seed_phrase, mnemonic)
+                        .await
+                    {
+                        Ok(controller) => {
+                            self.controller = Some(controller);
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(err));
+                        }
+                    },
+                    WalletManagement::Open {
+                        wallet_path,
+                        password,
+                    } => match self.open_wallet(wallet_path, password).await {
+                        Ok(controller) => {
+                            self.controller = Some(controller);
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(RpcError::Controller(err)));
+                        }
+                    },
+                    WalletManagement::Close => {
+                        self.controller = None;
+                    }
+                }
+                ControlFlow::Continue(())
+            }
             Some(WalletCommand::Stop) => {
                 log::info!("Wallet service terminating upon user request");
                 ControlFlow::Break(())
@@ -97,9 +169,80 @@ impl WalletWorker {
         }
     }
 
+    async fn open_wallet(
+        &mut self,
+        wallet_path: PathBuf,
+        password: Option<String>,
+    ) -> Result<WalletController, ControllerError<NodeRpcClient>> {
+        let wallet =
+            WalletController::open_wallet(self.chain_config.clone(), wallet_path, password)?;
+
+        WalletController::new(
+            self.chain_config.clone(),
+            self.node_rpc.clone(),
+            wallet,
+            wallet::wallet_events::WalletEventsNoOp,
+        )
+        .await
+    }
+    async fn create_wallet(
+        &self,
+        wallet_path: PathBuf,
+        whether_to_store_seed_phrase: bool,
+        mnemonic: Option<String>,
+    ) -> Result<WalletController, RpcError> {
+        // TODO: Support other languages
+        let language = wallet::wallet::Language::English;
+        let newly_generated_mnemonic = mnemonic.is_none();
+        let mnemonic = match &mnemonic {
+            Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
+                .map_err(RpcError::InvalidMnemonic)?,
+            None => wallet_controller::mnemonic::generate_new_mnemonic(language),
+        };
+        let whether_to_store_seed_phrase = if whether_to_store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
+
+        let wallet = if newly_generated_mnemonic {
+            let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
+            WalletController::create_wallet(
+                self.chain_config.clone(),
+                wallet_path,
+                mnemonic.clone(),
+                None,
+                whether_to_store_seed_phrase,
+                info.best_block_height,
+                info.best_block_id,
+            )
+        } else {
+            WalletController::recover_wallet(
+                self.chain_config.clone(),
+                wallet_path,
+                mnemonic.clone(),
+                None,
+                whether_to_store_seed_phrase,
+            )
+        }
+        .map_err(RpcError::Controller)?;
+
+        WalletController::new(
+            self.chain_config.clone(),
+            self.node_rpc.clone(),
+            wallet,
+            wallet::wallet_events::WalletEventsNoOp,
+        )
+        .await
+        .map_err(RpcError::Controller)
+    }
+
     async fn background_task(
-        controller: &mut WalletController,
+        controller_opt: &mut Option<WalletController>,
     ) -> Result<Never, WalletControllerError> {
-        controller.run().await
+        match controller_opt.as_mut() {
+            Some(controller) => controller.run().await,
+            None => std::future::pending().await,
+        }
     }
 }

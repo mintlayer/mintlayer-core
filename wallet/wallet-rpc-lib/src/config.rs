@@ -27,7 +27,7 @@ pub struct WalletServiceConfig {
     pub chain_config: Arc<ChainConfig>,
 
     /// Wallet file to operate on
-    pub wallet_file: PathBuf,
+    pub wallet_file: Option<PathBuf>,
 
     /// RPC address of the node to connect to
     pub node_rpc_address: Option<String>,
@@ -39,7 +39,7 @@ pub struct WalletServiceConfig {
 impl WalletServiceConfig {
     pub fn new(
         chain_type: ChainType,
-        wallet_file: PathBuf,
+        wallet_file: Option<PathBuf>,
         chain_config_options: ChainConfigOptions,
     ) -> anyhow::Result<Self> {
         let chain_config = match chain_type {

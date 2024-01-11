@@ -40,7 +40,7 @@ use crate::config::{WalletRpcConfig, WalletServiceConfig};
 pub struct Args {
     /// The wallet file to operate on
     #[arg()]
-    wallet_path: PathBuf,
+    wallet_path: Option<PathBuf>,
 
     /// Address to bind the RPC interface to
     #[arg(long, value_name("ADDR"))]

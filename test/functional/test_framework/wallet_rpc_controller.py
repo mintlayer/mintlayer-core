@@ -63,18 +63,13 @@ class WalletRpcController:
 
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
-        cookie_file2 = os.path.join(self.node.datadir, ".cookie2")
-        shutil.copy(cookie_file, cookie_file2)
-        async with WalletCliController(self.node, self.config, self.log, self.wallet_args, self.chain_config_args) as wallet:
-            await wallet.create_wallet()
 
         self.log.info(f"node url: {self.node.url}")
-        wallet_file = os.path.join(self.node.datadir, "wallet")
         wallet_rpc = os.path.join(self.config["environment"]["BUILDDIR"], "test_rpc_wallet"+self.config["environment"]["EXEEXT"] )
-        wallet_args = ["--chain-type", "regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-cookie-file", cookie_file2, "--rpc-no-authentication", wallet_file] + self.wallet_args + self.chain_config_args
+        wallet_args = ["--chain-type", "regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-cookie-file", cookie_file, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
-        url = "localhost"
+        url = "127.0.0.1"
         port = 23034
 
         self.process = await asyncio.create_subprocess_exec(
@@ -120,6 +115,8 @@ class WalletRpcController:
         return json.loads(body)
 
     async def create_wallet(self) -> str:
+        wallet_file = os.path.join(self.node.datadir, "wallet")
+        self._write_command("create_wallet", [wallet_file, True])
         return "Sucess"
 
     async def get_best_block_height(self) -> str:

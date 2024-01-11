@@ -18,8 +18,11 @@
 use futures::future::{BoxFuture, Future};
 
 use utils::shallow_clone::ShallowClone;
+use wallet_controller::{ControllerError, NodeRpcClient};
 
-use super::worker::{self, WalletCommand, WalletController};
+use crate::types::RpcError;
+
+use super::worker::{self, WalletCommand, WalletController, WalletManagement};
 
 /// Wallet handle allows the user to control the wallet service, perform queries etc.
 #[derive(Clone)]
@@ -32,13 +35,18 @@ impl WalletHandle {
 
     pub fn call_async<R: Send + 'static>(
         &self,
-        action: impl FnOnce(&mut WalletController) -> BoxFuture<R> + Send + 'static,
-    ) -> impl Future<Output = Result<R, SubmitError>> {
+        action: impl FnOnce(&mut WalletController) -> BoxFuture<Result<R, ControllerError<NodeRpcClient>>>
+            + Send
+            + 'static,
+    ) -> impl Future<Output = Result<Result<R, RpcError>, SubmitError>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let command = WalletCommand::Call(Box::new(move |controller| {
-            Box::pin(async move {
-                let _ = tx.send(action(controller).await);
-            })
+        let command = WalletCommand::Call(Box::new(move |opt_controller| match opt_controller {
+            Some(controller) => Box::pin(async move {
+                let _ = tx.send(action(controller).await.map_err(RpcError::Controller));
+            }),
+            None => Box::pin(async move {
+                let _ = tx.send(Err(RpcError::NoWalletOpened));
+            }),
         }));
 
         let send_result = self.send_raw(command);
@@ -51,12 +59,29 @@ impl WalletHandle {
 
     pub fn call<R: Send + 'static>(
         &self,
-        action: impl FnOnce(&mut WalletController) -> R + Send + 'static,
-    ) -> impl Future<Output = Result<R, SubmitError>> {
+        action: impl FnOnce(&mut WalletController) -> Result<R, ControllerError<NodeRpcClient>>
+            + Send
+            + 'static,
+    ) -> impl Future<Output = Result<Result<R, RpcError>, SubmitError>> {
         self.call_async(|controller| {
             let res = action(controller);
             Box::pin(std::future::ready(res))
         })
+    }
+
+    pub fn manage_async(
+        &self,
+        action: WalletManagement,
+    ) -> impl Future<Output = Result<Result<(), RpcError>, SubmitError>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let command = WalletCommand::Manage(action, tx);
+
+        let send_result = self.send_raw(command);
+
+        async {
+            send_result?;
+            rx.await.map_err(|_| SubmitError::Recv)
+        }
     }
 
     pub fn stop(self) -> Result<(), SubmitError> {
