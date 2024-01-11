@@ -86,7 +86,14 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
-    let node = node_lib::setup(opts).await?;
+    let setup_result = node_lib::setup(opts).await?;
+    let node = match setup_result {
+        node_lib::NodeSetupResult::Node(node) => node,
+        node_lib::NodeSetupResult::DataDirCleanedUp => {
+            // TODO: find more friendly way to report the message and shut down GUI
+            anyhow::bail!("Data directory was cleaned up, please restart the node without `clean-data` argument");
+        }
+    };
 
     let controller = node.controller().clone();
 
