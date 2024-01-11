@@ -26,9 +26,12 @@ pub struct WalletCompletions {
 impl WalletCompletions {
     pub fn new(mut external_commands: Vec<String>) -> Self {
         external_commands.sort();
+        let mut completer = DefaultCompleter::with_inclusions(&['-']);
+        completer.insert(external_commands.clone());
+
         WalletCompletions {
-            external_commands: external_commands.clone(),
-            inner: DefaultCompleter::new(external_commands),
+            external_commands,
+            inner: completer,
         }
     }
 }

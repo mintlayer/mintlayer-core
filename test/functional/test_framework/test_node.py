@@ -192,7 +192,7 @@ class TestNode():
             self.process.kill()
 
     def __getattr__(self, name):
-        """Dispatches any unrecognised messages to the RPC connection or a CLI instance."""
+        """Dispatches any unrecognized messages to the RPC connection or a CLI instance."""
         if self.use_cli:
             return getattr(RPCOverloadWrapper(self.cli, True, self.descriptors), name)
         else:
@@ -769,7 +769,7 @@ class RPCOverloadWrapper():
     def createwallet(self, wallet_name, disable_private_keys=None, blank=None, passphrase='', avoid_reuse=None, descriptors=None, load_on_startup=None, external_signer=None):
         if descriptors is None:
             descriptors = self.descriptors
-        return self.__getattr__('createwallet')(wallet_name, disable_private_keys, blank, passphrase, avoid_reuse, descriptors, load_on_startup, external_signer)
+        return self.__getattr__('wallet-create')(wallet_name, disable_private_keys, blank, passphrase, avoid_reuse, descriptors, load_on_startup, external_signer)
 
     def importprivkey(self, privkey, label=None, rescan=None):
         wallet_info = self.getwalletinfo()

@@ -160,6 +160,8 @@ pub fn run(
     }
 
     console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'help <command>' to learn more about the parameters of the command.");
+    console.print_line("Press TAB on your keyboard to auto-complete any command you write.");
     console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     loop {
