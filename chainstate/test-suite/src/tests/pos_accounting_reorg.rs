@@ -17,7 +17,7 @@ use itertools::Itertools;
 use std::num::NonZeroU64;
 
 use super::helpers::{
-    new_pub_key_destination, pos::create_stake_pool_data_with_all_reward_to_owner,
+    new_pub_key_destination, pos::create_stake_pool_data_with_all_reward_to_staker,
 };
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
@@ -308,7 +308,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk.clone());
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         amount_to_stake,
@@ -322,7 +322,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
 
     // produce block `a` at height 1 and create additional pool
     let (stake_pool_data_2, staking_sk_2) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
     let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
@@ -404,7 +404,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk.clone());
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         amount_to_stake,
@@ -418,7 +418,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
 
     // produce block `a` at height 1 and create additional pool
     let (stake_pool_data_2, _) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
     let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,

@@ -26,7 +26,7 @@ use crate::Error;
 pub struct PoolData {
     decommission_destination: Destination,
     pledge_amount: Amount,
-    owner_reward: Amount,
+    staker_rewards: Amount,
     vrf_public_key: VRFPublicKey,
     margin_ratio_per_thousand: PerThousand,
     cost_per_block: Amount,
@@ -36,7 +36,7 @@ impl PoolData {
     pub fn new(
         decommission_destination: Destination,
         pledge_amount: Amount,
-        owner_reward: Amount,
+        staker_rewards: Amount,
         vrf_public_key: VRFPublicKey,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
@@ -44,7 +44,7 @@ impl PoolData {
         Self {
             decommission_destination,
             pledge_amount,
-            owner_reward,
+            staker_rewards,
             vrf_public_key,
             margin_ratio_per_thousand,
             cost_per_block,
@@ -59,12 +59,12 @@ impl PoolData {
         self.pledge_amount
     }
 
-    pub fn owner_reward(&self) -> Amount {
-        self.owner_reward
+    pub fn staker_rewards(&self) -> Amount {
+        self.staker_rewards
     }
 
-    pub fn owner_balance(&self) -> Result<Amount, Error> {
-        (self.pledge_amount + self.owner_reward).ok_or(Error::PoolOwnerBalanceOverflow)
+    pub fn staker_balance(&self) -> Result<Amount, Error> {
+        (self.pledge_amount + self.staker_rewards).ok_or(Error::StakerBalanceOverflow)
     }
 
     pub fn vrf_public_key(&self) -> &VRFPublicKey {
@@ -81,7 +81,7 @@ impl PoolData {
 
     pub fn decommission_pool(mut self) -> Self {
         self.pledge_amount = Amount::ZERO;
-        self.owner_reward = Amount::ZERO;
+        self.staker_rewards = Amount::ZERO;
         self
     }
 
@@ -91,8 +91,9 @@ impl PoolData {
         Ok(self)
     }
 
-    pub fn increase_owner_reward(mut self, reward: Amount) -> Result<Self, Error> {
-        self.owner_reward = (self.owner_reward + reward).ok_or(Error::PledgeAmountAdditionError)?;
+    pub fn increase_staker_rewards(mut self, reward: Amount) -> Result<Self, Error> {
+        self.staker_rewards =
+            (self.staker_rewards + reward).ok_or(Error::PledgeAmountAdditionError)?;
         Ok(self)
     }
 }
@@ -102,7 +103,7 @@ impl From<StakePoolData> for PoolData {
         Self {
             decommission_destination: stake_data.decommission_key().clone(),
             pledge_amount: stake_data.value(),
-            owner_reward: Amount::ZERO,
+            staker_rewards: Amount::ZERO,
             vrf_public_key: stake_data.vrf_public_key().clone(),
             margin_ratio_per_thousand: stake_data.margin_ratio_per_thousand(),
             cost_per_block: stake_data.cost_per_block(),

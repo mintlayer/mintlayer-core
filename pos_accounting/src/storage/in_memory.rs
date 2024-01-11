@@ -111,7 +111,7 @@ impl InMemoryPoSAccounting {
                 .expect("Delegation balance must not overflow");
             assert_eq!(
                 Some(*pool_balance),
-                pool_data.owner_balance().expect("no overflow") + total_delegations_balance,
+                pool_data.staker_balance().expect("no overflow") + total_delegations_balance,
                 "Pledge amount and delegations don't add up to pool balance {}",
                 pool_id
             );

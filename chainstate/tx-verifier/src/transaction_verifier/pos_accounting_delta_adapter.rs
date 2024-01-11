@@ -194,14 +194,14 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         Ok(undo)
     }
 
-    fn increase_owner_reward(
+    fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
-        let undo = delta.increase_owner_reward(pool_id, amount_to_add)?;
+        let undo = delta.increase_staker_rewards(pool_id, amount_to_add)?;
 
         self.merge_delta(delta.consume())?;
 

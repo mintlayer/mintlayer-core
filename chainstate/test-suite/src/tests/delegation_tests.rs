@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
+use super::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::{TipStorageTag, Transactional};
@@ -49,7 +49,7 @@ fn prepare_stake_pool(
     let amount_to_stake =
         Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
     let (stake_pool_data, _) =
-        create_stake_pool_data_with_all_reward_to_owner(rng, amount_to_stake, vrf_pk);
+        create_stake_pool_data_with_all_reward_to_staker(rng, amount_to_stake, vrf_pk);
 
     let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -222,7 +222,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -504,16 +504,16 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         assert_eq!(Some(amount_to_delegate), delegation_balance);
 
         // decommission the pool
-        let owner_balance =
+        let staker_balance =
             PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tf.storage, pool_id)
                 .unwrap()
                 .unwrap()
-                .owner_balance()
+                .staker_balance()
                 .unwrap();
         let tx = TransactionBuilder::new()
             .add_input(stake_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
-                OutputValue::Coin(owner_balance),
+                OutputValue::Coin(staker_balance),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(1),
             ))
@@ -714,7 +714,7 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),

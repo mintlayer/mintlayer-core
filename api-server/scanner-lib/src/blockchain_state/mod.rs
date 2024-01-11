@@ -300,7 +300,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 increase_address_amount(
                     db_tx,
                     &address,
-                    &pool_data.owner_balance().expect("no overflow"),
+                    &pool_data.staker_balance().expect("no overflow"),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
@@ -418,14 +418,14 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
     let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
 
-    let owner_balance_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
+    let staker_balance_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
     // only used for checks for attempted to print money but we don't need to check that here
     let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        owner_balance_getter,
+        staker_balance_getter,
         delegation_balance_getter,
         tx.inputs(),
         &inputs_utxos,
@@ -452,7 +452,7 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
                     .get_pool_data(*pool_id)
                     .await?
                     .expect("should exist")
-                    .owner_balance()
+                    .staker_balance()
                     .expect("no overflow");
                 pools.insert(*pool_id, amount);
             }
@@ -574,7 +574,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             db_tx
                 .set_address_balance_at_height(
                     address.get(),
-                    pool_data.owner_balance().expect("no overflow"),
+                    pool_data.staker_balance().expect("no overflow"),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
@@ -759,7 +759,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             decrease_address_amount(
                                 db_tx,
                                 address,
-                                &pool_data.owner_balance().expect("no overflow"),
+                                &pool_data.staker_balance().expect("no overflow"),
                                 CoinOrTokenId::Coin,
                                 block_height,
                             )

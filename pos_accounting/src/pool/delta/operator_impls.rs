@@ -26,8 +26,8 @@ use crate::{
         helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, DeleteDelegationIdUndo, IncreaseOwnerRewardUndo,
-            IncreasePledgeAmountUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
+            DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
+            IncreaseStakerRewardsUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
             SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -117,7 +117,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
         ))
     }
 
-    fn increase_owner_reward(
+    fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
@@ -128,14 +128,14 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
-        let new_pool_data = pool_data.clone().increase_owner_reward(amount_to_add)?;
+        let new_pool_data = pool_data.clone().increase_staker_rewards(amount_to_add)?;
         let data_undo = self.data.pool_data.merge_delta_data_element(
             pool_id,
             DataDelta::new(Some(pool_data), Some(new_pool_data)),
         )?;
 
-        Ok(PoSAccountingUndo::IncreaseOwnerReward(
-            IncreaseOwnerRewardUndo {
+        Ok(PoSAccountingUndo::IncreaseStakerRewards(
+            IncreaseStakerRewardsUndo {
                 pool_id,
                 amount_added: amount_to_add,
                 data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
@@ -271,8 +271,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
                 self.undo_spend_share_from_delegation_id(undo)
             }
             PoSAccountingUndo::IncreasePledgeAmount(undo) => self.undo_increase_pledge_amount(undo),
-            PoSAccountingUndo::IncreaseOwnerReward(undo) => {
-                self.undo_increase_pool_owner_balance(undo)
+            PoSAccountingUndo::IncreaseStakerRewards(undo) => {
+                self.undo_increase_staker_balance(undo)
             }
         }
     }
@@ -412,9 +412,9 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         Ok(())
     }
 
-    fn undo_increase_pool_owner_balance(
+    fn undo_increase_staker_balance(
         &mut self,
-        undo: IncreaseOwnerRewardUndo,
+        undo: IncreaseStakerRewardsUndo,
     ) -> Result<(), Error> {
         let undo_data = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,

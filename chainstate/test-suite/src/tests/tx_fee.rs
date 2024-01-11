@@ -15,7 +15,7 @@
 
 use super::helpers::{
     in_memory_storage_wrapper::InMemoryStorageWrapper,
-    pos::create_stake_pool_data_with_all_reward_to_owner,
+    pos::create_stake_pool_data_with_all_reward_to_staker,
 };
 use super::*;
 
@@ -274,7 +274,7 @@ fn create_stake_pool(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let genesis_amount = chainstate_test_framework::get_output_value(&tf.genesis().utxos()[0])
             .unwrap()
@@ -322,7 +322,7 @@ fn delegate_staking(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let delegated_atoms = rng.gen_range(1..100_000);
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
@@ -409,7 +409,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = UtxoOutPoint::new(tf.genesis().get_id().into(), 0);
         let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
@@ -484,7 +484,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
         let (_, storage, mut tf) = setup(&mut rng);
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_owner(
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(
             &mut rng,
             tf.chainstate.get_chain_config().min_stake_pool_pledge(),
             vrf_pk,

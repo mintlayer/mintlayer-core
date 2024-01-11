@@ -66,10 +66,10 @@ impl OrphanType {
             | CTE::AttemptToSpendBurnedAmount
             | CTE::PoSAccountingError(_)
             | CTE::SpendStakeError(_)
-            | CTE::PoolOwnerBalanceNotFound(_)
+            | CTE::StakerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)
-            | CTE::PoolOwnerRewardCalculationFailed(_, _)
-            | CTE::PoolOwnerRewardCannotExceedTotalReward(..)
+            | CTE::StakerRewardCalculationFailed(_, _)
+            | CTE::StakerRewardCannotExceedTotalReward(..)
             | CTE::UnexpectedPoolId(_, _)
             | CTE::DelegationsRewardSumFailed(..)
             | CTE::DelegationRewardOverflow(..)

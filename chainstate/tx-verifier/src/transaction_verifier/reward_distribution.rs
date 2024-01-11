@@ -26,7 +26,7 @@ use common::{
 use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
 use utils::ensure;
 
-/// Distribute reward among the pool's owner and delegations
+/// Distribute reward among the staker and delegations
 pub fn distribute_pos_reward<
     U,
     P: PoSAccountingView<Error = pos_accounting::Error> + PoSAccountingOperations<U>,
@@ -40,26 +40,26 @@ pub fn distribute_pos_reward<
         .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
-    let pool_owner_reward = calculate_pool_owner_reward(
+    let staker_reward = calculate_staker_reward(
         total_reward,
         pool_data.cost_per_block(),
         pool_data.margin_ratio_per_thousand(),
     )
-    .ok_or(ConnectTransactionError::PoolOwnerRewardCalculationFailed(
+    .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
         block_id, pool_id,
     ))?;
 
-    let total_delegations_reward = (total_reward - pool_owner_reward).ok_or(
-        ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
+    let total_delegations_reward = (total_reward - staker_reward).ok_or(
+        ConnectTransactionError::StakerRewardCannotExceedTotalReward(
             block_id,
             pool_id,
-            pool_owner_reward,
+            staker_reward,
             total_reward,
         ),
     )?;
 
     // Distribute reward among delegators.
-    // In some cases this process can yield reward unallocated to delegators. This reward goes to the pool owner.
+    // In some cases this process can yield reward unallocated to delegators. This reward goes to the staker.
     let (delegation_undos, unallocated_reward) = if total_delegations_reward > Amount::ZERO {
         match accounting_adapter.get_pool_delegations_shares(pool_id)? {
             Some(delegation_shares) => {
@@ -78,11 +78,11 @@ pub fn distribute_pos_reward<
                         total_delegations_reward,
                     )?
                 } else {
-                    // If total balance of all delegations is 0 then give the reward to the pool's owner
+                    // If total balance of all delegations is 0 then give the reward to the staker
                     (Vec::new(), total_delegations_reward)
                 }
             }
-            // If no delegations then give the reward to the pool's owner
+            // If no delegations then give the reward to the staker
             None => (Vec::new(), total_delegations_reward),
         }
     } else {
@@ -90,10 +90,10 @@ pub fn distribute_pos_reward<
         (Vec::new(), Amount::ZERO)
     };
 
-    let total_owner_reward = (pool_owner_reward + unallocated_reward)
+    let total_staker_reward = (staker_reward + unallocated_reward)
         .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
     let increase_pool_balance_undo =
-        accounting_adapter.increase_owner_reward(pool_id, total_owner_reward)?;
+        accounting_adapter.increase_staker_rewards(pool_id, total_staker_reward)?;
 
     let undos = delegation_undos
         .into_iter()
@@ -103,21 +103,21 @@ pub fn distribute_pos_reward<
     Ok(undos)
 }
 
-fn calculate_pool_owner_reward(
+fn calculate_staker_reward(
     total_reward: Amount,
     cost_per_block: Amount,
     mpt: PerThousand,
 ) -> Option<Amount> {
-    let pool_owner_reward = match total_reward - cost_per_block {
+    let staker_reward = match total_reward - cost_per_block {
         Some(v) => (v * mpt.value().into())
             .and_then(|v| v / 1000)
             .and_then(|v| v + cost_per_block)?,
-        // if cost per block > total reward then give the reward to pool owner
+        // if cost per block > total reward then give the reward to staker
         None => total_reward,
     };
 
-    debug_assert!(pool_owner_reward <= total_reward);
-    Some(pool_owner_reward)
+    debug_assert!(staker_reward <= total_reward);
+    Some(staker_reward)
 }
 
 /// The reward is distributed among delegations proportionally to their balance
@@ -147,7 +147,7 @@ fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOper
         .collect::<Result<Vec<_>, _>>()?;
 
     // Due to integer arithmetics there can be a small remainder after all the delegations distributed.
-    // This remainder goes to the pool's owner
+    // This remainder goes to the staker
     let total_delegations_reward_distributed =
         rewards_per_delegation.iter().map(|(_, v)| *v).sum::<Option<Amount>>().ok_or(
             ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
@@ -241,7 +241,7 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn calculate_pool_owner_reward_test(#[case] seed: Seed) {
+    fn calculate_staker_reward_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
@@ -252,31 +252,29 @@ mod tests {
         let mpt_zero = PerThousand::new(0).unwrap();
         let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
 
-        assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt).is_some());
-        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt).is_some());
-        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt_zero).is_some());
-        assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt).is_some());
+        assert!(calculate_staker_reward(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_staker_reward(Amount::ZERO, Amount::ZERO, mpt).is_some());
+        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt).is_some());
+        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_staker_reward(reward, cost_per_block, mpt_zero).is_some());
+        assert!(calculate_staker_reward(reward, cost_per_block, mpt).is_some());
         // negative amount
         assert_eq!(
-            calculate_pool_owner_reward(Amount::ZERO, cost_per_block, mpt_zero),
+            calculate_staker_reward(Amount::ZERO, cost_per_block, mpt_zero),
             Some(Amount::ZERO)
         );
         // cost per block > reward
         assert_eq!(
-            calculate_pool_owner_reward(reward, cost_per_block_over_reward, mpt_zero),
+            calculate_staker_reward(reward, cost_per_block_over_reward, mpt_zero),
             Some(reward)
         );
         // overflow
-        assert!(
-            calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none()
-        );
+        assert!(calculate_staker_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none());
 
         // arbitrary values
         assert_eq!(
-            calculate_pool_owner_reward(
+            calculate_staker_reward(
                 Amount::from_atoms(100),
                 Amount::from_atoms(10),
                 PerThousand::new(100).unwrap()
@@ -284,7 +282,7 @@ mod tests {
             Some(Amount::from_atoms(19))
         );
         assert_eq!(
-            calculate_pool_owner_reward(
+            calculate_staker_reward(
                 Amount::from_atoms(1100),
                 Amount::from_atoms(100),
                 PerThousand::new(100).unwrap()
@@ -292,7 +290,7 @@ mod tests {
             Some(Amount::from_atoms(200))
         );
         assert_eq!(
-            calculate_pool_owner_reward(
+            calculate_staker_reward(
                 Amount::from_atoms(10_000),
                 Amount::from_atoms(33),
                 PerThousand::new(111).unwrap()
@@ -346,11 +344,11 @@ mod tests {
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
         );
-        let expected_owner_reward = Amount::from_atoms(150);
+        let expected_staker_reward = Amount::from_atoms(150);
         let expected_pool_data_a = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
-            expected_owner_reward,
+            expected_staker_reward,
             vrf_pk,
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
@@ -470,7 +468,7 @@ mod tests {
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
         let total_delegation_reward =
-            (reward - calculate_pool_owner_reward(reward, cost_per_block, mpt).unwrap()).unwrap();
+            (reward - calculate_staker_reward(reward, cost_per_block, mpt).unwrap()).unwrap();
 
         let original_pool_balance = amount_sum!(
             original_pledged_amount,
@@ -515,12 +513,12 @@ mod tests {
             distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap()
         };
 
-        let pool_owner_reward = accounting_adapter
+        let staker_reward = accounting_adapter
             .accounting_delta()
             .get_pool_data(pool_id)
             .unwrap()
             .unwrap()
-            .owner_reward();
+            .staker_rewards();
 
         // check that the whole reward is added to the balance
         let expected_pool_balance = (original_pool_balance + reward).unwrap();
@@ -545,11 +543,11 @@ mod tests {
             .get(&delegation_id_2)
             .map(|v| v.into_unsigned().unwrap());
 
-        // check that owner reward and delegation rewards add up to total reward
+        // check that staker reward and delegation rewards add up to total reward
         assert_eq!(
             reward,
             amount_sum!(
-                pool_owner_reward,
+                staker_reward,
                 delegation_1_reward.unwrap_or(Amount::ZERO),
                 delegation_2_reward.unwrap_or(Amount::ZERO)
             )
@@ -586,7 +584,7 @@ mod tests {
         }
     }
 
-    // Check that if delegation is present but its balance is 0 then all the reward goes to pool owner
+    // Check that if delegation is present but its balance is 0 then all the reward goes to staker
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -656,7 +654,7 @@ mod tests {
         assert_eq!(store, expected_store);
     }
 
-    // Check that pool owner can set its reward to 100% and the reward goes entirely to the owner
+    // Check that staker can set its reward to 100% and the reward goes entirely to the staker
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -726,7 +724,7 @@ mod tests {
         assert_eq!(store, expected_store);
     }
 
-    // Check that if there are no delegations then the whole reward goes to the pool owner
+    // Check that if there are no delegations then the whole reward goes to the staker
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]

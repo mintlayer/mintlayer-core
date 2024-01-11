@@ -371,7 +371,7 @@ where
             let pools = db_tx.get_latest_pool_data(1, 0).await.unwrap();
             assert!(pools.is_empty());
 
-            let pools = db_tx.get_pool_data_with_largest_owner_balance(1, 0).await.unwrap();
+            let pools = db_tx.get_pool_data_with_largest_staker_balance(1, 0).await.unwrap();
             assert!(pools.is_empty());
         }
 
@@ -408,7 +408,7 @@ where
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let amount_to_stake = {
                 let mut amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
-                while amount_to_stake == random_pool_data.owner_balance().unwrap() {
+                while amount_to_stake == random_pool_data.staker_balance().unwrap() {
                     amount_to_stake = Amount::from_atoms(rng.gen::<u128>());
                 }
                 amount_to_stake
@@ -453,8 +453,8 @@ where
             assert_eq!(latest_pool_data, expected_latest_pool_data.1);
 
             // check getting by pledge amount
-            let expected_pool_data_largest_pledge = if random_pool_data.owner_balance().unwrap()
-                > random_pool_data2.owner_balance().unwrap()
+            let expected_pool_data_largest_pledge = if random_pool_data.staker_balance().unwrap()
+                > random_pool_data2.staker_balance().unwrap()
             {
                 (random_pool_id, &random_pool_data)
             } else {
@@ -462,7 +462,7 @@ where
             };
 
             let latest_pool_data =
-                db_tx.get_pool_data_with_largest_owner_balance(1, 0).await.unwrap();
+                db_tx.get_pool_data_with_largest_staker_balance(1, 0).await.unwrap();
             assert_eq!(latest_pool_data.len(), 1);
             let (latest_pool_id, latest_pool_data) = latest_pool_data.last().unwrap();
             assert_eq!(*latest_pool_id, expected_pool_data_largest_pledge.0);

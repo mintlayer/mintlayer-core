@@ -204,12 +204,12 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        // increase owner reward
+        // increase staker reward
         10..=11 => {
             if let Some(pool_id) = random_pool {
                 let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
 
-                let undo = op.increase_owner_reward(pool_id, amount_to_add).unwrap();
+                let undo = op.increase_staker_rewards(pool_id, amount_to_add).unwrap();
                 undos.push(undo);
             }
         }

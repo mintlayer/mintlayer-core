@@ -53,16 +53,16 @@ impl ConstrainedValueAccumulator {
         })
     }
 
-    pub fn from_inputs<PoolOwnerBalanceGetterFn, DelegationBalanceGetterFn>(
+    pub fn from_inputs<StakerBalanceGetterFn, DelegationBalanceGetterFn>(
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        pool_owner_balance_getter: PoolOwnerBalanceGetterFn,
+        staker_balance_getter: StakerBalanceGetterFn,
         delegation_balance_getter: DelegationBalanceGetterFn,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
     ) -> Result<Self, Error>
     where
-        PoolOwnerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
+        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
         DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
     {
         ensure!(
@@ -81,7 +81,7 @@ impl ConstrainedValueAccumulator {
                     accumulator.process_input_utxo(
                         chain_config,
                         block_height,
-                        &pool_owner_balance_getter,
+                        &staker_balance_getter,
                         outpoint.clone(),
                         input_utxo,
                     )?;
@@ -114,16 +114,16 @@ impl ConstrainedValueAccumulator {
         Ok(accumulator)
     }
 
-    fn process_input_utxo<PoolOwnerBalanceGetterFn>(
+    fn process_input_utxo<StakerBalanceGetterFn>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        pool_owner_balance_getter: &PoolOwnerBalanceGetterFn,
+        staker_balance_getter: &StakerBalanceGetterFn,
         outpoint: UtxoOutPoint,
         input_utxo: &TxOutput,
     ) -> Result<(), Error>
     where
-        PoolOwnerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
+        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
     {
         match input_utxo {
             TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
@@ -158,7 +158,7 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let pool_owner_balance = pool_owner_balance_getter(*pool_id)?
+                let staker_balance = staker_balance_getter(*pool_id)?
                     .ok_or(Error::PledgeAmountNotFound(*pool_id))?;
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
@@ -169,14 +169,14 @@ impl ConstrainedValueAccumulator {
                             .timelock_constrained
                             .entry(maturity_distance)
                             .or_insert(Amount::ZERO);
-                        *balance = (*balance + pool_owner_balance)
+                        *balance = (*balance + staker_balance)
                             .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
                     }
                     None => {
                         insert_or_increase(
                             &mut self.unconstrained_value,
                             CoinOrTokenId::Coin,
-                            pool_owner_balance,
+                            staker_balance,
                         )?;
                     }
                 }

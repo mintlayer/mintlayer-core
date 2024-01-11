@@ -161,19 +161,16 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
-    async fn get_stake_pool_owner_balance(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let result = self
             .chainstate
             .call(move |this| this.get_stake_pool_data(pool_id))
             .await??
-            .map(|data| data.owner_balance())
+            .map(|data| data.staker_balance())
             .transpose()
             .map_err(|_| {
                 ChainstateError::FailedToReadProperty(
-                    chainstate::PropertyQueryError::StakePoolOwnerBalanceOverflow(pool_id),
+                    chainstate::PropertyQueryError::StakerBalanceOverflow(pool_id),
                 )
             })?;
         Ok(result)

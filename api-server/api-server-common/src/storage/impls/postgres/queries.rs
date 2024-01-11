@@ -417,7 +417,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_pool_data (
                     pool_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
-                    owner_balance TEXT NOT NULL,
+                    staker_balance TEXT NOT NULL,
                     data bytea NOT NULL,
                     PRIMARY KEY (pool_id, block_height)
                 );",
@@ -930,7 +930,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .collect()
     }
 
-    pub async fn get_pool_data_with_largest_owner_balance(
+    pub async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
         offset: u32,
@@ -943,11 +943,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 SELECT pool_id, data
                 FROM (
-                    SELECT pool_id, data, owner_balance, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
+                    SELECT pool_id, data, staker_balance, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
                     FROM ml_pool_data
                 ) AS sub
                 WHERE newest = 1
-                ORDER BY owner_balance DESC
+                ORDER BY staker_balance DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
@@ -983,14 +983,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
-        let amount_str = amount_to_str(pool_data.owner_balance().expect("no overflow"));
+        let amount_str = amount_to_str(pool_data.staker_balance().expect("no overflow"));
         let pool_id = Address::new(chain_config, &pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_pool_data (pool_id, block_height, owner_balance, data)
+                    INSERT INTO ml_pool_data (pool_id, block_height, staker_balance, data)
                     VALUES ($1, $2, $3, $4)
                 "#,
                 &[&pool_id.get(), &height, &amount_str, &pool_data.encode()],

@@ -656,10 +656,10 @@ fn get_output_coin_amount(
                 .ok_or(ChainstateError::FailedToReadProperty(
                     PropertyQueryError::StakePoolDataNotFound(*pool_id),
                 ))?
-                .owner_balance()
+                .staker_balance()
                 .map_err(|_| {
                     ChainstateError::FailedToReadProperty(
-                        PropertyQueryError::StakePoolOwnerBalanceOverflow(*pool_id),
+                        PropertyQueryError::StakerBalanceOverflow(*pool_id),
                     )
                 })?;
             Some(pledge_amount)

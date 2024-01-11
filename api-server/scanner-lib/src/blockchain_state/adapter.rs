@@ -156,7 +156,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         unimplemented!()
     }
 
-    fn increase_owner_reward(
+    fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
@@ -166,7 +166,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
             .get(&pool_id)
             .expect("must exist")
             .clone()
-            .increase_owner_reward(amount_to_add)
+            .increase_staker_rewards(amount_to_add)
             .expect("no overflow");
 
         self.pools.insert(pool_id, updated_pool);

@@ -25,8 +25,8 @@ use crate::{
         helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, DeleteDelegationIdUndo, IncreaseOwnerRewardUndo,
-            IncreasePledgeAmountUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
+            DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
+            IncreaseStakerRewardsUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
             SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -109,7 +109,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
         ))
     }
 
-    fn increase_owner_reward(
+    fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
@@ -119,13 +119,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
             .get_pool_data(pool_id)?
             .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
 
-        let new_pool_data = pool_data.clone().increase_owner_reward(amount_to_add)?;
+        let new_pool_data = pool_data.clone().increase_staker_rewards(amount_to_add)?;
         self.store.set_pool_data(pool_id, &new_pool_data)?;
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
-        Ok(PoSAccountingUndo::IncreaseOwnerReward(
-            IncreaseOwnerRewardUndo {
+        Ok(PoSAccountingUndo::IncreaseStakerRewards(
+            IncreaseStakerRewardsUndo {
                 pool_id,
                 amount_added: amount_to_add,
                 data_undo: PoolDataUndo::Data(Box::new(pool_data)),
@@ -256,7 +256,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
                 self.undo_spend_share_from_delegation_id(undo)
             }
             PoSAccountingUndo::IncreasePledgeAmount(undo) => self.undo_increase_pledge_amount(undo),
-            PoSAccountingUndo::IncreaseOwnerReward(undo) => self.undo_increase_owner_reward(undo),
+            PoSAccountingUndo::IncreaseStakerRewards(undo) => {
+                self.undo_increase_staker_reward(undo)
+            }
         }
     }
 }
@@ -406,14 +408,17 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         Ok(())
     }
 
-    fn undo_increase_owner_reward(&mut self, undo: IncreaseOwnerRewardUndo) -> Result<(), Error> {
+    fn undo_increase_staker_reward(
+        &mut self,
+        undo: IncreaseStakerRewardsUndo,
+    ) -> Result<(), Error> {
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
             PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         if self.store.get_pool_balance(undo.pool_id)?.is_none() {
-            return Err(Error::InvariantErrorIncreaseOwnerRewardUndoFailedPoolBalanceNotFound);
+            return Err(Error::InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound);
         }
 
         self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;

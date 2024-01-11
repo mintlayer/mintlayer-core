@@ -711,7 +711,7 @@ pub async fn pools<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?,
         PoolSorting::ByPledge => db_tx
-            .get_pool_data_with_largest_owner_balance(items, offset)
+            .get_pool_data_with_largest_staker_balance(items, offset)
             .await
             .map_err(|e| {
                 logging::log::error!("internal error: {e}");
@@ -729,7 +729,7 @@ pub async fn pools<T: ApiServerStorage>(
         json!({
             "pool_id": pool_id.get(),
             "decommission_destination": decommission_destination.get(),
-            "owner_balance": pool_data.owner_balance().expect("no overflow"),
+            "staker_balance": pool_data.staker_balance().expect("no overflow"),
             "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
             "cost_per_block": pool_data.cost_per_block(),
             "vrf_public_key": pool_data.vrf_public_key(),
@@ -772,7 +772,7 @@ pub async fn pool<T: ApiServerStorage>(
             .expect("no error in encoding");
     Ok(Json(json!({
         "decommission_destination": decommission_destination.get(),
-        "owner_balance": pool_data.owner_balance().expect("no overflow"),
+        "staker_balance": pool_data.staker_balance().expect("no overflow"),
         "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
         "cost_per_block": pool_data.cost_per_block(),
         "vrf_public_key": pool_data.vrf_public_key(),

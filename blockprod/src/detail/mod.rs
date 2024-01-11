@@ -631,10 +631,10 @@ fn generate_finalize_block_data(
                 .ok_or(ConsensusPoSError::PropertyQueryError(
                     PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
                 ))?
-                .owner_balance()
+                .staker_balance()
                 .map_err(|_| {
                     ConsensusPoSError::PropertyQueryError(
-                        PropertyQueryError::StakePoolOwnerBalanceOverflow(pos_input_data.pool_id()),
+                        PropertyQueryError::StakerBalanceOverflow(pos_input_data.pool_id()),
                     )
                 })?;
 
