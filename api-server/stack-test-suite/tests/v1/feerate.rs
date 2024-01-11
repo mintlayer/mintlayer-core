@@ -49,7 +49,7 @@ async fn invalid_query_parameter() {
 #[tokio::test]
 async fn ok(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let in_top_x_mb = rng.gen_range(0..100);
+    let in_top_x_mb = rng.gen_range(1..100);
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
@@ -115,7 +115,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
         }
     }
     let mut rng = make_seedable_rng(seed);
-    let in_top_x_mb = rng.gen_range(0..100);
+    let in_top_x_mb = rng.gen_range(1..100);
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::key_chain::MasterKeyChain;
+use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::verify_signature;
@@ -52,7 +52,7 @@ fn account_addresses() {
     .unwrap();
 
     let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
 
     let mut account = Account::new(config, &mut db_tx, key_chain, None).unwrap();
@@ -87,7 +87,7 @@ fn account_addresses_lookahead() {
     .unwrap();
 
     let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     let mut account = Account::new(config, &mut db_tx, key_chain, None).unwrap();
 
@@ -134,7 +134,7 @@ fn sign_transaction(#[case] seed: Seed) {
     .unwrap();
 
     let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
 

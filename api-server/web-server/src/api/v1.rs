@@ -335,7 +335,7 @@ pub async fn feerate<T: ApiServerStorage>(
 
     let feerate_points: BTreeMap<_, _> = {
         let current_time = state.time_getter.get_time();
-        let last_cache_time = feerate_points.read().expect("asd").0;
+        let last_cache_time = feerate_points.read().expect("should not fail normally").0;
 
         if (last_cache_time + REFRESH_INTERVAL_SEC).expect("no overflow") < current_time {
             let new_feerate_points = {

@@ -46,8 +46,9 @@ use crate::{
 
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_coin_amount, parse_pool_id, parse_token_amount,
-    parse_token_id, parse_utxo_outpoint, print_coin_amount, to_per_thousand, CliIsFreezable,
-    CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
+    parse_token_id, parse_utxo_outpoint, print_coin_amount, to_per_thousand, CliForceReduce,
+    CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
+    CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -97,6 +98,16 @@ pub enum WalletCommand {
 
     // Locks the private keys so they can't be used until they are unlocked again
     LockPrivateKeys,
+
+    /// Set the lookahead size for key generation
+    SetLookaheadSize {
+        // The new lookahead size
+        lookahead_size: u32,
+
+        // Forces the reduction of lookahead size even below the known last used address
+        // the new wallet can lose track of known addresses and balance
+        i_know_what_i_am_doing: Option<CliForceReduce>,
+    },
 
     /// Returns the node chainstate
     ChainstateInfo,
@@ -677,6 +688,25 @@ impl CommandHandler {
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now locked.".to_owned(),
+                ))
+            }
+
+            WalletCommand::SetLookaheadSize {
+                lookahead_size,
+                i_know_what_i_am_doing,
+            } => {
+                let force_reduce = match i_know_what_i_am_doing {
+                    Some(CliForceReduce::IKnowWhatIAmDoing) => true,
+                    None => false,
+                };
+
+                self.controller()?
+                    .set_lookahead_size(lookahead_size, force_reduce)
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(ConsoleCommand::Print(
+                    "Success. Lookahead size has been updated, will rescan the blockchain."
+                        .to_owned(),
                 ))
             }
 

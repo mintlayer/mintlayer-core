@@ -358,3 +358,8 @@ impl CliIsUnfreezable {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliForceReduce {
+    IKnowWhatIAmDoing,
+}

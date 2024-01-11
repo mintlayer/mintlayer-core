@@ -80,7 +80,7 @@ fn key_chain_creation(
     .unwrap();
 
     let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     key_chain.top_up_all(&mut db_tx).unwrap();
     db_tx.commit().unwrap();
@@ -142,7 +142,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     )
     .unwrap();
     let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     db_tx.commit().unwrap();
 
@@ -225,7 +225,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     )
     .unwrap();
     let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
         .unwrap();
     let id = key_chain.get_account_id();
     db_tx.commit().unwrap();

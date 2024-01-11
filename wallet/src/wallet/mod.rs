@@ -21,7 +21,7 @@ use crate::account::transaction_list::TransactionList;
 use crate::account::{
     Currency, CurrentFeeRate, DelegationData, UnconfirmedTokenInfo, UtxoSelectorError,
 };
-use crate::key_chain::{KeyChainError, MasterKeyChain};
+use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
@@ -58,13 +58,14 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
 pub const WALLET_VERSION_V2: u32 = 2;
 pub const WALLET_VERSION_V3: u32 = 3;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V3;
+pub const WALLET_VERSION_V4: u32 = 4;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V4;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -177,6 +178,8 @@ pub enum WalletError {
     DataDepositToBig(usize, usize),
     #[error("Cannot deposit empty data")]
     EmptyDataDeposit,
+    #[error("Cannot reduce lookahead size to {0} as it is below the last known used key {1}")]
+    ReducedLookaheadSize(u32, u32),
 }
 
 /// Result type used for the wallet
@@ -252,6 +255,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
+        db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
 
         let default_account = Wallet::<B>::create_next_unused_account(
             U31::ZERO,
@@ -327,6 +331,22 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    /// Migrate the wallet DB from version 3 to version 4
+    /// * set lookahead_size in the DB
+    fn migration_v4(db: &Store<B>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
+
+        db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
+        db_tx.set_storage_version(WALLET_VERSION_V4)?;
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V4
+        );
+
+        Ok(())
+    }
+
     /// Check if the DB is in a supported version and if it needs a migration to be ran
     /// Returns true if a migration needs to be ran, false if it is already on the latest version
     /// and an error if it is an unsupported version
@@ -347,15 +367,22 @@ impl<B: storage::Backend> Wallet<B> {
 
         match version {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
-            WALLET_VERSION_V1 => Self::migration_v2(db, chain_config)?,
-            WALLET_VERSION_V2 => Self::migration_v3(db, chain_config)?,
+            WALLET_VERSION_V1 => {
+                Self::migration_v2(db, chain_config.clone())?;
+            }
+            WALLET_VERSION_V2 => {
+                Self::migration_v3(db, chain_config.clone())?;
+            }
+            WALLET_VERSION_V3 => {
+                Self::migration_v4(db)?;
+            }
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
                 return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
             }
         }
 
-        Ok(())
+        Self::check_and_migrate_db(db, chain_config)
     }
 
     fn validate_chain_info(
@@ -375,7 +402,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
-        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        self.next_unused_account = accounts.pop_last().expect("not empty accounts");
+        self.accounts = accounts;
         db_tx.commit()?;
         Ok(())
     }
@@ -383,20 +412,37 @@ impl<B: storage::Backend> Wallet<B> {
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> WalletResult<()> {
+    ) -> WalletResult<BTreeMap<U31, Account>> {
         db_tx.clear_transactions()?;
+        db_tx.clear_addresses()?;
+        db_tx.clear_public_keys()?;
+
+        let lookahead_size = db_tx.get_lookahead_size()?;
 
         // set all accounts best block to genesis
-        let accounts = db_tx.get_accounts_info()?;
-        for (id, mut info) in accounts {
-            info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
-            db_tx.set_account(&id, &info)?;
-            db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
-            let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
-            account.scan_genesis(db_tx, &WalletEventsNoOp)?;
-        }
+        db_tx
+            .get_accounts_info()?
+            .into_iter()
+            .map(|(id, mut info)| {
+                info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
+                info.set_lookahead_size(lookahead_size);
+                db_tx.set_account(&id, &info)?;
+                db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
+                db_tx.set_keychain_usage_state(
+                    &AccountKeyPurposeId::new(id.clone(), KeyPurpose::Change),
+                    &KeychainUsageState::new(None, None),
+                )?;
+                db_tx.set_keychain_usage_state(
+                    &AccountKeyPurposeId::new(id.clone(), KeyPurpose::ReceiveFunds),
+                    &KeychainUsageState::new(None, None),
+                )?;
+                let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
+                account.top_up_addresses(db_tx)?;
+                account.scan_genesis(db_tx, &WalletEventsNoOp)?;
 
-        Ok(())
+                Ok((account.account_index(), account))
+            })
+            .collect()
     }
 
     fn migrate_next_unused_account(
@@ -424,20 +470,6 @@ impl<B: storage::Backend> Wallet<B> {
             db_tx,
             None,
         )?;
-        Ok(())
-    }
-
-    /// Resets the wallet's accounts to the genesis block so it can start to do a rescan of the
-    /// blockchain
-    pub fn reset_wallet(&mut self, wallet_events: &impl WalletEvents) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
-
-        for account in self.accounts.values_mut() {
-            account.reset_to_height(&mut db_tx, wallet_events, BlockHeight::new(0))?;
-        }
-
-        db_tx.commit()?;
-
         Ok(())
     }
 
@@ -520,6 +552,33 @@ impl<B: storage::Backend> Wallet<B> {
         self.db.unlock_private_keys(password).map_err(WalletError::from)
     }
 
+    pub fn set_lookahead_size(
+        &mut self,
+        lookahead_size: u32,
+        force_reduce: bool,
+    ) -> WalletResult<()> {
+        let last_used = self.accounts.values().fold(None, |last, acc| {
+            let usage = acc.get_addresses_usage();
+            std::cmp::max(last, usage.last_used().map(U31::into_u32))
+        });
+
+        if let Some(last_used) = last_used {
+            ensure!(
+                last_used < lookahead_size || force_reduce,
+                WalletError::ReducedLookaheadSize(lookahead_size, last_used)
+            );
+        }
+
+        let mut db_tx = self.db.transaction_rw(None)?;
+        db_tx.set_lookahead_size(lookahead_size)?;
+        let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        self.next_unused_account = accounts.pop_last().expect("not empty accounts");
+        self.accounts = accounts;
+        db_tx.commit()?;
+
+        Ok(())
+    }
+
     pub fn account_indexes(&self) -> impl Iterator<Item = &U31> {
         self.accounts.keys()
     }
@@ -544,8 +603,9 @@ impl<B: storage::Backend> Wallet<B> {
             WalletError::EmptyAccountName
         );
 
+        let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain =
-            master_key_chain.create_account_key_chain(db_tx, next_account_index)?;
+            master_key_chain.create_account_key_chain(db_tx, next_account_index, lookahead_size)?;
 
         let account = Account::new(chain_config, db_tx, account_key_chain, name)?;
 
