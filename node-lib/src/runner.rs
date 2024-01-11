@@ -195,6 +195,7 @@ async fn initialize(
                 .unwrap_or_else(|| RpcConfigFile::default_bind_address(&chain_config)),
             Some(rpc_creds),
         )
+        .with_method_list("node_list_methods")
         .register(crate::rpc::init(
             manager.make_shutdown_trigger(),
             chain_config,
