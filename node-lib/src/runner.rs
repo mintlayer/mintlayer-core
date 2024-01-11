@@ -321,6 +321,11 @@ async fn start(
         return Ok(NodeSetupResult::DataDirCleanedUp);
     }
 
+    log::info!(
+        "Starting mintlayer-core version {}",
+        chain_config.software_version()
+    );
+
     log::info!("Starting with the following config:\n {node_config:#?}");
     let (manager, controller) = match initialize(
         chain_config.clone(),
