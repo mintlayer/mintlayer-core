@@ -88,6 +88,29 @@ pub struct CurrentFeeRate {
     pub consolidate_fee_rate: FeeRate,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum SignTransactionResult {
+    Signed(SignedTransaction),
+    PartiallySigned(Transaction, Vec<Option<InputWitness>>),
+}
+
+impl SignTransactionResult {
+    pub fn into_singed_tx(self) -> WalletResult<Option<SignedTransaction>> {
+        match self {
+            SignTransactionResult::Signed(tx) => Ok(Some(tx)),
+            SignTransactionResult::PartiallySigned(tx, witnesses) => {
+                if witnesses.iter().all(|w| w.is_some()) {
+                    let witnesses =
+                        witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
+                    Ok(Some(SignedTransaction::new(tx, witnesses)?))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+}
+
 pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
@@ -477,8 +500,15 @@ impl Account {
         let tx = Transaction::new(0, vec![tx_input], vec![output])?;
 
         let input_utxo = self.output_cache.get_txo(&pool_data.utxo_outpoint);
-        let tx = self.sign_transaction(tx, &[&pool_data.decommission_key], &[input_utxo], db_tx)?;
-        Ok(tx)
+        let result =
+            self.sign_transaction(tx, &[&pool_data.decommission_key], &[input_utxo], db_tx)?;
+
+        match result {
+            SignTransactionResult::Signed(tx) => Ok(tx),
+            SignTransactionResult::PartiallySigned(_, _) => {
+                Err(WalletError::PartiallySignedTransaction)
+            }
+        }
     }
 
     pub fn spend_from_delegation(
@@ -545,8 +575,13 @@ impl Account {
         }
         let tx = Transaction::new(0, vec![tx_input], outputs)?;
 
-        let tx = self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?;
-        Ok(tx)
+        let result = self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?;
+        match result {
+            SignTransactionResult::Signed(tx) => Ok(tx),
+            SignTransactionResult::PartiallySigned(_, _) => {
+                Err(WalletError::PartiallySignedTransaction)
+            }
+        }
     }
 
     fn get_vrf_key(
@@ -974,51 +1009,62 @@ impl Account {
         let destinations = destinations.iter().collect_vec();
         let input_utxos = input_utxos.iter().map(Option::as_ref).collect_vec();
 
-        self.sign_transaction(tx, destinations.as_slice(), input_utxos.as_slice(), db_tx)
+        let result =
+            self.sign_transaction(tx, destinations.as_slice(), input_utxos.as_slice(), db_tx)?;
+        match result {
+            SignTransactionResult::Signed(tx) => Ok(tx),
+            SignTransactionResult::PartiallySigned(_, _) => {
+                Err(WalletError::PartiallySignedTransaction)
+            }
+        }
     }
 
-    // TODO: Use a different type to support partially signed transactions
     fn sign_transaction(
         &self,
         tx: Transaction,
         destinations: &[&Destination],
         input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SignTransactionResult> {
         let witnesses = destinations
             .iter()
             .copied()
             .enumerate()
             .map(|(i, destination)| {
                 if *destination == Destination::AnyoneCanSpend {
-                    Ok(InputWitness::NoSignature(None))
+                    Ok(Some(InputWitness::NoSignature(None)))
                 } else {
-                    let private_key = self
-                        .key_chain
+                    self.key_chain
                         .get_private_key_for_destination(destination, db_tx)?
-                        .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
-                        .private_key();
+                        .map(|pk_from_keychain| {
+                            let private_key = pk_from_keychain.private_key();
+                            let sighash_type =
+                                SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
-                    let sighash_type =
-                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-                    StandardInputSignature::produce_uniparty_signature_for_input(
-                        &private_key,
-                        sighash_type,
-                        destination.clone(),
-                        &tx,
-                        input_utxos,
-                        i,
-                    )
-                    .map(InputWitness::Standard)
-                    .map_err(WalletError::TransactionSig)
+                            StandardInputSignature::produce_uniparty_signature_for_input(
+                                &private_key,
+                                sighash_type,
+                                destination.clone(),
+                                &tx,
+                                input_utxos,
+                                i,
+                            )
+                            .map(InputWitness::Standard)
+                            .map_err(WalletError::TransactionSig)
+                        })
+                        .transpose()
                 }
             })
-            .collect::<Result<Vec<InputWitness>, _>>()?;
+            .collect::<Result<Vec<Option<InputWitness>>, _>>()?;
 
-        let tx = SignedTransaction::new(tx, witnesses)?;
-
-        Ok(tx)
+        if witnesses.iter().all(|w| w.is_some()) {
+            let witnesses = witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
+            Ok(SignTransactionResult::Signed(SignedTransaction::new(
+                tx, witnesses,
+            )?))
+        } else {
+            Ok(SignTransactionResult::PartiallySigned(tx, witnesses))
+        }
     }
 
     pub fn account_index(&self) -> U31 {

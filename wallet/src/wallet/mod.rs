@@ -182,6 +182,8 @@ pub enum WalletError {
     ReducedLookaheadSize(u32, u32),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
+    #[error("Cannot use partially signed transaction")]
+    PartiallySignedTransaction,
 }
 
 /// Result type used for the wallet
