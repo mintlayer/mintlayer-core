@@ -47,6 +47,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                 peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
+                expecting_blocks_since: None,
             },],
             1
         ),
@@ -65,6 +66,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -74,6 +76,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -88,6 +91,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 
@@ -103,6 +107,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -112,6 +117,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -126,6 +132,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 
@@ -141,6 +148,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -150,6 +158,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -159,6 +168,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -173,6 +183,7 @@ fn test_filter_address_group(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 }
@@ -198,6 +209,7 @@ fn test_ping(#[case] seed: Seed) {
                 peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
+                expecting_blocks_since: None,
             },],
             1
         ),
@@ -216,6 +228,7 @@ fn test_ping(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -225,6 +238,7 @@ fn test_ping(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -239,6 +253,7 @@ fn test_ping(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 
@@ -254,6 +269,7 @@ fn test_ping(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -263,6 +279,7 @@ fn test_ping(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -272,6 +289,7 @@ fn test_ping(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -286,6 +304,7 @@ fn test_ping(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 }
@@ -311,6 +330,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                 peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
+                expecting_blocks_since: None,
             },],
             1
         ),
@@ -329,6 +349,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -340,6 +361,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                             Duration::from_secs(10000000)
                         )),
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -354,6 +376,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 
@@ -371,6 +394,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                             Duration::from_secs(10000000)
                         )),
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -382,6 +406,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                             Duration::from_secs(10000001)
                         )),
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -393,6 +418,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
                             Duration::from_secs(10000002)
                         )),
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -407,6 +433,7 @@ fn test_filter_by_last_block_time(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: Some(Time::from_secs_since_epoch(10000000)),
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 }
@@ -432,6 +459,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                 peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
+                expecting_blocks_since: None,
             },],
             1
         ),
@@ -450,6 +478,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: Some(Time::from_secs_since_epoch(1000000)),
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -459,6 +488,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: None,
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -473,6 +503,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         },]
     );
 
@@ -488,6 +519,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -497,6 +529,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: Some(Time::from_secs_since_epoch(10000001)),
+                        expecting_blocks_since: None,
                     },
                     EvictionCandidate {
                         age: Duration::ZERO,
@@ -506,6 +539,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
                         peer_role: PeerRole::Inbound,
                         last_tip_block_time: None,
                         last_tx_time: Some(Time::from_secs_since_epoch(10000002)),
+                        expecting_blocks_since: None,
                     },
                 ],
                 &mut rng
@@ -520,6 +554,7 @@ fn test_filter_by_last_transaction_time(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
+            expecting_blocks_since: None,
         },]
     );
 }
@@ -546,6 +581,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         }]),
         Some(peer1)
     );
@@ -562,6 +598,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
                     last_tx_time: None,
+                    expecting_blocks_since: None,
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -571,6 +608,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
                     last_tx_time: None,
+                    expecting_blocks_since: None,
                 }
             ],
             &mut rng
@@ -589,6 +627,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
                     last_tx_time: None,
+                    expecting_blocks_since: None,
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -598,6 +637,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
                     last_tx_time: None,
+                    expecting_blocks_since: None,
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -607,6 +647,7 @@ fn test_find_group_most_connections(#[case] seed: Seed) {
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
                     last_tx_time: None,
+                    expecting_blocks_since: None,
                 },
             ],
             &mut rng
@@ -624,6 +665,7 @@ fn random_eviction_candidate(rng: &mut impl Rng) -> EvictionCandidate {
         peer_role: PeerRole::Inbound,
         last_tip_block_time: None,
         last_tx_time: None,
+        expecting_blocks_since: None,
     }
 }
 
@@ -697,6 +739,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now = Time::from_secs_since_epoch(100000);
     let min_age = Duration::from_secs(5000);
     let config = config_with_block_relay_conn_limits(2, min_age);
 
@@ -709,6 +752,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundBlockRelay,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         }
     }
 
@@ -719,7 +763,7 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
         make_candidate(peer3, min_age - Duration::from_secs(1)),
     ];
     assert_eq!(
-        select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &config),
+        select_for_eviction_block_relay(shuffle_vec(candidates, &mut rng), &config, now),
         None
     );
 
@@ -731,13 +775,13 @@ fn test_block_relay_eviction_young_old_peers(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &config),
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }
@@ -753,10 +797,16 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now_as_secs = 100000;
+    let now = Time::from_secs_since_epoch(now_as_secs);
     let min_age = Duration::from_secs(5000);
     let config = config_with_block_relay_conn_limits(2, min_age);
 
-    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
+    fn make_candidate(
+        peer_id: PeerId,
+        last_tip_block_time_secs: Option<u64>,
+        expecting_blocks_since_secs: Option<u64>,
+    ) -> EvictionCandidate {
         EvictionCandidate {
             age: Duration::from_secs(10000),
             peer_id,
@@ -765,24 +815,68 @@ fn test_block_relay_eviction_no_blocks(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundBlockRelay,
             last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
             last_tx_time: None,
+            expecting_blocks_since: expecting_blocks_since_secs.map(Time::from_secs_since_epoch),
         }
     }
 
-    // The peer that never sent us new blocks is evicted
+    // The peer that never sent us new blocks is evicted.
     let candidates = vec![
-        make_candidate(peer1, Some(10000)),
-        make_candidate(peer2, Some(20000)),
-        make_candidate(peer3, None),
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(peer3, None, None),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &config),
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
         Some(peer3)
     );
-
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The previously evicted peer now has `expecting_blocks_since` within the limit;
+    // the next worst peer should be evicted instead.
+    let candidates = vec![
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(
+            peer3,
+            None,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs()),
+        ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
+        Some(peer1)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The same peer now has `expecting_blocks_since` below the limit;
+    // this time it should be evicted.
+    let candidates = vec![
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(
+            peer3,
+            None,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs() - 1),
+        ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
+        Some(peer3)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }
@@ -798,10 +892,16 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now_as_secs = 100000;
+    let now = Time::from_secs_since_epoch(now_as_secs);
     let min_age = Duration::from_secs(5000);
     let config = config_with_block_relay_conn_limits(2, min_age);
 
-    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
+    fn make_candidate(
+        peer_id: PeerId,
+        last_tip_block_time_secs: u64,
+        expecting_blocks_since_secs: Option<u64>,
+    ) -> EvictionCandidate {
         EvictionCandidate {
             age: Duration::from_secs(10000),
             peer_id,
@@ -810,24 +910,68 @@ fn test_block_relay_eviction_old_blocks(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundBlockRelay,
             last_tip_block_time: Some(Time::from_secs_since_epoch(last_tip_block_time_secs)),
             last_tx_time: None,
+            expecting_blocks_since: expecting_blocks_since_secs.map(Time::from_secs_since_epoch),
         }
     }
 
-    // The peer that sent blocks a long time ago is evicted
+    // The peer that sent blocks a long time ago is evicted.
     let candidates = vec![
-        make_candidate(peer1, 10000),
-        make_candidate(peer2, 20000),
-        make_candidate(peer3, 30000),
+        make_candidate(peer1, 10000, None),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_block_relay(candidates.clone(), &config),
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
         Some(peer1)
     );
-
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The previously evicted peer now has `expecting_blocks_since` within the limit;
+    // the next worst peer should be evicted instead.
+    let candidates = vec![
+        make_candidate(
+            peer1,
+            10000,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs()),
+        ),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
+        Some(peer2)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The same peer now has `expecting_blocks_since` below the limit;
+    // this time it should be evicted.
+    let candidates = vec![
+        make_candidate(
+            peer1,
+            10000,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs() - 1),
+        ),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_block_relay(candidates.clone(), &config, now),
+        Some(peer1)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_block_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }
@@ -843,6 +987,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now = Time::from_secs_since_epoch(100000);
     let min_age = Duration::from_secs(5000);
     let config = config_with_full_relay_conn_limits(2, min_age);
 
@@ -855,6 +1000,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundFullRelay,
             last_tip_block_time: None,
             last_tx_time: None,
+            expecting_blocks_since: None,
         }
     }
 
@@ -865,7 +1011,7 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
         make_candidate(peer3, min_age - Duration::from_secs(1)),
     ];
     assert_eq!(
-        select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &config),
+        select_for_eviction_full_relay(shuffle_vec(candidates, &mut rng), &config, now),
         None
     );
 
@@ -877,13 +1023,13 @@ fn test_full_relay_eviction_young_old_peers(#[case] seed: Seed) {
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &config),
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
         Some(peer3)
     );
 
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }
@@ -899,10 +1045,16 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now_as_secs = 100000;
+    let now = Time::from_secs_since_epoch(now_as_secs);
     let min_age = Duration::from_secs(5000);
     let config = config_with_full_relay_conn_limits(2, min_age);
 
-    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: Option<u64>) -> EvictionCandidate {
+    fn make_candidate(
+        peer_id: PeerId,
+        last_tip_block_time_secs: Option<u64>,
+        expecting_blocks_since_secs: Option<u64>,
+    ) -> EvictionCandidate {
         EvictionCandidate {
             age: Duration::from_secs(10000),
             peer_id,
@@ -911,24 +1063,68 @@ fn test_full_relay_eviction_no_blocks(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundFullRelay,
             last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
             last_tx_time: None,
+            expecting_blocks_since: expecting_blocks_since_secs.map(Time::from_secs_since_epoch),
         }
     }
 
-    // The peer that never sent us new blocks is evicted
+    // The peer that never sent us new blocks is evicted.
     let candidates = vec![
-        make_candidate(peer1, Some(10000)),
-        make_candidate(peer2, Some(20000)),
-        make_candidate(peer3, None),
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(peer3, None, None),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &config),
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
         Some(peer3)
     );
-
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The previously evicted peer now has `expecting_blocks_since` within the limit;
+    // the next worst peer should be evicted instead.
+    let candidates = vec![
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(
+            peer3,
+            None,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs()),
+        ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
+        Some(peer1)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The same peer now has `expecting_blocks_since` below the limit;
+    // this time it should be evicted.
+    let candidates = vec![
+        make_candidate(peer1, Some(10000), None),
+        make_candidate(peer2, Some(20000), None),
+        make_candidate(
+            peer3,
+            None,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs() - 1),
+        ),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
+        Some(peer3)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }
@@ -944,10 +1140,16 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
     let peer2 = PeerId::new();
     let peer3 = PeerId::new();
 
+    let now_as_secs = 100000;
+    let now = Time::from_secs_since_epoch(now_as_secs);
     let min_age = Duration::from_secs(5000);
     let config = config_with_full_relay_conn_limits(2, min_age);
 
-    fn make_candidate(peer_id: PeerId, last_tip_block_time_secs: u64) -> EvictionCandidate {
+    fn make_candidate(
+        peer_id: PeerId,
+        last_tip_block_time_secs: u64,
+        expecting_blocks_since_secs: Option<u64>,
+    ) -> EvictionCandidate {
         EvictionCandidate {
             age: Duration::from_secs(10000),
             peer_id,
@@ -956,24 +1158,68 @@ fn test_full_relay_eviction_old_blocks(#[case] seed: Seed) {
             peer_role: PeerRole::OutboundFullRelay,
             last_tip_block_time: Some(Time::from_secs_since_epoch(last_tip_block_time_secs)),
             last_tx_time: None,
+            expecting_blocks_since: expecting_blocks_since_secs.map(Time::from_secs_since_epoch),
         }
     }
 
-    // The peer that sent blocks a long time ago is evicted
+    // The peer that sent blocks a long time ago is evicted.
     let candidates = vec![
-        make_candidate(peer1, 10000),
-        make_candidate(peer2, 20000),
-        make_candidate(peer3, 30000),
+        make_candidate(peer1, 10000, None),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
     ];
     let candidates = shuffle_vec(candidates, &mut rng);
     assert_eq!(
-        select_for_eviction_full_relay(candidates.clone(), &config),
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
         Some(peer1)
     );
-
     // But if the limits are lifted, no eviction happens.
     assert_eq!(
-        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits()),
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The previously evicted peer now has `expecting_blocks_since` within the limit;
+    // the next worst peer should be evicted instead.
+    let candidates = vec![
+        make_candidate(
+            peer1,
+            10000,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs()),
+        ),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
+        Some(peer2)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
+        None
+    );
+
+    // The same peer now has `expecting_blocks_since` below the limit;
+    // this time it should be evicted.
+    let candidates = vec![
+        make_candidate(
+            peer1,
+            10000,
+            Some(now_as_secs - BLOCK_EXPECTATION_MAX_DURATION.as_secs() - 1),
+        ),
+        make_candidate(peer2, 20000, None),
+        make_candidate(peer3, 30000, None),
+    ];
+    let candidates = shuffle_vec(candidates, &mut rng);
+    assert_eq!(
+        select_for_eviction_full_relay(candidates.clone(), &config, now),
+        Some(peer1)
+    );
+    // But if the limits are lifted, no eviction happens.
+    assert_eq!(
+        select_for_eviction_full_relay(candidates, &config_with_no_outbound_conn_limits(), now),
         None
     );
 }

@@ -21,6 +21,7 @@ use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::S
 
 use crate::{
     net::types::{PeerInfo, PeerRole},
+    sync::sync_status::PeerBlockSyncStatus,
     utils::rate_limiter::RateLimiter,
 };
 
@@ -75,4 +76,7 @@ pub struct PeerContext {
     pub last_tip_block_time: Option<Time>,
 
     pub last_tx_time: Option<Time>,
+
+    /// Certain information from the block sync manager that the peer manager may be interested in.
+    pub block_sync_status: PeerBlockSyncStatus,
 }

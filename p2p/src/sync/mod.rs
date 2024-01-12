@@ -17,9 +17,10 @@
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
 mod chainstate_handle;
+mod peer_activity;
 mod peer_common;
 mod peer_v2;
-mod types;
+pub mod sync_status;
 
 use std::collections::HashMap;
 

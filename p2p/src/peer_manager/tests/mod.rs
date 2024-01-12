@@ -17,6 +17,7 @@ mod addr_list_response_caching;
 mod addresses;
 mod ban;
 mod connections;
+mod eviction;
 mod peer_types;
 mod ping;
 mod utils;

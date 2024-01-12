@@ -63,6 +63,10 @@ pub struct EvictionCandidate {
     last_tip_block_time: Option<Time>,
 
     last_tx_time: Option<Time>,
+
+    /// The time since which we've been expecting a block from the peer; if None, we're not
+    /// expecting any blocks from it.
+    expecting_blocks_since: Option<Time>,
 }
 
 pub struct RandomState(u64, u64);
@@ -91,11 +95,13 @@ impl EvictionCandidate {
             peer_role: peer.peer_role,
             last_tip_block_time: peer.last_tip_block_time,
             last_tx_time: peer.last_tx_time,
+
+            expecting_blocks_since: peer.block_sync_status.expecting_blocks_since,
         }
     }
 }
 
-fn filter_old_peers(
+fn filter_mature_peers(
     mut candidates: Vec<EvictionCandidate>,
     age: Duration,
 ) -> Vec<EvictionCandidate> {
@@ -201,12 +207,14 @@ pub fn select_for_eviction_inbound(
 pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
     config: &PeerManagerConfig,
+    now: Time,
 ) -> Option<PeerId> {
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundBlockRelay,
         *config.outbound_block_relay_connection_min_age,
         *config.outbound_block_relay_count,
+        now,
     )
 }
 
@@ -214,17 +222,50 @@ pub fn select_for_eviction_block_relay(
 pub fn select_for_eviction_full_relay(
     candidates: Vec<EvictionCandidate>,
     config: &PeerManagerConfig,
+    now: Time,
 ) -> Option<PeerId> {
     // TODO: in bitcoin they protect full relay peers from eviction if there are no other
     // connection to their network (counting outbound-full-relay and manual peers). We should
     // probably do the same.
-    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
+    // See https://github.com/mintlayer/mintlayer-core/issues/1432
     select_for_eviction_outbound(
         candidates,
         PeerRole::OutboundFullRelay,
         *config.outbound_full_relay_connection_min_age,
         *config.outbound_full_relay_count,
+        now,
     )
+}
+
+/// If we've been expecting a block from a peer for a duration less or equal to this one,
+/// we'll try to avoid evicting it (by assuming that it has sent us a block just now).
+pub const BLOCK_EXPECTATION_MAX_DURATION: Duration = Duration::from_secs(5);
+
+/// Extended eviction candidate info for outbound peer eviction.
+#[derive(Debug)]
+struct EvictionCandidateExtOutbound {
+    ec: EvictionCandidate,
+    /// This will be set to 'now' if the peer has a non-empty expecting_blocks_since value
+    /// and it's recent enough.
+    effective_last_tip_block_time: Option<Time>,
+}
+
+impl EvictionCandidateExtOutbound {
+    fn new(ec: EvictionCandidate, now: Time) -> Self {
+        let effective_last_tip_block_time =
+            if ec.expecting_blocks_since.is_some_and(|expecting_blocks_since| {
+                (expecting_blocks_since + BLOCK_EXPECTATION_MAX_DURATION).expect("Cannot happen")
+                    >= now
+            }) {
+                Some(now)
+            } else {
+                ec.last_tip_block_time
+            };
+        Self {
+            ec,
+            effective_last_tip_block_time,
+        }
+    }
 }
 
 fn select_for_eviction_outbound(
@@ -232,29 +273,36 @@ fn select_for_eviction_outbound(
     peer_role: PeerRole,
     min_age: Duration,
     max_count: usize,
+    now: Time,
 ) -> Option<PeerId> {
     debug_assert!(candidates.iter().all(|c| c.peer_role == peer_role));
 
     // Give peers some time to have a chance to send blocks.
-    // TODO: in bitcoin, in addition to checking MINIMUM_CONNECT_TIME, they also check whether
-    // there are blocks in-flight with this peer; we should consider doing it too.
-    // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
-    let mut candidates = filter_old_peers(candidates, min_age);
+    let candidates = filter_mature_peers(candidates, min_age);
     if candidates.len() <= max_count {
         return None;
     }
 
+    let mut candidates: Vec<_> = candidates
+        .into_iter()
+        .map(|ec| EvictionCandidateExtOutbound::new(ec, now))
+        .collect();
+
     // Starting from the youngest, disconnect the first peer that never sent a new blockchain tip
-    candidates.sort_by_key(|peer| peer.age);
+    candidates.sort_by_key(|peer| peer.ec.age);
     for peer in candidates.iter() {
-        if peer.last_tip_block_time.is_none() {
-            return Some(peer.peer_id);
+        if peer.effective_last_tip_block_time.is_none() {
+            return Some(peer.ec.peer_id);
         }
     }
 
     // Disconnect the peer who sent a new blockchain tip a long time ago
-    candidates.sort_by_key(|peer| peer.last_tip_block_time);
-    candidates.first().map(|peer| peer.peer_id)
+    candidates
+        .iter()
+        .min_by(|peer1, peer2| {
+            peer1.effective_last_tip_block_time.cmp(&peer2.effective_last_tip_block_time)
+        })
+        .map(|peer| peer.ec.peer_id)
 }
 
 #[cfg(test)]

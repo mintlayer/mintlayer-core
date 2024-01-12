@@ -304,7 +304,7 @@ impl TestNodeGroup {
         self.prevent_peer_manager_events = set;
     }
 
-    /// NewTipReceived/NewChainstateTip/NewValidTransactionReceived messages are ignored
+    /// The "informational" messages like NewTipReceived/NewChainstateTip etc are ignored.
     // TODO: Rename the function
     fn assert_no_peer_manager_events_if_needed(&mut self) {
         if self.prevent_peer_manager_events {
@@ -327,7 +327,8 @@ impl TestNodeGroup {
                         }
                         PeerManagerEvent::NewTipReceived { .. }
                         | PeerManagerEvent::NewChainstateTip(_)
-                        | PeerManagerEvent::NewValidTransactionReceived { .. } => {
+                        | PeerManagerEvent::NewValidTransactionReceived { .. }
+                        | PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {
                             // Ignored
                         }
                     }

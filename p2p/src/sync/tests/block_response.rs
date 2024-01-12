@@ -38,7 +38,7 @@ use crate::{
     },
     testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
-    P2pConfig, P2pError,
+    P2pConfig, P2pError, PeerManagerEvent,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -226,16 +226,19 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
                     expected_indices.pop_front();
 
                     let expected_block_id = blocks[shuffled_index].get_id();
-                    node.receive_peer_manager_events(BTreeSet::from_iter(
-                        [
-                            PeerManagerEventDesc::NewTipReceived {
-                                peer_id: peer.get_id(),
-                                block_id: expected_block_id,
-                            },
-                            PeerManagerEventDesc::NewChainstateTip(expected_block_id),
-                        ]
-                        .into_iter(),
-                    ))
+                    node.receive_or_ignore_peer_manager_events(
+                        BTreeSet::from_iter(
+                            [
+                                PeerManagerEventDesc::NewTipReceived {
+                                    peer_id: peer.get_id(),
+                                    block_id: expected_block_id,
+                                },
+                                PeerManagerEventDesc::NewChainstateTip(expected_block_id),
+                            ]
+                            .into_iter(),
+                        ),
+                        |event| matches!(event, PeerManagerEvent::PeerBlockSyncStatusUpdate { .. }),
+                    )
                     .await;
                 } else {
                     let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
