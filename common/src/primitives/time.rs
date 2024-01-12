@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn format_absolute_time() {
         let t = Time::from_secs_since_epoch(1705064092);
-        let s = format!("{}", t.as_standard_printable_time());
+        let s = t.as_standard_printable_time().to_string();
         assert_eq!(&s, "2024-01-12 12:54:52");
     }
 }
