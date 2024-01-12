@@ -330,6 +330,13 @@ pub enum WalletCommand {
         pool_id: String,
     },
 
+    // FIXME: docs
+    #[clap(name = "staking-decommission-pool-request")]
+    DecommissionStakePoolRequest {
+        /// The pool id of the pool to be decommissioned.
+        pool_id: String,
+    },
+
     /// Create new wallet
     #[clap(name = "wallet-create")]
     CreateWallet {
@@ -1249,6 +1256,22 @@ impl CommandHandler {
                     .decommission_stake_pool(selected_account, pool_id, self.config)
                     .await?;
                 Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::DecommissionStakePoolRequest { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
+                let result = self
+                    .get_synced_controller()
+                    .await?
+                    .decommission_stake_pool_request(pool_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                let output_str = format!(
+                    "Decommission transaction created.\
+                    Pass the following string into the wallet with private key to sign:\n{}",
+                    result.to_string()
+                );
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::DepositData { hex_data } => {

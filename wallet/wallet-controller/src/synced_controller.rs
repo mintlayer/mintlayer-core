@@ -38,8 +38,9 @@ use futures::{stream::FuturesUnordered, TryStreamExt};
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
+use serialization::hex_encoded::HexEncoded;
 use wallet::{
-    account::UnconfirmedTokenInfo,
+    account::{PartiallySignedTransaction, UnconfirmedTokenInfo},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, StakePoolDataArguments,
@@ -578,6 +579,32 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             },
         )
         .await
+    }
+
+    pub async fn decommission_stake_pool_request(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<HexEncoded<PartiallySignedTransaction>, ControllerError<T>> {
+        let staker_balance = self
+            .rpc_client
+            .get_staker_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+                pool_id,
+            )))?;
+
+        let (current_fee_rate, _) = self.get_current_and_consolidation_fee_rate().await?;
+
+        self.wallet
+            .decommission_stake_pool_request(
+                self.account_index,
+                pool_id,
+                staker_balance,
+                current_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)
+            .map(|r| r.into())
     }
 
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {

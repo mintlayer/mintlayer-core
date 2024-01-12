@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
-    Currency, CurrentFeeRate, DelegationData, UnconfirmedTokenInfo, UtxoSelectorError,
+    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, UnconfirmedTokenInfo,
+    UtxoSelectorError,
 };
 use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
@@ -182,8 +183,12 @@ pub enum WalletError {
     ReducedLookaheadSize(u32, u32),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
-    #[error("Cannot use partially signed transaction")]
-    PartiallySignedTransaction,
+    #[error("Missing inputs signatures in a tx")]
+    InputsSignatureAreMissing,
+    #[error("Cannot use partially signed transaction in a decommission command")]
+    PartiallySignedTransactionInDecommissionCommand,
+    #[error("Cannot use fully signed transaction in a decommission request")]
+    FullySignedTransactionInDecommissionReq,
 }
 
 /// Result type used for the wallet
@@ -1188,6 +1193,18 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)
+        })
+    }
+
+    pub fn decommission_stake_pool_request(
+        &mut self,
+        account_index: U31,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<PartiallySignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.decommission_stake_pool_request(db_tx, pool_id, pool_balance, current_fee_rate)
         })
     }
 
