@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
@@ -180,6 +180,8 @@ pub enum WalletError {
     EmptyDataDeposit,
     #[error("Cannot reduce lookahead size to {0} as it is below the last known used key {1}")]
     ReducedLookaheadSize(u32, u32),
+    #[error("Wallet file {0} error: {1}")]
+    WalletFileError(PathBuf, String),
 }
 
 /// Result type used for the wallet
@@ -347,33 +349,26 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
-    /// Check if the DB is in a supported version and if it needs a migration to be ran
-    /// Returns true if a migration needs to be ran, false if it is already on the latest version
-    /// and an error if it is an unsupported version
-    pub fn check_db_needs_migration(db: &Store<B>) -> WalletResult<bool> {
-        let version = db.transaction_ro()?.get_storage_version()?;
-
-        match version {
-            WALLET_VERSION_UNINITIALIZED => Err(WalletError::WalletNotInitialized),
-            WALLET_VERSION_V1 | WALLET_VERSION_V2 => Ok(true),
-            CURRENT_WALLET_VERSION => Ok(false),
-            unsupported_version => Err(WalletError::UnsupportedWalletVersion(unsupported_version)),
-        }
-    }
-
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+    fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+        pre_migration: F,
+    ) -> WalletResult<()> {
         let version = db.transaction_ro()?.get_storage_version()?;
 
         match version {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
             WALLET_VERSION_V1 => {
+                pre_migration(WALLET_VERSION_V1)?;
                 Self::migration_v2(db, chain_config.clone())?;
             }
             WALLET_VERSION_V2 => {
+                pre_migration(WALLET_VERSION_V2)?;
                 Self::migration_v3(db, chain_config.clone())?;
             }
             WALLET_VERSION_V3 => {
+                pre_migration(WALLET_VERSION_V3)?;
                 Self::migration_v4(db)?;
             }
             CURRENT_WALLET_VERSION => return Ok(()),
@@ -382,7 +377,7 @@ impl<B: storage::Backend> Wallet<B> {
             }
         }
 
-        Self::check_and_migrate_db(db, chain_config)
+        Self::check_and_migrate_db(db, chain_config, pre_migration)
     }
 
     fn validate_chain_info(
@@ -473,15 +468,16 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
-    pub fn load_wallet(
+    pub fn load_wallet<F: Fn(u32) -> WalletResult<()>>(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,
         password: Option<String>,
+        pre_migration: F,
     ) -> WalletResult<Self> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
         }
-        Self::check_and_migrate_db(&db, chain_config.clone())?;
+        Self::check_and_migrate_db(&db, chain_config.clone(), pre_migration)?;
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
