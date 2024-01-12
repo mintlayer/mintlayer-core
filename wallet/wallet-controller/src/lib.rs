@@ -60,7 +60,7 @@ pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletError};
+use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletError, WalletResult};
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
@@ -224,16 +224,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(wallet)
     }
 
-    fn make_backup_wallet_file(file_path: impl AsRef<Path>) -> Result<(), ControllerError<T>> {
+    fn make_backup_wallet_file(file_path: impl AsRef<Path>, version: u32) -> WalletResult<()> {
         let backup_name = file_path
             .as_ref()
             .file_name()
             .map(|file_name| {
                 let mut file_name = file_name.to_os_string();
-                file_name.push("_backup");
+                file_name.push(format!("_backup_v{version}"));
                 file_name
             })
-            .ok_or(ControllerError::WalletFileError(
+            .ok_or(WalletError::WalletFileError(
                 file_path.as_ref().to_owned(),
                 "File path is not a file".to_owned(),
             ))?;
@@ -243,7 +243,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             backup_file_path.to_string_lossy()
         );
         fs::copy(&file_path, backup_file_path).map_err(|_| {
-            ControllerError::WalletFileError(
+            WalletError::WalletFileError(
                 file_path.as_ref().to_owned(),
                 "Could not make a backup of the file before migrating it".to_owned(),
             )
@@ -266,13 +266,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let db = wallet::wallet::open_or_create_wallet_file(&file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet_needs_migration =
-            wallet::Wallet::check_db_needs_migration(&db).map_err(ControllerError::WalletError)?;
 
-        if wallet_needs_migration {
-            Self::make_backup_wallet_file(file_path)?;
-        }
-        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db, password)
+        let wallet =
+            wallet::Wallet::load_wallet(Arc::clone(&chain_config), db, password, |version| {
+                Self::make_backup_wallet_file(file_path.as_ref(), version)
+            })
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
