@@ -16,12 +16,12 @@
 use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
 use common::primitives::time::Time;
-use crypto::random::Rng;
+use crypto::random::{seq::IteratorRandom, Rng};
 use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
-use super::{address_groups::AddressGroup, peer_context::PeerContext, PeerManagerConfig};
+use super::{address_groups::AddressGroup, config::PeerManagerConfig, peer_context::PeerContext};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
@@ -67,6 +67,9 @@ pub struct EvictionCandidate {
     /// The time since which we've been expecting a block from the peer; if None, we're not
     /// expecting any blocks from it.
     expecting_blocks_since: Option<Time>,
+
+    /// Whether the address is banned or discouraged.
+    is_banned_or_discouraged: bool,
 }
 
 pub struct RandomState(u64, u64);
@@ -84,7 +87,12 @@ impl RandomState {
 }
 
 impl EvictionCandidate {
-    pub fn new(peer: &PeerContext, random_state: &RandomState, now: Time) -> Self {
+    pub fn new(
+        peer: &PeerContext,
+        random_state: &RandomState,
+        now: Time,
+        is_banned_or_discouraged: bool,
+    ) -> Self {
         EvictionCandidate {
             age: now.saturating_sub(peer.created_at),
             peer_id: peer.info.peer_id,
@@ -97,6 +105,8 @@ impl EvictionCandidate {
             last_tx_time: peer.last_tx_time,
 
             expecting_blocks_since: peer.block_sync_status.expecting_blocks_since,
+
+            is_banned_or_discouraged,
         }
     }
 }
@@ -185,10 +195,20 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 pub fn select_for_eviction_inbound(
     candidates: Vec<EvictionCandidate>,
     config: &PeerManagerConfig,
+    rng: &mut impl Rng,
 ) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
     debug_assert!(candidates.iter().all(|c| c.peer_role == PeerRole::Inbound));
+
+    if candidates.len() <= config.total_preserved_inbound_count() {
+        return None;
+    }
+
+    if let Some(candidate) = candidates.iter().filter(|ec| ec.is_banned_or_discouraged).choose(rng)
+    {
+        return Some(candidate.peer_id);
+    }
 
     let candidates =
         filter_address_group(candidates, *config.preserved_inbound_count_address_group);
@@ -208,6 +228,7 @@ pub fn select_for_eviction_block_relay(
     candidates: Vec<EvictionCandidate>,
     config: &PeerManagerConfig,
     now: Time,
+    rng: &mut impl Rng,
 ) -> Option<PeerId> {
     select_for_eviction_outbound(
         candidates,
@@ -215,6 +236,7 @@ pub fn select_for_eviction_block_relay(
         *config.outbound_block_relay_connection_min_age,
         *config.outbound_block_relay_count,
         now,
+        rng,
     )
 }
 
@@ -223,6 +245,7 @@ pub fn select_for_eviction_full_relay(
     candidates: Vec<EvictionCandidate>,
     config: &PeerManagerConfig,
     now: Time,
+    rng: &mut impl Rng,
 ) -> Option<PeerId> {
     // TODO: in bitcoin they protect full relay peers from eviction if there are no other
     // connection to their network (counting outbound-full-relay and manual peers). We should
@@ -234,6 +257,7 @@ pub fn select_for_eviction_full_relay(
         *config.outbound_full_relay_connection_min_age,
         *config.outbound_full_relay_count,
         now,
+        rng,
     )
 }
 
@@ -274,8 +298,18 @@ fn select_for_eviction_outbound(
     min_age: Duration,
     max_count: usize,
     now: Time,
+    rng: &mut impl Rng,
 ) -> Option<PeerId> {
     debug_assert!(candidates.iter().all(|c| c.peer_role == peer_role));
+
+    if candidates.len() <= max_count {
+        return None;
+    }
+
+    if let Some(candidate) = candidates.iter().filter(|ec| ec.is_banned_or_discouraged).choose(rng)
+    {
+        return Some(candidate.peer_id);
+    }
 
     // Give peers some time to have a chance to send blocks.
     let candidates = filter_mature_peers(candidates, min_age);

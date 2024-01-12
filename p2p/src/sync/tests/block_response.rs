@@ -31,6 +31,7 @@ use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
 use test_utils::random::{shuffle_until_different, Seed};
 
 use crate::{
+    ban_config::BanConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     sync::tests::helpers::{
@@ -148,9 +149,15 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
 
         let chain_config = Arc::new(create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
-            // We want to count bannable errors in this test, but don't want a disconnect
-            // to happen because of them.
-            ban_threshold: 1000.into(),
+            ban_config: BanConfig {
+                // We want to count bannable errors in this test, but don't want a disconnect
+                // to happen because of them.
+                ban_threshold: 1000.into(),
+
+                ban_duration: Default::default(),
+                discouragement_threshold: Default::default(),
+                discouragement_duration: Default::default(),
+            },
 
             bind_addresses: Default::default(),
             socks5_proxy: Default::default(),
@@ -158,8 +165,6 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
-
-            ban_duration: Default::default(),
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
@@ -288,8 +293,7 @@ async fn disconnect(#[case] seed: Seed) {
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
-            ban_threshold: Default::default(),
-            ban_duration: Default::default(),
+            ban_config: Default::default(),
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
@@ -356,8 +360,7 @@ async fn slow_response(#[case] seed: Seed) {
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
-            ban_threshold: Default::default(),
-            ban_duration: Default::default(),
+            ban_config: Default::default(),
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),

@@ -24,14 +24,12 @@ use itertools::Itertools;
 use rstest::rstest;
 
 use ::test_utils::random::{make_seedable_rng, Seed};
-use common::{
-    chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
-};
+use common::chain::config::create_unit_test_config;
 use crypto::random::Rng;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
-    config::P2pConfig,
+    ban_config::BanConfig,
     peer_manager::{
         peerdb::{
             address_data::{self, PURGE_REACHABLE_FAIL_COUNT, PURGE_UNREACHABLE_TIME},
@@ -41,8 +39,8 @@ use crate::{
         peerdb_common::Transactional,
     },
     testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, test_p2p_config_with_peer_db_config,
-        TestAddressMaker,
+        peerdb_inmemory_store, test_p2p_config, test_p2p_config_with_ban_config,
+        test_p2p_config_with_peer_db_config, TestAddressMaker,
     },
 };
 
@@ -64,28 +62,13 @@ fn unban_peer() {
     let chain_config = create_unit_test_config();
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
-        Arc::new(P2pConfig {
+        Arc::new(test_p2p_config_with_ban_config(BanConfig {
             ban_duration: Duration::from_secs(60).into(),
+            discouragement_duration: Duration::from_secs(600).into(),
 
-            bind_addresses: Default::default(),
-            socks5_proxy: None,
-            disable_noise: Default::default(),
-            boot_nodes: Default::default(),
-            reserved_nodes: Default::default(),
-            whitelisted_addresses: Default::default(),
             ban_threshold: Default::default(),
-            outbound_connection_timeout: Default::default(),
-            ping_check_period: Default::default(),
-            ping_timeout: Default::default(),
-            peer_handshake_timeout: Default::default(),
-            max_clock_diff: Default::default(),
-            node_type: Default::default(),
-            allow_discover_private_ips: Default::default(),
-            user_agent: mintlayer_core_user_agent(),
-            sync_stalling_timeout: Default::default(),
-            peer_manager_config: Default::default(),
-            protocol_config: Default::default(),
-        }),
+            discouragement_threshold: Default::default(),
+        })),
         time_getter.get_time_getter(),
         db_store,
     )
@@ -94,15 +77,84 @@ fn unban_peer() {
     let address = TestAddressMaker::new_random_address();
     peerdb.ban(address.as_bannable());
 
+    // The address is banned.
     assert!(peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 1);
+    assert_eq!(banned_addresses[0].0, address.as_bannable());
+
+    // But not discouraged.
+    assert!(!peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 0);
 
     time_getter.advance_time(Duration::from_secs(120));
 
-    // Banned addresses updated in the `heartbeat` function
+    // Banned addresses are updated in the `heartbeat` function
     peerdb.heartbeat();
 
+    // The address is no longer banned.
+    assert!(!peerdb.is_address_banned(&address.as_bannable()));
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
+    assert_eq!(banned_addresses.len(), 0);
+
+    // And still not discouraged.
+    assert!(!peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 0);
+
+    assert_addr_consistency(&peerdb);
+}
+
+#[tracing::instrument]
+#[test]
+fn undiscourage_peer() {
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
+    let mut peerdb = PeerDb::<_>::new(
+        &chain_config,
+        Arc::new(test_p2p_config_with_ban_config(BanConfig {
+            discouragement_duration: Duration::from_secs(60).into(),
+            ban_duration: Duration::from_secs(600).into(),
+
+            ban_threshold: Default::default(),
+            discouragement_threshold: Default::default(),
+        })),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let address = TestAddressMaker::new_random_address();
+    peerdb.discourage(address.as_bannable());
+
+    // The address is discouraged.
+    assert!(peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 1);
+    assert_eq!(discouraged_addresses[0].0, address.as_bannable());
+
+    // But not banned.
+    assert!(!peerdb.is_address_banned(&address.as_bannable()));
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
+    assert_eq!(banned_addresses.len(), 0);
+
+    time_getter.advance_time(Duration::from_secs(120));
+
+    // Discouraged addresses are updated in the `heartbeat` function
+    peerdb.heartbeat();
+
+    // The address is no longer discouraged.
+    assert!(!peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 0);
+
+    // And still not banned.
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 0);

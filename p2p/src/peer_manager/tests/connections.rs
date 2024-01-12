@@ -43,6 +43,7 @@ use crate::{
         types::{services::Service, ConnectivityEvent, PeerRole},
     },
     peer_manager::{
+        config::{MaxInboundConnections, PeerManagerConfig},
         peerdb::{
             self, config::PeerDbConfig,
             test_utils::make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups,
@@ -50,13 +51,13 @@ use crate::{
         tests::{
             get_connected_peers, make_standalone_peer_manager, run_peer_manager,
             utils::{
-                expect_cmd_connect_to, expect_connect_cmd,
+                expect_cmd_connect_to, expect_cmd_connect_to_one_of,
                 inbound_block_relay_peer_accepted_by_backend, make_full_relay_peer_info,
                 mutate_peer_manager, outbound_full_relay_peer_accepted_by_backend,
                 query_peer_manager, recv_command_advance_time, start_manually_connecting,
             },
         },
-        MaxInboundConnections, PeerManager, PeerManagerConfig,
+        PeerManager,
     },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
@@ -87,6 +88,136 @@ use crate::{
     peer_manager::{self, tests::make_peer_manager},
     PeerManagerEvent,
 };
+
+async fn validate_invalid_connection<A, S>()
+where
+    A: TestTransportMaker<Transport = S::Transport>,
+    S: NetworkingService + 'static + std::fmt::Debug,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
+    for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
+        let config = Arc::new(config::create_unit_test_config());
+        let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
+            make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
+                .await;
+
+        // invalid magic bytes
+        let peer_id = PeerId::new();
+        let res = peer_manager.try_accept_connection(
+            TestAddressMaker::new_random_address(),
+            TestAddressMaker::new_random_address(),
+            peer_role,
+            net::types::PeerInfo {
+                peer_id,
+                protocol_version: TEST_PROTOCOL_VERSION,
+                network: [1, 2, 3, 4],
+                software_version: *config.software_version(),
+                user_agent: mintlayer_core_user_agent(),
+                common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
+                    .as_slice()
+                    .into(),
+            },
+            None,
+        );
+        assert!(res.is_err());
+        assert!(!peer_manager.is_peer_connected(peer_id));
+    }
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn validate_invalid_connection_tcp() {
+    validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn validate_invalid_connection_channels() {
+    validate_invalid_connection::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn validate_invalid_connection_noise() {
+    validate_invalid_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
+    )
+    .await;
+}
+
+async fn inbound_connection_invalid_magic<A, T>()
+where
+    A: TestTransportMaker<Transport = T::Transport>,
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
+    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::new(config::create_unit_test_config()),
+    )
+    .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
+        A::make_transport(),
+        addr2,
+        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+    )
+    .await;
+
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
+    )
+    .await;
+
+    // run the first peer manager in the background and poll events from the peer manager
+    // that tries to connect to the first manager
+    logging::spawn_in_current_span(async move { pm1.run().await });
+
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
+    match event {
+        Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id })
+            if peer_id == peer_info.peer_id => {}
+        _ => panic!("unexpected event: {event:?}"),
+    }
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn inbound_connection_invalid_magic_tcp() {
+    inbound_connection_invalid_magic::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn inbound_connection_invalid_magic_channels() {
+    inbound_connection_invalid_magic::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
+}
+
+#[tracing::instrument]
+#[tokio::test]
+async fn inbound_connection_invalid_magic_noise() {
+    inbound_connection_invalid_magic::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
+}
 
 // try to connect to an address that no one listening on and verify it fails
 async fn test_peer_manager_connect<T: NetworkingService>(
@@ -694,8 +825,7 @@ async fn connection_timeout_rpc_notified<T>(
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         peer_handshake_timeout: Default::default(),
@@ -807,8 +937,7 @@ where
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -852,8 +981,7 @@ where
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -964,8 +1092,7 @@ where
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1009,8 +1136,7 @@ where
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1041,8 +1167,7 @@ where
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1171,8 +1296,7 @@ async fn discovered_node_2_groups() {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1217,8 +1341,7 @@ async fn discovered_node_2_groups() {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1250,8 +1373,7 @@ async fn discovered_node_2_groups() {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1341,8 +1463,7 @@ async fn discovered_node_separate_groups() {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1387,8 +1508,7 @@ async fn discovered_node_separate_groups() {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1420,8 +1540,7 @@ async fn discovered_node_separate_groups() {
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -1550,7 +1669,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
 
     log::debug!("Expecting normal outbound connection attempt");
     let cmd = cmd_receiver.recv().await.unwrap();
-    let outbound_peer_addr = expect_connect_cmd(&cmd, &mut addresses);
+    let outbound_peer_addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
 
     let outbound_peer_id = PeerId::new();
     conn_event_sender
@@ -1597,7 +1716,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
             recv_command_advance_time(&mut cmd_receiver, &time_getter, feeler_connections_interval)
                 .await
                 .unwrap();
-        let addr = expect_connect_cmd(&cmd, &mut addresses);
+        let addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
         let is_last_addr = addresses.is_empty();
         let should_succeed = {
             let rand_bool = rng.gen_bool(0.5);
@@ -1684,7 +1803,10 @@ async fn feeler_connections_test_impl(seed: Seed) {
 }
 
 mod feeler_connections_test_utils {
-    use crate::peer_manager::peerdb::{salt::Salt, storage::PeerDbStorage, PeerDb};
+    use crate::peer_manager::{
+        config::PeerManagerConfig,
+        peerdb::{salt::Salt, storage::PeerDbStorage, PeerDb},
+    };
 
     use super::*;
 
@@ -1730,8 +1852,7 @@ mod feeler_connections_test_utils {
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
-            ban_threshold: Default::default(),
-            ban_duration: Default::default(),
+            ban_config: Default::default(),
             outbound_connection_timeout: Default::default(),
             ping_timeout: Default::default(),
             peer_handshake_timeout: Default::default(),
@@ -1817,8 +1938,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_timeout: Default::default(),
         peer_handshake_timeout: Default::default(),
@@ -1878,7 +1998,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
 
     // "Discover" outbound_peer1_addr; no connection attempt should be made.
     mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
-        peer_mgr.peerdb_mut().peer_discovered(outbound_peer1_addr);
+        peer_mgr.peer_db_mut().peer_discovered(outbound_peer1_addr);
     })
     .await;
     time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
@@ -1887,7 +2007,7 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
     // "Discover" peer2_addr; a connection attempt should be made and
     // the connection should be accepted.
     mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
-        peer_mgr.peerdb_mut().peer_discovered(peer2_addr)
+        peer_mgr.peer_db_mut().peer_discovered(peer2_addr)
     })
     .await;
     time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
@@ -2023,7 +2143,7 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
 
     // "Discover" outbound_peer_addr.
     mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
-        peer_mgr.peerdb_mut().peer_discovered(outbound_peer_addr);
+        peer_mgr.peer_db_mut().peer_discovered(outbound_peer_addr);
     })
     .await;
     time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);

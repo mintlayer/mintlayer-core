@@ -21,15 +21,12 @@ use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use utils::make_config_setting;
 
 use crate::{
+    ban_config::BanConfig,
     net::types::services::{Service, Services},
-    peer_manager::PeerManagerConfig,
+    peer_manager::config::PeerManagerConfig,
     protocol::ProtocolConfig,
 };
 
-make_config_setting!(BanThreshold, u32, 100);
-// BanDuration is only 30 mins as a compromise between banning for a longer period of time
-// and not banning at all with alternative approaches such as discouragement
-make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 30));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
@@ -85,10 +82,8 @@ pub struct P2pConfig {
     pub reserved_nodes: Vec<IpOrSocketAddress>,
     /// Optional list of whitelisted addresses. Such addresses cannot be automatically banned.
     pub whitelisted_addresses: Vec<IpAddr>,
-    /// The score threshold after which a peer is banned.
-    pub ban_threshold: BanThreshold,
-    /// Duration of bans in seconds.
-    pub ban_duration: BanDuration,
+    /// Settings related to banning and discouragement.
+    pub ban_config: BanConfig,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// How often send ping requests to peers
@@ -108,7 +103,7 @@ pub struct P2pConfig {
     pub user_agent: UserAgent,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
-    /// Various limits used internally by the peer manager; these should only be overridden in tests.
+    /// Various settings used internally by the peer manager.
     pub peer_manager_config: PeerManagerConfig,
     /// Various limits related to the protocol; these should only be overridden in tests.
     pub protocol_config: ProtocolConfig,

@@ -37,7 +37,7 @@ use crate::{
         default_backend::{
             transport::TcpTransportSocket,
             types::{Command, Message},
-            ConnectivityHandle, DefaultNetworkingService,
+            DefaultNetworkingService,
         },
         types::{PeerInfo, Role},
         ConnectivityService, NetworkingService,
@@ -45,24 +45,20 @@ use crate::{
     peer_manager::{
         addr_list_response_cache,
         peerdb::{
-            address_tables::table::test_utils::make_non_colliding_addresses,
-            storage::PeerDbStorage, storage_impl::PeerDbStorageImpl,
+            address_tables::table::test_utils::make_non_colliding_addresses, storage::PeerDbStorage,
         },
         PeerManager,
     },
     protocol::ProtocolConfig,
-    testing_utils::{peerdb_inmemory_store, TestAddressMaker, TEST_PROTOCOL_VERSION},
+    testing_utils::{TestAddressMaker, TEST_PROTOCOL_VERSION},
     types::peer_id::PeerId,
-    PeerManagerEvent,
 };
+
+use super::make_standalone_peer_manager;
 
 // Note: addr list requests are only handled for inbound peers, so we only test this variant.
 
 type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
-type TestPeerManager = PeerManager<
-    DefaultNetworkingService<TcpTransportSocket>,
-    PeerDbStorageImpl<storage::inmemory::InMemory>,
->;
 
 #[tracing::instrument(skip(seed))]
 #[rstest]
@@ -253,8 +249,7 @@ fn make_p2p_config() -> P2pConfig {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -273,28 +268,19 @@ fn setup_peer_mgr(
     p2p_config: &Arc<P2pConfig>,
     time_getter: &P2pBasicTestTimeGetter,
     rng: &mut impl Rng,
-) -> (TestPeerManager, UnboundedReceiver<Command>) {
-    let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
-        // Note: technically, we should pass the bind addresses here, but since we don't
-        // establish real connections, it doesn't really matter.
-        vec![],
-        cmd_sender,
-        conn_event_receiver,
-    );
-
-    let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new(
-        Arc::clone(chain_config),
-        Arc::clone(p2p_config),
-        connectivity_handle,
-        peer_mgr_event_receiver,
-        time_getter.get_time_getter(),
-        peerdb_inmemory_store(),
-    )
-    .unwrap();
+) -> (
+    PeerManager<TestNetworkingService, impl PeerDbStorage>,
+    UnboundedReceiver<Command>,
+) {
+    let (mut peer_mgr, _conn_event_sender, _peer_mgr_event_sender, cmd_receiver, _) =
+        make_standalone_peer_manager(
+            Arc::clone(chain_config),
+            Arc::clone(p2p_config),
+            // Note: technically, we should pass the bind addresses here, but since we don't
+            // establish real connections, it doesn't really matter.
+            vec![],
+            time_getter.get_time_getter(),
+        );
 
     let addresses_in_db = make_non_colliding_addresses(
         &[peer_mgr.peerdb.address_tables().new_addr_table()],

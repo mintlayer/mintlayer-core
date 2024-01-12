@@ -27,7 +27,7 @@ use common::{
     primitives::{time::Time, user_agent::mintlayer_core_user_agent},
 };
 use p2p::{
-    config::{BanDuration, BanThreshold, NodeType},
+    config::NodeType,
     error::{DialError, P2pError, ProtocolError},
     net::types::PeerInfo,
     testing_utils::TEST_PROTOCOL_VERSION,
@@ -312,8 +312,8 @@ fn ban_misbehaved_peer(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         CrawlerConfig {
-            ban_duration: BanDuration::new(BAN_DURATION),
-            ban_threshold: BanThreshold::new(ban_threshold),
+            ban_duration: BAN_DURATION.into(),
+            ban_threshold: ban_threshold.into(),
         },
         BTreeSet::new(),
         BTreeMap::new(),
@@ -442,8 +442,8 @@ fn ban_misbehaved_peers_with_same_address(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         CrawlerConfig {
-            ban_duration: BanDuration::new(BAN_DURATION),
-            ban_threshold: BanThreshold::new(ban_threshold),
+            ban_duration: BAN_DURATION.into(),
+            ban_threshold: ban_threshold.into(),
         },
         BTreeSet::new(),
         BTreeMap::new(),
@@ -589,8 +589,8 @@ fn ban_on_misbehavior_during_handshake(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         CrawlerConfig {
-            ban_duration: BanDuration::new(BAN_DURATION),
-            ban_threshold: BanThreshold::new(ban_threshold),
+            ban_duration: BAN_DURATION.into(),
+            ban_threshold: ban_threshold.into(),
         },
         BTreeSet::new(),
         BTreeMap::new(),
@@ -665,8 +665,8 @@ fn no_ban_on_connection_error(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         CrawlerConfig {
-            ban_duration: BanDuration::new(BAN_DURATION),
-            ban_threshold: BanThreshold::new(ban_threshold),
+            ban_duration: BAN_DURATION.into(),
+            ban_threshold: ban_threshold.into(),
         },
         BTreeSet::new(),
         BTreeMap::new(),
@@ -712,8 +712,8 @@ const BAN_THRESHOLD: u32 = 100;
 
 fn make_config() -> CrawlerConfig {
     CrawlerConfig {
-        ban_duration: BanDuration::new(BAN_DURATION),
-        ban_threshold: BanThreshold::new(BAN_THRESHOLD),
+        ban_duration: BAN_DURATION.into(),
+        ban_threshold: BAN_THRESHOLD.into(),
     }
 }
 

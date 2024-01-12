@@ -221,10 +221,26 @@ macro_rules! expect_no_recv {
     };
 }
 
+/// Wait until the specified value is received from the channel.
 pub async fn wait_for_recv<T: Eq>(receiver: &mut mpsc::UnboundedReceiver<T>, value: &T) {
     let wait_loop = async {
         loop {
             if receiver.recv().await.unwrap() == *value {
+                break;
+            }
+        }
+    };
+
+    expect_future_val!(wait_loop);
+}
+
+/// Wait until the sender stops putting messages into the channel.
+pub async fn wait_for_no_recv<T>(receiver: &mut mpsc::UnboundedReceiver<T>) {
+    let wait_loop = async {
+        loop {
+            let wait_result =
+                tokio::time::timeout(Duration::from_millis(100), receiver.recv()).await;
+            if wait_result.is_err() {
                 break;
             }
         }

@@ -18,28 +18,24 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use logging::log;
 use rstest::rstest;
 use test_utils::random::make_seedable_rng;
-use tokio::sync::mpsc;
 
 use p2p_test_utils::{expect_no_recv, expect_recv, P2pBasicTestTimeGetter};
 use test_utils::random::Seed;
 
 use crate::{
     config::P2pConfig,
-    net::{
-        default_backend::{types::Command, ConnectivityHandle},
-        types::ConnectivityEvent,
-    },
+    net::default_backend::types::Command,
     peer_manager::{
-        dns_seed::DefaultDnsSeed,
+        config::PeerManagerConfig,
         peerdb::{self, config::PeerDbConfig, salt::Salt},
         peers_eviction,
-        tests::utils::{expect_connect_cmd, make_block_relay_peer_info},
-        PeerManager, PeerManagerConfig,
+        tests::{
+            make_standalone_peer_manager,
+            utils::{expect_cmd_connect_to_one_of, outbound_block_relay_peer_accepted_by_backend},
+        },
     },
     sync::sync_status::PeerBlockSyncStatus,
-    testing_utils::{peerdb_inmemory_store, TestTransportMaker, TestTransportTcp},
-    tests::helpers::PeerManagerObserver,
-    types::peer_id::PeerId,
+    testing_utils::{TestTransportMaker, TestTransportTcp},
 };
 use common::{
     chain::{config, Block},
@@ -48,7 +44,6 @@ use common::{
 };
 
 use crate::{
-    net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
     peer_manager::{tests::utils::wait_for_heartbeat, HEARTBEAT_INTERVAL_MAX},
     PeerManagerEvent,
 };
@@ -85,8 +80,6 @@ mod dont_evict_if_blocks_in_flight {
         )]
         test_case: TestCase,
     ) {
-        type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
-
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(config::create_unit_test_config());
@@ -135,8 +128,7 @@ mod dont_evict_if_blocks_in_flight {
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             whitelisted_addresses: Default::default(),
-            ban_threshold: Default::default(),
-            ban_duration: Default::default(),
+            ban_config: Default::default(),
             outbound_connection_timeout: Default::default(),
             ping_timeout: Default::default(),
             peer_handshake_timeout: Default::default(),
@@ -149,34 +141,20 @@ mod dont_evict_if_blocks_in_flight {
         });
 
         let bind_address = TestTransportTcp::make_address();
-        let (cmd_sender, mut cmd_receiver) = mpsc::unbounded_channel();
-        let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
-        let (peer_mgr_event_sender, peer_mgr_event_receiver) =
-            mpsc::unbounded_channel::<PeerManagerEvent>();
         let time_getter = P2pBasicTestTimeGetter::new();
-        let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
-            vec![],
-            cmd_sender,
-            conn_event_receiver,
-        );
-        let (peer_mgr_notification_sender, mut peer_mgr_notification_receiver) =
-            mpsc::unbounded_channel();
-        let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_sender));
 
-        let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        let (
+            mut peer_mgr,
+            conn_event_sender,
+            peer_mgr_event_sender,
+            mut cmd_receiver,
+            mut peer_mgr_notification_receiver,
+        ) = make_standalone_peer_manager(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
-            connectivity_handle,
-            peer_mgr_event_receiver,
+            vec![bind_address],
             time_getter.get_time_getter(),
-            peerdb_inmemory_store(),
-            Some(peer_mgr_observer),
-            Box::new(DefaultDnsSeed::new(
-                Arc::clone(&chain_config),
-                Arc::clone(&p2p_config),
-            )),
-        )
-        .unwrap();
+        );
 
         let addr_count = 3;
         let addresses =
@@ -199,26 +177,23 @@ mod dont_evict_if_blocks_in_flight {
 
         log::debug!("Expecting outbound connection attempt #1");
         let cmd = expect_recv!(cmd_receiver);
-        let peer1_addr = expect_connect_cmd(&cmd, &mut addresses);
+        let peer1_addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
 
         log::debug!("Expecting outbound connection attempt #2");
         let cmd = expect_recv!(cmd_receiver);
-        let peer2_addr = expect_connect_cmd(&cmd, &mut addresses);
+        let peer2_addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
 
         log::debug!("Expecting outbound connection attempt #3");
         let cmd = expect_recv!(cmd_receiver);
-        let peer3_addr = expect_connect_cmd(&cmd, &mut addresses);
+        let peer3_addr = expect_cmd_connect_to_one_of(&cmd, &mut addresses);
 
         for peer_addr in [peer1_addr, peer2_addr, peer3_addr] {
-            let peer_id = PeerId::new();
-            conn_event_sender
-                .send(ConnectivityEvent::OutboundAccepted {
-                    peer_address: peer_addr,
-                    bind_address,
-                    peer_info: make_block_relay_peer_info(peer_id, &chain_config),
-                    node_address_as_seen_by_peer: None,
-                })
-                .unwrap();
+            let peer_id = outbound_block_relay_peer_accepted_by_backend(
+                &conn_event_sender,
+                peer_addr,
+                bind_address,
+                &chain_config,
+            );
 
             log::debug!("Expecting Command::Accept");
             let cmd = expect_recv!(cmd_receiver);

@@ -136,7 +136,9 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_max_inbound_connections: Option<usize>,
 
-    /// The p2p score threshold after which a peer is baned.
+    // TODO: add all the options related to banning/discouragement thresholds and durations,
+    // for completeness.
+    /// The p2p score threshold after which a peer is banned.
     #[clap(long)]
     pub p2p_ban_threshold: Option<u32>,
 

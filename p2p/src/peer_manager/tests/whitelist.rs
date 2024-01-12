@@ -22,7 +22,7 @@ use crate::{
         types::{PeerInfo, PeerRole, Role},
     },
     peer_manager::{
-        peerdb::{salt::Salt, storage::PeerDbStorageWrite, StorageVersion},
+        peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
         peerdb_common::storage::{TransactionRw, Transactional},
         tests::make_peer_manager_custom,
         PeerManager,
@@ -59,8 +59,7 @@ fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig 
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses,
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -201,7 +200,7 @@ where
             .saturating_duration_add(Duration::from_secs(60));
 
         let mut tx = db.transaction_rw().unwrap();
-        tx.set_version(StorageVersion::new(2)).unwrap();
+        tx.set_version(CURRENT_STORAGE_VERSION).unwrap();
         tx.set_salt(Salt::new_random()).unwrap();
         tx.add_banned_address(&BannableAddress::new(addr1.ip_addr()), ban_until)
             .unwrap();

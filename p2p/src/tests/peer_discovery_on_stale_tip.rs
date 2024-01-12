@@ -28,7 +28,7 @@ use test_utils::random::Seed;
 use crate::{
     config::P2pConfig,
     net::types::PeerRole,
-    peer_manager::{self, address_groups::AddressGroup, PeerManagerConfig},
+    peer_manager::{self, address_groups::AddressGroup, config::PeerManagerConfig},
     sync::test_helpers::make_new_block,
     testing_utils::{
         make_transport_with_local_addr_in_group, TestTransportChannel, TestTransportMaker,
@@ -488,8 +488,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         // Note: peer_handshake_timeout specifies real time rather than mocked time (it's passed
         // into tokio::time::timeout), so no need to make it artificially large.

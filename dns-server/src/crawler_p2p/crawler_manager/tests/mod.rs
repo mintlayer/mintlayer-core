@@ -19,16 +19,18 @@ use std::time::Duration;
 
 use chainstate::ban_score::BanScore;
 use p2p::{
-    config::{BanDuration, BanThreshold},
     error::{P2pError, ProtocolError},
     types::socket_address::SocketAddress,
 };
 use p2p_test_utils::{expect_no_recv, expect_recv};
 
 use crate::{
-    crawler_p2p::crawler_manager::tests::mock_manager::{
-        advance_time, assert_banned_addresses, assert_known_addresses, test_crawler,
-        ErraticNodeConnectError,
+    crawler_p2p::{
+        crawler::{BanDuration, BanThreshold},
+        crawler_manager::tests::mock_manager::{
+            advance_time, assert_banned_addresses, assert_known_addresses, test_crawler,
+            ErraticNodeConnectError,
+        },
     },
     dns_server::DnsServerCommand,
 };

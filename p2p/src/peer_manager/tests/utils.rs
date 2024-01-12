@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 
 use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
 use p2p_types::{
-    ip_or_socket_address::IpOrSocketAddress, services::Service, socket_address::SocketAddress,
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, services::Service, socket_address::SocketAddress,
     PeerId,
 };
 use test_utils::assert_matches_return_val;
@@ -92,7 +92,10 @@ pub fn make_block_relay_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -
     }
 }
 
-pub fn expect_connect_cmd(cmd: &Command, addresses: &mut BTreeSet<SocketAddress>) -> SocketAddress {
+pub fn expect_cmd_connect_to_one_of(
+    cmd: &Command,
+    addresses: &mut BTreeSet<SocketAddress>,
+) -> SocketAddress {
     match cmd {
         Command::Connect {
             address,
@@ -144,6 +147,46 @@ pub fn inbound_block_relay_peer_accepted_by_backend(
 }
 
 /// Send a ConnectivityEvent simulating a connection being accepted by the backend.
+pub fn inbound_full_relay_peer_accepted_by_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_address: SocketAddress,
+    bind_address: SocketAddress,
+    chain_config: &ChainConfig,
+) -> PeerId {
+    let peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::InboundAccepted {
+            peer_address,
+            bind_address,
+            peer_info: make_full_relay_peer_info(peer_id, &chain_config),
+            node_address_as_seen_by_peer: None,
+        })
+        .unwrap();
+
+    peer_id
+}
+
+/// Send a ConnectivityEvent simulating a connection being accepted by the backend.
+pub fn outbound_block_relay_peer_accepted_by_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_address: SocketAddress,
+    bind_address: SocketAddress,
+    chain_config: &ChainConfig,
+) -> PeerId {
+    let peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::OutboundAccepted {
+            peer_address,
+            bind_address,
+            peer_info: make_block_relay_peer_info(peer_id, &chain_config),
+            node_address_as_seen_by_peer: None,
+        })
+        .unwrap();
+
+    peer_id
+}
+
+/// Send a ConnectivityEvent simulating a connection being accepted by the backend.
 pub fn outbound_full_relay_peer_accepted_by_backend(
     conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
     peer_address: SocketAddress,
@@ -161,6 +204,15 @@ pub fn outbound_full_relay_peer_accepted_by_backend(
         .unwrap();
 
     peer_id
+}
+
+/// Send a ConnectivityEvent simulating a PeerManagerMessage being received from the backend.
+pub fn peer_mgr_message_received_from_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_id: PeerId,
+    message: PeerManagerMessage,
+) {
+    conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 }
 
 pub async fn wait_for_heartbeat(
@@ -229,4 +281,35 @@ pub fn start_manually_connecting(
         .unwrap();
 
     result_receiver
+}
+
+pub async fn adjust_peer_score(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_id: PeerId,
+    score_adjustment: u32,
+) {
+    let (result_sender, result_receiver) = oneshot_nofail::channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::AdjustPeerScore(
+            peer_id,
+            score_adjustment,
+            result_sender,
+        ))
+        .unwrap();
+
+    result_receiver.await.unwrap().unwrap();
+}
+
+pub async fn ban_peer_manually(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    peer_addr: BannableAddress,
+) {
+    let (result_sender, result_receiver) = oneshot_nofail::channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::Ban(peer_addr, result_sender))
+        .unwrap();
+
+    result_receiver.await.unwrap().unwrap();
 }

@@ -88,6 +88,8 @@ pub enum PeerError {
     },
     #[error("Address {0} is banned")]
     BannedAddress(String),
+    #[error("Address {0} is discouraged")]
+    DiscouragedAddress(String),
     #[error("PeerManager has too many peers")]
     TooManyPeers,
     #[error("Connection to address {0} already pending")]
