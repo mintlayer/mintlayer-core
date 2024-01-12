@@ -544,42 +544,40 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
                 .expect("no error");
 
-            for (delegation_id, updated_delegation) in adapter.delegations_iter() {
+            for (delegation_id, rewards, updated_delegation) in adapter.rewards_per_delegation() {
                 db_tx
-                    .set_delegation_at_height(*delegation_id, updated_delegation, block_height)
+                    .set_delegation_at_height(delegation_id, &updated_delegation, block_height)
                     .await?;
-
                 let address = Address::<Destination>::new(
                     &chain_config,
                     updated_delegation.spend_destination(),
                 )
                 .expect("Unable to encode address");
-                db_tx
-                    .set_address_balance_at_height(
-                        address.get(),
-                        *updated_delegation.balance(),
-                        CoinOrTokenId::Coin,
-                        block_height,
-                    )
-                    .await
-                    .expect("Unable to update balance");
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &rewards,
+                    CoinOrTokenId::Coin,
+                    block_height,
+                )
+                .await;
             }
 
-            let pool_data = adapter.get_pool_data(pool_id).expect("must exist");
+            let pool_data = adapter.get_pool_data_with_reward(pool_id).expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
+            let pool_reward = adapter.get_pool_reward(pool_id);
 
             let address =
                 Address::<Destination>::new(&chain_config, pool_data.decommission_destination())
                     .expect("Unable to encode address");
-            db_tx
-                .set_address_balance_at_height(
-                    address.get(),
-                    pool_data.staker_balance().expect("no overflow"),
-                    CoinOrTokenId::Coin,
-                    block_height,
-                )
-                .await
-                .expect("Unable to update balance");
+            increase_address_amount(
+                db_tx,
+                &address,
+                &pool_reward,
+                CoinOrTokenId::Coin,
+                block_height,
+            )
+            .await;
         }
     }
 

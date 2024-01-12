@@ -23,6 +23,9 @@ use std::collections::BTreeMap;
 pub struct PoSAdapter {
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, Delegation>,
+
+    delegation_rewards: Vec<(DelegationId, Amount)>,
+    pool_rewards: BTreeMap<PoolId, Amount>,
 }
 
 impl PoSAdapter {
@@ -34,15 +37,32 @@ impl PoSAdapter {
         Self {
             pools: BTreeMap::from_iter([(pool_id, pool_data)]),
             delegations,
+            delegation_rewards: vec![],
+            pool_rewards: BTreeMap::new(),
         }
     }
 
-    pub fn get_pool_data(&self, pool_id: PoolId) -> Option<PoolData> {
-        self.pools.get(&pool_id).cloned()
+    pub fn get_pool_reward(&self, pool_id: PoolId) -> Amount {
+        self.pool_rewards.get(&pool_id).copied().unwrap_or(Amount::ZERO)
     }
 
-    pub fn delegations_iter(&self) -> impl Iterator<Item = (&DelegationId, &Delegation)> {
-        self.delegations.iter()
+    pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
+        self.pools.get(&pool_id).map(|pool_data| {
+            let reward = self.get_pool_reward(pool_id);
+            pool_data.clone().increase_staker_rewards(reward).expect("cannot overflow")
+        })
+    }
+
+    pub fn rewards_per_delegation(&self) -> Vec<(DelegationId, Amount, Delegation)> {
+        self.delegation_rewards
+            .iter()
+            .copied()
+            .map(|(delegation_id, reward)| {
+                let data = self.delegations.get(&delegation_id).expect("must exist");
+                let updated_delegation = data.clone().stake(reward);
+                (delegation_id, reward, updated_delegation)
+            })
+            .collect()
     }
 }
 
@@ -116,14 +136,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), pos_accounting::Error> {
-        let updated_delegation = self
-            .delegations
-            .get(&delegation_target)
-            .expect("must exist")
-            .clone()
-            .stake(amount_to_delegate);
-
-        self.delegations.insert(delegation_target, updated_delegation);
+        self.delegation_rewards.push((delegation_target, amount_to_delegate));
 
         Ok(())
     }
@@ -153,15 +166,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
-        let updated_pool = self
-            .pools
-            .get(&pool_id)
-            .expect("must exist")
-            .clone()
-            .increase_staker_rewards(amount_to_add)
-            .expect("no overflow");
-
-        self.pools.insert(pool_id, updated_pool);
+        self.pool_rewards.insert(pool_id, amount_to_add);
 
         Ok(())
     }
