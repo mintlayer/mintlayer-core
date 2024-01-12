@@ -65,8 +65,8 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
                 handshake_res = self.handshakes.select_next_some(), if !self.handshakes.is_empty() => {
                     match handshake_res {
                         (Ok(handshake), addr) => return Ok((handshake, addr)),
-                        (Err(err), _) => {
-                            logging::log::warn!("handshake failed: {}", err);
+                        (Err(err), addr) => {
+                            logging::log::warn!("Handshake with {addr} failed: {err}");
                             continue;
                         },
                     }
@@ -83,7 +83,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
                             self.handshakes.push(handshake_with_addr);
                         },
                         Err(err) => {
-                            logging::log::error!("accept failed unexpectedly: {}", err);
+                            logging::log::error!("Accept failed unexpectedly: {err}");
                             return Err(err);
                         },
                     }

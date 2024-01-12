@@ -98,8 +98,8 @@ macro_rules! assert_matches_return_val {
             $pattern $(if $guard)? => $out,
             _ => {
                 panic!(
-                    "Assertion failed: expression {} doesn't match pattern {}",
-                    stringify!($in),
+                    "Assertion failed: expression {:?} doesn't match pattern {}",
+                    $in,
                     stringify!($pattern)
                 )
             }
@@ -122,6 +122,7 @@ mod tests {
 
     mod match_macro_tests {
         #[allow(unused)]
+        #[derive(Debug)]
         enum TestEnum {
             E1(usize),
             E2,

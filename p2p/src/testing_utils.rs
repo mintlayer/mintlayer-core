@@ -335,6 +335,7 @@ pub fn test_p2p_config_with_peer_db_config(peerdb_config: PeerDbConfig) -> P2pCo
         main_loop_tick_interval: Default::default(),
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
     })
 }
 

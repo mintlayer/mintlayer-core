@@ -180,6 +180,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ping_timeout,
         sync_stalling_timeout,
         node_type,
+        force_dns_query_if_no_global_addresses_known,
     } = config;
 
     let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
@@ -197,6 +198,9 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
     let sync_stalling_timeout = options.p2p_sync_stalling_timeout.or(sync_stalling_timeout);
     let node_type = options.node_type.or(node_type);
+    let force_dns_query_if_no_global_addresses_known = options
+        .p2p_force_dns_query_if_no_global_addresses_known
+        .or(force_dns_query_if_no_global_addresses_known);
 
     P2pConfigFile {
         bind_addresses,
@@ -214,6 +218,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ping_timeout,
         sync_stalling_timeout,
         node_type,
+        force_dns_query_if_no_global_addresses_known,
     }
 }
 

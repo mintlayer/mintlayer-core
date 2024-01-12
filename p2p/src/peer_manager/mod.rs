@@ -32,7 +32,7 @@ use std::{
 use futures::never::Never;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
+    socket_address::SocketAddress, IsGlobalIp,
 };
 use tokio::sync::mpsc;
 
@@ -138,6 +138,19 @@ pub struct PeerManagerConfig {
     /// The minimum interval between feeler connections.
     pub feeler_connections_interval: FeelerConnectionsInterval,
 
+    /// If true, the node will perform an early dns query if the peer db doesn't contain
+    /// any global addresses at startup (more precisely, the ones for which is_global_unicast_ip
+    /// returns true).
+    ///
+    /// Note that this is mainly needed to speed up the startup of the test
+    /// nodes in build-tools/p2p-test. Those nodes always start with a boot_nodes
+    /// list that contains addresses of their siblings, which are always some private ips;
+    /// therefore, they all will have peers from the beginning, which will prevent normal
+    /// dns queries, but will be unable to obtain blocks until stale_tip_time_diff has elapsed,
+    /// which is 30 min by default. Setting this option to true will force the peer manager
+    /// to perform an early dns query in such a situation.
+    pub force_dns_query_if_no_global_addresses_known: ForceDnsQueryIfNoGlobalAddressesKnown,
+
     /// Peer db configuration.
     pub peerdb_config: PeerDbConfig,
 }
@@ -169,17 +182,18 @@ make_config_setting!(
     Duration::from_secs(2 * 60)
 );
 make_config_setting!(EnableFeelerConnections, bool, true);
+make_config_setting!(ForceDnsQueryIfNoGlobalAddressesKnown, bool, false);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
-pub const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
+pub const HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
-pub const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
+pub const HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 /// How often resend own address to a specific peer (on average)
 const RESEND_OWN_ADDRESS_TO_PEER_PERIOD: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// The interval at which to contact DNS seed servers.
-pub const PEER_MGR_DNS_RELOAD_INTERVAL: Duration = Duration::from_secs(60);
+/// The minimal interval at which to query DNS seed servers.
+pub const DNS_SEED_QUERY_INTERVAL: Duration = Duration::from_secs(60);
 
 /// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
 pub const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
@@ -284,8 +298,6 @@ where
     last_ping_check_time: Option<Time>,
     /// The time after which a new feeler connection can be established.
     next_feeler_connection_time: Time,
-    /// If true, we've already loaded the predefined addresses into peerdb.
-    predefined_addresses_already_loaded: bool,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -368,7 +380,6 @@ where
             last_dns_query_time: None,
             last_ping_check_time: None,
             next_feeler_connection_time,
-            predefined_addresses_already_loaded: false,
         })
     }
 
@@ -1695,37 +1706,46 @@ where
         let last_heartbeat_time = self.last_heartbeat_time.unwrap_or(self.init_time);
 
         let next_heartbeat_min_time =
-            (last_heartbeat_time + PEER_MGR_HEARTBEAT_INTERVAL_MIN).expect("Cannot happen");
+            (last_heartbeat_time + HEARTBEAT_INTERVAL_MIN).expect("Cannot happen");
         let next_heartbeat_max_time =
-            (last_heartbeat_time + PEER_MGR_HEARTBEAT_INTERVAL_MAX).expect("Cannot happen");
+            (last_heartbeat_time + HEARTBEAT_INTERVAL_MAX).expect("Cannot happen");
 
         (now >= next_heartbeat_min_time && is_early_heartbeat) || now >= next_heartbeat_max_time
     }
 
-    // We query dns seed if there are no outbound connections, or the tip is stale, or we
-    // haven't queried it at least once yet.
+    /// Determine whether we need to query the dns seed.
+    ///
+    /// Note that we avoid querying dns seeds unless really necessary in order to reduce their
+    /// influence on the network topology (which can be bad if one of the seeds is compromised).
     fn dns_seed_query_needed(&self) -> bool {
-        if let Some(last_time) = self.last_dns_query_time {
-            let now = self.time_getter.get_time();
-            let next_time = (last_time + PEER_MGR_DNS_RELOAD_INTERVAL).expect("Cannot happen");
+        if self.last_dns_query_time.is_none() {
+            // If the peer db is empty, it makes sense to perform the first query immediately,
+            // instead of waiting for DNS_SEED_QUERY_INTERVAL to pass.
+            if self.peerdb.known_addresses_count() == 0 {
+                return true;
+            }
 
-            now >= next_time
-                && self.pending_outbound_connects.is_empty()
-                && (self.peers.is_empty() || self.tip_is_stale())
-        } else {
-            // Always make one query early, even if some outbound connections already exist.
-            // This is useful in the case when a "fresh" node has been passed some initial
-            // addresses at startup (via boot_nodes or reserved_nodes) and either their number
-            // is too small or they all are in the same address group. In that case the node
-            // might establish only a few OutboundBlockRelay connections and then stop establishing
-            // new connections until both it's out of IBD and its tip becomes stale (following
-            // the second part of the condition above).
-            // TODO: dns seeds are considered bad sources of peer addresses, because they can be
-            // compromised. It's better to avoid connecting to them unless necessary.
-            // See the TODO section of https://github.com/mintlayer/mintlayer-core/issues/832
-            // for extra details.
-            true
+            // Check whether the dns query should be forced.
+            if *self.p2p_config.peer_manager_config.force_dns_query_if_no_global_addresses_known {
+                let have_global_addrs =
+                    self.peerdb.known_addresses().any(|addr| addr.ip_addr().is_global_unicast_ip());
+
+                if !have_global_addrs {
+                    return true;
+                }
+            }
         }
+
+        let last_time = self.last_dns_query_time.unwrap_or(self.init_time);
+
+        let now = self.time_getter.get_time();
+        let next_time = (last_time + DNS_SEED_QUERY_INTERVAL).expect("Cannot happen");
+
+        // Query the dns seed if some time has passed, but we still don't have peers
+        // or if the tip is stale.
+        now >= next_time
+            && self.pending_outbound_connects.is_empty()
+            && (self.peers.is_empty() || self.tip_is_stale())
     }
 
     fn ping_check_needed(&self) -> bool {
@@ -1743,33 +1763,23 @@ where
         }
     }
 
-    /// Load predefined addresses into peerdb if needed, i.e. if the db is empty and we've already
-    /// queried the dns seed.
-    ///
-    /// Return true if peerdb has been updated.
-    fn load_predefined_addresses_if_needed(&mut self) -> bool {
-        if self.predefined_addresses_already_loaded {
-            return false;
-        }
-
-        if self.chain_config.predefined_peer_addresses().is_empty() {
-            self.predefined_addresses_already_loaded = true;
-            return false;
-        }
-
+    /// Return true if we need to load predefined addresses into peerdb.
+    fn need_load_predefined_addresses(&self) -> bool {
         let peerdb_is_empty = self.peerdb.known_addresses().next().is_none();
 
-        if peerdb_is_empty && self.last_dns_query_time.is_some() {
-            log::debug!("Loading predefined addresses into peerdb");
+        // Predefined addresses are only loaded if the dns seed has already been queried, but
+        // the peerdb is still empty.
+        peerdb_is_empty
+            && self.last_dns_query_time.is_some()
+            && !self.chain_config.predefined_peer_addresses().is_empty()
+    }
 
-            for addr in self.chain_config.predefined_peer_addresses() {
-                self.peerdb.peer_discovered(SocketAddress::new(*addr));
-            }
-            self.predefined_addresses_already_loaded = true;
-            return true;
+    fn load_predefined_addresses(&mut self) {
+        log::debug!("Loading predefined addresses into peerdb");
+
+        for addr in self.chain_config.predefined_peer_addresses() {
+            self.peerdb.peer_discovered(SocketAddress::new(*addr));
         }
-
-        false
     }
 
     /// Runs the `PeerManager` event loop.
@@ -1783,7 +1793,7 @@ where
     /// After handling an event from one of the aforementioned sources, the event loop
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
     /// to perform the peer manager maintenance. If the `PeerManager` doesn't receive any events,
-    /// [`PEER_MGR_HEARTBEAT_INTERVAL_MIN`] and [`PEER_MGR_HEARTBEAT_INTERVAL_MAX`] defines how
+    /// [`HEARTBEAT_INTERVAL_MIN`] and [`HEARTBEAT_INTERVAL_MAX`] defines how
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
@@ -1857,9 +1867,7 @@ where
             }
             last_time = now;
 
-            let tip_is_stale = self.tip_is_stale();
-
-            if tip_is_stale {
+            if self.tip_is_stale() {
                 early_heartbeat_needed = true;
             }
 
@@ -1875,7 +1883,8 @@ where
                 early_heartbeat_needed = true;
             }
 
-            if self.load_predefined_addresses_if_needed() {
+            if self.need_load_predefined_addresses() {
+                self.load_predefined_addresses();
                 early_heartbeat_needed = true;
             }
 

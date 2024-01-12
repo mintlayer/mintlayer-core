@@ -89,6 +89,9 @@ pub struct P2pConfigFile {
     pub sync_stalling_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
+    /// If true, the node will perform an early dns query if the peer db doesn't contain
+    /// any global addresses at startup.
+    pub force_dns_query_if_no_global_addresses_known: Option<bool>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -109,6 +112,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ping_timeout,
             sync_stalling_timeout,
             node_type,
+            force_dns_query_if_no_global_addresses_known,
         } = config_file;
 
         P2pConfig {
@@ -154,6 +158,9 @@ impl From<P2pConfigFile> for P2pConfig {
 
                 enable_feeler_connections: Default::default(),
                 feeler_connections_interval: Default::default(),
+
+                force_dns_query_if_no_global_addresses_known:
+                    force_dns_query_if_no_global_addresses_known.into(),
 
                 peerdb_config: Default::default(),
             },

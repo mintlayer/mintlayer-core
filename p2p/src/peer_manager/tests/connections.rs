@@ -33,7 +33,7 @@ use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketA
 use test_utils::random::Seed;
 
 use crate::{
-    config::{NodeType, P2pConfig},
+    config::P2pConfig,
     message::AddrListRequest,
     net::{
         default_backend::{
@@ -44,7 +44,10 @@ use crate::{
     },
     peer_manager::{
         peerdb::{self, config::PeerDbConfig},
-        tests::{get_connected_peers, run_peer_manager, utils::recv_command_advance_time},
+        tests::{
+            get_connected_peers, run_peer_manager,
+            utils::{make_peer_info, recv_command_advance_time},
+        },
         MaxInboundConnections, PeerManager, PeerManagerConfig,
     },
     testing_utils::{
@@ -1446,11 +1449,8 @@ async fn feeler_connections_test_impl(seed: Seed) {
     // Note: need to make sure that the generated addresses won't collide with each other when
     // put into either of the tables. Otherwise the checks below will fail, e.g. when a previously
     // "tried" address gets moved back into "new".
-    let addresses = peerdb::test_utils::make_non_colliding_addresses(
-        &[
-            peer_mgr.peerdb.address_tables().new_addr_table(),
-            peer_mgr.peerdb.address_tables().tried_addr_table(),
-        ],
+    let addresses = peerdb::test_utils::make_non_colliding_addresses_for_peer_db(
+        &peer_mgr.peerdb,
         10,
         &mut rng,
     );
@@ -1609,8 +1609,6 @@ async fn feeler_connections_test_impl(seed: Seed) {
 }
 
 mod feeler_connections_test_utils {
-    use common::chain::ChainConfig;
-
     use crate::peer_manager::peerdb::{salt::Salt, storage::PeerDbStorage, PeerDb};
 
     use super::*;
@@ -1645,6 +1643,7 @@ mod feeler_connections_test_utils {
                 stale_tip_time_diff: Default::default(),
                 enable_feeler_connections: Default::default(),
                 main_loop_tick_interval: Default::default(),
+                force_dns_query_if_no_global_addresses_known: Default::default(),
             },
             // Disable pings to simplify the test.
             ping_check_period: Duration::ZERO.into(),
@@ -1666,17 +1665,6 @@ mod feeler_connections_test_utils {
             user_agent: mintlayer_core_user_agent(),
             sync_stalling_timeout: Default::default(),
             protocol_config: Default::default(),
-        }
-    }
-
-    pub fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
-        PeerInfo {
-            peer_id,
-            protocol_version: TEST_PROTOCOL_VERSION,
-            network: *chain_config.magic_bytes(),
-            software_version: *chain_config.software_version(),
-            user_agent: mintlayer_core_user_agent(),
-            common_services: NodeType::Full.into(),
         }
     }
 
