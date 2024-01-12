@@ -1208,6 +1208,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bitcoin-bech32",
+ "chrono",
  "clap",
  "crypto",
  "expect-test",

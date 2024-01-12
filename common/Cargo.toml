@@ -18,6 +18,7 @@ utils = {path = '../utils'}
 
 anyhow.workspace = true
 bech32.workspace = true
+chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 fixed-hash.workspace = true
 generic-array.workspace = true

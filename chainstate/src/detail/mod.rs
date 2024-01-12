@@ -527,10 +527,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(ref bi) = result {
             log::info!(
-                "New tip in chainstate {} with height {}, timestamp: {}",
+                "New tip in chainstate {} with height {}, timestamp: {} ({})",
                 bi.block_id(),
                 bi.block_height(),
                 bi.block_timestamp(),
+                bi.block_timestamp().into_time().as_standard_printable_time(),
             );
 
             self.update_initial_block_download_flag()

@@ -101,6 +101,15 @@ impl Time {
     pub const fn saturating_sub(&self, t: Self) -> Duration {
         self.time.saturating_sub(t.time)
     }
+
+    pub fn as_absolute_time(&self) -> SystemTime {
+        SystemTime::UNIX_EPOCH + self.time
+    }
+
+    pub fn as_standard_printable_time(&self) -> String {
+        let datetime: chrono::DateTime<chrono::Utc> = self.as_absolute_time().into();
+        format!("{}", datetime.format("%Y-%m-%d %H:%M:%S"))
+    }
 }
 
 impl std::ops::Add<Duration> for Time {
@@ -177,5 +186,12 @@ mod tests {
         let d = duration_from_int(val);
         let val_again = duration_to_int(&d).unwrap();
         assert_eq!(val, val_again);
+    }
+
+    #[test]
+    fn format_absolute_time() {
+        let t = Time::from_secs_since_epoch(1705064092);
+        let s = format!("{}", t.as_standard_printable_time());
+        assert_eq!(&s, "2024-01-12 12:54:52");
     }
 }
