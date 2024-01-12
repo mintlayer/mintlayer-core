@@ -17,12 +17,10 @@ use std::{ops::ControlFlow, path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
 use futures::{future::BoxFuture, never::Never};
-use tokio::{
-    sync::{mpsc, oneshot::Sender},
-    task::JoinHandle,
-};
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
+use wallet::wallet::Mnemonic;
 use wallet_controller::{ControllerError, NodeInterface, NodeRpcClient};
 use wallet_types::seed_phrase::StoreSeedPhrase;
 
@@ -36,29 +34,22 @@ pub type CommandReceiver = mpsc::UnboundedReceiver<WalletCommand>;
 pub type CommandSender = mpsc::UnboundedSender<WalletCommand>;
 
 type CommandFn = dyn Send + FnOnce(&mut Option<WalletController>) -> BoxFuture<()>;
-
-pub enum WalletManagement {
-    Create {
-        wallet_path: PathBuf,
-        whether_to_store_seed_phrase: bool,
-        mnemonic: Option<String>,
-    },
-    Open {
-        wallet_path: PathBuf,
-        password: Option<String>,
-    },
-    Close,
-}
+type ManageFn = dyn Send + FnOnce(&mut WalletWorker) -> BoxFuture<()>;
 
 pub enum WalletCommand {
     /// Make the controller perform an action
     Call(Box<CommandFn>),
 
     /// Manage the Wallet itself, i.e. Create/Open/Close
-    Manage(WalletManagement, Sender<Result<(), RpcError>>),
+    Manage(Box<ManageFn>),
 
     /// Shutdown the wallet service task
     Stop,
+}
+
+pub enum CreatedWallet {
+    UserProvidedMenmonic,
+    NewlyGeneratedMnemonic(Mnemonic),
 }
 
 /// Represents the wallet worker task. It handles external commands and keeps the wallet in sync.
@@ -124,38 +115,8 @@ impl WalletWorker {
                 call(&mut self.controller).await;
                 ControlFlow::Continue(())
             }
-            Some(WalletCommand::Manage(command, tx)) => {
-                match command {
-                    WalletManagement::Create {
-                        wallet_path,
-                        whether_to_store_seed_phrase,
-                        mnemonic,
-                    } => match self
-                        .create_wallet(wallet_path, whether_to_store_seed_phrase, mnemonic)
-                        .await
-                    {
-                        Ok(controller) => {
-                            self.controller = Some(controller);
-                        }
-                        Err(err) => {
-                            let _ = tx.send(Err(err));
-                        }
-                    },
-                    WalletManagement::Open {
-                        wallet_path,
-                        password,
-                    } => match self.open_wallet(wallet_path, password).await {
-                        Ok(controller) => {
-                            self.controller = Some(controller);
-                        }
-                        Err(err) => {
-                            let _ = tx.send(Err(RpcError::Controller(err)));
-                        }
-                    },
-                    WalletManagement::Close => {
-                        self.controller = None;
-                    }
-                }
+            Some(WalletCommand::Manage(call)) => {
+                call(self).await;
                 ControlFlow::Continue(())
             }
             Some(WalletCommand::Stop) => {
@@ -169,28 +130,36 @@ impl WalletWorker {
         }
     }
 
-    async fn open_wallet(
+    pub fn close_wallet(&mut self) -> Result<(), ControllerError<NodeRpcClient>> {
+        self.controller = None;
+        Ok(())
+    }
+
+    pub async fn open_wallet(
         &mut self,
         wallet_path: PathBuf,
         password: Option<String>,
-    ) -> Result<WalletController, ControllerError<NodeRpcClient>> {
+    ) -> Result<(), ControllerError<NodeRpcClient>> {
         let wallet =
             WalletController::open_wallet(self.chain_config.clone(), wallet_path, password)?;
 
-        WalletController::new(
+        let controller = WalletController::new(
             self.chain_config.clone(),
             self.node_rpc.clone(),
             wallet,
             wallet::wallet_events::WalletEventsNoOp,
         )
-        .await
+        .await?;
+        self.controller.replace(controller);
+
+        Ok(())
     }
-    async fn create_wallet(
-        &self,
+    pub async fn create_wallet(
+        &mut self,
         wallet_path: PathBuf,
-        whether_to_store_seed_phrase: bool,
+        whether_to_store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
-    ) -> Result<WalletController, RpcError> {
+    ) -> Result<CreatedWallet, RpcError> {
         // TODO: Support other languages
         let language = wallet::wallet::Language::English;
         let newly_generated_mnemonic = mnemonic.is_none();
@@ -198,11 +167,6 @@ impl WalletWorker {
             Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
                 .map_err(RpcError::InvalidMnemonic)?,
             None => wallet_controller::mnemonic::generate_new_mnemonic(language),
-        };
-        let whether_to_store_seed_phrase = if whether_to_store_seed_phrase {
-            StoreSeedPhrase::Store
-        } else {
-            StoreSeedPhrase::DoNotStore
         };
 
         let wallet = if newly_generated_mnemonic {
@@ -227,14 +191,22 @@ impl WalletWorker {
         }
         .map_err(RpcError::Controller)?;
 
-        WalletController::new(
+        let controller = WalletController::new(
             self.chain_config.clone(),
             self.node_rpc.clone(),
             wallet,
             wallet::wallet_events::WalletEventsNoOp,
         )
         .await
-        .map_err(RpcError::Controller)
+        .map_err(RpcError::Controller)?;
+
+        self.controller.replace(controller);
+
+        let result = match newly_generated_mnemonic {
+            true => CreatedWallet::NewlyGeneratedMnemonic(mnemonic),
+            false => CreatedWallet::UserProvidedMenmonic,
+        };
+        Ok(result)
     }
 
     async fn background_task(

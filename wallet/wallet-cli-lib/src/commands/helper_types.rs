@@ -23,9 +23,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenTotalSupply},
-        ChainConfig, DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint,
+        ChainConfig, Destination, OutPointSourceId, PoolId, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, Id, H256},
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -104,32 +104,19 @@ impl CliUtxoState {
 }
 
 pub fn format_pool_info(
-    pool_id: PoolId,
-    balance: Amount,
+    pool_id: String,
+    balance: String,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
-    chain_config: &ChainConfig,
 ) -> String {
     format!(
         "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
-        Address::new(chain_config, &pool_id).expect("Encoding pool id should never fail"),
-        balance.into_fixedpoint_str(chain_config.coin_decimals()),
-        block_height,
-        block_timestamp
+        pool_id, balance, block_height, block_timestamp
     )
 }
 
-pub fn format_delegation_info(
-    delegation_id: DelegationId,
-    balance: Amount,
-    chain_config: &ChainConfig,
-) -> String {
-    format!(
-        "Delegation Id: {}, Balance: {}",
-        Address::new(chain_config, &delegation_id)
-            .expect("Delegation id address encoding can never fail"),
-        balance.into_fixedpoint_str(chain_config.coin_decimals()),
-    )
+pub fn format_delegation_info(delegation_id: String, balance: String) -> String {
+    format!("Delegation Id: {}, Balance: {}", delegation_id, balance,)
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -233,15 +220,6 @@ fn parse_fixed_token_supply(
     }
 }
 
-pub fn to_per_thousand(
-    value_str: &str,
-    variable_name: &str,
-) -> Result<PerThousand, WalletCliError> {
-    PerThousand::from_decimal_str(value_str).ok_or(WalletCliError::InvalidInput(format!(
-        "Failed to parse {variable_name}. The decimal must be in the range [0.001,1.000] or [0.1%,100%]",
-    )))
-}
-
 pub fn parse_address(
     chain_config: &ChainConfig,
     address: &str,
@@ -263,14 +241,6 @@ pub fn parse_token_id(
     Address::<TokenId>::from_str(chain_config, token_id)
         .and_then(|address| address.decode_object(chain_config))
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid token ID '{token_id}': {e}")))
-}
-
-pub fn parse_coin_amount(
-    chain_config: &ChainConfig,
-    value: &str,
-) -> Result<Amount, WalletCliError> {
-    Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
-        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
 }
 
 pub fn parse_token_amount(

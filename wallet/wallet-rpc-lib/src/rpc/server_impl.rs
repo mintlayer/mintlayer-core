@@ -13,32 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common::{
-    address::{dehexify::to_dehexified_json, Address},
-    chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
-    primitives::{per_thousand::PerThousand, Amount, Id},
+    address::dehexify::to_dehexified_json,
+    chain::{GenBlock, SignedTransaction},
+    primitives::Id,
 };
 use crypto::key::PublicKey;
-use utils::shallow_clone::ShallowClone;
-use wallet_controller::{ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes};
-use wallet_types::{wallet_tx, with_locked::WithLocked};
+use wallet_controller::{ControllerConfig, UtxoStates, UtxoTypes};
+use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
     rpc::{WalletRpc, WalletRpcServer},
-    service::WalletManagement,
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation, PoolInfo,
-        PublicKeyInfo, RpcError, TransactionOptions, TxOptionsOverrides, UtxoInfo,
+        PublicKeyInfo, TransactionOptions, TxOptionsOverrides, UtxoInfo,
     },
 };
 
 #[async_trait::async_trait]
 impl WalletRpcServer for WalletRpc {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.wallet.shallow_clone().stop())
+        rpc::handle_result(self.shutdown())
     }
 
     async fn create_wallet(
@@ -47,100 +43,54 @@ impl WalletRpcServer for WalletRpc {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
     ) -> rpc::RpcResult<()> {
+        let whether_to_store_seed_phrase = if store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
         rpc::handle_result(
-            self.wallet
-                .manage_async(WalletManagement::Create {
-                    wallet_path: path.into(),
-                    whether_to_store_seed_phrase: store_seed_phrase,
-                    mnemonic,
-                })
-                .await,
+            self.create_wallet(path.into(), whether_to_store_seed_phrase, mnemonic)
+                .await
+                .map(|_| ()),
         )
     }
 
     async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()> {
-        rpc::handle_result(
-            self.wallet
-                .manage_async(WalletManagement::Open {
-                    wallet_path: path.into(),
-                    password,
-                })
-                .await,
-        )
+        rpc::handle_result(self.open_wallet(path.into(), password).await)
     }
 
     async fn close_wallet(&self) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.wallet.manage_async(WalletManagement::Close).await)
+        rpc::handle_result(self.close_wallet().await)
     }
 
     async fn sync(&self) -> rpc::RpcResult<()> {
-        rpc::handle_result(
-            self.wallet
-                .call_async(move |w| Box::pin(async move { w.sync_once().await }))
-                .await,
-        )
+        rpc::handle_result(self.sync().await)
     }
 
-    async fn best_block(&self, _: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
-        let res = rpc::handle_result(self.wallet.call(|w| Ok(w.best_block())).await)?;
-        Ok(BlockInfo::from_tuple(res))
+    async fn best_block(&self, empty_args: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
+        rpc::handle_result(self.best_block(empty_args).await)
     }
 
-    async fn create_account(&self, _: EmptyArgs) -> rpc::RpcResult<NewAccountInfo> {
-        let (num, name) = rpc::handle_result(self.wallet.call(|w| w.create_account(None)).await)?;
-        Ok(NewAccountInfo::new(num, name))
+    async fn create_account(&self, _empty_args: EmptyArgs) -> rpc::RpcResult<NewAccountInfo> {
+        rpc::handle_result(self.create_account(None).await)
     }
 
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {
-        let account_index = account_index.index()?;
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
-        let (child_number, destination) = rpc::handle_result(
-            self.wallet
-                .call_async(move |w| {
-                    Box::pin(async move {
-                        w.synced_controller(account_index, config).await?.new_address()
-                    })
-                })
-                .await,
-        )?;
-        Ok(AddressInfo::new(child_number, destination))
+        rpc::handle_result(self.issue_address(account_index.index()?).await)
     }
 
     async fn issue_public_key(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<PublicKeyInfo> {
-        let account_index = account_index.index()?;
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
-        let publick_key = rpc::handle_result(
-            self.wallet
-                .call_async(move |w| {
-                    Box::pin(async move {
-                        w.synced_controller(account_index, config).await?.new_public_key()
-                    })
-                })
-                .await,
-        )?;
-        Ok(PublicKeyInfo::new(publick_key))
+        rpc::handle_result(self.issue_public_key(account_index.index()?).await)
     }
 
     async fn get_issued_addresses(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>> {
-        let account_idx = account_index.index()?;
-        let addresses: BTreeMap<_, _> = rpc::handle_result(
-            self.wallet
-                .call(move |controller| {
-                    controller.readonly_controller(account_idx).get_addresses_with_usage()
-                })
-                .await,
-        )?;
-        let result = addresses
-            .into_iter()
-            .map(|(num, (addr, used))| AddressWithUsageInfo::new(num, addr, used))
-            .collect();
-        Ok(result)
+        rpc::handle_result(self.get_issued_addresses(account_index.index()?).await)
     }
 
     async fn get_balance(
@@ -148,38 +98,25 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
-        let account_idx = account_index.index()?;
-
-        let balances: Balances = rpc::handle_result(
-            self.wallet
-                .call_async(move |w| {
-                    Box::pin(async move {
-                        let c = w.readonly_controller(account_idx);
-                        c.get_decimal_balance(
-                            UtxoStates::ALL,
-                            with_locked.unwrap_or(WithLocked::Unlocked),
-                        )
-                        .await
-                    })
-                })
-                .await,
-        )?;
-        Ok(balances)
+        rpc::handle_result(
+            self.get_balance(
+                account_index.index()?,
+                UtxoStates::ALL,
+                with_locked.unwrap_or(WithLocked::Unlocked),
+            )
+            .await,
+        )
     }
 
     async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>> {
-        let account_idx = account_index.index()?;
-        let utxos: Vec<_> = rpc::handle_result(
-            self.wallet
-                .call(move |w| {
-                    w.readonly_controller(account_idx).get_utxos(
-                        UtxoTypes::ALL,
-                        UtxoStates::ALL,
-                        WithLocked::Any,
-                    )
-                })
-                .await,
-        )?;
+        let utxos = self
+            .get_utxos(
+                account_index.index()?,
+                UtxoTypes::ALL,
+                UtxoStates::ALL,
+                WithLocked::Unlocked,
+            )
+            .await?;
 
         let result = utxos
             .into_iter()
@@ -194,7 +131,7 @@ impl WalletRpcServer for WalletRpc {
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.node.submit_transaction(tx.take(), options).await)
+        rpc::handle_result(self.submit_raw_transaction(tx, options).await)
     }
 
     async fn send_coins(
@@ -204,27 +141,11 @@ impl WalletRpcServer for WalletRpc {
         amount_str: DecimalAmount,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let decimals = self.chain_config.coin_decimals();
-        let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let address = Address::from_str(&self.chain_config, &address)
-            .map_err(|_| RpcError::InvalidAddress)?;
-        let acct = account_index.index()?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .send_to_address(address, amount, vec![])
-                            .await?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
+            self.send_coins(account_index.index()?, address, amount_str, vec![], config)
                 .await,
         )
     }
@@ -238,38 +159,19 @@ impl WalletRpcServer for WalletRpc {
         decommission_key: Option<HexEncoded<PublicKey>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let decimals = self.chain_config.coin_decimals();
-        let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let cost_per_block =
-            cost_per_block.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let decommission_key = decommission_key.map(HexEncoded::take);
-
-        let margin_ratio_per_thousand = PerThousand::from_decimal_str(&margin_ratio_per_thousand)
-            .ok_or(RpcError::InvalidMarginRatio)?;
-
-        let acct = account_index.index()?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .create_stake_pool_tx(
-                                amount,
-                                decommission_key,
-                                margin_ratio_per_thousand,
-                                cost_per_block,
-                            )
-                            .await?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
-                .await,
+            self.create_stake_pool(
+                account_index.index()?,
+                amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
+                decommission_key,
+                config,
+            )
+            .await,
         )
     }
 
@@ -279,27 +181,11 @@ impl WalletRpcServer for WalletRpc {
         pool_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let acct = account_index.index()?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-        let pool_id = Address::from_str(&self.chain_config, &pool_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|_| RpcError::InvalidPoolId)?;
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .decommission_stake_pool(pool_id)
-                            .await?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
-                .await,
+            self.decommission_stake_pool(account_index.index()?, pool_id, config).await,
         )
     }
 
@@ -310,37 +196,12 @@ impl WalletRpcServer for WalletRpc {
         pool_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewDelegation> {
-        let acct = account_index.index()?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-        let address =
-            Address::from_str(&self.chain_config, &address).map_err(|_| RpcError::InvalidPoolId)?;
-
-        let pool_id = Address::from_str(&self.chain_config, &pool_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|_| RpcError::InvalidPoolId)?;
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        let delegation_id = controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .create_delegation(address, pool_id)
-                            .await?;
-                        Ok::<DelegationId, ControllerError<_>>(delegation_id)
-                    })
-                })
-                .await,
+            self.create_delegation(account_index.index()?, address, pool_id, config).await,
         )
-        .map(|delegation_id: DelegationId| NewDelegation {
-            delegation_id: Address::new(&self.chain_config, &delegation_id)
-                .expect("addressable delegation id")
-                .get()
-                .to_owned(),
-        })
     }
 
     async fn delegate_staking(
@@ -350,29 +211,11 @@ impl WalletRpcServer for WalletRpc {
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let acct = account_index.index()?;
-        let decimals = self.chain_config.coin_decimals();
-        let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-
-        let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|_| RpcError::InvalidPoolId)?;
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .delegate_staking(amount, delegation_id)
-                            .await?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
+            self.delegate_staking(account_index.index()?, amount, delegation_id, config)
                 .await,
         )
     }
@@ -385,120 +228,44 @@ impl WalletRpcServer for WalletRpc {
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
-        let decimals = self.chain_config.coin_decimals();
-        let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let address = Address::from_str(&self.chain_config, &address)
-            .map_err(|_| RpcError::InvalidAddress)?;
-        let acct = account_index.index()?;
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
-        let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|_| RpcError::InvalidPoolId)?;
-
         rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller
-                            .synced_controller(acct, config)
-                            .await?
-                            .send_to_address_from_delegation(address, amount, delegation_id)
-                            .await?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
-                .await,
+            self.send_from_delegation_to_address(
+                account_index.index()?,
+                address,
+                amount,
+                delegation_id,
+                config,
+            )
+            .await,
         )
     }
 
     async fn start_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
-        let acct = account_index.index()?;
-
-        rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(async move {
-                        controller.synced_controller(acct, config).await?.start_staking()?;
-                        Ok::<(), ControllerError<_>>(())
-                    })
-                })
-                .await,
-        )
+        rpc::handle_result(self.start_staking(account_index.index()?).await)
     }
 
     async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()> {
-        let acct = account_index.index()?;
-
-        rpc::handle_result(
-            self.wallet
-                .call(move |controller| {
-                    controller.stop_staking(acct)?;
-                    Ok::<(), ControllerError<_>>(())
-                })
-                .await,
-        )
+        rpc::handle_result(self.stop_staking(account_index.index()?).await)
     }
 
     async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>> {
-        let acct = account_index.index()?;
-
-        rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(
-                        async move { controller.readonly_controller(acct).get_pool_ids().await },
-                    )
-                })
-                .await,
-        )
-        .map(|pools: Vec<(PoolId, wallet_tx::BlockInfo, Amount)>| {
-            pools
-                .into_iter()
-                .map(|(pool_id, block_data, balance)| {
-                    PoolInfo::new(pool_id, block_data, balance, &self.chain_config)
-                })
-                .collect()
-        })
+        rpc::handle_result(self.list_pool_ids(account_index.index()?).await)
     }
 
     async fn list_delegation_ids(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<DelegationInfo>> {
-        let acct = account_index.index()?;
-
-        rpc::handle_result(
-            self.wallet
-                .call_async(move |controller| {
-                    Box::pin(
-                        async move { controller.readonly_controller(acct).get_delegations().await },
-                    )
-                })
-                .await,
-        )
-        .map(|delegations: Vec<(DelegationId, Amount)>| {
-            delegations
-                .into_iter()
-                .map(|(delegation_id, balance)| {
-                    DelegationInfo::new(delegation_id, balance, &self.chain_config)
-                })
-                .collect()
-        })
+        rpc::handle_result(self.list_delegation_ids(account_index.index()?).await)
     }
 
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<Id<GenBlock>>> {
-        let acct = account_index.index()?;
-
-        rpc::handle_result(
-            self.wallet
-                .call(move |controller| controller.readonly_controller(acct).get_created_blocks())
-                .await,
-        )
+        rpc::handle_result(self.list_created_blocks_ids(account_index.index()?).await)
     }
 }

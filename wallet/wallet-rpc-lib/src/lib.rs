@@ -19,12 +19,14 @@ pub mod error;
 mod rpc;
 mod service;
 
-pub use rpc::{types, RpcAuthData, RpcCreds, WalletRpcServer};
-pub use service::{WalletHandle, WalletResult, WalletService};
+pub use rpc::{types, RpcAuthData, RpcCreds, RpcError, WalletRpc, WalletRpcServer};
+use service::InitError;
+pub use service::{CreatedWallet, WalletHandle, WalletResult, WalletService};
 
 use std::time::Duration;
 
-use config::{WalletRpcConfig, WalletServiceConfig};
+use config::WalletRpcConfig;
+pub use config::WalletServiceConfig;
 use logging::log;
 
 use utils::shallow_clone::ShallowClone;
@@ -54,8 +56,21 @@ pub async fn start_services(
     wallet_config: WalletServiceConfig,
     rpc_config: WalletRpcConfig,
 ) -> Result<(WalletService, rpc::Rpc), StartupError> {
+    let chain_config = wallet_config.chain_config;
+
+    let node_rpc = {
+        let rpc_address = {
+            let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
+            wallet_config.node_rpc_address.unwrap_or_else(default_addr)
+        };
+
+        wallet_controller::make_rpc_client(rpc_address, wallet_config.node_credentials)
+            .await
+            .map_err(InitError::NodeRpc)?
+    };
     // Start the wallet service
-    let wallet_service = WalletService::start(wallet_config).await?;
+    let wallet_service =
+        WalletService::start(chain_config, node_rpc, wallet_config.wallet_file).await?;
 
     // Start the RPC server
     let rpc_server = {

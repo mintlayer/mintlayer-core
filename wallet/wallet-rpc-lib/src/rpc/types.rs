@@ -23,9 +23,12 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::{
-    hdkd::{child_number::ChildNumber, u31::U31},
-    PublicKey,
+use crypto::{
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PublicKey,
+    },
+    vrf::VRFPublicKey,
 };
 use serialization::hex::HexEncode;
 
@@ -34,6 +37,8 @@ pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{Balances, DecimalAmount};
 use wallet_types::wallet_tx;
+
+use crate::service::SubmitError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -56,13 +61,16 @@ pub enum RpcError {
     InvalidMnemonic(wallet_controller::mnemonic::Error),
 
     #[error("Wallet error: {0}")]
-    Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+    Controller(#[from] wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
 
     #[error("RPC error: {0}")]
     RpcError(node_comm::rpc_client::NodeRpcError),
 
     #[error("No wallet opened")]
     NoWalletOpened,
+
+    #[error("{0}")]
+    SubmitError(#[from] SubmitError),
 }
 
 impl From<RpcError> for rpc::Error {
@@ -81,8 +89,8 @@ pub struct AccountIndexArg {
 }
 
 impl AccountIndexArg {
-    pub fn index(&self) -> rpc::RpcResult<U31> {
-        rpc::handle_result(U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange))
+    pub fn index(&self) -> Result<U31, RpcError> {
+        U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
     }
 }
 
@@ -139,6 +147,22 @@ impl PublicKeyInfo {
     pub fn new(pub_key: PublicKey) -> Self {
         Self {
             public_key: pub_key.hex_encode(),
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VrfPublicKeyInfo {
+    pub vrf_public_key: String,
+}
+
+impl VrfPublicKeyInfo {
+    pub fn new(pub_key: VRFPublicKey, chain_config: &ChainConfig) -> Self {
+        Self {
+            vrf_public_key: Address::new(chain_config, &pub_key)
+                .expect("addressable")
+                .get()
+                .to_owned(),
         }
     }
 }

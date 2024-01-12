@@ -8,9 +8,11 @@ rust-version.workspace = true
 [dependencies]
 
 common = { path = "../../common" }
+chainstate = { path = "../../chainstate" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool-types = { path = "../../mempool/types" }
+mempool = { path = "../../mempool" }
 node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
