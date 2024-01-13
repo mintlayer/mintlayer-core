@@ -666,7 +666,7 @@ fn create_mainnet_genesis() -> Genesis {
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1639975460),
+        BlockTimestamp::from_int_seconds(1705176548),
         vec![output],
     )
 }
