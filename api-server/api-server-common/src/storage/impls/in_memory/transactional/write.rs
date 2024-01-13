@@ -41,6 +41,13 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.initialize_storage(chain_config)
     }
 
+    async fn reinitialize_storage(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.reinitialize_storage(chain_config)
+    }
+
     async fn del_address_balance_above_height(
         &mut self,
         block_height: BlockHeight,

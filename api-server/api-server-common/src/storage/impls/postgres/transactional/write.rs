@@ -47,6 +47,16 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         Ok(())
     }
 
+    async fn reinitialize_storage(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.reinitialize_database(chain_config).await?;
+
+        Ok(())
+    }
+
     async fn del_address_balance_above_height(
         &mut self,
         block_height: BlockHeight,

@@ -51,6 +51,11 @@ use crate::{
 
 const LOCK_FILE_NAME: &str = ".lock";
 
+pub enum NodeSetupResult {
+    Node(Node),
+    DataDirCleanedUp,
+}
+
 pub struct Node {
     manager: subsystem::Manager,
     controller: NodeController,
@@ -223,7 +228,7 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: Options) -> Result<Node> {
+pub async fn setup(options: Options) -> Result<NodeSetupResult> {
     let command = options.command.clone().unwrap_or(Command::Testnet(RunOptions::default()));
     match command {
         Command::Mainnet(ref run_options) => {
@@ -293,7 +298,7 @@ async fn start(
     datadir_path_opt: &Option<PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
-) -> Result<Node> {
+) -> Result<NodeSetupResult> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
@@ -313,7 +318,13 @@ async fn start(
             &data_dir,
             std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
         )?;
+        return Ok(NodeSetupResult::DataDirCleanedUp);
     }
+
+    log::info!(
+        "Starting mintlayer-core version {}",
+        chain_config.software_version()
+    );
 
     log::info!("Starting with the following config:\n {node_config:#?}");
     let (manager, controller) = match initialize(
@@ -348,11 +359,11 @@ async fn start(
         },
     };
 
-    Ok(Node {
+    Ok(NodeSetupResult::Node(Node {
         manager,
         controller,
         lock_file,
-    })
+    }))
 }
 
 #[cfg(test)]

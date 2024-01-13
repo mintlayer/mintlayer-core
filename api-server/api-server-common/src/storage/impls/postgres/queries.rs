@@ -326,7 +326,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn create_tables(&mut self) -> Result<(), ApiServerStorageError> {
+    async fn create_tables(&mut self) -> Result<(), ApiServerStorageError> {
         logging::log::info!("Creating database tables");
 
         self.just_execute(
@@ -462,6 +462,28 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    async fn drop_tables(&mut self) -> Result<(), ApiServerStorageError> {
+        logging::log::info!("Dropping database tables");
+
+        self.just_execute("DROP TABLE ml_misc_data;").await?;
+        self.just_execute("DROP TABLE ml_genesis;").await?;
+        self.just_execute("DROP TABLE ml_main_chain_blocks;").await?;
+        self.just_execute("DROP TABLE ml_blocks;").await?;
+        self.just_execute("DROP TABLE ml_transactions;").await?;
+        self.just_execute("DROP TABLE ml_address_balance;").await?;
+        self.just_execute("DROP TABLE ml_address_transactions;").await?;
+        self.just_execute("DROP TABLE ml_utxo;").await?;
+        self.just_execute("DROP TABLE ml_block_aux_data;").await?;
+        self.just_execute("DROP TABLE ml_pool_data;").await?;
+        self.just_execute("DROP TABLE ml_delegations;").await?;
+        self.just_execute("DROP TABLE ml_fungible_token;").await?;
+        self.just_execute("DROP TABLE ml_nft_issuance;").await?;
+
+        logging::log::info!("Done dropping database tables");
+
+        Ok(())
+    }
+
     pub async fn initialize_database(
         &mut self,
         chain_config: &ChainConfig,
@@ -488,6 +510,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn reinitialize_database(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        self.drop_tables().await?;
+
+        self.initialize_database(chain_config).await?;
 
         Ok(())
     }

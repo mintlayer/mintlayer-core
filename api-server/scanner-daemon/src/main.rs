@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use api_blockchain_scanner_lib::blockchain_state::BlockchainState;
 use api_server_common::storage::{
-    impls::postgres::TransactionalApiServerPostgresStorage,
+    impls::{postgres::TransactionalApiServerPostgresStorage, CURRENT_STORAGE_VERSION},
     storage_api::{
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw,
@@ -88,6 +88,19 @@ pub async fn run<S: ApiServerStorage>(
                 .expect("Can't scan genesis");
             local_block
         } else {
+            let storage_version = db_tx
+                .get_storage_version()
+                .await
+                .unwrap_or_else(|e| panic!("Storage version read failed {}", e))
+                .expect("cannot be empty");
+
+            if storage_version != CURRENT_STORAGE_VERSION {
+                db_tx
+                    .reinitialize_storage(chain_config)
+                    .await
+                    .unwrap_or_else(|e| panic!("Storage re-initialization failed {}", e));
+            }
+
             db_tx
                 .commit()
                 .await
