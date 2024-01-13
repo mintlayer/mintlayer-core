@@ -123,6 +123,7 @@ mod tests {
     use crypto::key::{KeyKind, PrivateKey};
     use pubkeyhash::PublicKeyHash;
     use rstest::rstest;
+    use serialization::Encode;
     use test_utils::random::Seed;
 
     #[rstest]
@@ -140,5 +141,13 @@ mod tests {
             .decode_object(&cfg)
             .expect("Failed to extract public key hash from address");
         assert_eq!(public_key_hash_restored_dest, public_key_hash_dest);
+    }
+
+    #[test]
+    fn example() {
+        let address = "mtc1q9aaqkulkth7qp7mqtyv0rpgdwdytdewdu6ykrsj";
+        let dest = Address::<Destination>::from_str_no_hrp_verify(address).unwrap();
+        let hex = hex::encode(dest.encode());
+        assert_eq!(hex, "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f");
     }
 }
