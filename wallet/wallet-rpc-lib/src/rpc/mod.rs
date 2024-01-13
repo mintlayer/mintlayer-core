@@ -27,7 +27,7 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
-use wallet::WalletError;
+use wallet::{account::PartiallySignedTransaction, WalletError};
 
 use common::{
     address::Address,
@@ -309,6 +309,25 @@ impl WalletRpc {
             .map_err(RpcError::RpcError)
     }
 
+    pub async fn sign_raw_transaction(
+        &self,
+        account_index: U31,
+        tx: HexEncoded<PartiallySignedTransaction>,
+        config: ControllerConfig,
+    ) -> WRpcResult<HexEncoded<SignedTransaction>> {
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let tx = controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .sign_raw_transaction(tx.take())?;
+                    Ok::<HexEncoded<SignedTransaction>, ControllerError<_>>(tx)
+                })
+            })
+            .await?
+    }
+
     pub async fn send_coins(
         &self,
         account_index: U31,
@@ -425,6 +444,30 @@ impl WalletRpc {
                         .decommission_stake_pool(pool_id)
                         .await?;
                     Ok::<(), ControllerError<_>>(())
+                })
+            })
+            .await?
+    }
+
+    pub async fn decommission_stake_pool_request(
+        &self,
+        account_index: U31,
+        pool_id: String,
+        config: ControllerConfig,
+    ) -> WRpcResult<HexEncoded<PartiallySignedTransaction>> {
+        let pool_id = Address::from_str(&self.chain_config, &pool_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidPoolId)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let tx = controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .decommission_stake_pool_request(pool_id)
+                        .await?;
+                    Ok::<HexEncoded<PartiallySignedTransaction>, ControllerError<_>>(tx)
                 })
             })
             .await?

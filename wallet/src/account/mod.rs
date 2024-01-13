@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -89,7 +89,7 @@ pub struct CurrentFeeRate {
     pub consolidate_fee_rate: FeeRate,
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
@@ -109,8 +109,12 @@ impl PartiallySignedTransaction {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
             Ok(SignedTransaction::new(self.tx, witnesses)?)
         } else {
-            Err(WalletError::InputsSignatureAreMissing)
+            Err(WalletError::FailedToConvertPartiallySignedTx(self))
         }
+    }
+
+    pub fn take(self) -> (Transaction, Vec<Option<InputWitness>>) {
+        (self.tx, self.witnesses)
     }
 }
 
@@ -1032,6 +1036,39 @@ impl Account {
             .into_signed_tx()
     }
 
+    fn sign_input(
+        &self,
+        tx: &Transaction,
+        destination: &Destination,
+        input_index: usize,
+        input_utxos: &[Option<&TxOutput>],
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<Option<InputWitness>> {
+        if *destination == Destination::AnyoneCanSpend {
+            Ok(Some(InputWitness::NoSignature(None)))
+        } else {
+            self.key_chain
+                .get_private_key_for_destination(destination, db_tx)?
+                .map(|pk_from_keychain| {
+                    let private_key = pk_from_keychain.private_key();
+                    let sighash_type =
+                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+
+                    StandardInputSignature::produce_uniparty_signature_for_input(
+                        &private_key,
+                        sighash_type,
+                        destination.clone(),
+                        tx,
+                        input_utxos,
+                        input_index,
+                    )
+                    .map(InputWitness::Standard)
+                    .map_err(WalletError::TransactionSig)
+                })
+                .transpose()
+        }
+    }
+
     fn sign_transaction(
         &self,
         tx: Transaction,
@@ -1043,34 +1080,59 @@ impl Account {
             .iter()
             .copied()
             .enumerate()
-            .map(|(i, destination)| {
-                if *destination == Destination::AnyoneCanSpend {
-                    Ok(Some(InputWitness::NoSignature(None)))
-                } else {
-                    self.key_chain
-                        .get_private_key_for_destination(destination, db_tx)?
-                        .map(|pk_from_keychain| {
-                            let private_key = pk_from_keychain.private_key();
-                            let sighash_type =
-                                SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-                            StandardInputSignature::produce_uniparty_signature_for_input(
-                                &private_key,
-                                sighash_type,
-                                destination.clone(),
-                                &tx,
-                                input_utxos,
-                                i,
-                            )
-                            .map(InputWitness::Standard)
-                            .map_err(WalletError::TransactionSig)
-                        })
-                        .transpose()
-                }
-            })
+            .map(|(i, destination)| self.sign_input(&tx, destination, i, input_utxos, db_tx))
             .collect::<Result<Vec<Option<InputWitness>>, _>>()?;
 
         Ok(PartiallySignedTransaction::new(tx, witnesses))
+    }
+
+    pub fn sign_raw_transaction(
+        &self,
+        tx: PartiallySignedTransaction,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<SignedTransaction> {
+        match tx.into_signed_tx() {
+            Ok(tx) => Ok(tx),
+            Err(WalletError::FailedToConvertPartiallySignedTx(tx)) => {
+                let (tx, witnesses) = tx.take();
+
+                let input_utxos = tx
+                    .inputs()
+                    .iter()
+                    .map(|input| match input {
+                        TxInput::Utxo(outpoint) => Ok(Some(
+                            self.output_cache.get_txo(outpoint).ok_or(WalletError::NoUtxos)?,
+                        )),
+                        TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
+                            Err(WalletError::InputCannotBeSigned)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                ensure!(
+                    input_utxos.len() == witnesses.len(),
+                    TransactionCreationError::InvalidWitnessCount
+                );
+
+                let witnesses = witnesses
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, witness)| match witness {
+                        Some(w) => Ok(w),
+                        None => {
+                            let destination =
+                                get_tx_output_destination(input_utxos[i].expect("cannot be none"))
+                                    .ok_or(WalletError::InputCannotBeSigned)?;
+                            self.sign_input(&tx, destination, i, &input_utxos, db_tx)?
+                                .ok_or(WalletError::InputCannotBeSigned)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(SignedTransaction::new(tx, witnesses)?)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn account_index(&self) -> U31 {

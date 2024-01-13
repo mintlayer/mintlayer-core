@@ -31,7 +31,7 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::version::get_version;
+use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
 
@@ -483,6 +483,13 @@ pub enum WalletCommand {
         transaction: HexEncoded<SignedTransaction>,
     },
 
+    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
+    #[clap(name = "node-sign-raw-transaction")]
+    SignRawTransaction {
+        /// Hex encoded transaction.
+        transaction: HexEncoded<PartiallySignedTransaction>,
+    },
+
     /// Returns the current node's chainstate (block height information and more)
     #[clap(name = "node-chainstate-info")]
     ChainstateInfo,
@@ -893,6 +900,21 @@ impl CommandHandler {
                 Ok(Self::tx_submitted_command())
             }
 
+            WalletCommand::SignRawTransaction { transaction } => {
+                let selected_account = self.get_selected_acc()?;
+                let result = self
+                    .wallet_rpc
+                    .sign_raw_transaction(selected_account, transaction, self.config)
+                    .await?;
+
+                let output_str = format!(
+                    "Transaction has been signed.\
+                    Pass the following string into the wallet to broadcast:\n{}",
+                    result.to_string()
+                );
+                Ok(ConsoleCommand::Print(output_str))
+            }
+
             WalletCommand::AbandonTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
@@ -1259,13 +1281,11 @@ impl CommandHandler {
             }
 
             WalletCommand::DecommissionStakePoolRequest { pool_id } => {
-                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
+                let selected_account = self.get_selected_acc()?;
                 let result = self
-                    .get_synced_controller()
-                    .await?
-                    .decommission_stake_pool_request(pool_id)
-                    .await
-                    .map_err(WalletCliError::Controller)?;
+                    .wallet_rpc
+                    .decommission_stake_pool_request(selected_account, pool_id, self.config)
+                    .await?;
                 let output_str = format!(
                     "Decommission transaction created.\
                     Pass the following string into the wallet with private key to sign:\n{}",

@@ -620,6 +620,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(())
     }
 
+    pub fn sign_raw_transaction(
+        &mut self,
+        tx: PartiallySignedTransaction,
+    ) -> Result<HexEncoded<SignedTransaction>, ControllerError<T>> {
+        self.wallet
+            .sign_raw_transaction(self.account_index, tx)
+            .map_err(ControllerError::WalletError)
+            .map(|tx| tx.into())
+    }
+
     async fn get_current_and_consolidation_fee_rate(
         &mut self,
     ) -> Result<(mempool::FeeRate, mempool::FeeRate), ControllerError<T>> {

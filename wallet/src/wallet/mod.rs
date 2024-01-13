@@ -189,6 +189,10 @@ pub enum WalletError {
     PartiallySignedTransactionInDecommissionCommand,
     #[error("Cannot use fully signed transaction in a decommission request")]
     FullySignedTransactionInDecommissionReq,
+    #[error("Input cannot be signed")]
+    InputCannotBeSigned,
+    #[error("Failed to convert partially signed tx to signed")]
+    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
 }
 
 /// Result type used for the wallet
@@ -1205,6 +1209,16 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<PartiallySignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.decommission_stake_pool_request(db_tx, pool_id, pool_balance, current_fee_rate)
+        })
+    }
+
+    pub fn sign_raw_transaction(
+        &mut self,
+        account_index: U31,
+        tx: PartiallySignedTransaction,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.sign_raw_transaction(tx, db_tx)
         })
     }
 
