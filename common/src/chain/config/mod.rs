@@ -663,7 +663,7 @@ fn create_mainnet_genesis() -> Genesis {
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
+        "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f",
     );
 
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
