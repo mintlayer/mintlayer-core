@@ -129,14 +129,14 @@ impl ChainType {
         match self {
             ChainType::Mainnet => {
                 vec![
-                    "51.159.232.144:3030".parse().expect("Cannot fail"),
-                    "172.232.50.132:3030".parse().expect("Cannot fail"),
+                    "51.159.232.144:3031".parse().expect("Cannot fail"),
+                    "172.232.50.132:3031".parse().expect("Cannot fail"),
                 ]
             }
             ChainType::Testnet => {
                 vec![
-                    "51.15.103.154:13030".parse().expect("Cannot fail"),
-                    "51.15.59.248:13030".parse().expect("Cannot fail"),
+                    "51.15.103.154:13031".parse().expect("Cannot fail"),
+                    "51.15.59.248:13031".parse().expect("Cannot fail"),
                 ]
             }
             ChainType::Regtest => Vec::new(),
