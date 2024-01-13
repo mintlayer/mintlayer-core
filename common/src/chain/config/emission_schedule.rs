@@ -20,7 +20,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 // The initial supply that will be handed in the genesis block (besides the emission schedule)
-pub const DEFAULT_INITIAL_MINT: Amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
+pub const DEFAULT_INITIAL_MINT: Amount = Amount::from_atoms(400_000_000 * CoinUnit::ATOMS_PER_COIN);
 
 /// Internal emission schedule representation
 pub type EmissionScheduleFn = dyn Fn(BlockHeight) -> CoinUnit + Sync + Send + 'static;

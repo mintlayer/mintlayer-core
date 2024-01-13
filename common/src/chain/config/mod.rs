@@ -672,8 +672,8 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // We add 3_600_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
-    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * CoinUnit::ATOMS_PER_COIN);
+    // We add 3_300_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
+    let extra_testnet_mint = Amount::from_atoms(3_300_000_000 * CoinUnit::ATOMS_PER_COIN);
     let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
