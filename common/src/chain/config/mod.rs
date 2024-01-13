@@ -652,22 +652,48 @@ fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
 }
 
 fn create_mainnet_genesis() -> Genesis {
+    let genesis_message = "TestnetStartOne".to_string();
+
+    let decommission_pub_key = decode_hex::<PublicKey>(
+        "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
+    );
+
+    let staker_pub_key = decode_hex::<PublicKey>(
+        "0002ddd59a9187481582c160794a20dfe194087f2dcd1faee18d023fc0cce7904e79",
+    );
+
+    let vrf_pub_key = decode_hex::<VRFPublicKey>(
+        "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
+    );
+
+    let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
+    let mint_output_amount = (DEFAULT_INITIAL_MINT - initial_pool_amount).expect("must be valid");
+
     // TODO: replace this with our mint key
     let genesis_mint_pubkeyhash_hex_encoded = "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f";
     let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
-    let genesis_message = "TestnetStartOne".to_string();
-
-    // TODO: replace this with the real genesis mint value
-    let output = TxOutput::Transfer(
-        OutputValue::Coin(DEFAULT_INITIAL_MINT),
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
         genesis_mint_destination,
+    );
+
+    let initial_pool = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            initial_pool_amount,
+            Destination::PublicKey(staker_pub_key),
+            vrf_pub_key,
+            Destination::PublicKey(decommission_pub_key),
+            PerThousand::new(1000).expect("must be valid"),
+            Amount::ZERO,
+        )),
     );
 
     Genesis::new(
         genesis_message,
         BlockTimestamp::from_int_seconds(1705176548),
-        vec![output],
+        vec![mint_output, initial_pool],
     )
 }
 
@@ -685,6 +711,12 @@ fn create_testnet_genesis() -> Genesis {
     let genesis_mint_destination = decode_hex::<PublicKey>(
         "0003e9d79eb6487c28dad9679461faa1ffcdbc52a10033e1ad625101a97db1ba8edd",
     );
+
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
+        Destination::PublicKey(genesis_mint_destination),
+    );
+
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
     );
@@ -694,11 +726,6 @@ fn create_testnet_genesis() -> Genesis {
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
         "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
-    );
-
-    let mint_output = TxOutput::Transfer(
-        OutputValue::Coin(mint_output_amount),
-        Destination::PublicKey(genesis_mint_destination),
     );
 
     let initial_pool = TxOutput::CreateStakePool(

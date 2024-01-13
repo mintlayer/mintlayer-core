@@ -120,7 +120,10 @@ mod tests {
     use super::*;
     use crate::chain::config::create_mainnet;
     use crate::chain::Destination;
-    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::{
+        key::{KeyKind, PrivateKey},
+        vrf::VRFPublicKey,
+    };
     use pubkeyhash::PublicKeyHash;
     use rstest::rstest;
     use serialization::Encode;
@@ -144,10 +147,21 @@ mod tests {
     }
 
     #[test]
-    fn example() {
+    fn example_mainnet_address() {
         let address = "mtc1q9aaqkulkth7qp7mqtyv0rpgdwdytdewdu6ykrsj";
         let dest = Address::<Destination>::from_str_no_hrp_verify(address).unwrap();
         let hex = hex::encode(dest.encode());
         assert_eq!(hex, "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f");
+    }
+
+    #[test]
+    fn example_mainnet_vrf() {
+        let address = "mvrfpk1qqyxcl4tc6y9amf2vmv6sgu8x5jwqlxawx73vhgemkduag9c8ku57m03mze";
+        let dest = Address::<VRFPublicKey>::from_str_no_hrp_verify(address).unwrap();
+        let hex = hex::encode(dest.encode());
+        assert_eq!(
+            hex,
+            "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f"
+        );
     }
 }
