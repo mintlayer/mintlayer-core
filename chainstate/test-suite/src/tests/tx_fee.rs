@@ -428,7 +428,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             required_maturity_distance.to_int()..(required_maturity_distance.to_int() * 2),
         );
 
-        let decomission_outputs =
+        let decommission_outputs =
             test_utils::split_value(&mut rng, amount_to_stake.into_atoms() / 2)
                 .into_iter()
                 .map(|value| {
@@ -447,7 +447,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
                 TxInput::from_utxo(stake_pool_tx_id.into(), 0),
                 empty_witness(&mut rng),
             )
-            .with_outputs(decomission_outputs)
+            .with_outputs(decommission_outputs)
             .build();
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);

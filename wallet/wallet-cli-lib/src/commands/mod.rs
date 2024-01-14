@@ -330,7 +330,9 @@ pub enum WalletCommand {
         pool_id: String,
     },
 
-    // FIXME: docs
+    /// Create a request to decommission a pool. This assumes that the decommission key is owned
+    /// by another wallet. The output of this command should be passed to SignRawTransaction for
+    /// signing.
     #[clap(name = "staking-decommission-pool-request")]
     DecommissionStakePoolRequest {
         /// The pool id of the pool to be decommissioned.
@@ -908,9 +910,9 @@ impl CommandHandler {
                     .await?;
 
                 let output_str = format!(
-                    "Transaction has been signed.\
+                    "Transaction has been signed. \
                     Pass the following string into the wallet to broadcast:\n{}",
-                    result.to_string()
+                    result
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
@@ -1287,9 +1289,9 @@ impl CommandHandler {
                     .decommission_stake_pool_request(selected_account, pool_id, self.config)
                     .await?;
                 let output_str = format!(
-                    "Decommission transaction created.\
+                    "Decommission transaction created. \
                     Pass the following string into the wallet with private key to sign:\n{}",
-                    result.to_string()
+                    result
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }

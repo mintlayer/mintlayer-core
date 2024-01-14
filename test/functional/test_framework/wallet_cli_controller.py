@@ -240,6 +240,15 @@ class WalletCliController:
     async def decommission_stake_pool(self, pool_id: str) -> str:
         return await self._write_command(f"staking-decommission-pool {pool_id}\n")
 
+    async def decommission_stake_pool_request(self, pool_id: str) -> str:
+        return await self._write_command(f"staking-decommission-pool-request {pool_id}\n")
+
+    async def sign_raw_transaction(self, transaction: str) -> str:
+        return await self._write_command(f"node-sign-raw-transaction {transaction}\n")
+
+    async def submit_transaction(self, transaction: str) -> str:
+        return await self._write_command(f"node-submit-transaction {transaction}\n")
+
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n")
         pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'

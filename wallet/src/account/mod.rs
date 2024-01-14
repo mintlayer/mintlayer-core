@@ -36,9 +36,9 @@ use wallet_types::with_locked::WithLocked;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
-    make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decomission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-    make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
+    get_reward_output_destination, make_address_output, make_address_output_from_delegation,
+    make_address_output_token, make_decommission_stake_pool_output, make_mint_token_outputs,
+    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
@@ -478,7 +478,7 @@ impl Account {
         let tx_input = TxInput::Utxo(pool_data.utxo_outpoint.clone());
 
         let network_fee: Amount = {
-            let output = make_decomission_stake_pool_output(
+            let output = make_decommission_stake_pool_output(
                 self.chain_config.as_ref(),
                 pool_data.decommission_key.clone(),
                 pool_balance,
@@ -496,7 +496,7 @@ impl Account {
                 .into()
         };
 
-        let output = make_decomission_stake_pool_output(
+        let output = make_decommission_stake_pool_output(
             self.chain_config.as_ref(),
             pool_data.decommission_key.clone(),
             (pool_balance - network_fee)
@@ -665,13 +665,13 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         stake_pool_arguments: StakePoolDataArguments,
-        decomission_key: Option<PublicKey>,
+        decommission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
-        let decommission_key = match decomission_key {
+        let decommission_key = match decommission_key {
             Some(key) => key,
             None => self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
         };
@@ -1002,7 +1002,7 @@ impl Account {
             .ok_or(WalletError::UnknownPoolId(pool_id))?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
 
-        let stake_destination = get_tx_output_destination(kernel_input_utxo)
+        let stake_destination = get_reward_output_destination(kernel_input_utxo)
             .expect("must succeed for CreateStakePool and ProduceBlockFromStake outputs");
         let stake_private_key = self
             .key_chain
@@ -1181,6 +1181,8 @@ impl Account {
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
         get_tx_output_destination(txo).map_or(false, |d| self.is_mine_or_watched_destination(d))
+            || get_reward_output_destination(txo)
+                .map_or(false, |d| self.is_mine_or_watched_destination(d))
     }
 
     /// Return true if this destination can be spent by this account or if it is being watched.

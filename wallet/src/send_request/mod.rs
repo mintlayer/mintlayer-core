@@ -125,7 +125,7 @@ pub fn make_address_output_from_delegation(
     ))
 }
 
-pub fn make_decomission_stake_pool_output(
+pub fn make_decommission_stake_pool_output(
     chain_config: &ChainConfig,
     destination: Destination,
     amount: Amount,
@@ -276,7 +276,7 @@ impl SendRequest {
     }
 }
 
-pub fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+pub fn get_reward_output_destination(txo: &TxOutput) -> Option<&Destination> {
     match txo {
         TxOutput::Transfer(_, d)
         | TxOutput::LockThenTransfer(_, d, _)
@@ -284,6 +284,21 @@ pub fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::IssueNft(_, _, d)
         | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
         TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+        TxOutput::IssueFungibleToken(_)
+        | TxOutput::Burn(_)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_) => None,
+    }
+}
+
+pub fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+    match txo {
+        TxOutput::Transfer(_, d)
+        | TxOutput::LockThenTransfer(_, d, _)
+        | TxOutput::CreateDelegationId(d, _)
+        | TxOutput::IssueNft(_, _, d)
+        | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
+        TxOutput::CreateStakePool(_, data) => Some(data.decommission_key()),
         TxOutput::IssueFungibleToken(_)
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
