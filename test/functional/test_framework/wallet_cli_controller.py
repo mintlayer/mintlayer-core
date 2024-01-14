@@ -141,7 +141,7 @@ class WalletCliController:
         return await self._write_command("node-best-block-height\n")
 
     async def get_best_block(self) -> str:
-        return await self._write_command("node-best-block\n")
+        return await self._write_command("node-best-block-id\n")
 
     async def create_new_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-create {name}\n")

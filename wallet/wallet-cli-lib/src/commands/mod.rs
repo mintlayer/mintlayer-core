@@ -485,7 +485,7 @@ pub enum WalletCommand {
     ChainstateInfo,
 
     /// Returns the current best block hash
-    #[clap(name = "node-best-block")]
+    #[clap(name = "node-best-block-id")]
     BestBlock,
 
     /// Returns the current best block height
