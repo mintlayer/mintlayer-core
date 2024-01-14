@@ -475,10 +475,10 @@ where
             let cost_per_block = Amount::from_atoms(rng.gen::<u128>());
             let margin_ratio_per_thousand = rng.gen_range(1..=1000);
             let random_pool_data_new = PoolData::new(
-                Destination::PublicKey(pk),
+                Destination::PublicKey(pk.clone()),
                 amount_to_stake,
                 Amount::ZERO,
-                vrf_pk,
+                vrf_pk.clone(),
                 PerThousand::new(margin_ratio_per_thousand).unwrap(),
                 cost_per_block,
             );
@@ -502,6 +502,46 @@ where
             // the old data should still be there
             let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
             assert_eq!(pool_data, random_pool_data);
+
+            // decommission one of the pools
+            let decommissioned_random_pool_data = PoolData::new(
+                Destination::PublicKey(pk),
+                Amount::ZERO,
+                Amount::ZERO,
+                vrf_pk,
+                PerThousand::new(margin_ratio_per_thousand).unwrap(),
+                cost_per_block,
+            );
+            eprintln!("setting pledge to 0 for pool {random_pool_id:?}");
+            db_tx
+                .set_pool_data_at_height(
+                    random_pool_id,
+                    &decommissioned_random_pool_data,
+                    random_block_height.next_height().next_height(),
+                )
+                .await
+                .unwrap();
+
+            if random_block_height2 < random_block_height {
+                let latest_pool_data = db_tx.get_latest_pool_data(2, 0).await.unwrap();
+                assert_eq!(latest_pool_data.len(), 1);
+                let (latest_pool_id, latest_pool_data) = latest_pool_data.last().unwrap();
+                assert_eq!(*latest_pool_id, random_pool_id2);
+                assert_eq!(latest_pool_data, &random_pool_data2);
+
+                let latest_pool_data =
+                    db_tx.get_pool_data_with_largest_staker_balance(2, 0).await.unwrap();
+                assert_eq!(latest_pool_data.len(), 1);
+                let (latest_pool_id, latest_pool_data) = latest_pool_data.last().unwrap();
+                assert_eq!(*latest_pool_id, random_pool_id2);
+                assert_eq!(latest_pool_data, &random_pool_data2);
+            } else {
+                let latest_pool_data = db_tx.get_latest_pool_data(2, 0).await.unwrap();
+                assert_eq!(latest_pool_data.len(), 0);
+                let latest_pool_data =
+                    db_tx.get_pool_data_with_largest_staker_balance(2, 0).await.unwrap();
+                assert_eq!(latest_pool_data.len(), 0);
+            }
         }
 
         db_tx.commit().await.unwrap();
