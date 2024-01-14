@@ -135,7 +135,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
-            ConnectTransactionError::StakerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::StakerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
@@ -166,6 +165,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
+            ConnectTransactionError::PoolBalanceNotFound(_) => 0,
             ConnectTransactionError::StorageError(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
@@ -173,6 +173,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
             ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 0,
             ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 0,
+            ConnectTransactionError::StakerRewardOverflow(_, _, _, _) => 0,
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
@@ -181,6 +182,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
+            ConnectTransactionError::PoolBalanceIsZero(_) => 0,
         }
     }
 }

@@ -104,8 +104,8 @@ pub enum ConnectTransactionError {
     StakerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
-    StakerRewardCalculationFailed(Id<Block>, PoolId),
+    #[error("Balance of pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
     #[error(
         "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
     )]
@@ -116,10 +116,14 @@ pub enum ConnectTransactionError {
     DelegationsRewardSumFailed(Id<Block>, PoolId),
     #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
     DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
+    #[error("Reward for staker {0} overflowed: {1:?}*{2:?}/{3:?}")]
+    StakerRewardOverflow(PoolId, Amount, Amount, Amount),
     #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Total balance of delegations in pool {0} is zero")]
     TotalDelegationBalanceZero(PoolId),
+    #[error("Balance of pool {0} is zero")]
+    PoolBalanceIsZero(PoolId),
     #[error("Data for delegation {0} not found")]
     DelegationDataNotFound(DelegationId),
 

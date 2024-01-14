@@ -20,7 +20,9 @@ use crate::error::ConnectTransactionError;
 
 use common::{
     chain::{Block, DelegationId, PoolId},
-    primitives::{per_thousand::PerThousand, Amount, Id},
+    primitives::{
+        amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand, Amount, Id,
+    },
     Uint256,
 };
 use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
@@ -39,15 +41,18 @@ pub fn distribute_pos_reward<
     let pool_data = accounting_adapter
         .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
+    let pool_balance = accounting_adapter
+        .get_pool_balance(pool_id)?
+        .ok_or(ConnectTransactionError::PoolBalanceNotFound(pool_id))?;
 
     let staker_reward = calculate_staker_reward(
         total_reward,
+        pool_balance,
+        pool_data.staker_balance()?,
         pool_data.cost_per_block(),
         pool_data.margin_ratio_per_thousand(),
-    )
-    .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
-        block_id, pool_id,
-    ))?;
+        pool_id,
+    )?;
 
     let total_delegations_reward = (total_reward - staker_reward).ok_or(
         ConnectTransactionError::StakerRewardCannotExceedTotalReward(
@@ -105,19 +110,47 @@ pub fn distribute_pos_reward<
 
 fn calculate_staker_reward(
     total_reward: Amount,
+    pool_balance: Amount,
+    staker_balance: Amount,
     cost_per_block: Amount,
     mpt: PerThousand,
-) -> Option<Amount> {
+    pool_id: PoolId,
+) -> Result<Amount, ConnectTransactionError> {
+    debug_assert!(staker_balance <= pool_balance);
+
     let staker_reward = match total_reward - cost_per_block {
-        Some(v) => (v * mpt.value().into())
-            .and_then(|v| v / 1000)
-            .and_then(|v| v + cost_per_block)?,
+        Some(v) => {
+            let pool_balance = Uint256::from_amount(pool_balance);
+            let staker_balance = Uint256::from_amount(staker_balance);
+            let numer =
+                (Uint256::from_amount(v) * staker_balance).expect("Source types are smaller");
+            let pro_rata_staker_reward = (numer / pool_balance)
+                .ok_or(ConnectTransactionError::PoolBalanceIsZero(pool_id))?;
+            let pro_rata_staker_reward: AmountUIntType = pro_rata_staker_reward
+                .try_into()
+                .expect("cannot be greater than total_reward type");
+            let pro_rata_staker_reward = Amount::from_atoms(pro_rata_staker_reward);
+
+            let delegations_reward =
+                (v - pro_rata_staker_reward).expect("cannot be greater than total reward");
+
+            (delegations_reward * mpt.value().into())
+                .and_then(|v| v / 1000)
+                .and_then(|v| v + pro_rata_staker_reward)
+                .and_then(|v| v + cost_per_block)
+                .ok_or(ConnectTransactionError::StakerRewardOverflow(
+                    pool_id,
+                    delegations_reward,
+                    Amount::from_atoms(mpt.value() as AmountUIntType),
+                    Amount::from_atoms(1000),
+                ))?
+        }
         // if cost per block > total reward then give the reward to staker
         None => total_reward,
     };
 
     debug_assert!(staker_reward <= total_reward);
-    Some(staker_reward)
+    Ok(staker_reward)
 }
 
 /// The reward is distributed among delegations proportionally to their balance
@@ -190,15 +223,14 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
                 let numer = (total_delegations_reward * balance).expect("Source types are smaller");
                 let reward = (numer / total_delegations_balance)
                     .ok_or(ConnectTransactionError::TotalDelegationBalanceZero(pool_id))?;
-                let reward: common::primitives::amount::UnsignedIntType =
-                    reward.try_into().map_err(|_| {
-                        ConnectTransactionError::DelegationRewardOverflow(
-                            *delegation_id,
-                            total_delegations_amount,
-                            total_delegations_reward_amount,
-                            *balance_amount,
-                        )
-                    })?;
+                let reward: AmountUIntType = reward.try_into().map_err(|_| {
+                    ConnectTransactionError::DelegationRewardOverflow(
+                        *delegation_id,
+                        total_delegations_amount,
+                        total_delegations_reward_amount,
+                        *balance_amount,
+                    )
+                })?;
                 Ok((*delegation_id, Amount::from_atoms(reward)))
             },
         )
@@ -244,7 +276,11 @@ mod tests {
     fn calculate_staker_reward_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
+        let pool_id = new_pool_id(1);
         let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
+        let pool_balance = Amount::from_atoms(rng.gen_range(1..=100_000_000));
+        let staker_balance = Amount::from_atoms(rng.gen_range(1..=pool_balance.into_atoms()));
+
         let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
         let cost_per_block_over_reward =
             (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
@@ -252,50 +288,123 @@ mod tests {
         let mpt_zero = PerThousand::new(0).unwrap();
         let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
 
-        assert!(calculate_staker_reward(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_staker_reward(Amount::ZERO, Amount::ZERO, mpt).is_some());
-        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt).is_some());
-        assert!(calculate_staker_reward(reward, Amount::ZERO, mpt_zero).is_some());
-        assert!(calculate_staker_reward(reward, cost_per_block, mpt_zero).is_some());
-        assert!(calculate_staker_reward(reward, cost_per_block, mpt).is_some());
+        assert_eq!(
+            calculate_staker_reward(
+                Amount::ZERO,
+                Amount::ZERO,
+                Amount::ZERO,
+                Amount::ZERO,
+                mpt_zero,
+                pool_id
+            ),
+            Err(ConnectTransactionError::PoolBalanceIsZero(pool_id))
+        );
+        assert_eq!(
+            calculate_staker_reward(
+                reward,
+                Amount::ZERO,
+                Amount::ZERO,
+                cost_per_block,
+                mpt_zero,
+                pool_id
+            ),
+            Err(ConnectTransactionError::PoolBalanceIsZero(pool_id))
+        );
+        assert!(calculate_staker_reward(
+            reward,
+            pool_balance,
+            staker_balance,
+            Amount::ZERO,
+            mpt_zero,
+            pool_id
+        )
+        .is_ok());
+        assert!(calculate_staker_reward(
+            reward,
+            pool_balance,
+            staker_balance,
+            Amount::ZERO,
+            mpt,
+            pool_id
+        )
+        .is_ok());
+        assert!(calculate_staker_reward(
+            reward,
+            pool_balance,
+            Amount::ZERO,
+            Amount::ZERO,
+            mpt,
+            pool_id
+        )
+        .is_ok());
         // negative amount
         assert_eq!(
-            calculate_staker_reward(Amount::ZERO, cost_per_block, mpt_zero),
-            Some(Amount::ZERO)
+            calculate_staker_reward(
+                Amount::ZERO,
+                pool_balance,
+                staker_balance,
+                cost_per_block,
+                mpt_zero,
+                pool_id
+            ),
+            Ok(Amount::ZERO)
         );
         // cost per block > reward
         assert_eq!(
-            calculate_staker_reward(reward, cost_per_block_over_reward, mpt_zero),
-            Some(reward)
+            calculate_staker_reward(
+                reward,
+                pool_balance,
+                staker_balance,
+                cost_per_block_over_reward,
+                mpt_zero,
+                pool_id
+            ),
+            Ok(reward)
         );
         // overflow
-        assert!(calculate_staker_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none());
+        assert!(calculate_staker_reward(
+            Amount::MAX,
+            pool_balance,
+            staker_balance,
+            cost_per_block,
+            mpt_more_than_one,
+            pool_id
+        )
+        .is_err());
 
         // arbitrary values
         assert_eq!(
             calculate_staker_reward(
                 Amount::from_atoms(100),
+                Amount::from_atoms(1000),
+                Amount::from_atoms(500),
                 Amount::from_atoms(10),
-                PerThousand::new(100).unwrap()
+                PerThousand::new(100).unwrap(),
+                pool_id
             ),
-            Some(Amount::from_atoms(19))
+            Ok(Amount::from_atoms(59))
         );
         assert_eq!(
             calculate_staker_reward(
                 Amount::from_atoms(1100),
+                Amount::from_atoms(1000),
+                Amount::from_atoms(500),
                 Amount::from_atoms(100),
-                PerThousand::new(100).unwrap()
+                PerThousand::new(100).unwrap(),
+                pool_id
             ),
-            Some(Amount::from_atoms(200))
+            Ok(Amount::from_atoms(650))
         );
         assert_eq!(
             calculate_staker_reward(
                 Amount::from_atoms(10_000),
+                Amount::from_atoms(700),
+                Amount::from_atoms(55),
                 Amount::from_atoms(33),
-                PerThousand::new(111).unwrap()
+                PerThousand::new(111).unwrap(),
+                pool_id
             ),
-            Some(Amount::from_atoms(1139))
+            Ok(Amount::from_atoms(1835))
         );
     }
 
@@ -344,7 +453,7 @@ mod tests {
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
         );
-        let expected_staker_reward = Amount::from_atoms(150);
+        let expected_staker_reward = Amount::from_atoms(278);
         let expected_pool_data_a = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
@@ -389,24 +498,24 @@ mod tests {
             BTreeMap::from([
                 (
                     (pool_id_a, delegation_a_1),
-                    (delegation_a_1_amount + Amount::from_atoms(300)).unwrap(),
+                    (delegation_a_1_amount + Amount::from_atoms(257)).unwrap(),
                 ),
                 ((pool_id_b, delegation_b_1), delegation_b_1_amount),
                 (
                     (pool_id_a, delegation_a_2),
-                    (delegation_a_2_amount + Amount::from_atoms(600)).unwrap(),
+                    (delegation_a_2_amount + Amount::from_atoms(515)).unwrap(),
                 ),
                 ((pool_id_b, delegation_b_2), delegation_b_2_amount),
             ]),
             BTreeMap::from_iter([
                 (
                     delegation_a_1,
-                    (delegation_a_1_amount + Amount::from_atoms(300)).unwrap(),
+                    (delegation_a_1_amount + Amount::from_atoms(257)).unwrap(),
                 ),
                 (delegation_b_1, delegation_b_1_amount),
                 (
                     delegation_a_2,
-                    (delegation_a_2_amount + Amount::from_atoms(600)).unwrap(),
+                    (delegation_a_2_amount + Amount::from_atoms(515)).unwrap(),
                 ),
                 (delegation_b_2, delegation_b_2_amount),
             ]),
@@ -464,17 +573,26 @@ mod tests {
         let delegation_2_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let total_delegation_shares = (delegation_1_balance + delegation_2_balance).unwrap();
 
-        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = PerThousand::new_from_rng(&mut rng);
-        let total_delegation_reward =
-            (reward - calculate_staker_reward(reward, cost_per_block, mpt).unwrap()).unwrap();
-
         let original_pool_balance = amount_sum!(
             original_pledged_amount,
             delegation_1_balance,
             delegation_2_balance
         )
+        .unwrap();
+
+        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let mpt = PerThousand::new_from_rng(&mut rng);
+        let total_delegation_reward = (reward
+            - calculate_staker_reward(
+                reward,
+                original_pool_balance,
+                original_pledged_amount,
+                cost_per_block,
+                mpt,
+                pool_id,
+            )
+            .unwrap())
         .unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);

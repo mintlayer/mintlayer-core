@@ -1770,11 +1770,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
-    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+    let pledge_amount = create_unit_test_config().min_stake_pool_pledge();
 
     let staker_reward_per_block = Amount::from_atoms(1000);
     let stake_pool_data = StakePoolData::new(
-        amount_to_stake,
+        pledge_amount,
         Destination::PublicKey(staking_pk),
         vrf_pk,
         Destination::AnyoneCanSpend,
@@ -1795,10 +1795,6 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // Process block_1: create delegation and delegate some amount
-
-    let block_subsidy =
-        tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
-    let delegation_reward_per_block = (block_subsidy - staker_reward_per_block).unwrap();
 
     let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -1866,9 +1862,8 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .unwrap();
 
     // Process block_4 and spend some share including reward
-    let delegation_balance = (amount_to_delegate - amount_to_withdraw)
-        .and_then(|balance| balance + (delegation_reward_per_block * 3).unwrap())
-        .unwrap();
+    let delegation_balance =
+        tf.chainstate.get_stake_delegation_balance(delegation_id).unwrap().unwrap();
 
     // try overspend
     {
