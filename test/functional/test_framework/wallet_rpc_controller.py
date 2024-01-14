@@ -44,12 +44,12 @@ class UtxoOutpoint:
 @dataclass
 class PoolData:
     pool_id: str
-    balance: float
+    balance: str
 
 @dataclass
 class DelegationData:
     delegation_id: str
-    balance: float
+    balance: str
 
 class WalletRpcController:
 
@@ -226,7 +226,7 @@ class WalletRpcController:
 
     async def list_pool_ids(self) -> List[PoolData]:
         pools = self._write_command("list_pool_ids", [self.account])['result']
-        return [PoolData(pool['pool_id'], int(pool['balance'])) for pool in pools]
+        return [PoolData(pool['pool_id'], pool['balance']) for pool in pools]
 
     async def list_created_blocks_ids(self) -> List[str]:
         return self._write_command("list_created_blocks_ids", [self.account])['result']
@@ -240,7 +240,7 @@ class WalletRpcController:
 
     async def list_delegation_ids(self) -> List[DelegationData]:
         delegations = self._write_command("list_delegation_ids", [self.account])['result']
-        return [DelegationData(delegation['delegation_id'], float(delegation['balance'])) for delegation in delegations]
+        return [DelegationData(delegation['delegation_id'], delegation['balance']) for delegation in delegations]
 
     async def deposit_data(self, data: str) -> str:
         return await self._write_command(f"depositdata \"{data}\"\n")
