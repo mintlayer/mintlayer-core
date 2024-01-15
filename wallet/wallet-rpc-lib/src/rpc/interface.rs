@@ -31,7 +31,7 @@ trait WalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
-    #[method(name = "create_wallet")]
+    #[method(name = "wallet_create")]
     async fn create_wallet(
         &self,
         path: String,
@@ -39,54 +39,54 @@ trait WalletRpc {
         mnemonic: Option<String>,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "open_wallet")]
+    #[method(name = "wallet_open")]
     async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()>;
 
-    #[method(name = "close_wallet")]
+    #[method(name = "wallet_close")]
     async fn close_wallet(&self) -> rpc::RpcResult<()>;
 
-    #[method(name = "sync")]
+    #[method(name = "wallet_sync")]
     async fn sync(&self) -> rpc::RpcResult<()>;
 
-    #[method(name = "best_block")]
+    #[method(name = "wallet_best_block")]
     async fn best_block(&self, options: EmptyArgs) -> rpc::RpcResult<BlockInfo>;
 
-    #[method(name = "create_account")]
+    #[method(name = "account_create")]
     async fn create_account(&self, options: EmptyArgs) -> rpc::RpcResult<NewAccountInfo>;
 
-    #[method(name = "get_issued_addresses")]
+    #[method(name = "address_show")]
     async fn get_issued_addresses(
         &self,
         options: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
 
-    #[method(name = "issue_address")]
+    #[method(name = "address_new")]
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo>;
 
-    #[method(name = "issue_public_key")]
+    #[method(name = "address_new_public_key")]
     async fn issue_public_key(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<PublicKeyInfo>;
 
-    #[method(name = "get_balance")]
+    #[method(name = "account_balance")]
     async fn get_balance(
         &self,
         account_index: AccountIndexArg,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances>;
 
-    #[method(name = "get_utxos")]
+    #[method(name = "account_utxos")]
     async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>>;
 
-    #[method(name = "submit_raw_transaction")]
+    #[method(name = "node_submit_transaction")]
     async fn submit_raw_transaction(
         &self,
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "send_coins")]
+    #[method(name = "address_send")]
     async fn send_coins(
         &self,
         account_index: AccountIndexArg,
@@ -95,7 +95,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "create_stake_pool")]
+    #[method(name = "staking_create_pool")]
     async fn create_stake_pool(
         &self,
         account_index: AccountIndexArg,
@@ -106,7 +106,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "decommission_stake_pool")]
+    #[method(name = "staking_decommission_pool")]
     async fn decommission_stake_pool(
         &self,
         account_index: AccountIndexArg,
@@ -114,7 +114,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "create_delegation")]
+    #[method(name = "delegation_create")]
     async fn create_delegation(
         &self,
         account_index: AccountIndexArg,
@@ -123,7 +123,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewDelegation>;
 
-    #[method(name = "delegate_staking")]
+    #[method(name = "delegation_stake")]
     async fn delegate_staking(
         &self,
         account_index: AccountIndexArg,
@@ -132,7 +132,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "send_from_delegation_to_address")]
+    #[method(name = "delegation_send_to_address")]
     async fn send_from_delegation_to_address(
         &self,
         account_index: AccountIndexArg,
@@ -142,22 +142,22 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 
-    #[method(name = "start_staking")]
+    #[method(name = "staking_start")]
     async fn start_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()>;
 
-    #[method(name = "stop_staking")]
+    #[method(name = "staking_stop")]
     async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()>;
 
-    #[method(name = "list_pool_ids")]
+    #[method(name = "staking_list_pool_ids")]
     async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>>;
 
-    #[method(name = "list_delegation_ids")]
+    #[method(name = "delegation_list_ids")]
     async fn list_delegation_ids(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<DelegationInfo>>;
 
-    #[method(name = "list_created_blocks_ids")]
+    #[method(name = "staking_list_created_block_ids")]
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,

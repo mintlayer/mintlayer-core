@@ -116,17 +116,17 @@ class WalletRpcController:
 
     async def create_wallet(self) -> str:
         wallet_file = os.path.join(self.node.datadir, "wallet")
-        self._write_command("create_wallet", [wallet_file, True])
+        self._write_command("wallet_create", [wallet_file, True])
         return "Sucess"
 
     async def get_best_block_height(self) -> str:
-        return str(self._write_command("best_block", [{}])['result']['height'])
+        return str(self._write_command("wallet_best_block", [{}])['result']['height'])
 
     async def get_best_block(self) -> str:
-        return self._write_command("best_block", [{}])['result']['id']
+        return self._write_command("wallet_best_block", [{}])['result']['id']
 
     async def create_new_account(self, name: Optional[str] = '') -> str:
-        self._write_command("create_account", [{}])
+        self._write_command("account_create", [{}])
         return "Success"
 
     async def select_account(self, account_index: int) -> str:
@@ -134,14 +134,14 @@ class WalletRpcController:
         return "Success"
 
     async def new_public_key(self) -> bytes:
-        public_key = self._write_command("issue_public_key", [self.account])['result']['public_key']
+        public_key = self._write_command("address_new_public_key", [self.account])['result']['public_key']
 
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
     async def new_address(self) -> str:
-        return self._write_command(f"issue_address", [self.account])['result']['address']
+        return self._write_command(f"address_new", [self.account])['result']['address']
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"listutxo {utxo_types} {with_locked} {''.join(utxo_states)}\n")
@@ -157,7 +157,7 @@ class WalletRpcController:
         return await self._write_command(f"getrawsignedtransaction {tx_id}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
-        self._write_command("send_coins", [self.account, address, str(amount), {'in_top_x_mb': 5}])
+        self._write_command("address_send", [self.account, address, str(amount), {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
@@ -217,44 +217,44 @@ class WalletRpcController:
                                 margin_ratio_per_thousand: float,
                                 decommission_key: Optional[str] = None) -> str:
         #decommission_key = decommission_key if decommission_key else 'NULL'
-        self._write_command("create_stake_pool", [self.account, str(amount), str(cost_per_block), str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
+        self._write_command("staking_create_pool", [self.account, str(amount), str(cost_per_block), str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
-        self._write_command("decommission_stake_pool", [self.account, pool_id, {'in_top_x_mb': 5}])['result']
+        self._write_command("staking_decommission_pool", [self.account, pool_id, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:
-        pools = self._write_command("list_pool_ids", [self.account])['result']
+        pools = self._write_command("staking_list_pool_ids", [self.account])['result']
         return [PoolData(pool['pool_id'], pool['balance']) for pool in pools]
 
     async def list_created_blocks_ids(self) -> List[str]:
-        return self._write_command("list_created_blocks_ids", [self.account])['result']
+        return self._write_command("staking_list_created_block_ids", [self.account])['result']
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
-        return self._write_command("create_delegation", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']
+        return self._write_command("delegation_create", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']
 
     async def stake_delegation(self, amount: int, delegation_id: str) -> str:
-        self._write_command(f"delegate_staking", [self.account, str(amount), delegation_id, {'in_top_x_mb': 5}])['result']
+        self._write_command(f"delegation_stake", [self.account, str(amount), delegation_id, {'in_top_x_mb': 5}])['result']
         return "Success"
 
     async def list_delegation_ids(self) -> List[DelegationData]:
-        delegations = self._write_command("list_delegation_ids", [self.account])['result']
+        delegations = self._write_command("delegation_list_ids", [self.account])['result']
         return [DelegationData(delegation['delegation_id'], delegation['balance']) for delegation in delegations]
 
     async def deposit_data(self, data: str) -> str:
         return await self._write_command(f"depositdata \"{data}\"\n")
 
     async def sync(self) -> str:
-        self._write_command("sync")
+        self._write_command("wallet_sync")
         return "Success"
 
     async def start_staking(self) -> str:
-        self._write_command(f"start_staking", [self.account])['result']
+        self._write_command(f"staking_start", [self.account])['result']
         return "Staking started successfully"
 
     async def stop_staking(self) -> str:
-        self._write_command(f"stop_staking", [self.account])['result']
+        self._write_command(f"staking_stop", [self.account])['result']
         return "Success"
 
     async def get_addresses_usage(self) -> str:
@@ -262,7 +262,7 @@ class WalletRpcController:
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
-        balances = self._write_command("get_balance", [self.account, with_locked])# {' '.join(utxo_states)})
+        balances = self._write_command("account_balance", [self.account, with_locked])# {' '.join(utxo_states)})
         return f"Coins amount: {balances['result']['coins']}"
 
     async def list_pending_transactions(self) -> List[str]:
