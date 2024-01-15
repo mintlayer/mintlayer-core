@@ -238,9 +238,20 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
+        decommission_pub_key_encoded = ""
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # new cold wallet
+            await wallet.create_wallet("cold_wallet")
+
+            decommission_pub_key_bytes = await wallet.new_public_key()
+            decommission_pub_key_encoded = pub_key_obj.encode(self.public_key(decommission_pub_key_bytes.hex())).to_hex()[2:]
+
+        decommission_req = ""
+
         async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new hot wallet
-            await wallet.create_wallet()
+            await wallet.create_wallet("hot_wallet")
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
@@ -275,25 +286,8 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 50000", balance)
 
-            # create new account that would hold decommission key
-            assert_in("Success", await wallet.create_new_account())
-            assert_in("Success", await wallet.select_account(1))
-            acc1_address = await wallet.new_address()
-            decommission_pub_key_bytes = await wallet.new_public_key()
-            decommission_pub_key_encoded  = pub_key_obj.encode(self.public_key(decommission_pub_key_bytes.hex())).to_hex()[2:]
-
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 100))
-            assert_in("Success", await wallet.select_account(1))
-            transactions = node.mempool_transactions()
-
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-
             assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_pub_key_encoded))
-            transactions2 = node.mempool_transactions()
-            for tx in transactions2:
-                if tx not in transactions:
-                    transactions.append(tx)
+            transactions = node.mempool_transactions()
 
             self.gen_pos_block(transactions, 2)
             assert_in("Success", await wallet.sync())
@@ -302,14 +296,33 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_equal(len(pools), 1)
             assert_equal(pools[0].balance, 40000)
 
+            # try decommission from hot wallet
+            assert_in("Controller error: Wallet error: Cannot use partially signed transaction in a decommission command",
+                       await wallet.decommission_stake_pool(pools[0].pool_id))
+
             # create decommission request
             decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
             decommission_req = decommission_req_output.split('\n')[1]
 
-            # switch accounts and sign decommission request
-            assert_in("Success", await wallet.select_account(1))
+            # try to sign decommission request from hot wallet
+            assert_in("Controller error: Wallet error: Input cannot be signed",
+                       await wallet.sign_raw_transaction(decommission_req))
+
+        decommission_signed_tx = ""
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # open cold wallet
+            await wallet.open_wallet("cold_wallet")
+            assert_in("Success", await wallet.sync())
+
+            # sign decommission request
             decommission_signed_tx_output = await wallet.sign_raw_transaction(decommission_req)
             decommission_signed_tx = decommission_signed_tx_output.split('\n')[1]
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # open hot wallet
+            await wallet.open_wallet("hot_wallet")
+
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(decommission_signed_tx))
 
             self.gen_pos_block(node.mempool_transactions(), 3)

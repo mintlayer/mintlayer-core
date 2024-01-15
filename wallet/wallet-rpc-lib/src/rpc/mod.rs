@@ -314,7 +314,7 @@ impl WalletRpc {
         account_index: U31,
         tx: HexEncoded<PartiallySignedTransaction>,
         config: ControllerConfig,
-    ) -> WRpcResult<HexEncoded<SignedTransaction>> {
+    ) -> WRpcResult<SignedTransaction> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -322,7 +322,7 @@ impl WalletRpc {
                         .synced_controller(account_index, config)
                         .await?
                         .sign_raw_transaction(tx.take())?;
-                    Ok::<HexEncoded<SignedTransaction>, ControllerError<_>>(tx)
+                    Ok::<SignedTransaction, ControllerError<_>>(tx)
                 })
             })
             .await?
@@ -454,7 +454,7 @@ impl WalletRpc {
         account_index: U31,
         pool_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<HexEncoded<PartiallySignedTransaction>> {
+    ) -> WRpcResult<PartiallySignedTransaction> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
@@ -467,7 +467,7 @@ impl WalletRpc {
                         .await?
                         .decommission_stake_pool_request(pool_id)
                         .await?;
-                    Ok::<HexEncoded<PartiallySignedTransaction>, ControllerError<_>>(tx)
+                    Ok::<PartiallySignedTransaction, ControllerError<_>>(tx)
                 })
             })
             .await?

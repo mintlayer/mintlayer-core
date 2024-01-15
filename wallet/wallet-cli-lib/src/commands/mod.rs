@@ -79,6 +79,13 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
+    /// Signs the inputs that are not yet signed
+    #[clap(name = "account-sign-raw-transaction")]
+    SignRawTransaction {
+        /// Hex encoded transaction.
+        transaction: HexEncoded<PartiallySignedTransaction>,
+    },
+
     /// Issue a new non-fungible token (NFT) from scratch
     #[clap(name = "token-nft-issue-new")]
     IssueNewNft {
@@ -483,13 +490,6 @@ pub enum WalletCommand {
     SubmitTransaction {
         /// Hex encoded transaction.
         transaction: HexEncoded<SignedTransaction>,
-    },
-
-    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
-    #[clap(name = "node-sign-raw-transaction")]
-    SignRawTransaction {
-        /// Hex encoded transaction.
-        transaction: HexEncoded<PartiallySignedTransaction>,
     },
 
     /// Returns the current node's chainstate (block height information and more)
@@ -908,11 +908,12 @@ impl CommandHandler {
                     .wallet_rpc
                     .sign_raw_transaction(selected_account, transaction, self.config)
                     .await?;
+                let result_hex: HexEncoded<SignedTransaction> = result.into();
 
                 let output_str = format!(
                     "Transaction has been signed. \
                     Pass the following string into the wallet to broadcast:\n{}",
-                    result
+                    result_hex
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
@@ -1288,10 +1289,12 @@ impl CommandHandler {
                     .wallet_rpc
                     .decommission_stake_pool_request(selected_account, pool_id, self.config)
                     .await?;
+                let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
+
                 let output_str = format!(
                     "Decommission transaction created. \
                     Pass the following string into the wallet with private key to sign:\n{}",
-                    result
+                    result_hex
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
