@@ -361,6 +361,92 @@ mod tests {
         );
     }
 
+    #[test]
+    fn calculate_staker_reward_test_v1_continuity() {
+        // Ensure that results are continuous when there's delegation and where there's none
+
+        let pool_id = new_pool_id(1);
+
+        {
+            // No delegators, all goes to staker
+            assert_eq!(
+                calculate_staker_reward_v1(
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(0),
+                    PerThousand::new(0).unwrap(),
+                    pool_id
+                ),
+                Ok(Amount::from_atoms(100))
+            );
+        }
+
+        {
+            // With and without cost-per-block, the only difference is subtracting at the beginning
+            assert_eq!(
+                calculate_staker_reward_v1(
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(90),
+                    Amount::from_atoms(0),
+                    PerThousand::new(0).unwrap(),
+                    pool_id
+                ),
+                Ok(Amount::from_atoms(90))
+            );
+
+            let cost_per_block = 50;
+            assert_eq!(
+                calculate_staker_reward_v1(
+                    Amount::from_atoms(100 + cost_per_block),
+                    Amount::from_atoms(100),
+                    Amount::from_atoms(90),
+                    Amount::from_atoms(cost_per_block),
+                    PerThousand::new(0).unwrap(),
+                    pool_id
+                ),
+                Ok(Amount::from_atoms(90 + cost_per_block))
+            );
+        }
+
+        {
+            // When a margin ratio exists, we subtract the share then multiply the ratio by what's left to get the reward for staker from delegators' share
+            let total_reward = 100;
+            let pool_balance = 100;
+            let staker_balance = 90;
+            assert_eq!(
+                calculate_staker_reward_v1(
+                    Amount::from_atoms(total_reward),
+                    Amount::from_atoms(pool_balance),
+                    Amount::from_atoms(staker_balance),
+                    Amount::from_atoms(0),
+                    PerThousand::new(0).unwrap(),
+                    pool_id
+                ),
+                Ok(Amount::from_atoms(90))
+            );
+
+            let margin_ratio_for_staker = 100; // 100/10=10%
+            let expected_share_from_delegators_reward =
+                (total_reward - (total_reward * staker_balance) / pool_balance) * 10 / 100;
+            assert_eq!(expected_share_from_delegators_reward, 1);
+            assert_eq!(
+                calculate_staker_reward_v1(
+                    Amount::from_atoms(total_reward),
+                    Amount::from_atoms(pool_balance),
+                    Amount::from_atoms(staker_balance),
+                    Amount::from_atoms(0),
+                    PerThousand::new(margin_ratio_for_staker).unwrap(),
+                    pool_id
+                ),
+                Ok(Amount::from_atoms(
+                    90 + expected_share_from_delegators_reward
+                ))
+            );
+        }
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
