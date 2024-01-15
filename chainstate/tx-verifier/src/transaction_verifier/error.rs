@@ -100,16 +100,16 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
-    #[error("Pool owner balance of pool {0} not found")]
-    PoolOwnerBalanceNotFound(PoolId),
+    #[error("Staker balance of pool {0} not found")]
+    StakerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Failed to calculate reward for block {0} for owner of the pool {1}")]
-    PoolOwnerRewardCalculationFailed(Id<Block>, PoolId),
+    #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
+    StakerRewardCalculationFailed(Id<Block>, PoolId),
     #[error(
-        "Reward in block {0} for owner of the pool {1} which is {2:?} cannot be bigger than total reward {3:?}"
+        "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
     )]
-    PoolOwnerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
     #[error("Unexpected pool id in kernel {0} doesn't match pool id {1}")]
     UnexpectedPoolId(PoolId, PoolId),
     #[error("Failed to sum block {0} reward for pool {1} delegations")]

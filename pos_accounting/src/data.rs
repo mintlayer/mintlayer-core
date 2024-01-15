@@ -28,7 +28,7 @@ pub struct PoSAccountingData {
     /// A collection of all the pools and their data.
     pub pool_data: BTreeMap<PoolId, PoolData>,
     /// A collection of all the pools and their total balances
-    /// which are owners balance + balances of all the delegations
+    /// which are staker balance + balances of all the delegations
     pub pool_balances: BTreeMap<PoolId, Amount>,
     /// A collection of shares of delegations in pools.
     /// Useful to retrieve all delegation balances for a pool.

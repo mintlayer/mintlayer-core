@@ -61,7 +61,7 @@ pub fn calculate_new_target(
 
 // Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
 // with this pool data
-pub fn create_stake_pool_data_with_all_reward_to_owner(
+pub fn create_stake_pool_data_with_all_reward_to_staker(
     rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
     vrf_pk: VRFPublicKey,
@@ -74,7 +74,7 @@ pub fn create_stake_pool_data_with_all_reward_to_owner(
             Destination::PublicKey(pk),
             vrf_pk,
             Destination::AnyoneCanSpend,
-            PerThousand::new(1000).unwrap(), // give all reward to the owner
+            PerThousand::new(1000).unwrap(), // give all reward to the staker
             Amount::ZERO,
         ),
         sk,

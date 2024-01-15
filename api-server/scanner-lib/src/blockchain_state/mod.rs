@@ -275,13 +275,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             }
             TxOutput::CreateStakePool(pool_id, pool_data) => {
                 let staker = pool_data.staker();
-                let pool_data = PoolData::new(
-                    pool_data.decommission_key().clone(),
-                    pool_data.value(),
-                    pool_data.vrf_public_key().clone(),
-                    pool_data.margin_ratio_per_thousand(),
-                    pool_data.cost_per_block(),
-                );
+                let pool_data: PoolData = pool_data.as_ref().clone().into();
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &pool_data, block_height)
@@ -306,7 +300,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 increase_address_amount(
                     db_tx,
                     &address,
-                    &pool_data.pledge_amount(),
+                    &pool_data.staker_balance().expect("no overflow"),
                     CoinOrTokenId::Coin,
                     block_height,
                 )
@@ -424,14 +418,14 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
     let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
 
-    let pledge_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
+    let staker_balance_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
     // only used for checks for attempted to print money but we don't need to check that here
     let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        pledge_getter,
+        staker_balance_getter,
         delegation_balance_getter,
         tx.inputs(),
         &inputs_utxos,
@@ -454,8 +448,12 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let amount =
-                    db_tx.get_pool_data(*pool_id).await?.expect("should exist").pledge_amount();
+                let amount = db_tx
+                    .get_pool_data(*pool_id)
+                    .await?
+                    .expect("should exist")
+                    .staker_balance()
+                    .expect("no overflow");
                 pools.insert(*pool_id, amount);
             }
             Some(
@@ -759,7 +757,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             decrease_address_amount(
                                 db_tx,
                                 address,
-                                &pool_data.pledge_amount(),
+                                &pool_data.staker_balance().expect("no overflow"),
                                 CoinOrTokenId::Coin,
                                 block_height,
                             )
@@ -961,14 +959,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
                 // Create pool pledge
-
-                let new_pool_data = PoolData::new(
-                    stake_pool_data.decommission_key().clone(),
-                    stake_pool_data.value(),
-                    stake_pool_data.vrf_public_key().clone(),
-                    stake_pool_data.margin_ratio_per_thousand(),
-                    stake_pool_data.cost_per_block(),
-                );
+                let new_pool_data: PoolData = stake_pool_data.as_ref().clone().into();
 
                 db_tx
                     .set_pool_data_at_height(*pool_id, &new_pool_data, block_height)

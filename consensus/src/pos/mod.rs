@@ -174,10 +174,10 @@ where
     let pool_balance = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
-    let pledge_amount = pos_accounting_view
+    let staker_balance = pos_accounting_view
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
-        .pledge_amount();
+        .staker_balance()?;
     let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
@@ -189,7 +189,7 @@ where
         pos_data,
         &vrf_pub_key,
         header.timestamp(),
-        pledge_amount,
+        staker_balance,
         pool_balance,
         final_supply.to_amount_atoms(),
     )?;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
+use super::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
 
 use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
@@ -62,7 +62,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -106,7 +106,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
@@ -147,7 +147,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
@@ -212,7 +212,7 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let outpoint0 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx0_id), 1);
         let pool_id = pos_accounting::make_pool_id(&outpoint0);
 
@@ -271,7 +271,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
         let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
@@ -325,7 +325,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_owner(
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(
             &mut rng,
             genesis_overspend_amount,
             vrf_pk,
@@ -374,7 +374,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
 
         // invalid case
         let amount_to_stake = Amount::from_atoms(rng.gen_range(1..min_pledge.into_atoms()));
-        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_owner(
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(
             &mut rng,
             amount_to_stake,
             vrf_pk.clone(),
@@ -403,7 +403,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
 
         // valid case
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, min_pledge, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, min_pledge, vrf_pk);
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateStakePool(
@@ -430,7 +430,7 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -515,7 +515,7 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
         let amount_to_stake =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
-            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),

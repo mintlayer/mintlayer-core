@@ -375,13 +375,15 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
-    async fn get_pool_data_with_largest_pledge(
+    async fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
         offset: u32,
     ) -> Result<Vec<(PoolId, PoolData)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_data_with_largest_pledge(len, offset, &self.chain_config).await?;
+        let res = conn
+            .get_pool_data_with_largest_staker_balance(len, offset, &self.chain_config)
+            .await?;
 
         Ok(res)
     }

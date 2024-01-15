@@ -17,7 +17,7 @@ use std::{num::NonZeroU64, time::Duration};
 
 use super::helpers::pos::{
     calculate_new_target, create_custom_genesis_with_stake_pool,
-    create_stake_pool_data_with_all_reward_to_owner,
+    create_stake_pool_data_with_all_reward_to_staker,
 };
 
 use chainstate::{
@@ -177,7 +177,7 @@ fn setup_test_chain_with_staked_pool(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_owner(
+    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
         rng,
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk,
@@ -239,12 +239,12 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data1, pk1) = create_stake_pool_data_with_all_reward_to_owner(
+    let (stake_pool_data1, pk1) = create_stake_pool_data_with_all_reward_to_staker(
         rng,
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk_1,
     );
-    let (stake_pool_data2, pk2) = create_stake_pool_data_with_all_reward_to_owner(
+    let (stake_pool_data2, pk2) = create_stake_pool_data_with_all_reward_to_staker(
         rng,
         tf.chainstate.get_chain_config().min_stake_pool_pledge(),
         vrf_pk_2,
@@ -928,7 +928,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, min_stake_pool_pledge, vrf_pk);
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, min_stake_pool_pledge, vrf_pk);
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
@@ -1213,7 +1213,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
 
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, Amount::from_atoms(1), vrf_pk);
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, Amount::from_atoms(1), vrf_pk);
     let reward_output = TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data));
     let block = tf
         .make_block_builder()

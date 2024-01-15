@@ -254,7 +254,7 @@ pub fn pos_mine(
     let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
 
     let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
-    let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().pledge_amount();
+    let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
 
     let mut timestamp = initial_timestamp;
     for _ in 0..1000 {

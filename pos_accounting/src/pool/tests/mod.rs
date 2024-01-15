@@ -59,6 +59,7 @@ fn create_pool_data(
     PoolData::new(
         decommission_destination,
         pledged_amount,
+        Amount::ZERO,
         vrf_pk,
         margin_ratio,
         cost_per_block,

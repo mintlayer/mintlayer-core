@@ -20,10 +20,13 @@ use common::{
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
+use crate::Error;
+
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PoolData {
     decommission_destination: Destination,
     pledge_amount: Amount,
+    staker_rewards: Amount,
     vrf_public_key: VRFPublicKey,
     margin_ratio_per_thousand: PerThousand,
     cost_per_block: Amount,
@@ -33,6 +36,7 @@ impl PoolData {
     pub fn new(
         decommission_destination: Destination,
         pledge_amount: Amount,
+        staker_rewards: Amount,
         vrf_public_key: VRFPublicKey,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
@@ -40,6 +44,7 @@ impl PoolData {
         Self {
             decommission_destination,
             pledge_amount,
+            staker_rewards,
             vrf_public_key,
             margin_ratio_per_thousand,
             cost_per_block,
@@ -52,6 +57,14 @@ impl PoolData {
 
     pub fn pledge_amount(&self) -> Amount {
         self.pledge_amount
+    }
+
+    pub fn staker_rewards(&self) -> Amount {
+        self.staker_rewards
+    }
+
+    pub fn staker_balance(&self) -> Result<Amount, Error> {
+        (self.pledge_amount + self.staker_rewards).ok_or(Error::StakerBalanceOverflow)
     }
 
     pub fn vrf_public_key(&self) -> &VRFPublicKey {
@@ -68,7 +81,13 @@ impl PoolData {
 
     pub fn decommission_pool(mut self) -> Self {
         self.pledge_amount = Amount::ZERO;
+        self.staker_rewards = Amount::ZERO;
         self
+    }
+
+    pub fn increase_staker_rewards(mut self, reward: Amount) -> Result<Self, Error> {
+        self.staker_rewards = (self.staker_rewards + reward).ok_or(Error::StakerBalanceOverflow)?;
+        Ok(self)
     }
 }
 
@@ -77,6 +96,7 @@ impl From<StakePoolData> for PoolData {
         Self {
             decommission_destination: stake_data.decommission_key().clone(),
             pledge_amount: stake_data.value(),
+            staker_rewards: Amount::ZERO,
             vrf_public_key: stake_data.vrf_public_key().clone(),
             margin_ratio_per_thousand: stake_data.margin_ratio_per_thousand(),
             cost_per_block: stake_data.cost_per_block(),

@@ -656,7 +656,12 @@ fn get_output_coin_amount(
                 .ok_or(ChainstateError::FailedToReadProperty(
                     PropertyQueryError::StakePoolDataNotFound(*pool_id),
                 ))?
-                .pledge_amount();
+                .staker_balance()
+                .map_err(|_| {
+                    ChainstateError::FailedToReadProperty(
+                        PropertyQueryError::StakerBalanceOverflow(*pool_id),
+                    )
+                })?;
             Some(pledge_amount)
         }
         TxOutput::DelegateStaking(v, _) => Some(*v),

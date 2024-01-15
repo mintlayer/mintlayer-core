@@ -48,14 +48,8 @@ impl PoSAdapter {
 
     pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
         self.pools.get(&pool_id).map(|pool_data| {
-            let amount_to_add = self.get_pool_reward(pool_id);
-            PoolData::new(
-                pool_data.decommission_destination().clone(),
-                (pool_data.pledge_amount() + amount_to_add).expect("no overflow"),
-                pool_data.vrf_public_key().clone(),
-                pool_data.margin_ratio_per_thousand(),
-                pool_data.cost_per_block(),
-            )
+            let reward = self.get_pool_reward(pool_id);
+            pool_data.clone().increase_staker_rewards(reward).expect("cannot overflow")
         })
     }
 
@@ -83,8 +77,8 @@ impl PoSAccountingView for PoSAdapter {
         Ok(self.pools.get(&pool_id).cloned())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        Ok(self.pools.get(&pool_id).map(|data| data.pledge_amount()))
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
     }
 
     fn get_delegation_data(
@@ -143,6 +137,7 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         amount_to_delegate: Amount,
     ) -> Result<(), pos_accounting::Error> {
         self.delegation_rewards.push((delegation_target, amount_to_delegate));
+
         Ok(())
     }
 
@@ -166,12 +161,13 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         unimplemented!()
     }
 
-    fn increase_pool_pledge_amount(
+    fn increase_staker_rewards(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
         self.pool_rewards.insert(pool_id, amount_to_add);
+
         Ok(())
     }
 

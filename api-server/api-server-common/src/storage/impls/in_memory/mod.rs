@@ -219,7 +219,7 @@ impl ApiServerInMemoryStorage {
         Ok(latest_pools)
     }
 
-    fn get_pool_data_with_largest_pledge(
+    fn get_pool_data_with_largest_staker_balance(
         &self,
         len: u32,
         offset: u32,
@@ -232,7 +232,7 @@ impl ApiServerInMemoryStorage {
             .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
             .collect();
 
-        pool_data.sort_by_key(|(_, data)| Reverse(data.pledge_amount()));
+        pool_data.sort_by_key(|(_, data)| Reverse(data.staker_balance().expect("no overflow")));
         if offset >= pool_data.len() {
             return Ok(vec![]);
         }

@@ -229,7 +229,7 @@ async fn ok(#[case] seed: Seed) {
                 decommission_key.get(),
             );
             assert_eq!(
-                json.get("pledge").unwrap(),
+                json.get("staker_balance").unwrap(),
                 &serde_json::json!(pool_data.value())
             );
 
@@ -280,7 +280,7 @@ async fn ok(#[case] seed: Seed) {
                 decommission_key.get(),
             );
             assert_eq!(
-                json.get("pledge").unwrap(),
+                json.get("staker_balance").unwrap(),
                 &serde_json::json!(pool_data.value())
             );
 

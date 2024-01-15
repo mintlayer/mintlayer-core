@@ -178,11 +178,13 @@ pub fn check_tx_inputs_outputs_policy(
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
-    let pledge_getter = |pool_id: PoolId| {
-        Ok(pos_accounting_view
+    let staker_balance_getter = |pool_id: PoolId| {
+        pos_accounting_view
             .get_pool_data(pool_id)
             .map_err(|_| pos_accounting::Error::ViewFail)?
-            .map(|pool_data| pool_data.pledge_amount()))
+            .map(|pool_data| pool_data.staker_balance())
+            .transpose()
+            .map_err(constraints_value_accumulator::Error::PoSAccountingError)
     };
 
     let delegation_balance_getter = |delegation_id: DelegationId| {
@@ -194,7 +196,7 @@ pub fn check_tx_inputs_outputs_policy(
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        pledge_getter,
+        staker_balance_getter,
         delegation_balance_getter,
         tx.inputs(),
         &inputs_utxos,

@@ -96,7 +96,7 @@ fn simulation_test_db(#[case] seed: Seed) {
             random_delegation,
             random_delegation_balance,
         );
-        storage.check_consistancy();
+        storage.check_consistency();
     }
 }
 
@@ -128,7 +128,7 @@ fn simulation_test_delta(#[case] seed: Seed) {
             random_delegation_balance,
         );
         db.batch_write_delta(delta.consume()).unwrap();
-        storage.check_consistancy();
+        storage.check_consistency();
     }
 }
 
@@ -195,12 +195,12 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        // increase pool pledge
+        // increase staker reward
         8..=9 => {
             if let Some(pool_id) = random_pool {
                 let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
 
-                let undo = op.increase_pool_pledge_amount(pool_id, amount_to_add).unwrap();
+                let undo = op.increase_staker_rewards(pool_id, amount_to_add).unwrap();
                 undos.push(undo);
             }
         }
