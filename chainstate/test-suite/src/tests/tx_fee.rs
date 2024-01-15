@@ -20,7 +20,8 @@ use super::helpers::{
 use super::*;
 
 use chainstate_test_framework::{empty_witness, TestFramework, TestStore, TransactionBuilder};
-use common::chain::{AccountCommand, AccountNonce, AccountSpending};
+use common::chain::config::create_unit_test_config;
+use common::chain::{AccountCommand, AccountNonce, AccountSpending, RewardDistributionVersion};
 use common::{
     chain::{
         config::ChainType,
@@ -44,17 +45,7 @@ use tx_verifier::transaction_verifier::{TransactionSourceForConnect, Transaction
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
 
-    let chain_config = common::chain::config::Builder::test_chain()
-        .chainstate_upgrades(
-            NetUpgrades::initialize(vec![(
-                BlockHeight::zero(),
-                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-            )])
-            .unwrap(),
-        )
-        .genesis_unittest(Destination::AnyoneCanSpend)
-        .build();
-
+    let chain_config = create_unit_test_config();
     let tf = TestFramework::builder(rng)
         .with_storage(storage.clone())
         .with_chain_config(chain_config.clone())
@@ -580,7 +571,10 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V0,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )

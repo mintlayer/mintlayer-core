@@ -106,6 +106,8 @@ pub enum ConnectTransactionError {
     PoolDataNotFound(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
+    #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
+    StakerRewardCalculationFailed(Id<Block>, PoolId),
     #[error(
         "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
     )]

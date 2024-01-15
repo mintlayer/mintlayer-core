@@ -24,7 +24,7 @@ use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{make_token_id, Metadata, NftIssuance, NftIssuanceV0, TokenIssuanceVersion},
-    ChainstateUpgrade, Destination, TxInput, TxOutput,
+    ChainstateUpgrade, Destination, RewardDistributionVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::{CryptoRng, Rng};
@@ -1626,7 +1626,10 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V1,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )
@@ -1679,7 +1682,10 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V1,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )

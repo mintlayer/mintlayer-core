@@ -68,6 +68,7 @@ impl OrphanType {
             | CTE::SpendStakeError(_)
             | CTE::StakerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)
+            | CTE::StakerRewardCalculationFailed(_, _)
             | CTE::StakerRewardCannotExceedTotalReward(..)
             | CTE::UnexpectedPoolId(_, _)
             | CTE::DelegationsRewardSumFailed(..)

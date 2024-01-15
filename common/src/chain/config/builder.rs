@@ -30,7 +30,7 @@ use crate::{
         pow::PoWChainConfigBuilder,
         tokens::TokenIssuanceVersion,
         ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -42,6 +42,8 @@ use crypto::key::hdkd::child_number::ChildNumber;
 
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const CHAINSTATE_AND_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
+// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance
+const CHAINSTATE_STAKER_REWARD_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -125,7 +127,7 @@ impl ChainType {
             ChainType::Mainnet | ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
                     BlockHeight::new(0),
-                    ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                    ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
@@ -133,11 +135,24 @@ impl ChainType {
                 let upgrades = vec![
                     (
                         BlockHeight::new(0),
-                        ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V0,
+                            RewardDistributionVersion::V0,
+                        ),
                     ),
                     (
                         CHAINSTATE_AND_TOKEN_FORK_HEIGHT,
-                        ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V0,
+                        ),
+                    ),
+                    (
+                        CHAINSTATE_STAKER_REWARD_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                        ),
                     ),
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")

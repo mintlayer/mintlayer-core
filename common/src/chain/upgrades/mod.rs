@@ -17,7 +17,7 @@ mod chainstate_upgrade;
 mod consensus_upgrade;
 mod netupgrade;
 
-pub use chainstate_upgrade::ChainstateUpgrade;
+pub use chainstate_upgrade::{ChainstateUpgrade, RewardDistributionVersion};
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
 pub use netupgrade::{Activate, NetUpgrades};
 

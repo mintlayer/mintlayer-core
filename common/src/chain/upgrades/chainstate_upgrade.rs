@@ -17,20 +17,37 @@ use crate::chain::tokens::TokenIssuanceVersion;
 
 use super::Activate;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum RewardDistributionVersion {
+    /// Initial distribution implementation
+    V0,
+    /// Distribute reward to staker proportional to its balance
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
+    reward_distribution_version: RewardDistributionVersion,
 }
 
 impl ChainstateUpgrade {
-    pub fn new(token_issuance_version: TokenIssuanceVersion) -> Self {
+    pub fn new(
+        token_issuance_version: TokenIssuanceVersion,
+        reward_distribution_version: RewardDistributionVersion,
+    ) -> Self {
         Self {
             token_issuance_version,
+            reward_distribution_version,
         }
     }
 
     pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
         self.token_issuance_version
+    }
+
+    pub fn reward_distribution_version(&self) -> RewardDistributionVersion {
+        self.reward_distribution_version
     }
 }
 

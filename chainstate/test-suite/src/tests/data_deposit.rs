@@ -19,10 +19,10 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
-    output_value::OutputValue, signature::inputsig::InputWitness, tokens::TokenIssuanceVersion,
-    ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+    output_value::OutputValue, signature::inputsig::InputWitness, Destination, OutPointSourceId,
+    TxInput, TxOutput, UtxoOutPoint,
 };
-use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
+use common::primitives::{Amount, CoinOrTokenId, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -35,20 +35,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        common::chain::NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -109,20 +96,7 @@ fn data_deposit_insufficient_fee(
 ) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        common::chain::NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -198,20 +172,7 @@ fn data_deposit_insufficient_fee(
 fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        common::chain::NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 

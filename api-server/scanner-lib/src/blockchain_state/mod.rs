@@ -541,8 +541,21 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
             let mut adapter = PoSAdapter::new(pool_id, pool_data, &delegation_shares);
 
-            distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
-                .expect("no error");
+            let reward_distribution_version = chain_config
+                .as_ref()
+                .chainstate_upgrades()
+                .version_at_height(block_height)
+                .1
+                .reward_distribution_version();
+
+            distribute_pos_reward(
+                &mut adapter,
+                block.get_id(),
+                pool_id,
+                total_reward,
+                reward_distribution_version,
+            )
+            .expect("no error");
 
             for (delegation_id, rewards) in adapter.rewards_per_delegation() {
                 let delegation = delegation_shares.get(delegation_id).expect("must exist").clone();
