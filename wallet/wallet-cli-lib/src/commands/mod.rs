@@ -17,7 +17,6 @@ mod helper_types;
 
 use std::{fmt::Write, path::PathBuf, str::FromStr, sync::Arc};
 
-use chainstate::TokenIssuanceError;
 use clap::Parser;
 use common::{
     address::Address,
@@ -28,24 +27,18 @@ use common::{
     primitives::{BlockHeight, DecimalAmount, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
+use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use utils::ensure;
-use wallet::{version::get_version, WalletError};
-use wallet_controller::{
-    ControllerConfig, ControllerError, NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
-};
+use wallet::version::get_version;
+use wallet_controller::{ControllerConfig, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService};
 
-use crate::{
-    commands::helper_types::{parse_address, parse_token_supply},
-    errors::WalletCliError,
-};
+use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
 
 use self::helper_types::{
-    format_delegation_info, format_pool_info, parse_pool_id, parse_token_id, parse_utxo_outpoint,
-    print_coin_amount, CliForceReduce, CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase,
-    CliUtxoState, CliUtxoTypes, CliWithLocked,
+    format_delegation_info, format_pool_info, parse_utxo_outpoint, CliForceReduce, CliIsFreezable,
+    CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -662,21 +655,9 @@ impl CommandHandler {
         ConsoleCommand::Print(status_text.to_owned())
     }
 
-    pub async fn broadcast_transaction(
-        rpc_client: &NodeRpcClient,
-        tx: SignedTransaction,
-    ) -> Result<ConsoleCommand, WalletCliError> {
-        rpc_client
-            .submit_transaction(tx, Default::default())
-            .await
-            .map_err(WalletCliError::RpcError)?;
-        Ok(Self::tx_submitted_command())
-    }
-
     pub async fn handle_wallet_command(
         &mut self,
         chain_config: &Arc<ChainConfig>,
-        rpc_client: &NodeRpcClient,
         command: WalletCommand,
     ) -> Result<ConsoleCommand, WalletCliError> {
         match command {
@@ -794,26 +775,22 @@ impl CommandHandler {
             }
 
             WalletCommand::ChainstateInfo => {
-                let info = rpc_client.chainstate_info().await.map_err(WalletCliError::RpcError)?;
+                let info = self.wallet_rpc.chainstate_info().await?;
                 Ok(ConsoleCommand::Print(format!("{info:#?}")))
             }
 
             WalletCommand::BestBlock => {
-                let id = rpc_client.get_best_block_id().await.map_err(WalletCliError::RpcError)?;
+                let id = self.wallet_rpc.node_best_block_id().await?;
                 Ok(ConsoleCommand::Print(id.hex_encode()))
             }
 
             WalletCommand::BestBlockHeight => {
-                let height =
-                    rpc_client.get_best_block_height().await.map_err(WalletCliError::RpcError)?;
+                let height = self.wallet_rpc.node_best_block_height().await?;
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
             WalletCommand::BlockId { height } => {
-                let hash = rpc_client
-                    .get_block_id_at_height(height)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
+                let hash = self.wallet_rpc.node_block_id(height).await?;
                 match hash {
                     Some(id) => Ok(ConsoleCommand::Print(id.hex_encode())),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -823,8 +800,7 @@ impl CommandHandler {
             WalletCommand::GetBlock { hash } => {
                 let hash = H256::from_str(&hash)
                     .map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
-                let hash =
-                    rpc_client.get_block(hash.into()).await.map_err(WalletCliError::RpcError)?;
+                let hash = self.wallet_rpc.get_node_block(hash.into()).await?;
                 match hash {
                     Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -834,8 +810,7 @@ impl CommandHandler {
             WalletCommand::GenerateBlock { transactions } => {
                 let selected_account = self.get_selected_acc()?;
                 let transactions = transactions.into_iter().map(HexEncoded::take).collect();
-                let block = self.wallet_rpc.generate_block(transactions, selected_account).await?;
-                rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+                let _ = self.wallet_rpc.generate_block(selected_account, transactions).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
@@ -881,29 +856,25 @@ impl CommandHandler {
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
-                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                let balance_opt = rpc_client
-                    .get_stake_pool_balance(pool_id)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
+                let balance_opt = self.wallet_rpc.stake_pool_balance(pool_id).await?;
                 match balance_opt {
-                    Some(balance) => Ok(ConsoleCommand::Print(print_coin_amount(
-                        chain_config,
-                        balance,
-                    ))),
+                    Some(balance) => Ok(ConsoleCommand::Print(balance)),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
                 }
             }
 
             WalletCommand::SubmitBlock { block } => {
-                rpc_client.submit_block(block.take()).await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.submit_block(block).await?;
                 Ok(ConsoleCommand::Print(
                     "The block was submitted successfully".to_owned(),
                 ))
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                Self::broadcast_transaction(rpc_client, transaction.take()).await
+                self.wallet_rpc
+                    .submit_raw_transaction(transaction, TxOptionsOverrides::default())
+                    .await?;
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
@@ -924,14 +895,6 @@ impl CommandHandler {
                 token_supply,
                 is_freezable,
             } => {
-                ensure!(
-                    number_of_decimals <= chain_config.token_max_dec_count(),
-                    WalletCliError::Controller(ControllerError::WalletError(
-                        WalletError::TokenIssuance(TokenIssuanceError::IssueErrorTooManyDecimals),
-                    ))
-                );
-
-                let destination_address = parse_address(chain_config, &destination_address)?;
                 let token_supply = parse_token_supply(&token_supply, number_of_decimals)?;
 
                 let account_index = self.get_selected_acc()?;
@@ -951,8 +914,7 @@ impl CommandHandler {
 
                 Ok(ConsoleCommand::Print(format!(
                     "A new token has been issued with ID: {}",
-                    Address::new(chain_config, &token_id)
-                        .expect("Encoding token id should never fail"),
+                    token_id
                 )))
             }
 
@@ -967,8 +929,6 @@ impl CommandHandler {
                 media_uri,
                 additional_metadata_uri,
             } => {
-                let destination_address = parse_address(chain_config, &destination_address)?;
-
                 let metadata = Metadata {
                     creator: creator.map(|pk| TokenCreator {
                         public_key: pk.take(),
@@ -990,8 +950,7 @@ impl CommandHandler {
 
                 Ok(ConsoleCommand::Print(format!(
                     "A new NFT has been issued with ID: {}",
-                    Address::new(chain_config, &token_id)
-                        .expect("Encoding token id should never fail"),
+                    token_id
                 )))
             }
 
@@ -1000,9 +959,6 @@ impl CommandHandler {
                 address,
                 amount,
             } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-                let address = parse_address(chain_config, &address)?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .mint_tokens(selected_account, token_id, address, amount, self.config)
@@ -1012,8 +968,6 @@ impl CommandHandler {
             }
 
             WalletCommand::UnmintTokens { token_id, amount } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .unmint_tokens(selected_account, token_id, amount, self.config)
@@ -1023,8 +977,6 @@ impl CommandHandler {
             }
 
             WalletCommand::LockTokenSupply { token_id } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .lock_token_supply(selected_account, token_id, self.config)
@@ -1037,8 +989,6 @@ impl CommandHandler {
                 token_id,
                 is_unfreezable,
             } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .freeze_token(
@@ -1053,8 +1003,6 @@ impl CommandHandler {
             }
 
             WalletCommand::UnfreezeToken { token_id } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc.unfreeze_token(selected_account, token_id, self.config).await?;
 
@@ -1062,9 +1010,6 @@ impl CommandHandler {
             }
 
             WalletCommand::ChangeTokenAuthority { token_id, address } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-                let address = parse_address(chain_config, &address)?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .change_token_authority(selected_account, token_id, address, self.config)
@@ -1211,8 +1156,6 @@ impl CommandHandler {
                 address,
                 amount,
             } => {
-                let token_id = parse_token_id(chain_config, token_id.as_str())?;
-
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
                     .send_tokens(selected_account, token_id, address, amount, self.config)
@@ -1333,7 +1276,7 @@ impl CommandHandler {
             }
 
             WalletCommand::NodeVersion => {
-                let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;
+                let version = self.wallet_rpc.node_version().await?;
                 Ok(ConsoleCommand::Print(version))
             }
 
@@ -1377,60 +1320,51 @@ impl CommandHandler {
             }
 
             WalletCommand::NodeShutdown => {
-                rpc_client.node_shutdown().await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.node_shutdown().await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::Connect { address } => {
-                rpc_client.p2p_connect(address).await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.connect_to_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Disconnect { peer_id } => {
-                rpc_client.p2p_disconnect(peer_id).await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.disconnect_peer(peer_id).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::ListBanned => {
-                let list = rpc_client.p2p_list_banned().await.map_err(WalletCliError::RpcError)?;
+                let list = self.wallet_rpc.list_banned().await?;
                 Ok(ConsoleCommand::Print(format!("{list:#?}")))
             }
             WalletCommand::Ban { address } => {
-                rpc_client.p2p_ban(address).await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.ban_address(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Unban { address } => {
-                rpc_client.p2p_unban(address).await.map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.unban_address(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::PeerCount => {
-                let peer_count =
-                    rpc_client.p2p_get_peer_count().await.map_err(WalletCliError::RpcError)?;
+                let peer_count = self.wallet_rpc.peer_count().await?;
                 Ok(ConsoleCommand::Print(peer_count.to_string()))
             }
             WalletCommand::ConnectedPeers => {
-                let peers =
-                    rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
+                let peers = self.wallet_rpc.connected_peers().await?;
                 Ok(ConsoleCommand::Print(format!("{peers:#?}")))
             }
             WalletCommand::ConnectedPeersJson => {
-                let peers =
-                    rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
+                let peers = self.wallet_rpc.connected_peers().await?;
                 let peers_json = serde_json::to_string(&peers)?;
                 Ok(ConsoleCommand::Print(peers_json))
             }
             WalletCommand::AddReservedPeer { address } => {
-                rpc_client
-                    .p2p_add_reserved_node(address)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.add_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::RemoveReservedPeer { address } => {
-                rpc_client
-                    .p2p_remove_reserved_node(address)
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
+                self.wallet_rpc.remove_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::ShowReceiveAddresses => {

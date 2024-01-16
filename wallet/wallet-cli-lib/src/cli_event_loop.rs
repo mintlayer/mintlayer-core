@@ -34,21 +34,20 @@ pub enum Event {
 
 pub async fn run(
     chain_config: &Arc<ChainConfig>,
-    rpc_client: &NodeRpcClient,
+    rpc_client: NodeRpcClient,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
     in_top_x_mb: usize,
 ) -> Result<(), WalletCliError> {
     let mut command_handler = CommandHandler::new(
         ControllerConfig { in_top_x_mb },
         chain_config.clone(),
-        rpc_client.clone(),
+        rpc_client,
     )
     .await?;
 
     loop {
         if let Some(Event::HandleCommand { command, res_tx }) = event_rx.recv().await {
-            let res =
-                command_handler.handle_wallet_command(chain_config, rpc_client, command).await;
+            let res = command_handler.handle_wallet_command(chain_config, command).await;
             let _ = res_tx.send(res);
         } else {
             return Ok(());

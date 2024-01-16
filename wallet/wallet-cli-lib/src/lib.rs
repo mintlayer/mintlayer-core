@@ -169,7 +169,7 @@ pub async fn run(
         ),
     });
 
-    cli_event_loop::run(&chain_config, &rpc_client, event_rx, in_top_x_mb).await?;
+    cli_event_loop::run(&chain_config, rpc_client, event_rx, in_top_x_mb).await?;
 
     repl_handle.join().expect("Should not panic")
 }

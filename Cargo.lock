@@ -7509,6 +7509,7 @@ dependencies = [
  "mempool",
  "mempool-types",
  "node-comm",
+ "p2p-types",
  "rpc",
  "rstest",
  "serde",

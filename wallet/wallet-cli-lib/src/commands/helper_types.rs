@@ -19,11 +19,10 @@ use clap::ValueEnum;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
-    address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenTotalSupply},
-        ChainConfig, Destination, OutPointSourceId, PoolId, UtxoOutPoint,
+        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenTotalSupply},
+        OutPointSourceId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -220,39 +219,12 @@ fn parse_fixed_token_supply(
     }
 }
 
-pub fn parse_address(
-    chain_config: &ChainConfig,
-    address: &str,
-) -> Result<Address<Destination>, WalletCliError> {
-    Address::from_str(chain_config, address)
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
-}
-
-pub fn parse_pool_id(chain_config: &ChainConfig, pool_id: &str) -> Result<PoolId, WalletCliError> {
-    Address::<PoolId>::from_str(chain_config, pool_id)
-        .and_then(|address| address.decode_object(chain_config))
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid pool ID '{pool_id}': {e}")))
-}
-
-pub fn parse_token_id(
-    chain_config: &ChainConfig,
-    token_id: &str,
-) -> Result<TokenId, WalletCliError> {
-    Address::<TokenId>::from_str(chain_config, token_id)
-        .and_then(|address| address.decode_object(chain_config))
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid token ID '{token_id}': {e}")))
-}
-
 pub fn parse_token_amount(
     token_number_of_decimals: u8,
     value: &str,
 ) -> Result<Amount, WalletCliError> {
     Amount::from_fixedpoint_str(value, token_number_of_decimals)
         .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
-}
-
-pub fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
-    value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
 #[cfg(test)]

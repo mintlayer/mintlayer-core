@@ -18,8 +18,9 @@
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp,
+        tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
+        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -57,8 +58,17 @@ pub enum RpcError {
     #[error("Invalid pool ID")]
     InvalidPoolId,
 
+    #[error("Invalid token ID")]
+    InvalidTokenId,
+
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
+
+    #[error("Invalid ip address")]
+    InvalidIpAddress,
+
+    #[error("Invalid block ID")]
+    InvalidBlockId,
 
     #[error("Wallet error: {0}")]
     Controller(#[from] wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
@@ -248,4 +258,103 @@ impl DelegationInfo {
             balance,
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NftMetadata {
+    pub media_hash: String,
+    pub name: String,
+    pub description: String,
+    pub ticker: String,
+    pub creator: Option<HexEncoded<PublicKey>>,
+    pub icon_uri: Option<String>,
+    pub media_uri: Option<String>,
+    pub additional_metadata_uri: Option<String>,
+}
+
+impl NftMetadata {
+    pub fn into_metadata(self) -> Metadata {
+        Metadata {
+            creator: self.creator.map(|pk| TokenCreator {
+                public_key: pk.take(),
+            }),
+            name: self.name.into_bytes(),
+            description: self.description.into_bytes(),
+            ticker: self.ticker.into_bytes(),
+            icon_uri: self.icon_uri.map(|x| x.into_bytes()).into(),
+            additional_metadata_uri: self.additional_metadata_uri.map(|x| x.into_bytes()).into(),
+            media_uri: self.media_uri.map(|x| x.into_bytes()).into(),
+            media_hash: self.media_hash.into_bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+enum TokenTotalSupply {
+    Fixed(DecimalAmount),
+    Lockable,
+    Unlimited,
+}
+
+impl TokenTotalSupply {
+    fn into_token_supply(
+        self,
+        chain_config: &ChainConfig,
+    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+        match self {
+            Self::Lockable => Ok(tokens::TokenTotalSupply::Lockable),
+            Self::Unlimited => Ok(tokens::TokenTotalSupply::Unlimited),
+            Self::Fixed(amount) => {
+                let decimals = chain_config.coin_decimals();
+                let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
+                Ok(tokens::TokenTotalSupply::Fixed(amount))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TokenMetadata {
+    pub token_ticker: String,
+    pub number_of_decimals: u8,
+    pub metadata_uri: String,
+    token_supply: TokenTotalSupply,
+    is_freezable: bool,
+}
+
+impl TokenMetadata {
+    pub fn token_supply(
+        &self,
+        chain_config: &ChainConfig,
+    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+        self.token_supply.into_token_supply(chain_config)
+    }
+
+    pub fn is_freezable(&self) -> IsTokenFreezable {
+        if self.is_freezable {
+            IsTokenFreezable::Yes
+        } else {
+            IsTokenFreezable::No
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SeedPhrase {
+    pub seed_phrase: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StakePoolBalance {
+    pub balance: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RpcTokenId {
+    pub token_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NodeVersion {
+    pub version: String,
 }
