@@ -62,8 +62,10 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
     let addr_result: Result<AddressInfo, _> =
         wallet_rpc.request("address_new", [ACCOUNT1_ARG]).await;
     assert!(addr_result.is_err());
-    let new_acct: NewAccountInfo =
-        wallet_rpc.request("account_create", [EmptyArgs {}]).await.unwrap();
+    let new_acct: NewAccountInfo = wallet_rpc
+        .request("account_create", (None::<String>, EmptyArgs {}))
+        .await
+        .unwrap();
     assert_eq!(new_acct.account, 1);
     let acct1_addr: AddressInfo = wallet_rpc.request("address_new", [ACCOUNT1_ARG]).await.unwrap();
     log::info!("acct1_addr: {acct1_addr:?}");

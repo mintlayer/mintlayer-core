@@ -24,8 +24,6 @@ use wallet_rpc_lib::RpcError;
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
     Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
-    #[error("RPC error: {0}")]
-    RpcError(node_comm::rpc_client::NodeRpcError),
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, std::io::Error),
     #[error(

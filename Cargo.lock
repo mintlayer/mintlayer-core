@@ -7424,7 +7424,6 @@ dependencies = [
  "hex",
  "logging",
  "mempool",
- "node-comm",
  "node-lib",
  "p2p",
  "p2p-types",

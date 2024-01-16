@@ -16,8 +16,9 @@
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
+use rpc::RpcAuthData;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::{ControllerConfig, NodeRpcClient};
+use wallet_controller::ControllerConfig;
 
 use crate::{
     commands::{CommandHandler, ConsoleCommand, WalletCommand},
@@ -34,14 +35,16 @@ pub enum Event {
 
 pub async fn run(
     chain_config: &Arc<ChainConfig>,
-    rpc_client: NodeRpcClient,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
     in_top_x_mb: usize,
+    node_rpc_address: Option<String>,
+    node_credentials: RpcAuthData,
 ) -> Result<(), WalletCliError> {
     let mut command_handler = CommandHandler::new(
         ControllerConfig { in_top_x_mb },
         chain_config.clone(),
-        rpc_client,
+        node_rpc_address,
+        node_credentials,
     )
     .await?;
 

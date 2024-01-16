@@ -16,7 +16,7 @@
 mod handle;
 mod worker;
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
@@ -47,12 +47,19 @@ pub enum InitError {
 }
 
 impl WalletService {
-    pub async fn start(
-        chain_config: Arc<ChainConfig>,
-        node_rpc: NodeRpcClient,
-        wallet_file: Option<PathBuf>,
-    ) -> Result<Self, InitError> {
-        let controller = if let Some(wallet_file) = &wallet_file {
+    pub async fn start(config: crate::WalletServiceConfig) -> Result<Self, InitError> {
+        let chain_config = config.chain_config;
+
+        let node_rpc = {
+            let rpc_address = {
+                let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
+                config.node_rpc_address.unwrap_or_else(default_addr)
+            };
+
+            wallet_controller::make_rpc_client(rpc_address, config.node_credentials).await?
+        };
+
+        let controller = if let Some(wallet_file) = &config.wallet_file {
             let wallet = {
                 // TODO: Allow user to set password (config file only)
                 let wallet_password = None;

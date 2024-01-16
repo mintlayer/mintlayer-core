@@ -90,9 +90,6 @@ pub async fn run(
         Mode::NonInteractive
     };
 
-    let default_http_rpc_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-    let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
-
     let rpc_auth = match (rpc_cookie_file, rpc_username, rpc_password) {
         (None, None, None) => {
             let cookie_file_path =
@@ -109,10 +106,6 @@ pub async fn run(
             ))
         }
     };
-
-    let rpc_client = wallet_controller::make_rpc_client(rpc_address, rpc_auth)
-        .await
-        .map_err(WalletCliError::RpcError)?;
 
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -169,7 +162,7 @@ pub async fn run(
         ),
     });
 
-    cli_event_loop::run(&chain_config, rpc_client, event_rx, in_top_x_mb).await?;
+    cli_event_loop::run(&chain_config, event_rx, in_top_x_mb, rpc_address, rpc_auth).await?;
 
     repl_handle.join().expect("Should not panic")
 }

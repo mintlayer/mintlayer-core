@@ -29,10 +29,11 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::version::get_version;
-use wallet_controller::{ControllerConfig, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
-use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService};
+use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
 
 use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
 
@@ -594,9 +595,17 @@ impl CommandHandler {
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
-        node_rpc: NodeRpcClient,
+        node_rpc_address: Option<String>,
+        node_credentials: RpcAuthData,
     ) -> Result<Self, WalletCliError> {
-        let wallet_service = WalletService::start(chain_config.clone(), node_rpc, None)
+        let wallet_config = WalletServiceConfig {
+            chain_config,
+            wallet_file: None,
+            node_rpc_address,
+            node_credentials,
+        };
+
+        let wallet_service = WalletService::start(wallet_config)
             .await
             .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 
