@@ -19,7 +19,7 @@ use std::{fmt::Write, path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::{
-    address::Address,
+    address::{Address, AddressError},
     chain::{
         tokens::{Metadata, TokenCreator},
         Block, ChainConfig, SignedTransaction, Transaction, UtxoOutPoint,
@@ -31,6 +31,7 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
+use utils::qrcode::QrCode;
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
@@ -908,10 +909,16 @@ impl CommandHandler {
                     .await?;
                 let result_hex: HexEncoded<SignedTransaction> = result.into();
 
+                let qr_code =
+                    utils::qrcode::qrcode_from_str(result_hex.to_string()).map_err(|e| {
+                        WalletCliError::AddressEncodingError(AddressError::QrCodeError(e))
+                    })?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
                 let output_str = format!(
                     "Transaction has been signed. \
-                    Pass the following string into the wallet to broadcast:\n{}",
-                    result_hex
+                    Pass the following string into the wallet to broadcast:\n{result_hex}\n\
+                    Or scan the Qr code with it:\n{qr_code_string}"
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
@@ -1289,10 +1296,16 @@ impl CommandHandler {
                     .await?;
                 let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
 
+                let qr_code =
+                    utils::qrcode::qrcode_from_str(result_hex.to_string()).map_err(|e| {
+                        WalletCliError::AddressEncodingError(AddressError::QrCodeError(e))
+                    })?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
                 let output_str = format!(
                     "Decommission transaction created. \
-                    Pass the following string into the wallet with private key to sign:\n{}",
-                    result_hex
+                    Pass the following string into the wallet with private key to sign:\n{result_hex}\n\
+                    Or scan the Qr code with it:\n{qr_code_string}"
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
