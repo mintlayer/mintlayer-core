@@ -34,15 +34,12 @@ from test_framework.mintlayer import (
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_in
-from test_framework.mintlayer import block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj, destination_obj, destination_from_pub_key
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
-import scalecodec
 import asyncio
 import sys
 import time
-
-pub_key_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('PublicKey')
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
@@ -159,6 +156,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 },
             },
         }
+
     def run_test(self):
         if 'win32' in sys.platform:
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -245,7 +243,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet.create_wallet("cold_wallet")
 
             decommission_pub_key_bytes = await wallet.new_public_key()
-            decommission_pub_key_encoded = pub_key_obj.encode(self.public_key(decommission_pub_key_bytes.hex())).to_hex()[2:]
+            decommission_pub_key_encoded = destination_obj.encode(destination_from_pub_key(decommission_pub_key_bytes)).to_hex()[2:]
 
         decommission_req = ""
 

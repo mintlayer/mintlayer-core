@@ -18,7 +18,7 @@ mod server_impl;
 pub mod types;
 
 use chainstate::{ChainInfo, TokenIssuanceError};
-use crypto::key::{hdkd::u31::U31, PublicKey};
+use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{
@@ -394,17 +394,20 @@ impl WalletRpc {
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_address: String,
         config: ControllerConfig,
     ) -> WRpcResult<()> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let cost_per_block =
             cost_per_block.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let decommission_key = decommission_key.map(HexEncoded::take);
 
         let margin_ratio_per_thousand = PerThousand::from_decimal_str(&margin_ratio_per_thousand)
             .ok_or(RpcError::InvalidMarginRatio)?;
+
+        let decommission_destination = Address::from_str(&self.chain_config, &decommission_address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
             .call_async(move |controller| {
@@ -414,7 +417,7 @@ impl WalletRpc {
                         .await?
                         .create_stake_pool_tx(
                             amount,
-                            decommission_key,
+                            decommission_destination,
                             margin_ratio_per_thousand,
                             cost_per_block,
                         )

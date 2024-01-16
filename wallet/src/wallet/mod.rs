@@ -1168,7 +1168,6 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
-        decommission_key: Option<PublicKey>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         stake_pool_arguments: StakePoolDataArguments,
@@ -1178,7 +1177,6 @@ impl<B: storage::Backend> Wallet<B> {
             account.create_stake_pool_tx(
                 db_tx,
                 stake_pool_arguments,
-                decommission_key,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,

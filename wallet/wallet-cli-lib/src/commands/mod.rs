@@ -323,9 +323,7 @@ pub enum WalletCommand {
         margin_ratio_per_thousand: String,
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.
-        /// If not provided, the selected account in this wallet will control both decommission and staking.
-        /// This is NOT RECOMMENDED.
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_key: String,
     },
 
     /// Decommission a staking pool, given its id. This assumes that the decommission key is owned

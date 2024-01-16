@@ -526,7 +526,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn create_stake_pool_tx(
         &mut self,
         amount: Amount,
-        decommission_key: Option<PublicKey>,
+        decommission_key: Destination,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
     ) -> Result<(), ControllerError<T>> {
@@ -537,13 +537,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                   account_index: U31| {
                 wallet.create_stake_pool_tx(
                     account_index,
-                    decommission_key,
                     current_fee_rate,
                     consolidate_fee_rate,
                     StakePoolDataArguments {
                         amount,
                         margin_ratio_per_thousand,
                         cost_per_block,
+                        decommission_key,
                     },
                 )
             },

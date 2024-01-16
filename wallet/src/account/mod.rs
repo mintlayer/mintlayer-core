@@ -665,28 +665,20 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         stake_pool_arguments: StakePoolDataArguments,
-        decommission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
         // TODO: Use other accounts here
-        let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
-        let decommission_key = match decommission_key {
-            Some(key) => key,
-            None => self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
-        };
+        let staker = Destination::PublicKey(
+            self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
+        );
         let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
         // and then replace it with when we can calculate the pool_id
         let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
-        let dummy_stake_output = make_stake_output(
-            dummy_pool_id,
-            stake_pool_arguments,
-            staker.into_public_key(),
-            decommission_key,
-            vrf_public_key,
-        )?;
+        let dummy_stake_output =
+            make_stake_output(dummy_pool_id, stake_pool_arguments, staker, vrf_public_key);
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
         let mut request = self.select_inputs_for_send_request(
             request,

@@ -43,7 +43,7 @@ from scalecodec.base import ScaleBytes
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_greater_than, assert_in
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import mintlayer_hash, block_input_data_obj, destination_obj, destination_from_pub_key
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
@@ -207,6 +207,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
                 },
             },
         }
+
     def run_test(self):
         if 'win32' in sys.platform:
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -323,6 +324,9 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 50000", balance)
 
+            decommission_pub_key_bytes = await wallet.new_public_key()
+            decommission_pub_key_encoded = destination_obj.encode(destination_from_pub_key(decommission_pub_key_bytes)).to_hex()[2:]
+
             assert_in("Success", await wallet.create_new_account())
             assert_in("Success", await wallet.select_account(1))
             acc1_address = await wallet.new_address()
@@ -332,7 +336,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             transactions = node.mempool_transactions()
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5))
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_pub_key_encoded))
             transactions2 = node.mempool_transactions()
             for tx in transactions2:
                 if tx not in transactions:

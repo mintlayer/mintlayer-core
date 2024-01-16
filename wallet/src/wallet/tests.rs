@@ -1294,16 +1294,18 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
+    let decommission_key = wallet.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
-            None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
             },
         )
         .unwrap();
@@ -1389,13 +1391,13 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
 
     let result = wallet.create_stake_pool_tx(
         DEFAULT_ACCOUNT_INDEX,
-        None,
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
         StakePoolDataArguments {
             amount: not_enough,
             margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
             cost_per_block: Amount::ZERO,
+            decommission_key: Destination::AnyoneCanSpend,
         },
     );
     // check that result is an error and we last issued address is still the same
@@ -1513,13 +1515,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
-            None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
             },
         )
         .unwrap();
@@ -3555,3 +3557,5 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
 }
+
+//FIXME: tests for decommission request

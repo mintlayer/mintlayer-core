@@ -19,7 +19,6 @@ use common::{
     chain::{tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use crypto::key::PublicKey;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
@@ -209,7 +208,7 @@ impl WalletRpcServer for WalletRpc {
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_address: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()> {
         let config = ControllerConfig {
@@ -221,7 +220,7 @@ impl WalletRpcServer for WalletRpc {
                 amount,
                 cost_per_block,
                 margin_ratio_per_thousand,
-                decommission_key,
+                decommission_address,
                 config,
             )
             .await,
