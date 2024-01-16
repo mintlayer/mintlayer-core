@@ -23,7 +23,9 @@ pub async fn run() -> anyhow::Result<()> {
             node.main().await;
         }
         node_lib::NodeSetupResult::DataDirCleanedUp => {
-            logging::log::info!("Data directory was cleaned up, please restart the node without `clean-data` argument");
+            logging::log::info!(
+                "Data directory is now clean. Please restart the node without `--clean-data` flag"
+            );
         }
     };
 
