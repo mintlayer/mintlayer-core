@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use crate::error::ConnectTransactionError;
 
 use common::{
+    amount_sum,
     chain::{Block, DelegationId, PoolId, RewardDistributionVersion},
     primitives::{
         amount::UnsignedIntType as AmountUIntType, per_thousand::PerThousand, Amount, Id,
@@ -125,8 +126,8 @@ fn calculate_staker_reward_v0(
     mpt: PerThousand,
 ) -> Option<Amount> {
     let staker_reward = match total_reward - cost_per_block {
-        Some(v) => (v * mpt.value().into())
-            .and_then(|v| v / 1000)
+        Some(to_distribute) => (to_distribute * mpt.value().into())
+            .and_then(|v| v / mpt.denominator().into())
             .and_then(|v| v + cost_per_block)?,
         // if cost per block > total reward then give the reward to staker
         None => total_reward,
@@ -147,31 +148,40 @@ fn calculate_staker_reward_v1(
     debug_assert!(staker_balance <= pool_balance);
 
     let staker_reward = match total_reward - cost_per_block {
-        Some(v) => {
+        Some(to_distribute) => {
             let pool_balance = Uint256::from_amount(pool_balance);
             let staker_balance = Uint256::from_amount(staker_balance);
-            let numer =
-                (Uint256::from_amount(v) * staker_balance).expect("Source types are smaller");
+            let numer = (Uint256::from_amount(to_distribute) * staker_balance)
+                .expect("Source types are smaller");
             let pro_rata_staker_reward = (numer / pool_balance)
                 .ok_or(ConnectTransactionError::PoolBalanceIsZero(pool_id))?;
             let pro_rata_staker_reward: AmountUIntType = pro_rata_staker_reward
                 .try_into()
-                .expect("cannot be greater than total_reward type");
+                .expect("Cannot be greater than total_reward type");
             let pro_rata_staker_reward = Amount::from_atoms(pro_rata_staker_reward);
 
-            let delegations_reward =
-                (v - pro_rata_staker_reward).expect("cannot be greater than total reward");
+            let delegators_reward = (to_distribute - pro_rata_staker_reward)
+                .expect("Cannot be greater than total reward");
+            let delegators_reward = Uint256::from_amount(delegators_reward);
 
-            (delegations_reward * mpt.value().into())
-                .and_then(|v| v / 1000)
-                .and_then(|v| v + pro_rata_staker_reward)
-                .and_then(|v| v + cost_per_block)
-                .ok_or(ConnectTransactionError::StakerRewardOverflow(
-                    pool_id,
-                    delegations_reward,
-                    Amount::from_atoms(mpt.value() as AmountUIntType),
-                    Amount::from_atoms(1000),
-                ))?
+            let margin_reward: AmountUIntType = (delegators_reward
+                * Uint256::from_u64(mpt.value() as u64))
+            .and_then(|v| v / Uint256::from_u64(mpt.denominator() as u64))
+            .expect("Source types are smaller")
+            .try_into()
+            .expect("Cannot overflow");
+
+            amount_sum!(
+                Amount::from_atoms(margin_reward),
+                pro_rata_staker_reward,
+                cost_per_block
+            )
+            .ok_or(ConnectTransactionError::StakerRewardOverflow(
+                pool_id,
+                Amount::from_atoms(margin_reward),
+                pro_rata_staker_reward,
+                cost_per_block,
+            ))?
         }
         // if cost per block > total reward then give the reward to staker
         None => total_reward,
@@ -547,7 +557,7 @@ mod tests {
             mpt_more_than_one,
             pool_id
         )
-        .is_err());
+        .is_ok());
 
         // arbitrary values
         assert_eq!(
