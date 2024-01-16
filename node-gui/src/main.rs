@@ -13,6 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Windows only: prevent opening a console window when the GUI app is started.
+// Note that it's also supposed to detach the app from the console when it's being
+// launched from one, which is unfortunate, because it's useful to be able to run
+// the GUI app and still see the logs. However, for some reason this is not true
+// for MSYS console, which remains attached, so it's still possible to observe
+// the logs by using MSYS.
+#![windows_subsystem = "windows"]
+
 mod backend;
 mod main_window;
 mod widgets;

@@ -88,11 +88,28 @@ where
     });
 }
 
+fn can_use_coloring() -> bool {
+    if cfg!(windows) {
+        // Allow using colors if run in an MSYS console, which includes Git Bash
+        // (the value of the variable will differ depending on how the console was started,
+        // so we don't check it).
+        // Also note that though Cygwin technically supports ansi coloring, it only works
+        // in applications linked with cygwin.dll, so it makes no sense to check for it here
+        // (which doesn't seem to be possible anyway).
+        // Finally, we could enable ansi coloring for the traditional Windows console by using
+        // this crate - https://github.com/sunshowers-code/enable-ansi-support
+        // This will work only starting from Windows 10 though.
+        std::env::var("MSYSTEM").is_ok()
+    } else {
+        true
+    }
+}
+
 fn should_use_coloring(preferred_coloring: TextColoring, is_terminal: bool) -> bool {
     match preferred_coloring {
         TextColoring::On => true,
         TextColoring::Off => false,
-        TextColoring::Auto => is_terminal,
+        TextColoring::Auto => is_terminal && can_use_coloring(),
     }
 }
 
