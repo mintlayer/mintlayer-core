@@ -15,7 +15,9 @@
 
 use chainstate::{
     ban_score::BanScore,
-    tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
+    tx_verifier::transaction_verifier::{
+        signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
+    },
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
     TransactionVerifierStorageError,
 };
@@ -125,6 +127,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::RewardDistributionError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::MissingTxInputs => 100,
@@ -135,8 +138,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
-            ConnectTransactionError::StakerRewardCalculationFailed(_, _) => 100,
-            ConnectTransactionError::StakerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
@@ -172,18 +173,12 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
-            ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 0,
-            ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 0,
-            ConnectTransactionError::StakerRewardOverflow(_, _, _, _) => 0,
-            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
-            ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
-            ConnectTransactionError::PoolBalanceIsZero(_) => 0,
         }
     }
 }
@@ -391,6 +386,28 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUndoFreezeTokenThatIsNotFrozen(_) => 0,
             tokens_accounting::Error::CannotUndoUnfreezeTokenThatIsFrozen(_) => 0,
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for RewardDistributionError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            RewardDistributionError::PoSAccountingError(err) => err.mempool_ban_score(),
+
+            RewardDistributionError::InvariantStakerBalanceGreaterThanPoolBalance(_, _, _) => 100,
+            RewardDistributionError::RewardAdditionError(_) => 100,
+            RewardDistributionError::StakerRewardCalculationFailed(_, _) => 100,
+            RewardDistributionError::StakerRewardCannotExceedTotalReward(_, _, _, _) => 100,
+            RewardDistributionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
+
+            RewardDistributionError::InvariantPoolBalanceIsZero(_) => 0,
+            RewardDistributionError::TotalDelegationBalanceZero(_) => 0,
+            RewardDistributionError::PoolDataNotFound(_) => 0,
+            RewardDistributionError::PoolBalanceNotFound(_) => 0,
+            RewardDistributionError::DelegationRewardOverflow(_, _, _, _) => 0,
+            RewardDistributionError::DelegationsRewardSumFailed(_, _) => 0,
+            RewardDistributionError::StakerRewardOverflow(_, _, _, _) => 0,
         }
     }
 }

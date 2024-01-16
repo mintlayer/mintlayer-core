@@ -29,7 +29,7 @@ use thiserror::Error;
 use crate::timelock_check;
 
 use super::{
-    input_output_policy::IOPolicyError,
+    input_output_policy::IOPolicyError, reward_distribution,
     signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
@@ -106,26 +106,8 @@ pub enum ConnectTransactionError {
     PoolDataNotFound(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
-    #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
-    StakerRewardCalculationFailed(Id<Block>, PoolId),
-    #[error(
-        "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
-    )]
-    StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
     #[error("Unexpected pool id in kernel {0} doesn't match pool id {1}")]
     UnexpectedPoolId(PoolId, PoolId),
-    #[error("Failed to sum block {0} reward for pool {1} delegations")]
-    DelegationsRewardSumFailed(Id<Block>, PoolId),
-    #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
-    DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
-    #[error("Reward for staker {0} overflowed: {1:?}+{2:?}+{3:?}")]
-    StakerRewardOverflow(PoolId, Amount, Amount, Amount),
-    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
-    DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
-    #[error("Total balance of delegations in pool {0} is zero")]
-    TotalDelegationBalanceZero(PoolId),
-    #[error("Balance of pool {0} is zero")]
-    PoolBalanceIsZero(PoolId),
     #[error("Data for delegation {0} not found")]
     DelegationDataNotFound(DelegationId),
 
@@ -168,6 +150,8 @@ pub enum ConnectTransactionError {
     InsufficientCoinsFee(Amount, Amount),
     #[error("Cannot perform any operations for frozen token {0}")]
     AttemptToSpendFrozenToken(TokenId),
+    #[error("Reward distribution error: {0}")]
+    RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

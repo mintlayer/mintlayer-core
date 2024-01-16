@@ -57,7 +57,7 @@ use self::{
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
-pub use reward_distribution::distribute_pos_reward;
+pub use reward_distribution::{distribute_pos_reward, RewardDistributionError};
 
 use chainstate_types::BlockIndex;
 use common::{

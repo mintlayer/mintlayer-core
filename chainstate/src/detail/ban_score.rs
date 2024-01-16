@@ -21,6 +21,7 @@ use tx_verifier::{
     timelock_check::OutputMaturityError,
     transaction_verifier::{
         signature_destination_getter::SignatureDestinationGetterError, IOPolicyError,
+        RewardDistributionError,
     },
 };
 
@@ -128,14 +129,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
-            ConnectTransactionError::StakerRewardCalculationFailed(_, _) => 100,
-            ConnectTransactionError::StakerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
-            ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 100,
-            ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 100,
-            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
-            ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
@@ -153,8 +148,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
             ConnectTransactionError::PoolBalanceNotFound(_) => 100,
-            ConnectTransactionError::StakerRewardOverflow(_, _, _, _) => 100,
-            ConnectTransactionError::PoolBalanceIsZero(_) => 100,
+            ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
         }
     }
 }
@@ -535,6 +529,26 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
+        }
+    }
+}
+
+impl BanScore for RewardDistributionError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            RewardDistributionError::PoSAccountingError(err) => err.ban_score(),
+            RewardDistributionError::InvariantPoolBalanceIsZero(_) => 100,
+            RewardDistributionError::InvariantStakerBalanceGreaterThanPoolBalance(_, _, _) => 100,
+            RewardDistributionError::RewardAdditionError(_) => 100,
+            RewardDistributionError::TotalDelegationBalanceZero(_) => 100,
+            RewardDistributionError::PoolDataNotFound(_) => 0,
+            RewardDistributionError::PoolBalanceNotFound(_) => 0,
+            RewardDistributionError::StakerRewardCalculationFailed(_, _) => 100,
+            RewardDistributionError::StakerRewardCannotExceedTotalReward(_, _, _, _) => 100,
+            RewardDistributionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
+            RewardDistributionError::DelegationRewardOverflow(_, _, _, _) => 100,
+            RewardDistributionError::DelegationsRewardSumFailed(_, _) => 100,
+            RewardDistributionError::StakerRewardOverflow(_, _, _, _) => 100,
         }
     }
 }

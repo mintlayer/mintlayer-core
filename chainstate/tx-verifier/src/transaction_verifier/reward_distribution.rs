@@ -16,8 +16,6 @@
 use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
-use crate::error::ConnectTransactionError;
-
 use common::{
     amount_sum,
     chain::{Block, DelegationId, PoolId, RewardDistributionVersion},
@@ -27,7 +25,42 @@ use common::{
     Uint256,
 };
 use pos_accounting::{PoSAccountingOperations, PoSAccountingView};
+use thiserror::Error;
 use utils::ensure;
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum RewardDistributionError {
+    #[error("PoS accounting error: {0}")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+
+    #[error("Balance of pool {0} is zero")]
+    InvariantPoolBalanceIsZero(PoolId),
+    #[error("In pool {0} staker balance {1:?} is greater than pool balance {2:?}")]
+    InvariantStakerBalanceGreaterThanPoolBalance(PoolId, Amount, Amount),
+
+    #[error("Block reward addition error for block {0}")]
+    RewardAdditionError(Id<Block>),
+    #[error("Total balance of delegations in pool {0} is zero")]
+    TotalDelegationBalanceZero(PoolId),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
+    #[error("Balance of pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
+    #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
+    StakerRewardCalculationFailed(Id<Block>, PoolId),
+    #[error(
+        "Reward in block {0} for the pool {1} staker which is {2:?} cannot be bigger than total reward {3:?}"
+    )]
+    StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
+    DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
+    #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
+    DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
+    #[error("Failed to sum block {0} reward for pool {1} delegations")]
+    DelegationsRewardSumFailed(Id<Block>, PoolId),
+    #[error("Reward for staker {0} overflowed: {1:?}+{2:?}+{3:?}")]
+    StakerRewardOverflow(PoolId, Amount, Amount, Amount),
+}
 
 /// Distribute reward among the staker and delegations
 pub fn distribute_pos_reward<
@@ -39,13 +72,13 @@ pub fn distribute_pos_reward<
     pool_id: PoolId,
     total_reward: Amount,
     reward_distribution_version: RewardDistributionVersion,
-) -> Result<Vec<U>, ConnectTransactionError> {
+) -> Result<Vec<U>, RewardDistributionError> {
     let pool_data = accounting_adapter
         .get_pool_data(pool_id)?
-        .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
+        .ok_or(RewardDistributionError::PoolDataNotFound(pool_id))?;
     let pool_balance = accounting_adapter
         .get_pool_balance(pool_id)?
-        .ok_or(ConnectTransactionError::PoolBalanceNotFound(pool_id))?;
+        .ok_or(RewardDistributionError::PoolBalanceNotFound(pool_id))?;
 
     let staker_reward = match reward_distribution_version {
         RewardDistributionVersion::V0 => calculate_staker_reward_v0(
@@ -53,7 +86,7 @@ pub fn distribute_pos_reward<
             pool_data.cost_per_block(),
             pool_data.margin_ratio_per_thousand(),
         )
-        .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
+        .ok_or(RewardDistributionError::StakerRewardCalculationFailed(
             block_id, pool_id,
         ))?,
         RewardDistributionVersion::V1 => calculate_staker_reward_v1(
@@ -67,7 +100,7 @@ pub fn distribute_pos_reward<
     };
 
     let total_delegations_reward = (total_reward - staker_reward).ok_or(
-        ConnectTransactionError::StakerRewardCannotExceedTotalReward(
+        RewardDistributionError::StakerRewardCannotExceedTotalReward(
             block_id,
             pool_id,
             staker_reward,
@@ -82,7 +115,7 @@ pub fn distribute_pos_reward<
             Some(delegation_shares) => {
                 let total_delegations_balance =
                     delegation_shares.values().copied().sum::<Option<Amount>>().ok_or(
-                        ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
+                        RewardDistributionError::DelegationsRewardSumFailed(block_id, pool_id),
                     )?;
 
                 if total_delegations_balance > Amount::ZERO {
@@ -108,7 +141,7 @@ pub fn distribute_pos_reward<
     };
 
     let total_staker_reward = (staker_reward + unallocated_reward)
-        .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+        .ok_or(RewardDistributionError::RewardAdditionError(block_id))?;
     let increase_pool_balance_undo =
         accounting_adapter.increase_staker_rewards(pool_id, total_staker_reward)?;
 
@@ -133,7 +166,6 @@ fn calculate_staker_reward_v0(
         None => total_reward,
     };
 
-    debug_assert!(staker_reward <= total_reward);
     Some(staker_reward)
 }
 
@@ -144,8 +176,20 @@ fn calculate_staker_reward_v1(
     cost_per_block: Amount,
     mpt: PerThousand,
     pool_id: PoolId,
-) -> Result<Amount, ConnectTransactionError> {
-    debug_assert!(staker_balance <= pool_balance);
+) -> Result<Amount, RewardDistributionError> {
+    ensure!(
+        staker_balance <= pool_balance,
+        RewardDistributionError::InvariantStakerBalanceGreaterThanPoolBalance(
+            pool_id,
+            staker_balance,
+            pool_balance
+        )
+    );
+
+    ensure!(
+        pool_balance > Amount::ZERO,
+        RewardDistributionError::InvariantPoolBalanceIsZero(pool_id)
+    );
 
     let staker_reward = match total_reward - cost_per_block {
         Some(to_distribute) => {
@@ -153,8 +197,7 @@ fn calculate_staker_reward_v1(
             let staker_balance = Uint256::from_amount(staker_balance);
             let numer = (Uint256::from_amount(to_distribute) * staker_balance)
                 .expect("Source types are smaller");
-            let pro_rata_staker_reward = (numer / pool_balance)
-                .ok_or(ConnectTransactionError::PoolBalanceIsZero(pool_id))?;
+            let pro_rata_staker_reward = (numer / pool_balance).expect("cannot be 0");
             let pro_rata_staker_reward: AmountUIntType = pro_rata_staker_reward
                 .try_into()
                 .expect("Cannot be greater than total_reward type");
@@ -176,7 +219,7 @@ fn calculate_staker_reward_v1(
                 pro_rata_staker_reward,
                 cost_per_block
             )
-            .ok_or(ConnectTransactionError::StakerRewardOverflow(
+            .ok_or(RewardDistributionError::StakerRewardOverflow(
                 pool_id,
                 Amount::from_atoms(margin_reward),
                 pro_rata_staker_reward,
@@ -187,7 +230,6 @@ fn calculate_staker_reward_v1(
         None => total_reward,
     };
 
-    debug_assert!(staker_reward <= total_reward);
     Ok(staker_reward)
 }
 
@@ -199,7 +241,7 @@ fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOper
     pool_id: PoolId,
     total_delegations_balance: Amount,
     total_delegations_reward: Amount,
-) -> Result<(Vec<U>, Amount), ConnectTransactionError> {
+) -> Result<(Vec<U>, Amount), RewardDistributionError> {
     let rewards_per_delegation = calculate_rewards_per_delegation(
         delegation_shares.iter(),
         pool_id,
@@ -213,7 +255,7 @@ fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOper
         .map(|(delegation_id, reward)| {
             accounting_adapter
                 .delegate_staking(*delegation_id, *reward)
-                .map_err(ConnectTransactionError::PoSAccountingError)
+                .map_err(RewardDistributionError::PoSAccountingError)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -221,12 +263,12 @@ fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOper
     // This remainder goes to the staker
     let total_delegations_reward_distributed =
         rewards_per_delegation.iter().map(|(_, v)| *v).sum::<Option<Amount>>().ok_or(
-            ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
+            RewardDistributionError::DelegationsRewardSumFailed(block_id, pool_id),
         )?;
 
     let delegations_reward_remainder =
         (total_delegations_reward - total_delegations_reward_distributed).ok_or(
-            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(
+            RewardDistributionError::DistributedDelegationsRewardExceedTotal(
                 pool_id,
                 block_id,
                 total_delegations_reward_distributed,
@@ -241,14 +283,14 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
     pool_id: PoolId,
     total_delegations_amount: Amount,
     total_delegations_reward_amount: Amount,
-) -> Result<Vec<(DelegationId, Amount)>, ConnectTransactionError> {
+) -> Result<Vec<(DelegationId, Amount)>, RewardDistributionError> {
     // this condition is necessary to ensure that the multiplication of balance and rewards won't overflow;
     // if this is to change, please ensure that the output of the operations below has twice as many bits
     assert_eq_size!(Amount, common::primitives::amount::UnsignedIntType);
 
     ensure!(
         total_delegations_amount != Amount::ZERO,
-        ConnectTransactionError::TotalDelegationBalanceZero(pool_id)
+        RewardDistributionError::TotalDelegationBalanceZero(pool_id)
     );
 
     let total_delegations_balance = Uint256::from_amount(total_delegations_amount);
@@ -256,13 +298,13 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
     delegation_shares
         .into_iter()
         .map(
-            |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
+            |(delegation_id, balance_amount)| -> Result<_, RewardDistributionError> {
                 let balance = Uint256::from_amount(*balance_amount);
                 let numer = (total_delegations_reward * balance).expect("Source types are smaller");
                 let reward = (numer / total_delegations_balance)
-                    .ok_or(ConnectTransactionError::TotalDelegationBalanceZero(pool_id))?;
+                    .ok_or(RewardDistributionError::TotalDelegationBalanceZero(pool_id))?;
                 let reward: AmountUIntType = reward.try_into().map_err(|_| {
-                    ConnectTransactionError::DelegationRewardOverflow(
+                    RewardDistributionError::DelegationRewardOverflow(
                         *delegation_id,
                         total_delegations_amount,
                         total_delegations_reward_amount,
@@ -484,7 +526,7 @@ mod tests {
                 mpt_zero,
                 pool_id
             ),
-            Err(ConnectTransactionError::PoolBalanceIsZero(pool_id))
+            Err(RewardDistributionError::InvariantPoolBalanceIsZero(pool_id))
         );
         assert_eq!(
             calculate_staker_reward_v1(
@@ -495,7 +537,7 @@ mod tests {
                 mpt_zero,
                 pool_id
             ),
-            Err(ConnectTransactionError::PoolBalanceIsZero(pool_id))
+            Err(RewardDistributionError::InvariantPoolBalanceIsZero(pool_id))
         );
         assert!(calculate_staker_reward_v1(
             reward,
