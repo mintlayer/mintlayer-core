@@ -16,7 +16,7 @@
 mod utils;
 
 use logging::log;
-use rstest::rstest;
+use rstest::*;
 
 use common::{
     chain::{Block, UtxoOutPoint},
@@ -28,6 +28,7 @@ use wallet_rpc_lib::types::{
 };
 
 #[rstest]
+#[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn startup_shutdown(#[case] seed: Seed) {
@@ -49,6 +50,7 @@ async fn startup_shutdown(#[case] seed: Seed) {
 }
 
 #[rstest]
+#[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn send_coins_to_acct1(#[case] seed: Seed) {
@@ -121,6 +123,7 @@ async fn send_coins_to_acct1(#[case] seed: Seed) {
 }
 
 #[rstest]
+#[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn no_hexified_destination(#[case] seed: Seed) {
