@@ -18,12 +18,14 @@ use serialization::{Decode, Encode, Error, Input};
 
 use super::Amount;
 
+const DENOMINATOR: u16 = 1000;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug, serde::Serialize)]
 pub struct PerThousand(u16);
 
 impl PerThousand {
     pub const fn new(value: u16) -> Option<Self> {
-        if value <= 1000 {
+        if value <= DENOMINATOR {
             Some(Self(value))
         } else {
             None
@@ -31,11 +33,15 @@ impl PerThousand {
     }
 
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
-        Self(rng.gen_range(0..=1000))
+        Self(rng.gen_range(0..=DENOMINATOR))
     }
 
     pub fn value(&self) -> u16 {
         self.0
+    }
+
+    pub const fn denominator(&self) -> u16 {
+        DENOMINATOR
     }
 
     pub fn from_decimal_str(s: &str) -> Option<Self> {
@@ -76,7 +82,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_from_decimal_str(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        for value in 0..=1000 {
+        for value in 0..=DENOMINATOR {
             let per_thousand = PerThousand::new(value).unwrap();
             let per_thousand_str =
                 Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
@@ -109,16 +115,16 @@ mod tests {
     fn test_per_thousand(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        assert!(PerThousand::new_from_rng(&mut rng).value() <= 1000);
+        assert!(PerThousand::new_from_rng(&mut rng).value() <= DENOMINATOR);
 
         assert_eq!(PerThousand::new(0).unwrap().value(), 0);
-        assert_eq!(PerThousand::new(1000).unwrap().value(), 1000);
+        assert_eq!(PerThousand::new(DENOMINATOR).unwrap().value(), DENOMINATOR);
 
         assert!(PerThousand::new(1001).is_none());
         assert!(PerThousand::new(u16::MAX).is_none());
 
         {
-            let valid_value = rng.gen_range(0..=1000);
+            let valid_value = rng.gen_range(0..=DENOMINATOR);
             assert_eq!(PerThousand::new(valid_value).unwrap().value(), valid_value);
         }
 

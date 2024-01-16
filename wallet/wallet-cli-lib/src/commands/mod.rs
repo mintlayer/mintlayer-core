@@ -300,23 +300,28 @@ pub enum WalletCommand {
     /// and will be capable of taking delegations from other users and staking.
     /// The decommission key is the key that can decommission the pool.
     /// Cost per block, and margin ratio are parameters that control how delegators receive rewards.
-    /// The cost per block is an amount in coins to be subtracted from the total rewards in a block,
+    /// The cost per block is an amount in coins to be subtracted from the total rewards in a block first,
     /// and handed to the staking pool. After subtracting the cost per block, a fraction equal to
     /// margin ratio is taken from what is left, and given to the staking pool. Finally, what is left
-    /// is distributed among stakers, pro-rata, based on their delegation amounts.
+    /// is distributed among delegators, pro-rata, based on their delegation amounts.
     #[clap(name = "staking-create-pool")]
     CreateStakePool {
         /// The amount to be pledged to the pool. There is a minimum to be accepted.
         /// This amount, and the rewards gained by the pool, CANNOT be taken out without decommissioning the pool.
         /// If you'd like to withdraw rewards, consider creating a pool and delegating to yourself.
         /// Delegators have no restrictions on withdrawals.
+        /// The likelihood to win block rewards, by creating blocks while staking, is proportional to how much the pool owns,
+        /// up to a maximum, to discourage heavy centralization of power.
         amount: String,
 
-        /// An amount in coins to be subtracted from the total rewards in a block and handed to the pool.
+        /// An amount in coins to be subtracted from the total rewards in a block and handed to the staker
+        /// as a constant/fixed cost for running the pool.
         cost_per_block: String,
 
-        /// After subtracting "cost per block" from the reward, this ratio is taken from the rewards and is handed to the pool.
+        /// After subtracting "cost per block" from the reward, this ratio is taken from the rewards and is handed to the staker.
         /// What is left is distributed among delegators, pro-rata, based on their delegation amounts.
+        /// The amount here is written as a percentage with per-mill accuracy. For example, 0.1% is valid,
+        /// and is equivalent to 0.001. Also 5% is valid and is equivalent to 0.05.
         margin_ratio_per_thousand: String,
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.

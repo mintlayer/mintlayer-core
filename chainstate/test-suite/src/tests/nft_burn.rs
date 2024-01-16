@@ -19,7 +19,7 @@ use common::chain::{
     output_value::OutputValue,
     signature::inputsig::InputWitness,
     tokens::{make_token_id, TokenIssuanceVersion},
-    ChainstateUpgrade, Destination, TxInput, TxOutput,
+    ChainstateUpgrade, Destination, RewardDistributionVersion, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
@@ -212,7 +212,10 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V1,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )

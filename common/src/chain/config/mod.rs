@@ -45,6 +45,7 @@ use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::tokens::TokenIssuanceVersion;
+use super::RewardDistributionVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
 
@@ -744,7 +745,7 @@ pub fn create_unit_test_config_builder() -> Builder {
         .chainstate_upgrades(
             NetUpgrades::initialize(vec![(
                 BlockHeight::zero(),
-                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
             )])
             .expect("cannot fail"),
         )

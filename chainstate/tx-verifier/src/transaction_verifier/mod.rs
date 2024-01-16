@@ -57,7 +57,7 @@ use self::{
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
-pub use reward_distribution::distribute_pos_reward;
+pub use reward_distribution::{distribute_pos_reward, RewardDistributionError};
 
 use chainstate_types::BlockIndex;
 use common::{
@@ -877,11 +877,21 @@ where
                 let undos = {
                     let mut accounting_adapter =
                         self.pos_accounting_adapter.operations(TransactionSource::Chain(block_id));
+
+                    let reward_distribution_version = self
+                        .chain_config
+                        .as_ref()
+                        .chainstate_upgrades()
+                        .version_at_height(block_index.block_height())
+                        .1
+                        .reward_distribution_version();
+
                     let undos = reward_distribution::distribute_pos_reward(
                         &mut accounting_adapter,
                         block_id,
                         *pos_data.stake_pool_id(),
                         total_reward,
+                        reward_distribution_version,
                     )?;
 
                     AccountingBlockRewardUndo::new(undos)

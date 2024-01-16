@@ -68,13 +68,7 @@ impl OrphanType {
             | CTE::SpendStakeError(_)
             | CTE::StakerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)
-            | CTE::StakerRewardCalculationFailed(_, _)
-            | CTE::StakerRewardCannotExceedTotalReward(..)
             | CTE::UnexpectedPoolId(_, _)
-            | CTE::DelegationsRewardSumFailed(..)
-            | CTE::DelegationRewardOverflow(..)
-            | CTE::DistributedDelegationsRewardExceedTotal(..)
-            | CTE::TotalDelegationBalanceZero(_)
             | CTE::UndoFetchFailure
             | CTE::TxVerifierStorage
             | CTE::DestinationRetrievalError(_)
@@ -91,6 +85,8 @@ impl OrphanType {
             | CTE::InsufficientCoinsFee(_, _)
             | CTE::AttemptToSpendFrozenToken(_)
             | CTE::ConstrainedValueAccumulatorError(_, _)
+            | CTE::PoolBalanceNotFound(_)
+            | CTE::RewardDistributionError(_)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

@@ -16,13 +16,15 @@
 use api_server_common::storage::storage_api::Delegation;
 use common::chain::{DelegationId, Destination, PoolId, UtxoOutPoint};
 use common::primitives::Amount;
-use pos_accounting::{PoSAccountingOperations, PoSAccountingView, PoolData};
+use pos_accounting::{
+    DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingOperations,
+    PoSAccountingView, PoolData,
+};
 use std::collections::BTreeMap;
 
 /// Helper struct used for distribute_pos_reward
 pub struct PoSAdapter {
-    pools: BTreeMap<PoolId, PoolData>,
-    delegations: BTreeMap<DelegationId, Delegation>,
+    storage: InMemoryPoSAccounting,
 
     delegation_rewards: Vec<(DelegationId, Amount)>,
     pool_rewards: BTreeMap<PoolId, Amount>,
@@ -32,13 +34,41 @@ impl PoSAdapter {
     pub fn new(
         pool_id: PoolId,
         pool_data: PoolData,
-        delegations: BTreeMap<DelegationId, Delegation>,
+        delegations: &BTreeMap<DelegationId, Delegation>,
     ) -> Self {
+        let pool_balances = (pool_data.staker_balance().expect("cannot fail")
+            + delegations
+                .iter()
+                .map(|(_, d)| *d.balance())
+                .sum::<Option<Amount>>()
+                .expect("cannot fail"))
+        .expect("cannot fail");
+
+        let mut pool_delegation_shares = BTreeMap::<(PoolId, DelegationId), Amount>::new();
+        let mut delegation_balances = BTreeMap::<DelegationId, Amount>::new();
+        let mut delegation_data = BTreeMap::<DelegationId, DelegationData>::new();
+
+        for (delegation_id, delegation) in delegations {
+            pool_delegation_shares.insert((pool_id, *delegation_id), *delegation.balance());
+            delegation_balances.insert(*delegation_id, *delegation.balance());
+            delegation_data.insert(
+                *delegation_id,
+                DelegationData::new(pool_id, delegation.spend_destination().clone()),
+            );
+        }
+
+        let storage = InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, pool_data)]),
+            BTreeMap::from([(pool_id, pool_balances)]),
+            pool_delegation_shares,
+            delegation_balances,
+            delegation_data,
+        );
+
         Self {
-            pools: BTreeMap::from_iter([(pool_id, pool_data)]),
-            delegations,
-            delegation_rewards: vec![],
-            pool_rewards: BTreeMap::new(),
+            storage,
+            delegation_rewards: Default::default(),
+            pool_rewards: Default::default(),
         }
     }
 
@@ -46,23 +76,8 @@ impl PoSAdapter {
         self.pool_rewards.get(&pool_id).copied().unwrap_or(Amount::ZERO)
     }
 
-    pub fn get_pool_data_with_reward(&self, pool_id: PoolId) -> Option<PoolData> {
-        self.pools.get(&pool_id).map(|pool_data| {
-            let reward = self.get_pool_reward(pool_id);
-            pool_data.clone().increase_staker_rewards(reward).expect("cannot overflow")
-        })
-    }
-
-    pub fn rewards_per_delegation(&self) -> Vec<(DelegationId, Amount, Delegation)> {
-        self.delegation_rewards
-            .iter()
-            .copied()
-            .map(|(delegation_id, reward)| {
-                let data = self.delegations.get(&delegation_id).expect("must exist");
-                let updated_delegation = data.clone().stake(reward);
-                (delegation_id, reward, updated_delegation)
-            })
-            .collect()
+    pub fn rewards_per_delegation(&self) -> &Vec<(DelegationId, Amount)> {
+        &self.delegation_rewards
     }
 }
 
@@ -70,51 +85,51 @@ impl PoSAccountingView for PoSAdapter {
     type Error = pos_accounting::Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
-        Ok(self.pools.contains_key(&pool_id))
+        let db = PoSAccountingDB::new(&self.storage);
+        db.pool_exists(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        Ok(self.pools.get(&pool_id).cloned())
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_pool_data(pool_id)
     }
 
-    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        unimplemented!()
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_pool_balance(pool_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
-        let data = self.delegations.get(&delegation_id).map(|data| {
-            pos_accounting::DelegationData::new(*data.pool_id(), data.spend_destination().clone())
-        });
-        Ok(data)
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_delegation_data(delegation_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        let data = self.delegations.get(&delegation_id).map(|data| *data.balance());
-        Ok(data)
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_delegation_balance(delegation_id)
     }
 
     fn get_pool_delegation_share(
         &self,
-        _pool_id: PoolId,
+        pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        let data = self.delegations.get(&delegation_id).map(|data| *data.balance());
-        Ok(data)
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_pool_delegation_share(pool_id, delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
-        _pool_id: PoolId,
+        pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        let delegations =
-            self.delegations.iter().map(|(key, data)| (*key, *data.balance())).collect();
-        Ok(Some(delegations))
+        let db = PoSAccountingDB::new(&self.storage);
+        db.get_pool_delegations_shares(pool_id)
     }
 }
 
@@ -136,6 +151,9 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), pos_accounting::Error> {
+        let mut db = PoSAccountingDB::new(&mut self.storage);
+        let _ = db.delegate_staking(delegation_target, amount_to_delegate)?;
+
         self.delegation_rewards.push((delegation_target, amount_to_delegate));
 
         Ok(())
@@ -166,6 +184,9 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
+        let mut db = PoSAccountingDB::new(&mut self.storage);
+        let _ = db.increase_staker_rewards(pool_id, amount_to_add)?;
+
         self.pool_rewards.insert(pool_id, amount_to_add);
 
         Ok(())

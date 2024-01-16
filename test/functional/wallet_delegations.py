@@ -326,7 +326,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in("Success", await wallet.select_account(1))
             acc1_address = await wallet.new_address()
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 100))
+            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 5000))
             assert_in("Success", await wallet.select_account(1))
             transactions = node.mempool_transactions()
 
@@ -353,7 +353,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 0)
 
-            assert_in("Success", await wallet.stake_delegation(10, delegation_id))
+            assert_in("Success", await wallet.stake_delegation(1000, delegation_id))
             transactions2 = node.mempool_transactions()
             for tx in transactions2:
                 if tx not in transactions:
@@ -365,7 +365,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 1)
-            assert_equal(delegations[0].balance, 10)
+            assert_equal(delegations[0].balance, 1000)
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             created_block_ids = await wallet.list_created_blocks_ids()

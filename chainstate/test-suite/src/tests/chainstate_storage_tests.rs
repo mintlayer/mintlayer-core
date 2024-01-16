@@ -26,8 +26,8 @@ use common::{
         tokens::{
             make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0, TokenIssuanceVersion,
         },
-        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, RewardDistributionVersion,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -116,7 +116,10 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V0,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )
@@ -190,7 +193,10 @@ fn store_nft_v0(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         common::chain::NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V0,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )
@@ -369,7 +375,10 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V1,
+                                RewardDistributionVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )

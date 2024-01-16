@@ -32,7 +32,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
-use pos_accounting::{make_delegation_id, PoolData};
+use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
@@ -539,14 +539,29 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Pool should exist");
 
             let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
-            let mut adapter = PoSAdapter::new(pool_id, pool_data, delegation_shares);
+            let mut adapter = PoSAdapter::new(pool_id, pool_data, &delegation_shares);
 
-            distribute_pos_reward(&mut adapter, block.get_id(), pool_id, total_reward)
-                .expect("no error");
+            let reward_distribution_version = chain_config
+                .as_ref()
+                .chainstate_upgrades()
+                .version_at_height(block_height)
+                .1
+                .reward_distribution_version();
 
-            for (delegation_id, rewards, updated_delegation) in adapter.rewards_per_delegation() {
+            distribute_pos_reward(
+                &mut adapter,
+                block.get_id(),
+                pool_id,
+                total_reward,
+                reward_distribution_version,
+            )
+            .expect("no error");
+
+            for (delegation_id, rewards) in adapter.rewards_per_delegation() {
+                let delegation = delegation_shares.get(delegation_id).expect("must exist").clone();
+                let updated_delegation = delegation.stake(*rewards);
                 db_tx
-                    .set_delegation_at_height(delegation_id, &updated_delegation, block_height)
+                    .set_delegation_at_height(*delegation_id, &updated_delegation, block_height)
                     .await?;
                 let address = Address::<Destination>::new(
                     &chain_config,
@@ -556,14 +571,14 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 increase_address_amount(
                     db_tx,
                     &address,
-                    &rewards,
+                    rewards,
                     CoinOrTokenId::Coin,
                     block_height,
                 )
                 .await;
             }
 
-            let pool_data = adapter.get_pool_data_with_reward(pool_id).expect("must exist");
+            let pool_data = adapter.get_pool_data(pool_id).expect("no error").expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
             let pool_reward = adapter.get_pool_reward(pool_id);
 
