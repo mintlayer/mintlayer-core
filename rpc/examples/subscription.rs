@@ -46,17 +46,39 @@ impl UsefulStuffServer for MyRpc {
     }
 }
 
+/// Simple program to test websocket subscription
+/// You can test it with `websocat` from the terminal, or the good, old postman
+///
+/// To test, run the program, and take note from the `INFO` logs of the port, say it's 1234
+/// $ RUST_LOG=info cargo run --example subscription
+///
+/// To test with `websocat`, run:
+/// $ websocat --jsonrpc ws://127.0.0.1:1234
+///
+/// Then right after that enter the following, to subscribe for a message every 700 ms:
+///
+/// subscribe_ticker 700
+///
+/// This will create the subscription and you'll get a response every 700 ms.
+///
+/// To test with Postman:
+/// Go to File -> New, then pick Websocket.
+/// Put the URL `ws://127.0.0.1:1234` (don't forget to replace with the correct port)
+/// Then in the `Message` field, type the following and hit `Send`:
+/// {"jsonrpc": "2.0", "method": "subscribe_ticker", "params": [700], "id": "1"}
+///
+/// which will subscribe to a message every 700 ms.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     logging::init_logging();
 
     log::debug!("Starting an RPC server");
-    let rpc_server = rpc::Builder::new("127.0.0.1:0".parse().unwrap(), None)
+    let rpc_server = rpc::Builder::new("127.0.0.1:0".parse().expect("Can't fail"), None)
         .with_method_list("methods")
         .register(MyRpc.into_rpc())
         .build()
         .await
-        .unwrap();
+        .unwrap_or_else(|e| panic!("Failed to start RPC server with error: {e}"));
 
     log::info!("RPC server address: {}", rpc_server.http_address());
 
