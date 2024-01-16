@@ -17,15 +17,29 @@
 
 use common::{
     address::Address,
-    chain::{Destination, GenBlock, TxOutput, UtxoOutPoint},
-    primitives::{BlockHeight, Id},
+    chain::{
+        block::timestamp::BlockTimestamp,
+        tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
+        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxOutput, UtxoOutPoint,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::{
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PublicKey,
+    },
+    vrf::VRFPublicKey,
+};
+use serialization::hex::HexEncode;
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{Balances, DecimalAmount};
+use wallet_types::wallet_tx;
+
+use crate::service::SubmitError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -37,6 +51,36 @@ pub enum RpcError {
 
     #[error("Invalid address")]
     InvalidAddress,
+
+    #[error("Failed to parse margin_ratio_per_thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
+    InvalidMarginRatio,
+
+    #[error("Invalid pool ID")]
+    InvalidPoolId,
+
+    #[error("Invalid token ID")]
+    InvalidTokenId,
+
+    #[error("Invalid mnemonic: {0}")]
+    InvalidMnemonic(wallet_controller::mnemonic::Error),
+
+    #[error("Invalid ip address")]
+    InvalidIpAddress,
+
+    #[error("Invalid block ID")]
+    InvalidBlockId,
+
+    #[error("Wallet error: {0}")]
+    Controller(#[from] wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+
+    #[error("RPC error: {0}")]
+    RpcError(node_comm::rpc_client::NodeRpcError),
+
+    #[error("No wallet opened")]
+    NoWalletOpened,
+
+    #[error("{0}")]
+    SubmitError(#[from] SubmitError),
 }
 
 impl From<RpcError> for rpc::Error {
@@ -55,8 +99,8 @@ pub struct AccountIndexArg {
 }
 
 impl AccountIndexArg {
-    pub fn index(&self) -> rpc::RpcResult<U31> {
-        rpc::handle_result(U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange))
+    pub fn index(&self) -> Result<U31, RpcError> {
+        U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
     }
 }
 
@@ -104,6 +148,35 @@ impl AddressWithUsageInfo {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PublicKeyInfo {
+    pub public_key: String,
+}
+
+impl PublicKeyInfo {
+    pub fn new(pub_key: PublicKey) -> Self {
+        Self {
+            public_key: pub_key.hex_encode(),
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VrfPublicKeyInfo {
+    pub vrf_public_key: String,
+}
+
+impl VrfPublicKeyInfo {
+    pub fn new(pub_key: VRFPublicKey, chain_config: &ChainConfig) -> Self {
+        Self {
+            vrf_public_key: Address::new(chain_config, &pub_key)
+                .expect("addressable")
+                .get()
+                .to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct UtxoInfo {
     pub outpoint: UtxoOutPoint,
@@ -132,4 +205,156 @@ impl NewAccountInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionOptions {
     pub in_top_x_mb: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PoolInfo {
+    pub pool_id: String,
+    pub balance: DecimalAmount,
+    pub height: BlockHeight,
+    pub block_timestamp: BlockTimestamp,
+}
+
+impl PoolInfo {
+    pub fn new(
+        pool_id: PoolId,
+        block_info: wallet_tx::BlockInfo,
+        balance: Amount,
+        chain_config: &ChainConfig,
+    ) -> Self {
+        let decimals = chain_config.coin_decimals();
+        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+
+        Self {
+            pool_id: Address::new(chain_config, &pool_id).expect("addressable").get().to_owned(),
+            balance,
+            height: block_info.height,
+            block_timestamp: block_info.timestamp,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NewDelegation {
+    pub delegation_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DelegationInfo {
+    pub delegation_id: String,
+    pub balance: DecimalAmount,
+}
+
+impl DelegationInfo {
+    pub fn new(delegation_id: DelegationId, balance: Amount, chain_config: &ChainConfig) -> Self {
+        let decimals = chain_config.coin_decimals();
+        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+
+        Self {
+            delegation_id: Address::new(chain_config, &delegation_id)
+                .expect("addressable")
+                .get()
+                .to_owned(),
+            balance,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NftMetadata {
+    pub media_hash: String,
+    pub name: String,
+    pub description: String,
+    pub ticker: String,
+    pub creator: Option<HexEncoded<PublicKey>>,
+    pub icon_uri: Option<String>,
+    pub media_uri: Option<String>,
+    pub additional_metadata_uri: Option<String>,
+}
+
+impl NftMetadata {
+    pub fn into_metadata(self) -> Metadata {
+        Metadata {
+            creator: self.creator.map(|pk| TokenCreator {
+                public_key: pk.take(),
+            }),
+            name: self.name.into_bytes(),
+            description: self.description.into_bytes(),
+            ticker: self.ticker.into_bytes(),
+            icon_uri: self.icon_uri.map(|x| x.into_bytes()).into(),
+            additional_metadata_uri: self.additional_metadata_uri.map(|x| x.into_bytes()).into(),
+            media_uri: self.media_uri.map(|x| x.into_bytes()).into(),
+            media_hash: self.media_hash.into_bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+enum TokenTotalSupply {
+    Fixed(DecimalAmount),
+    Lockable,
+    Unlimited,
+}
+
+impl TokenTotalSupply {
+    fn into_token_supply(
+        self,
+        chain_config: &ChainConfig,
+    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+        match self {
+            Self::Lockable => Ok(tokens::TokenTotalSupply::Lockable),
+            Self::Unlimited => Ok(tokens::TokenTotalSupply::Unlimited),
+            Self::Fixed(amount) => {
+                let decimals = chain_config.coin_decimals();
+                let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
+                Ok(tokens::TokenTotalSupply::Fixed(amount))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TokenMetadata {
+    pub token_ticker: String,
+    pub number_of_decimals: u8,
+    pub metadata_uri: String,
+    token_supply: TokenTotalSupply,
+    is_freezable: bool,
+}
+
+impl TokenMetadata {
+    pub fn token_supply(
+        &self,
+        chain_config: &ChainConfig,
+    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+        self.token_supply.into_token_supply(chain_config)
+    }
+
+    pub fn is_freezable(&self) -> IsTokenFreezable {
+        if self.is_freezable {
+            IsTokenFreezable::Yes
+        } else {
+            IsTokenFreezable::No
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SeedPhrase {
+    pub seed_phrase: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StakePoolBalance {
+    pub balance: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RpcTokenId {
+    pub token_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NodeVersion {
+    pub version: String,
 }

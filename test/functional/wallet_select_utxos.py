@@ -129,7 +129,7 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             # try to select one and send more than it has it should fail
             selected_utxos = random.sample(utxos, 1)
             output = await wallet.send_to_address(address, 11, selected_utxos)
-            assert_in("Controller error: Wallet error: Coin selection error: Not enough funds", output)
+            assert_in("Wallet error: Coin selection error: Not enough funds", output)
             # check that we didn't spent any utxos
             assert_equal(utxos, await wallet.list_utxos())
 

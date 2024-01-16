@@ -17,7 +17,10 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::primitives::BlockHeight;
+use common::{
+    chain::config::{regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions},
+    primitives::BlockHeight,
+};
 use test_utils::{test_dir::TestRoot, test_root};
 use wallet_rpc_lib::{
     config::WalletServiceConfig, types::AccountIndexArg, WalletHandle, WalletService,
@@ -77,12 +80,31 @@ impl TestFramework {
         let shutdown_trigger = manager.make_shutdown_trigger();
         let node_manager_task = manager.main_in_task();
 
+        let chain_config_options = ChainConfigOptions {
+            software_version: None,
+            chain_magic_bytes: None,
+            chain_coin_decimals: None,
+            chain_pos_netupgrades: None,
+            chain_emission_schedule: None,
+            chain_initial_difficulty: None,
+            chain_target_block_spacing: None,
+            chain_max_block_header_size: None,
+            chain_genesis_block_timestamp: None,
+            chain_pos_netupgrades_v0_to_v1: None,
+            chain_genesis_staking_settings: GenesisStakingSettings::default(),
+            chain_max_future_block_time_offset: None,
+            chain_max_block_size_with_standard_txs: None,
+            chain_max_block_size_with_smart_contracts: None,
+        };
+
         // Start the wallet service
         let (wallet_service, rpc_server) = {
-            let ws_config = WalletServiceConfig::new(chain_type, wallet_path)
-                .with_custom_chain_config(chain_config)
-                .with_node_rpc_address(node_rpc_addr.to_string())
-                .with_username_and_password(RPC_USERNAME.to_string(), RPC_PASSWORD.to_string());
+            let ws_config =
+                WalletServiceConfig::new(chain_type, Some(wallet_path), chain_config_options)
+                    .unwrap()
+                    .with_custom_chain_config(chain_config)
+                    .with_node_rpc_address(node_rpc_addr.to_string())
+                    .with_username_and_password(RPC_USERNAME.to_string(), RPC_PASSWORD.to_string());
             let bind_addr = "127.0.0.1:0".parse().unwrap();
             let rpc_config = wallet_rpc_lib::config::WalletRpcConfig {
                 bind_addr,

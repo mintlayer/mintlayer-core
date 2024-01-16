@@ -14,7 +14,6 @@ consensus = { path = "../../consensus" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
-node-comm = { path = "../wallet-node-client" }
 p2p-types = { path = "../../p2p/types" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
@@ -23,6 +22,7 @@ wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
+wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true

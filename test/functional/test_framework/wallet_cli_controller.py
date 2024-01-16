@@ -39,12 +39,12 @@ class UtxoOutpoint:
 @dataclass
 class PoolData:
     pool_id: str
-    balance: int
+    balance: str
 
 @dataclass
 class DelegationData:
     delegation_id: str
-    balance: int
+    balance: str
 
 class WalletCliController:
 
@@ -244,7 +244,7 @@ class WalletCliController:
         output = await self._write_command("staking-list-pool-ids\n")
         pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'
         matches = re.findall(pattern, output)
-        return [PoolData(pool_id, int(balance)) for pool_id, balance in matches]
+        return [PoolData(pool_id, balance) for pool_id, balance in matches]
 
     async def list_created_blocks_ids(self) -> List[str]:
         output =  await self._write_command("staking-list-created-block-ids\n")
@@ -267,7 +267,7 @@ class WalletCliController:
         output = await self._write_command("delegation-list-ids\n")
         pattern = r'Delegation Id: ([a-zA-Z0-9]+), Balance: (\d+)'
         matches = re.findall(pattern, output)
-        return [DelegationData(delegation_id, int(balance)) for delegation_id, balance in matches]
+        return [DelegationData(delegation_id, balance) for delegation_id, balance in matches]
 
     async def deposit_data(self, data: str) -> str:
         return await self._write_command(f"address-deposit-data \"{data}\"\n")

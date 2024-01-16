@@ -16,8 +16,9 @@
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
+use rpc::RpcAuthData;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::{ControllerConfig, NodeRpcClient};
+use wallet_controller::ControllerConfig;
 
 use crate::{
     commands::{CommandHandler, ConsoleCommand, WalletCommand},
@@ -34,32 +35,25 @@ pub enum Event {
 
 pub async fn run(
     chain_config: &Arc<ChainConfig>,
-    rpc_client: &NodeRpcClient,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
     in_top_x_mb: usize,
-) {
-    let mut command_handler = CommandHandler::new(ControllerConfig { in_top_x_mb });
+    node_rpc_address: Option<String>,
+    node_credentials: RpcAuthData,
+) -> Result<(), WalletCliError> {
+    let mut command_handler = CommandHandler::new(
+        ControllerConfig { in_top_x_mb },
+        chain_config.clone(),
+        node_rpc_address,
+        node_credentials,
+    )
+    .await?;
 
     loop {
-        let mut controller_opt = command_handler.controller_opt();
-        let background_task = async {
-            match controller_opt.as_mut() {
-                Some(controller) => controller.run().await,
-                None => std::future::pending().await,
-            }
-        };
-
-        tokio::select! {
-            event_opt = event_rx.recv() => {
-                match event_opt {
-                    Some(Event::HandleCommand { command, res_tx }) => {
-                        let res = command_handler.handle_wallet_command(chain_config, rpc_client, command).await;
-                        let _ = res_tx.send(res);
-                    },
-                    None => return,
-                }
-            }
-            _ = background_task => {}
+        if let Some(Event::HandleCommand { command, res_tx }) = event_rx.recv().await {
+            let res = command_handler.handle_wallet_command(chain_config, command).await;
+            let _ = res_tx.send(res);
+        } else {
+            return Ok(());
         }
     }
 }

@@ -13,16 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cmdline;
 pub mod config;
+pub mod error;
 mod rpc;
 mod service;
 
-pub use rpc::{types, RpcAuthData, RpcCreds, WalletRpcServer};
-pub use service::{WalletHandle, WalletResult, WalletService};
+pub use rpc::{types, RpcAuthData, RpcCreds, RpcError, WalletRpc, WalletRpcServer};
+pub use service::{CreatedWallet, WalletHandle, WalletResult, WalletService};
 
 use std::time::Duration;
 
-use config::{WalletRpcConfig, WalletServiceConfig};
+use config::WalletRpcConfig;
+pub use config::WalletServiceConfig;
 use logging::log;
 
 use utils::shallow_clone::ShallowClone;

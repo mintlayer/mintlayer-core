@@ -19,6 +19,7 @@ parity-scale-codec.workspace = true
 itertools.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }

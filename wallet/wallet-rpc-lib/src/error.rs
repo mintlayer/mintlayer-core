@@ -13,31 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use logging::log;
-use wallet_rpc_lib::{cmdline, error::RunError};
+use crate::{cmdline::ConfigError, StartupError};
 
-async fn run() -> Result<(), RunError> {
-    let (ws_config, rpc_config) = <cmdline::Args as clap::Parser>::parse().into_config()?;
+#[derive(thiserror::Error, Debug)]
+pub enum RunError {
+    #[error(transparent)]
+    Config(#[from] ConfigError),
 
-    wallet_rpc_lib::run(ws_config, rpc_config).await?;
-
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-
-    logging::init_logging();
-
-    let run_result = run().await;
-
-    if let Err(err) = run_result {
-        log::error!("{err}");
-        std::process::exit(1);
-    }
+    #[error(transparent)]
+    Startup(#[from] StartupError),
 }

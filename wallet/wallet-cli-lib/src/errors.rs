@@ -18,13 +18,12 @@ use std::path::PathBuf;
 use common::address::AddressError;
 use crypto::key::hdkd::u31::U31;
 use utils::cookie::LoadCookieError;
+use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
     Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
-    #[error("RPC error: {0}")]
-    RpcError(node_comm::rpc_client::NodeRpcError),
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, std::io::Error),
     #[error(
@@ -55,4 +54,6 @@ pub enum WalletCliError {
     AddressesRetrievalFailed(U31, String),
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
+    #[error("{0}")]
+    WalletRpcError(#[from] RpcError),
 }
