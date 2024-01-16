@@ -16,11 +16,12 @@
 use std::path::PathBuf;
 
 use super::*;
+
 use crypto::random::{
     distributions::{Alphanumeric, DistString},
     Rng,
 };
-use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -32,6 +33,9 @@ pub trait SubsystemRpc {
 
     #[method(name = "add")]
     fn add(&self, a: u64, b: u64) -> RpcResult<u64>;
+
+    #[subscription(name = "subscribe_squares", item = u32)]
+    async fn subscribe_squares(&self) -> subscription::Reply;
 }
 
 #[rpc(server, namespace = "example_server")]
@@ -49,6 +53,7 @@ impl RpcInfoServer for RpcInfo {
 
 pub struct SubsystemRpcImpl;
 
+#[async_trait::async_trait]
 impl SubsystemRpcServer for SubsystemRpcImpl {
     fn name(&self) -> RpcResult<String> {
         Ok("sub1".into())
@@ -57,10 +62,26 @@ impl SubsystemRpcServer for SubsystemRpcImpl {
     fn add(&self, a: u64, b: u64) -> RpcResult<u64> {
         Ok(a + b)
     }
+
+    async fn subscribe_squares(&self, pending: subscription::Pending) -> subscription::Reply {
+        let sub = subscription::accept::<u32>(pending).await?;
+        for i in 1u32..(1u32 << 16) {
+            sub.send(&(i * i)).await?;
+        }
+        Ok(())
+    }
 }
 
 #[tokio::test]
 async fn method_list() -> anyhow::Result<()> {
+    const METHOD_LIST: [&str; 5] = [
+        "method_list",
+        "some_subsystem_add",
+        "some_subsystem_name",
+        "some_subsystem_subscribe_squares",
+        "some_subsystem_unsubscribe_squares",
+    ];
+
     let http_bind_address = "127.0.0.1:0".parse::<SocketAddr>().unwrap();
 
     let rpc = Builder::new(http_bind_address, None)
@@ -72,10 +93,7 @@ async fn method_list() -> anyhow::Result<()> {
     let url = format!("http://{}", rpc.http_address());
     let client = new_http_client(url, RpcAuthData::None).unwrap();
     let response: RpcClientResult<Vec<String>> = client.request("method_list", [(); 0]).await;
-    assert_eq!(
-        response.unwrap(),
-        vec!["method_list", "some_subsystem_add", "some_subsystem_name"]
-    );
+    assert_eq!(response.unwrap(), METHOD_LIST);
 
     subsystem::Subsystem::shutdown(rpc).await;
     Ok(())
@@ -277,4 +295,34 @@ async fn rpc_server_auth_ws(#[case] seed: Seed) {
     .unwrap_err();
 
     subsystem::Subsystem::shutdown(rpc).await;
+}
+
+#[tokio::test]
+async fn simple_subscription() -> anyhow::Result<()> {
+    let bind_address = "127.0.0.1:0".parse::<SocketAddr>()?;
+
+    let rpc = Builder::new(bind_address, None)
+        .register(SubsystemRpcImpl.into_rpc())
+        .build()
+        .await?;
+
+    let url = format!("ws://{}", rpc.http_address());
+    let client = new_ws_client(url, RpcAuthData::None).await?;
+
+    let mut squares_sub: jsonrpsee::core::client::Subscription<u32> = client
+        .subscribe(
+            "some_subsystem_subscribe_squares",
+            [(); 0],
+            "some_subsystem_unsubscribe_squares",
+        )
+        .await?;
+
+    assert_eq!(squares_sub.next().await.unwrap()?, 1);
+    assert_eq!(squares_sub.next().await.unwrap()?, 4);
+    assert_eq!(squares_sub.next().await.unwrap()?, 9);
+
+    squares_sub.unsubscribe().await.unwrap();
+
+    subsystem::Subsystem::shutdown(rpc).await;
+    Ok(())
 }
