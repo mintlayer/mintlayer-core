@@ -26,8 +26,11 @@ use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::types::RpcError;
 
-pub type WalletController =
-    wallet_controller::RpcController<wallet::wallet_events::WalletEventsNoOp>;
+use crate::Event;
+
+use super::WalletServiceEvents;
+
+pub type WalletController = wallet_controller::RpcController<super::WalletServiceEvents>;
 pub type WalletControllerError =
     wallet_controller::ControllerError<wallet_controller::NodeRpcClient>;
 pub type CommandReceiver = mpsc::UnboundedReceiver<WalletCommand>;
@@ -36,12 +39,16 @@ pub type CommandSender = mpsc::UnboundedSender<WalletCommand>;
 type CommandFn = dyn Send + FnOnce(&mut Option<WalletController>) -> BoxFuture<()>;
 type ManageFn = dyn Send + FnOnce(&mut WalletWorker) -> BoxFuture<()>;
 
+/// Commands to control the wallet task
 pub enum WalletCommand {
     /// Make the controller perform an action
     Call(Box<CommandFn>),
 
     /// Manage the Wallet itself, i.e. Create/Open/Close
     Manage(Box<ManageFn>),
+
+    /// Subscribe to events
+    Subscribe(mpsc::UnboundedSender<Event>),
 
     /// Shutdown the wallet service task
     Stop,
@@ -58,30 +65,49 @@ pub struct WalletWorker {
     command_rx: CommandReceiver,
     chain_config: Arc<ChainConfig>,
     node_rpc: NodeRpcClient,
+    subscribers: Vec<mpsc::UnboundedSender<Event>>,
+    events_rx: mpsc::UnboundedReceiver<Event>,
+    wallet_events: WalletServiceEvents,
 }
 
 impl WalletWorker {
     fn new(
         controller: Option<WalletController>,
-        command_rx: CommandReceiver,
         chain_config: Arc<ChainConfig>,
         node_rpc: NodeRpcClient,
+        command_rx: CommandReceiver,
+        events_rx: mpsc::UnboundedReceiver<Event>,
+        wallet_events: WalletServiceEvents,
     ) -> Self {
+        let subscribers = Vec::new();
         Self {
             controller,
             command_rx,
             chain_config,
             node_rpc,
+            subscribers,
+            events_rx,
+            wallet_events,
         }
     }
 
     pub fn spawn(
         controller: Option<WalletController>,
-        request_rx: CommandReceiver,
         chain_config: Arc<ChainConfig>,
         node_rpc: NodeRpcClient,
+        command_rx: CommandReceiver,
+        events_rx: mpsc::UnboundedReceiver<Event>,
+        wallet_events: WalletServiceEvents,
     ) -> JoinHandle<()> {
-        tokio::spawn(Self::new(controller, request_rx, chain_config, node_rpc).event_loop())
+        let worker = Self::new(
+            controller,
+            chain_config,
+            node_rpc,
+            command_rx,
+            events_rx,
+            wallet_events,
+        );
+        tokio::spawn(worker.event_loop())
     }
 
     async fn event_loop(mut self) {
@@ -95,6 +121,14 @@ impl WalletWorker {
                     match self.process_command(command).await {
                         ControlFlow::Continue(()) => (),
                         ControlFlow::Break(()) => break,
+                    }
+                }
+
+                // Forward events to subscribers
+                event = self.events_rx.recv() => {
+                    match event {
+                        Some(event) => self.broadcast(&event),
+                        None => log::warn!("Events channel closed unexpectedly"),
                     }
                 }
 
@@ -117,6 +151,10 @@ impl WalletWorker {
             }
             Some(WalletCommand::Manage(call)) => {
                 call(self).await;
+                ControlFlow::Continue(())
+            }
+            Some(WalletCommand::Subscribe(sender)) => {
+                self.subscribers.push(sender);
                 ControlFlow::Continue(())
             }
             Some(WalletCommand::Stop) => {
@@ -147,13 +185,14 @@ impl WalletWorker {
             self.chain_config.clone(),
             self.node_rpc.clone(),
             wallet,
-            wallet::wallet_events::WalletEventsNoOp,
+            self.wallet_events.clone(),
         )
         .await?;
         self.controller.replace(controller);
 
         Ok(())
     }
+
     pub async fn create_wallet(
         &mut self,
         wallet_path: PathBuf,
@@ -195,7 +234,7 @@ impl WalletWorker {
             self.chain_config.clone(),
             self.node_rpc.clone(),
             wallet,
-            wallet::wallet_events::WalletEventsNoOp,
+            self.wallet_events.clone(),
         )
         .await
         .map_err(RpcError::Controller)?;
@@ -207,6 +246,10 @@ impl WalletWorker {
             false => CreatedWallet::UserProvidedMenmonic,
         };
         Ok(result)
+    }
+
+    fn broadcast(&mut self, event: &Event) {
+        self.subscribers.retain(|sub| sub.send(event.clone()).is_ok())
     }
 
     async fn background_task(

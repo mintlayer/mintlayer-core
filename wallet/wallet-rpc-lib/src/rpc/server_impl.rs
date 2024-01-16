@@ -36,7 +36,7 @@ use crate::{
         StakePoolBalance, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
-    RpcError,
+    Event, RpcError,
 };
 
 #[async_trait::async_trait]
@@ -679,5 +679,20 @@ impl WalletRpcServer for WalletRpc {
                 .await
                 .map(|tx| HexEncode::hex_encode(tx.get_signed_transaction())),
         )
+    }
+
+    async fn subscribe_wallet_events(
+        &self,
+        pending: rpc::subscription::Pending,
+        _options: EmptyArgs,
+    ) -> rpc::subscription::Reply {
+        let mut wallet_events = self.wallet.subscribe()?;
+        let sub = rpc::subscription::accept::<Event>(pending).await?;
+
+        while let Some(evt) = wallet_events.recv().await {
+            sub.send(&evt).await?;
+        }
+
+        Ok(())
     }
 }

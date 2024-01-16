@@ -17,21 +17,21 @@
 
 use futures::future::{BoxFuture, Future};
 
+use tokio::sync::mpsc;
 use utils::shallow_clone::ShallowClone;
 
-use crate::types::RpcError;
-
-use super::worker::{self, WalletCommand, WalletController, WalletWorker};
+use crate::{
+    service::worker::{self, WalletCommand, WalletController, WalletWorker},
+    types::RpcError,
+    Event,
+};
 
 /// Wallet handle allows the user to control the wallet service, perform queries etc.
 #[derive(Clone)]
 pub struct WalletHandle(worker::CommandSender);
 
 impl WalletHandle {
-    pub(super) fn new(sender: worker::CommandSender) -> Self {
-        Self(sender)
-    }
-
+    /// Asynchronous wallet service call
     pub fn call_async<R: Send + 'static, E: Into<RpcError> + Send + 'static>(
         &self,
         action: impl FnOnce(&mut WalletController) -> BoxFuture<Result<R, E>> + Send + 'static,
@@ -54,6 +54,7 @@ impl WalletHandle {
         }
     }
 
+    /// Wallet service call
     pub fn call<R: Send + 'static, E: Into<RpcError> + Send + 'static>(
         &self,
         action: impl FnOnce(&mut WalletController) -> Result<R, E> + Send + 'static,
@@ -83,10 +84,19 @@ impl WalletHandle {
         }
     }
 
+    /// Subscribe to wallet events
+    pub fn subscribe(&self) -> Result<EventStream, SubmitError> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.send_raw(WalletCommand::Subscribe(tx))?;
+        Ok(EventStream(rx))
+    }
+
+    /// Stop the wallet service
     pub fn stop(self) -> Result<(), SubmitError> {
         self.send_raw(WalletCommand::Stop)
     }
 
+    /// Check if the wallet service is surrently running
     pub fn is_running(&self) -> bool {
         !self.0.is_closed()
     }
@@ -96,9 +106,23 @@ impl WalletHandle {
     }
 }
 
+pub fn create(sender: worker::CommandSender) -> WalletHandle {
+    WalletHandle(sender)
+}
+
 impl ShallowClone for WalletHandle {
     fn shallow_clone(&self) -> Self {
         Self(worker::CommandSender::clone(&self.0))
+    }
+}
+
+/// A stream of wallet events
+pub struct EventStream(mpsc::UnboundedReceiver<Event>);
+
+impl EventStream {
+    /// Receive an event
+    pub async fn recv(&mut self) -> Option<Event> {
+        self.0.recv().await
     }
 }
 

@@ -7501,6 +7501,7 @@ dependencies = [
  "chainstate",
  "clap",
  "common",
+ "consensus",
  "crypto",
  "futures",
  "jsonrpsee",

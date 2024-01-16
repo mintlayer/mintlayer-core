@@ -37,7 +37,7 @@ pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 use wallet::account::PoolData;
-pub use wallet_controller::types::{Balances, DecimalAmount};
+pub use wallet_controller::types::{Balances, BlockInfo, DecimalAmount};
 
 use crate::service::SubmitError;
 

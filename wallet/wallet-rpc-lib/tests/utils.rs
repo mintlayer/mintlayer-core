@@ -18,7 +18,10 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{
-    chain::config::{regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions},
+    chain::{
+        config::{regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions},
+        ChainConfig,
+    },
     primitives::BlockHeight,
 };
 use test_utils::{test_dir::TestRoot, test_root};
@@ -28,7 +31,10 @@ use wallet_rpc_lib::{
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
 
 pub use crypto::random::Rng;
-pub use jsonrpsee::{core::client::ClientT, core::JsonValue};
+pub use jsonrpsee::{
+    core::client::{ClientT, SubscriptionClientT},
+    core::JsonValue,
+};
 pub use test_utils::random::{make_seedable_rng, Seed};
 
 pub const ACCOUNT0_ARG: AccountIndexArg = AccountIndexArg { account: 0 };
@@ -123,10 +129,20 @@ impl TestFramework {
         }
     }
 
-    pub fn rpc_client(&self) -> rpc::RpcHttpClient {
+    pub fn chain_config(&self) -> &ChainConfig {
+        self.wallet_service.chain_config()
+    }
+
+    pub fn rpc_client_http(&self) -> rpc::RpcHttpClient {
         let rpc_addr = format!("http://{}", self.rpc_addr());
         let rpc_auth = rpc::RpcAuthData::None;
         rpc::new_http_client(rpc_addr, rpc_auth).unwrap()
+    }
+
+    pub async fn rpc_client_ws(&self) -> rpc::RpcWsClient {
+        let rpc_addr = format!("ws://{}", self.rpc_addr());
+        let rpc_auth = rpc::RpcAuthData::None;
+        rpc::new_ws_client(rpc_addr, rpc_auth).await.unwrap()
     }
 
     pub fn handle(&self) -> WalletHandle {
