@@ -127,7 +127,10 @@ impl Rpc {
             let http_server = ServerBuilder::new()
                 .set_http_middleware(middleware.clone())
                 .build(http_bind_addr)
-                .await?;
+                .await
+                .map_err(|e| {
+                    logging::log::error!("\n\nError: Failed to bind RPC to address {http_bind_addr}; the port is probably reserved by another application. Assuming the node is not already running, either pick another port (bind address) or disable RPC.\n"); e
+                })?;
             let http_address = http_server.local_addr()?;
             let http_handle = http_server.start(methods.clone());
             (http_address, http_handle)
