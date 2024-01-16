@@ -112,6 +112,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_pool_block_stats(pool_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
     async fn get_pool_delegations(
         &self,
         pool_id: PoolId,

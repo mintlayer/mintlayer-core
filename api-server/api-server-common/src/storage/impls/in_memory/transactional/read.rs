@@ -70,6 +70,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_delegation(delegation_id)
     }
 
+    async fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        self.transaction.get_pool_block_stats(pool_id)
+    }
+
     async fn get_pool_delegations(
         &self,
         pool_id: PoolId,

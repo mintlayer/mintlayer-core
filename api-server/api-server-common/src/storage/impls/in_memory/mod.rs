@@ -179,6 +179,10 @@ impl ApiServerInMemoryStorage {
         Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
     }
 
+    fn get_pool_block_stats(&self, pool_id: PoolId) -> Result<Option<u64>, ApiServerStorageError> {
+        Ok(self.pool_data_table.get(&pool_id).map(|by_height| (by_height.len() - 1) as u64))
+    }
+
     fn get_pool_delegations(
         &self,
         pool_id: PoolId,

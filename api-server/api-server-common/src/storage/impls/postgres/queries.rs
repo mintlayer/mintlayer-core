@@ -821,6 +821,33 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<u64>, ApiServerStorageError> {
+        let pool_id_str = Address::new(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self
+            .tx
+            .query_one(
+                r#"SELECT COUNT(*) - 1
+                    FROM ml_pool_data
+                    WHERE pool_id = $1
+                "#,
+                &[&pool_id_str.get()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let count: i64 = row.get(0);
+
+        if count < 0 {
+            Ok(None)
+        } else {
+            Ok(Some(count as u64))
+        }
+    }
+
     pub async fn get_pool_delegation_shares(
         &mut self,
         pool_id: PoolId,

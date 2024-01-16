@@ -238,6 +238,11 @@ pub trait ApiServerStorageRead: Sync {
         pool_id: PoolId,
     ) -> Result<Option<PoolData>, ApiServerStorageError>;
 
+    async fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<u64>, ApiServerStorageError>;
+
     async fn get_latest_pool_data(
         &self,
         len: u32,
