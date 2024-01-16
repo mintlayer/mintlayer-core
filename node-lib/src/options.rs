@@ -63,8 +63,8 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
-    /// Clean data dir before starting
-    #[clap(long)]
+    /// A flag that will clean data dir before starting
+    #[clap(long, short, action = clap::ArgAction::SetTrue)]
     pub clean_data: Option<bool>,
 
     /// Minimum number of connected peers to enable block production.

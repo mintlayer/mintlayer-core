@@ -23,7 +23,9 @@ async fn main() -> Result<(), node_lib::Error> {
     let node = match setup_result {
         node_lib::NodeSetupResult::Node(node) => node,
         node_lib::NodeSetupResult::DataDirCleanedUp => {
-            panic!("Data directory was cleaned up, please restart the node without `clean-data` argument");
+            panic!(
+                "Data directory is now clean. Please restart the node without `--clean-data` flag"
+            );
         }
     };
     node.main().await;

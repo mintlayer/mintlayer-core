@@ -91,7 +91,9 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
         node_lib::NodeSetupResult::Node(node) => node,
         node_lib::NodeSetupResult::DataDirCleanedUp => {
             // TODO: find more friendly way to report the message and shut down GUI
-            anyhow::bail!("Data directory was cleaned up, please restart the node without `clean-data` argument");
+            anyhow::bail!(
+                "Data directory is now clean. Please restart the node without `--clean-data` flag"
+            );
         }
     };
 
