@@ -120,8 +120,12 @@ impl WalletRpcServer for WalletRpc {
         rpc::handle_result(self.best_block(empty_args).await)
     }
 
-    async fn create_account(&self, _empty_args: EmptyArgs) -> rpc::RpcResult<NewAccountInfo> {
-        rpc::handle_result(self.create_account(None).await)
+    async fn create_account(
+        &self,
+        name: Option<String>,
+        _empty_args: EmptyArgs,
+    ) -> rpc::RpcResult<NewAccountInfo> {
+        rpc::handle_result(self.create_account(name).await)
     }
 
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {

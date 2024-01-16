@@ -21,13 +21,10 @@ import asyncio
 import http.client
 import json
 import re
-import shutil
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 from typing import Optional, List, Tuple, Union
-
-from .wallet_cli_controller import WalletCliController
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -125,8 +122,8 @@ class WalletRpcController:
     async def get_best_block(self) -> str:
         return self._write_command("wallet_best_block", [{}])['result']['id']
 
-    async def create_new_account(self, name: Optional[str] = '') -> str:
-        self._write_command("account_create", [{}])
+    async def create_new_account(self, name: Optional[str] = None) -> str:
+        self._write_command("account_create", [name, {}])
         return "Success"
 
     async def select_account(self, account_index: int) -> str:
@@ -144,24 +141,21 @@ class WalletRpcController:
         return self._write_command(f"address_new", [self.account])['result']['address']
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
-        output = await self._write_command(f"listutxo {utxo_types} {with_locked} {''.join(utxo_states)}\n")
-
-        pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{0x([^}]*)\}[^}]*index:\s*(\d+)'
-        matches = re.findall(pattern, output, re.DOTALL)
-        return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
+        outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
+        return [UtxoOutpoint(id=match['outpoint']['id'].strip(), index=int(match['outpoint']['index'].strip())) for match in outputs]
 
     async def get_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"gettransaction {tx_id}\n")
+        return self._write_command("transaction_get", [self.account, tx_id])['result']
 
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"getrawsignedtransaction {tx_id}\n")
+        return self._write_command("transaction_get_signed_raw", [self.account, tx_id])['result']
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         self._write_command("address_send", [self.account, address, str(amount), {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return await self._write_command(f"sendtokenstoaddress {token_id} {address} {amount}\n")
+        return self._write_command("token_send", [self.account, token_id, address, amount, {'in_top_x_mb': 5}])['result']
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -169,30 +163,36 @@ class WalletRpcController:
                               metadata_uri: str,
                               destination_address: str,
                               token_supply: str = 'unlimited',
-                              is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
-        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
-        if output.startswith("A new token has been issued with ID"):
-            return output[output.find(':')+2:], None
-
-        return None, output
+                              is_freezable: str = 'freezable'):
+        output = self._write_command('token_issue_new', [
+            self.account,
+            token_ticker,
+            number_of_decimals,
+            metadata_uri,
+            destination_address,
+            token_supply,
+            is_freezable,
+            {'in_top_x_mb': 5}
+            ])['result']
+        return output
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return await self._write_command(f"minttokens {token_id} {address} {amount}\n")
+        return self._write_command("token_mint", [self.account, token_id, address, amount, {'in_top_x_mb': 5}])['result']
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return await self._write_command(f"unminttokens {token_id} {amount}\n")
+        return self._write_command("token_mint", [self.account, token_id, amount, {'in_top_x_mb': 5}])['result']
 
     async def lock_token_supply(self, token_id: str) -> str:
-        return await self._write_command(f"locktokensupply {token_id}\n")
+        return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']
 
     async def freeze_token(self, token_id: str, is_unfreezable: str) -> str:
-        return await self._write_command(f"freezetoken {token_id} {is_unfreezable}\n")
+        return self._write_command("token_freeze", [self.account, token_id, is_unfreezable, {'in_top_x_mb': 5}])['result']
 
     async def unfreeze_token(self, token_id: str) -> str:
-        return await self._write_command(f"unfreezetoken {token_id}\n")
+        return self._write_command("token_unfreeze", [self.account, token_id, {'in_top_x_mb': 5}])['result']
 
     async def change_token_authority(self, token_id: str, new_authority: str) -> str:
-        return await self._write_command(f"changetokenauthority {token_id} {new_authority}\n")
+        return self._write_command("token_change_authority", [self.account, token_id, new_authority, {'in_top_x_mb': 5}])['result']
 
     async def issue_new_nft(self,
                             destination_address: str,
@@ -204,12 +204,22 @@ class WalletRpcController:
                             icon_uri: Optional[str] = '',
                             media_uri: Optional[str] = '',
                             additional_metadata_uri: Optional[str] = ''):
-        output = await self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
-        if output.startswith("A new NFT has been issued with ID"):
-            return output[output.find(':')+2:]
-
-        self.log.error(f"err: {output}")
-        return None
+        output = self._write_command("token_nft_issue_new", [
+            self.account,
+            destination_address,
+            {
+                'media_hash': media_hash,
+                'name': name,
+                'description': description,
+                'ticker': ticker,
+                'creator': creator,
+                'icon_uri': icon_uri,
+                'media_uri': media_uri,
+                'additional_metadata_uri': additional_metadata_uri
+            },
+            {'in_top_x_mb': 5}
+            ])['result']
+        return output
 
     async def create_stake_pool(self,
                                 amount: int,
@@ -243,7 +253,7 @@ class WalletRpcController:
         return [DelegationData(delegation['delegation_id'], delegation['balance']) for delegation in delegations]
 
     async def deposit_data(self, data: str) -> str:
-        return await self._write_command(f"depositdata \"{data}\"\n")
+        return self._write_command("address_deposit_data", [self.account, data, {'in_top_x_mb': 5}])['result']
 
     async def sync(self) -> str:
         self._write_command("wallet_sync")
@@ -258,7 +268,7 @@ class WalletRpcController:
         return "Success"
 
     async def get_addresses_usage(self) -> str:
-        return await self._write_command("showreceiveaddresses\n")
+        return self._write_command("address_show")['result']
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
@@ -266,10 +276,9 @@ class WalletRpcController:
         return f"Coins amount: {balances['result']['coins']}"
 
     async def list_pending_transactions(self) -> List[str]:
-        output = await self._write_command(f"listpendingtransactions\n")
-        pattern = r'id: Id<Transaction>\{0x([^}]*)\}'
-        return re.findall(pattern, output)
+        output = self._write_command("transaction_list_pending", [self.account])['result']
+        return output
 
     async def abandon_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"abandontransaction {tx_id}\n")
+        return self._write_command("transaction_abandon", [self.account, tx_id])['result']
 

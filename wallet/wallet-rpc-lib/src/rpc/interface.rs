@@ -84,7 +84,11 @@ trait WalletRpc {
     async fn best_block(&self, options: EmptyArgs) -> rpc::RpcResult<BlockInfo>;
 
     #[method(name = "account_create")]
-    async fn create_account(&self, options: EmptyArgs) -> rpc::RpcResult<NewAccountInfo>;
+    async fn create_account(
+        &self,
+        name: Option<String>,
+        options: EmptyArgs,
+    ) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "address_show")]
     async fn get_issued_addresses(
