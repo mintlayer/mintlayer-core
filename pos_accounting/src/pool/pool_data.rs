@@ -89,6 +89,10 @@ impl PoolData {
         self.staker_rewards = (self.staker_rewards + reward).ok_or(Error::StakerBalanceOverflow)?;
         Ok(self)
     }
+
+    pub fn is_decommissioned(&self) -> bool {
+        self.pledge_amount == Amount::ZERO && self.staker_rewards == Amount::ZERO
+    }
 }
 
 impl From<StakePoolData> for PoolData {

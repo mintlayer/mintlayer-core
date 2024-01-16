@@ -929,13 +929,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                SELECT pool_id, data
+                SELECT sub.pool_id, data
                 FROM (
-                    SELECT pool_id, data, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height) as oldest
+                    SELECT pool_id, data, staker_balance, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
                     FROM ml_pool_data
-                ) AS sub
-                WHERE oldest = 1
-                ORDER BY block_height DESC
+                ) AS sub INNER JOIN (SELECT pool_id, MIN(block_height) AS created_height FROM ml_pool_data GROUP BY pool_id) as created ON sub.pool_id = created.pool_id
+                WHERE newest = 1 AND staker_balance::NUMERIC != 0
+                ORDER BY created_height DESC
                 OFFSET $1
                 LIMIT $2;
             "#,
@@ -979,7 +979,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SELECT pool_id, data, staker_balance, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
                     FROM ml_pool_data
                 ) AS sub
-                WHERE newest = 1
+                WHERE newest = 1 AND staker_balance::NUMERIC != 0
                 ORDER BY staker_balance DESC
                 OFFSET $1
                 LIMIT $2;

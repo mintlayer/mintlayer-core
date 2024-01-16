@@ -203,7 +203,12 @@ impl ApiServerInMemoryStorage {
         let mut pool_data: Vec<_> = self
             .pool_data_table
             .iter()
-            .map(|(pool_id, by_height)| (pool_id, by_height.iter().next().expect("not empty")))
+            .map(|(pool_id, by_height)| {
+                let created_height = by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty");
+                (pool_id, (created_height, latest_data))
+            })
+            .filter(|(_pool_id, data)| !data.1.is_decommissioned())
             .collect();
 
         pool_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
@@ -230,6 +235,7 @@ impl ApiServerInMemoryStorage {
             .pool_data_table
             .iter()
             .map(|(pool_id, by_height)| (pool_id, by_height.values().last().expect("not empty")))
+            .filter(|(_pool_id, data)| !data.is_decommissioned())
             .collect();
 
         pool_data.sort_by_key(|(_, data)| Reverse(data.staker_balance().expect("no overflow")));
