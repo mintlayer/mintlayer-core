@@ -58,7 +58,7 @@ use crate::{
 
 use super::{
     peer::ConnectionInfo,
-    types::{HandshakeNonce, Message},
+    types::{peer_event, HandshakeNonce, Message},
 };
 
 /// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
@@ -512,10 +512,10 @@ where
     ) -> crate::Result<bool> {
         if connection_info == ConnectionInfo::Inbound {
             // Look for own outbound connection with same nonce
-            let outbound_peer_id = self
+            let pending_outbound_peer_id = self
                 .pending
                 .iter()
-                .find(|(_peer_id, pending)| match pending.connection_info {
+                .find(|(_peer_id, peer_ctx)| match peer_ctx.connection_info {
                     ConnectionInfo::Inbound => false,
                     ConnectionInfo::Outbound {
                         handshake_nonce,
@@ -524,18 +524,17 @@ where
                 })
                 .map(|(peer_id, _pending)| *peer_id);
 
-            if let Some(outbound_peer_id) = outbound_peer_id {
-                let outbound_pending =
-                    self.pending.remove(&outbound_peer_id).expect("peer must exist");
+            if let Some(peer_id) = pending_outbound_peer_id {
+                let peer_ctx = self.pending.remove(&peer_id).expect("peer must exist");
 
                 log::info!(
                     "self-connection detected on address {:?}",
-                    outbound_pending.peer_address
+                    peer_ctx.peer_address
                 );
 
                 // Report outbound connection failure
                 self.conn_event_sender.send(ConnectivityEvent::ConnectionError {
-                    peer_address: outbound_pending.peer_address,
+                    peer_address: peer_ctx.peer_address,
                     error: P2pError::DialError(DialError::AttemptToDialSelf),
                 })?;
 
@@ -550,26 +549,36 @@ where
     fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
-                protocol_version,
-                network,
-                common_services,
-                user_agent,
-                software_version,
-                node_address_as_seen_by_peer,
-                handshake_nonce,
-            } => self.create_peer(
-                peer_id,
-                handshake_nonce,
-                PeerInfo {
+                info:
+                    peer_event::PeerInfo {
+                        protocol_version,
+                        network,
+                        common_services,
+                        user_agent,
+                        software_version,
+                        node_address_as_seen_by_peer,
+                        handshake_nonce,
+                    },
+                confirmation_sender,
+            } => {
+                if let Some(confirmation_sender) = confirmation_sender {
+                    let _ = confirmation_sender.send(());
+                }
+
+                self.create_peer(
                     peer_id,
-                    protocol_version,
-                    network,
-                    software_version,
-                    user_agent,
-                    common_services,
-                },
-                node_address_as_seen_by_peer,
-            ),
+                    handshake_nonce,
+                    PeerInfo {
+                        peer_id,
+                        protocol_version,
+                        network,
+                        software_version,
+                        user_agent,
+                        common_services,
+                    },
+                    node_address_as_seen_by_peer,
+                )
+            }
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 

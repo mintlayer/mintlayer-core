@@ -21,7 +21,7 @@ use common::{
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc::Sender, oneshot};
 
 use crate::{
     error::P2pError,
@@ -79,21 +79,35 @@ impl P2pTimestamp {
     }
 }
 
-/// Events sent by Peer to Backend
-#[derive(Debug, PartialEq, Eq)]
-pub enum PeerEvent {
-    /// Peer information received from remote
-    PeerInfoReceived {
-        protocol_version: SupportedProtocolVersion,
-        network: [u8; 4],
-        common_services: Services,
-        user_agent: UserAgent,
-        software_version: SemVer,
-        node_address_as_seen_by_peer: Option<PeerAddress>,
+pub mod peer_event {
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct PeerInfo {
+        pub protocol_version: SupportedProtocolVersion,
+        pub network: [u8; 4],
+        pub common_services: Services,
+        pub user_agent: UserAgent,
+        pub software_version: SemVer,
+        pub node_address_as_seen_by_peer: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
         /// For inbound connections that is what was received from remote peer.
-        handshake_nonce: HandshakeNonce,
+        pub handshake_nonce: HandshakeNonce,
+    }
+}
+
+/// Events sent by Peer to Backend
+#[derive(Debug)]
+pub enum PeerEvent {
+    /// Peer information received from remote
+    PeerInfoReceived {
+        info: peer_event::PeerInfo,
+
+        /// If this is `Some`, `Backend` will send a value through it once it receives
+        /// the `PeerInfoReceived` event. This is used by `Peer` to guarantee correct detection
+        /// of self-connects.
+        confirmation_sender: Option<oneshot::Sender<()>>,
     },
 
     /// Connection closed to remote

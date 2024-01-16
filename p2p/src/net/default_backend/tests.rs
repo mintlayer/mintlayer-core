@@ -344,32 +344,38 @@ where
     .unwrap();
 
     // Try connect to self
-    let addr = conn1.local_addresses();
-    conn1.connect(addr[0], None).unwrap();
+    let addr = conn1.local_addresses()[0];
+    // Repeat this several times (5 seems to be enough to reproduce the race condition described
+    // below *almost* on every test run).
+    for _ in 0..5 {
+        conn1.connect(addr, None).unwrap();
 
-    // ConnectionError should be reported
-    if let Ok(ConnectivityEvent::ConnectionError {
-        peer_address,
-        error,
-    }) = conn1.poll_next().await
-    {
-        assert_eq!(peer_address, conn1.local_addresses()[0]);
-        assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
-    } else {
-        panic!("invalid event received");
+        // ConnectionError should be reported
+        let poll_result = conn1.poll_next().await;
+        if let Ok(ConnectivityEvent::ConnectionError {
+            peer_address,
+            error,
+        }) = poll_result
+        {
+            assert_eq!(peer_address, addr);
+            assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
+        } else {
+            panic!("Invalid event received: {poll_result:?}");
+        }
     }
 
     // Check that we can still connect normally after
-    let addr = conn2.local_addresses();
-    conn1.connect(addr[0], None).unwrap();
+    let addr = conn2.local_addresses()[0];
+    conn1.connect(addr, None).unwrap();
+    let poll_result = conn1.poll_next().await;
     if let Ok(ConnectivityEvent::OutboundAccepted {
         peer_address,
         bind_address: _,
         peer_info,
         node_address_as_seen_by_peer: _,
-    }) = conn1.poll_next().await
+    }) = poll_result
     {
-        assert_eq!(peer_address, conn2.local_addresses()[0]);
+        assert_eq!(peer_address, addr);
         assert_eq!(
             peer_info.protocol_version,
             get_preferred_protocol_version_for_tests()
@@ -379,24 +385,29 @@ where
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(peer_info.common_services, NodeType::Full.into());
     } else {
-        panic!("invalid event received");
+        panic!("Invalid event received: {poll_result:?}");
     }
 }
 
+// Note: it's important for the "self_connect" tests to be multi-threaded to be able to detect
+// all possible problems of the implementation (specifically, we had a race condition between
+// sending a `PeerEvent` to backend and sending `HelloAck` to the peer, which could break
+// self-connection detection but which couldn't be caught by the single-threaded version of
+// these tests).
 #[tracing::instrument]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_connect_tcp() {
     self_connect::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
 #[tracing::instrument]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_connect_channels() {
     self_connect::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
 #[tracing::instrument]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_connect_noise() {
     self_connect::<TestTransportNoise, NoiseTcpTransport>().await;
 }

@@ -30,7 +30,7 @@ to shut down the containers.
 ```
 run_wallet_cmd.sh node_idx cmd [cmd_params...]
 ```
-Run the specified wallet-cli command on the specified node. E.g. `run_wallet_cmd.sh 1 connectedpeers` will print peer information for the 1st node.
+Run the specified wallet-cli command on the specified node. E.g. `run_wallet_cmd.sh 1 node-list-connected-peers` will print peer information for the 1st node.
 
 #### prune_node.sh
 ```
