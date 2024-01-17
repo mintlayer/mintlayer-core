@@ -548,37 +548,27 @@ where
 
     fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
-            PeerEvent::PeerInfoReceived {
-                info:
-                    peer_event::PeerInfo {
-                        protocol_version,
-                        network,
-                        common_services,
-                        user_agent,
-                        software_version,
-                        node_address_as_seen_by_peer,
-                        handshake_nonce,
-                    },
-                confirmation_sender,
-            } => {
-                if let Some(confirmation_sender) = confirmation_sender {
-                    let _ = confirmation_sender.send(());
-                }
-
-                self.create_peer(
+            PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
+                protocol_version,
+                network,
+                common_services,
+                user_agent,
+                software_version,
+                node_address_as_seen_by_peer,
+                handshake_nonce,
+            }) => self.create_peer(
+                peer_id,
+                handshake_nonce,
+                PeerInfo {
                     peer_id,
-                    handshake_nonce,
-                    PeerInfo {
-                        peer_id,
-                        protocol_version,
-                        network,
-                        software_version,
-                        user_agent,
-                        common_services,
-                    },
-                    node_address_as_seen_by_peer,
-                )
-            }
+                    protocol_version,
+                    network,
+                    software_version,
+                    user_agent,
+                    common_services,
+                },
+                node_address_as_seen_by_peer,
+            ),
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 
@@ -642,6 +632,13 @@ where
             PeerEvent::Misbehaved { error } => {
                 self.conn_event_sender.send(ConnectivityEvent::Misbehaved { peer_id, error })?;
 
+                Ok(())
+            }
+
+            PeerEvent::Sync {
+                event_received_confirmation_sender,
+            } => {
+                let _ = event_received_confirmation_sender.send(());
                 Ok(())
             }
         }

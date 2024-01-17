@@ -200,24 +200,29 @@ where
                 // detection (which we've experienced in production), where the "outbound" part
                 // of a self-connection may still be able to complete the handshake before the
                 // "inbound" `PeerInfoReceived` manages to reach `Backend`.
-                let (confirmation_sender, confirmation_receiver) = oneshot::channel();
 
                 self.peer_event_sender
-                    .send(PeerEvent::PeerInfoReceived {
-                        info: peer_event::PeerInfo {
-                            protocol_version: common_protocol_version,
-                            network,
-                            common_services,
-                            user_agent,
-                            software_version,
-                            node_address_as_seen_by_peer,
-                            handshake_nonce,
-                        },
-                        confirmation_sender: Some(confirmation_sender),
-                    })
+                    .send(PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
+                        protocol_version: common_protocol_version,
+                        network,
+                        common_services,
+                        user_agent,
+                        software_version,
+                        node_address_as_seen_by_peer,
+                        handshake_nonce,
+                    }))
                     .await?;
 
-                let _ = confirmation_receiver.await;
+                // Sync with `Backend` to ensure that the sent `PeerInfoReceived` has already been
+                // processed by it before we complete the handshake.
+                let (event_received_confirmation_sender, event_received_confirmation_receiver) =
+                    oneshot::channel();
+                self.peer_event_sender
+                    .send(PeerEvent::Sync {
+                        event_received_confirmation_sender,
+                    })
+                    .await?;
+                let _ = event_received_confirmation_receiver.await;
 
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::HelloAck {
@@ -273,18 +278,15 @@ where
                     choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
 
                 self.peer_event_sender
-                    .send(PeerEvent::PeerInfoReceived {
-                        info: peer_event::PeerInfo {
-                            protocol_version: common_protocol_version,
-                            network,
-                            common_services,
-                            user_agent,
-                            software_version,
-                            node_address_as_seen_by_peer,
-                            handshake_nonce,
-                        },
-                        confirmation_sender: None,
-                    })
+                    .send(PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
+                        protocol_version: common_protocol_version,
+                        network,
+                        common_services,
+                        user_agent,
+                        software_version,
+                        node_address_as_seen_by_peer,
+                        handshake_nonce,
+                    }))
                     .await?;
             }
         }
@@ -425,8 +427,9 @@ where
 mod tests {
     use futures::FutureExt;
     use std::time::Duration;
-    use test_utils::mock_time_getter::{
-        mocked_time_getter_milliseconds, mocked_time_getter_seconds,
+    use test_utils::{
+        assert_matches,
+        mock_time_getter::{mocked_time_getter_milliseconds, mocked_time_getter_seconds},
     };
     use utils::atomics::SeqCstAtomicU64;
 
@@ -448,21 +451,14 @@ mod tests {
 
     const TEST_CHAN_BUF_SIZE: usize = 100;
 
-    async fn expect_peer_info_received(
+    async fn expect_peer_info_received_event(
         peer_event_receiver: &mut mpsc::Receiver<PeerEvent>,
         expected_info: &peer_event::PeerInfo,
     ) {
         let peer_event = peer_event_receiver.recv().await.unwrap();
         match peer_event {
-            PeerEvent::PeerInfoReceived {
-                info,
-                confirmation_sender,
-            } => {
+            PeerEvent::PeerInfoReceived(info) => {
                 assert_eq!(&info, expected_info);
-
-                if let Some(confirmation_sender) = confirmation_sender {
-                    let _ = confirmation_sender.send(());
-                }
             }
             _ => {
                 panic!("Unexpected peer event: {peer_event:?}")
@@ -471,16 +467,20 @@ mod tests {
     }
 
     // Same as expect_peer_info_received, but we don't care about the actual info.
-    async fn expect_some_peer_info_received(peer_event_receiver: &mut mpsc::Receiver<PeerEvent>) {
+    async fn expect_some_peer_info_received_event(
+        peer_event_receiver: &mut mpsc::Receiver<PeerEvent>,
+    ) {
+        let peer_event = peer_event_receiver.recv().await.unwrap();
+        assert_matches!(peer_event, PeerEvent::PeerInfoReceived(_));
+    }
+
+    async fn expect_sync_event(peer_event_receiver: &mut mpsc::Receiver<PeerEvent>) {
         let peer_event = peer_event_receiver.recv().await.unwrap();
         match peer_event {
-            PeerEvent::PeerInfoReceived {
-                info: _,
-                confirmation_sender,
+            PeerEvent::Sync {
+                event_received_confirmation_sender,
             } => {
-                if let Some(confirmation_sender) = confirmation_sender {
-                    let _ = confirmation_sender.send(());
-                }
+                let _ = event_received_confirmation_sender.send(());
             }
             _ => {
                 panic!("Unexpected peer event: {peer_event:?}")
@@ -536,7 +536,7 @@ mod tests {
             .await
             .is_ok());
 
-        expect_peer_info_received(
+        expect_peer_info_received_event(
             &mut peer_event_receiver,
             &peer_event::PeerInfo {
                 protocol_version: TEST_PROTOCOL_VERSION,
@@ -549,6 +549,7 @@ mod tests {
             },
         )
         .await;
+        expect_sync_event(&mut peer_event_receiver).await;
         let _peer = handle.await.unwrap();
     }
 
@@ -620,7 +621,7 @@ mod tests {
             .await
             .is_ok());
 
-        expect_peer_info_received(
+        expect_peer_info_received_event(
             &mut peer_event_receiver,
             &peer_event::PeerInfo {
                 protocol_version: TEST_PROTOCOL_VERSION,
@@ -699,7 +700,8 @@ mod tests {
             .await
             .is_ok());
 
-        expect_some_peer_info_received(&mut peer_event_receiver).await;
+        expect_some_peer_info_received_event(&mut peer_event_receiver).await;
+        expect_sync_event(&mut peer_event_receiver).await;
         assert_eq!(handle.await.unwrap(), Ok(()));
     }
 

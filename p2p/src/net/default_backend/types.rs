@@ -82,6 +82,10 @@ impl P2pTimestamp {
 pub mod peer_event {
     use super::*;
 
+    /// The "peer info" from PeerEvent's perspective.
+    ///
+    /// Note that we also have another `PeerInfo` in a higher-level module that has slightly
+    /// different fields.
     #[derive(Debug, PartialEq, Eq)]
     pub struct PeerInfo {
         pub protocol_version: SupportedProtocolVersion,
@@ -101,14 +105,7 @@ pub mod peer_event {
 #[derive(Debug)]
 pub enum PeerEvent {
     /// Peer information received from remote
-    PeerInfoReceived {
-        info: peer_event::PeerInfo,
-
-        /// If this is `Some`, `Backend` will send a value through it once it receives
-        /// the `PeerInfoReceived` event. This is used by `Peer` to guarantee correct detection
-        /// of self-connects.
-        confirmation_sender: Option<oneshot::Sender<()>>,
-    },
+    PeerInfoReceived(peer_event::PeerInfo),
 
     /// Connection closed to remote
     ConnectionClosed,
@@ -121,6 +118,13 @@ pub enum PeerEvent {
 
     /// Protocol violation during handshake
     MisbehavedOnHandshake { error: P2pError },
+
+    /// Upon receiving this event, `Backend` should send a value through the provided one-shot
+    /// sender. By awaiting on the corresponding receiver, `Peer` can make sure that all previously
+    /// sent events have already been processed by `Backend`.
+    Sync {
+        event_received_confirmation_sender: oneshot::Sender<()>,
+    },
 }
 
 /// Events sent by Backend to Peer
