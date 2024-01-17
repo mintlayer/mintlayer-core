@@ -402,31 +402,29 @@ impl Backend {
         let StakeRequest {
             wallet_id,
             account_id,
-            amount,
+            pledge_amount: amount,
+            mpt,
+            cost_per_block,
+            decommission_address,
         } = stake_request;
 
         let amount = parse_coin_amount(&self.chain_config, &amount)
-            .ok_or(BackendError::InvalidAmount(amount))?;
+            .ok_or(BackendError::InvalidPledgeAmount(amount))?;
 
-        // TODO: decommission address should be passed here as an argument
-        let (_, decommission_addr) = self
-            .synced_wallet_controller(wallet_id, account_id.account_index())
-            .await?
-            .new_address()
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
-        let decommission_key = decommission_addr
+        let cost_per_block = parse_coin_amount(&self.chain_config, &cost_per_block)
+            .ok_or(BackendError::InvalidCostPerBlockAmount(cost_per_block))?;
+
+        let mpt = PerThousand::from_decimal_str(&mpt)
+            .ok_or(BackendError::InvalidMarginPerThousand(mpt))?;
+
+        let decommission_key = parse_address(&self.chain_config, &decommission_address)
+            .map_err(|err| BackendError::AddressError(err.to_string()))?
             .decode_object(&self.chain_config)
             .map_err(|e| BackendError::AddressError(e.to_string()))?;
 
         self.synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
-            .create_stake_pool_tx(
-                amount,
-                decommission_key,
-                // TODO: get value from gui
-                PerThousand::new(10).expect("Must not fail"),
-                Amount::ZERO,
-            )
+            .create_stake_pool_tx(amount, decommission_key, mpt, cost_per_block)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
