@@ -21,7 +21,7 @@ use common::{
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc::Sender, oneshot};
 
 use crate::{
     error::P2pError,
@@ -79,22 +79,33 @@ impl P2pTimestamp {
     }
 }
 
-/// Events sent by Peer to Backend
-#[derive(Debug, PartialEq, Eq)]
-pub enum PeerEvent {
-    /// Peer information received from remote
-    PeerInfoReceived {
-        protocol_version: SupportedProtocolVersion,
-        network: [u8; 4],
-        common_services: Services,
-        user_agent: UserAgent,
-        software_version: SemVer,
-        node_address_as_seen_by_peer: Option<PeerAddress>,
+pub mod peer_event {
+    use super::*;
+
+    /// The "peer info" from PeerEvent's perspective.
+    ///
+    /// Note that we also have another `PeerInfo` in a higher-level module that has slightly
+    /// different fields.
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct PeerInfo {
+        pub protocol_version: SupportedProtocolVersion,
+        pub network: [u8; 4],
+        pub common_services: Services,
+        pub user_agent: UserAgent,
+        pub software_version: SemVer,
+        pub node_address_as_seen_by_peer: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
         /// For inbound connections that is what was received from remote peer.
-        handshake_nonce: HandshakeNonce,
-    },
+        pub handshake_nonce: HandshakeNonce,
+    }
+}
+
+/// Events sent by Peer to Backend
+#[derive(Debug)]
+pub enum PeerEvent {
+    /// Peer information received from remote
+    PeerInfoReceived(peer_event::PeerInfo),
 
     /// Connection closed to remote
     ConnectionClosed,
@@ -107,6 +118,13 @@ pub enum PeerEvent {
 
     /// Protocol violation during handshake
     MisbehavedOnHandshake { error: P2pError },
+
+    /// Upon receiving this event, `Backend` should send a value through the provided one-shot
+    /// sender. By awaiting on the corresponding receiver, `Peer` can make sure that all previously
+    /// sent events have already been processed by `Backend`.
+    Sync {
+        event_received_confirmation_sender: oneshot::Sender<()>,
+    },
 }
 
 /// Events sent by Backend to Peer
