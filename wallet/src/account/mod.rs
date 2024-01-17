@@ -616,7 +616,7 @@ impl Account {
             .into_signed_tx()
     }
 
-    pub fn get_vrf_public_key(
+    fn get_vrf_public_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<VRFPublicKey> {
@@ -1136,6 +1136,12 @@ impl Account {
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.key_chain.get_all_issued_addresses()
+    }
+
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        self.key_chain.get_all_issued_vrf_public_keys()
     }
 
     pub fn get_addresses_usage(&self) -> &KeychainUsageState {

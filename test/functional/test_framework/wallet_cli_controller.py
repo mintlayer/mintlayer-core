@@ -288,6 +288,9 @@ class WalletCliController:
     async def sync(self) -> str:
         return await self._write_command("wallet-sync\n")
 
+    async def rescan(self) -> str:
+        return await self._write_command("wallet-rescan\n")
+
     async def start_staking(self) -> str:
         return await self._write_command(f"staking-start\n")
 
@@ -296,6 +299,9 @@ class WalletCliController:
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")
+
+    async def get_vrf_addresses_usage(self) -> str:
+        return await self._write_command("staking-show-vrf-key\n")
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         return await self._write_command(f"account-balance {with_locked} {' '.join(utxo_states)}\n")

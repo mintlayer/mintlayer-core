@@ -207,17 +207,21 @@ impl WalletRpc {
         Ok(PublicKeyInfo::new(publick_key))
     }
 
-    pub async fn get_vrf_key(&self, account_index: U31) -> WRpcResult<VrfPublicKeyInfo> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
-        let publick_key = self
-            .wallet
+    pub async fn get_vrf_key_usage(&self, account_index: U31) -> WRpcResult<Vec<VrfPublicKeyInfo>> {
+        self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config).await?.get_vrf_public_key()
+                    w.readonly_controller(account_index).get_all_issued_vrf_public_keys()
                 })
             })
-            .await??;
-        Ok(VrfPublicKeyInfo::new(publick_key, &self.chain_config))
+            .await?
+            .map(|keys| {
+                keys.into_iter()
+                    .map(|(child_number, (pub_key, used))| {
+                        VrfPublicKeyInfo::new(pub_key, child_number, used)
+                    })
+                    .collect()
+            })
     }
 
     pub async fn get_issued_addresses(

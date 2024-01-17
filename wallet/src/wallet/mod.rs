@@ -888,14 +888,17 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(account.get_all_issued_addresses())
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_issued_vrf_public_keys())
+    }
+
     pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
         let account = self.get_account(account_index)?;
         Ok(account.get_addresses_usage())
-    }
-
-    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
-        let mut db_tx = self.db.transaction_rw(None)?;
-        Self::get_account_mut(&mut self.accounts, account_index)?.get_vrf_public_key(&mut db_tx)
     }
 
     /// Creates a transaction to send funds to specified addresses.

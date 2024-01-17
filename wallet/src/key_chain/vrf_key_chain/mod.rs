@@ -300,20 +300,29 @@ impl VrfKeySoftChain {
         self.usage_state.last_issued()
     }
 
-    // pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
-    //     let last_issued = match self.usage_state.last_issued() {
-    //         Some(index) => index,
-    //         None => return BTreeMap::new(),
-    //     };
+    pub fn get_all_issued_keys(&self) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        let last_issued = match self.usage_state.last_issued() {
+            Some(index) => index,
+            None => return BTreeMap::new(),
+        };
 
-    //     let last_issued = ChildNumber::from_normal(last_issued);
+        let last_issued = ChildNumber::from_normal(last_issued);
 
-    //     self.addresses
-    //         .clone()
-    //         .into_iter()
-    //         .filter(|(index, _address)| *index <= last_issued)
-    //         .collect()
-    // }
+        self.derived_public_keys
+            .clone()
+            .into_iter()
+            .filter(|(index, _key)| *index <= last_issued)
+            .map(|(index, key)| {
+                (
+                    index,
+                    (
+                        Address::new(&self.chain_config, key.public_key()).expect("addressable"),
+                        self.usage_state.last_used().is_some_and(|used| used >= index.get_index()),
+                    ),
+                )
+            })
+            .collect()
+    }
 
     pub fn usage_state(&self) -> &KeychainUsageState {
         &self.usage_state

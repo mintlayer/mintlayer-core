@@ -136,6 +136,14 @@ class WalletGetAddressUsage(BitcoinTestFramework):
                 assert_equal(line, expected_line)
 
             decommission_address = await wallet.new_address()
+            expected_vrf_output = """+-------+---------+--------------------------------+
+| Index | Address | Is used in transaction history |
++=======+=========+================================+
++-------+---------+--------------------------------+"""
+            output = await wallet.get_vrf_addresses_usage()
+            self.log.info(output)
+            for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
+                assert_equal(line, expected_line)
 
             for _ in range(100):
                 assert_in("Not enough funds", await wallet.create_stake_pool(stake_pool_amount + 1, 0, 0.5, decommission_address))
@@ -145,6 +153,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
                 assert_equal(line, expected_line)
 
             assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(stake_pool_amount, 0, 0.5, decommission_address))
+            self.generate_block()
 
             expected_output = """+-------+----------------------------------------------+--------------------------------+
 | Index | Address                                      | Is used in transaction history |
@@ -167,6 +176,25 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 +-------+----------------------------------------------+--------------------------------+"""
             output = await wallet.get_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert_equal(line, expected_line)
+
+            expected_vrf_output = """+-------+--------------------------------------------------------------------+--------------------------------+
+            | Index | Address                                                            | Is used in transaction history |
+            +=======+====================================================================+================================+
+            | 0     | rvrfpk1qpdw6kxmjggz65wck0tgtn7g8exhp975zcww0x6syzpg2ulegz58jjvqg8v | Yes                             |
+            +-------+--------------------------------------------------------------------+--------------------------------+"""
+            output = await wallet.get_vrf_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
+                assert_equal(line, expected_line)
+
+            assert_in("Successfully rescanned the blockchain", await wallet.rescan())
+
+            output = await wallet.get_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert_equal(line, expected_line)
+
+            output = await wallet.get_vrf_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
                 assert_equal(line, expected_line)
 
 

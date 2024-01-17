@@ -164,15 +164,16 @@ impl PublicKeyInfo {
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VrfPublicKeyInfo {
     pub vrf_public_key: String,
+    pub child_number: u32,
+    pub used: bool,
 }
 
 impl VrfPublicKeyInfo {
-    pub fn new(pub_key: VRFPublicKey, chain_config: &ChainConfig) -> Self {
+    pub fn new(pub_key: Address<VRFPublicKey>, child_number: ChildNumber, used: bool) -> Self {
         Self {
-            vrf_public_key: Address::new(chain_config, &pub_key)
-                .expect("addressable")
-                .get()
-                .to_owned(),
+            vrf_public_key: pub_key.to_string(),
+            child_number: child_number.get_index().into_u32(),
+            used,
         }
     }
 }

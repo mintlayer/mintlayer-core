@@ -437,6 +437,12 @@ impl AccountKeyChain {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        self.vrf_chain.get_all_issued_keys()
+    }
+
     pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
     }

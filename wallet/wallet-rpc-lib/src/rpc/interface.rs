@@ -205,7 +205,7 @@ trait WalletRpc {
     async fn get_vrf_public_key(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<VrfPublicKeyInfo>;
+    ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
 
     #[method(name = "token_nft_issue_new")]
     async fn issue_new_nft(

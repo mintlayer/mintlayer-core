@@ -262,6 +262,11 @@ impl ExtendedVRFPublicKey {
             public_key: private_key.private_key.to_public_key(),
         }
     }
+
+    pub fn public_key(&self) -> &VRFPublicKey {
+        &self.public_key
+    }
+
     pub fn into_public_key(self) -> VRFPublicKey {
         self.public_key
     }

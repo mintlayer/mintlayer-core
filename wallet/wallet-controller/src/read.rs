@@ -25,7 +25,10 @@ use common::{
     },
     primitives::{id::WithId, Amount, DecimalAmount, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::{
+    key::hdkd::{child_number::ChildNumber, u31::U31},
+    vrf::VRFPublicKey,
+};
 use futures::{stream::FuturesUnordered, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
@@ -48,6 +51,8 @@ pub struct ReadOnlyController<'a, T> {
     chain_config: &'a ChainConfig,
     account_index: U31,
 }
+
+type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
 impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub fn new(
@@ -156,6 +161,14 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .map_err(ControllerError::WalletError)
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
+        self.wallet
+            .get_all_issued_vrf_public_keys(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn get_addresses_usage(&self) -> Result<&'a KeychainUsageState, ControllerError<T>> {
         self.wallet
             .get_addresses_usage(self.account_index)
@@ -167,10 +180,9 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     /// Note that the usage statistics follow strictly the rules of the wallet. For example,
     /// the initial wallet only stored information about the last used address, so the usage
     /// of all addresses after the first unused address will have the result `false`.
-    #[allow(clippy::type_complexity)]
     pub fn get_addresses_with_usage(
         &self,
-    ) -> Result<BTreeMap<ChildNumber, (Address<Destination>, bool)>, ControllerError<T>> {
+    ) -> Result<MapAddressWithUsage<Destination>, ControllerError<T>> {
         let addresses = self.get_all_issued_addresses()?;
         let usage = self.get_addresses_usage()?;
 
@@ -181,6 +193,17 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                 (child_number, (address, used))
             })
             .collect())
+    }
+
+    /// Get all addresses with usage information
+    /// The boolean in the BTreeMap's value is true if the address is used, false is otherwise
+    /// Note that the usage statistics follow strictly the rules of the wallet. For example,
+    /// the initial wallet only stored information about the last used address, so the usage
+    /// of all addresses after the first unused address will have the result `false`.
+    pub fn get_vrf_public_key_with_usage(
+        &self,
+    ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
+        self.get_all_issued_vrf_public_keys()
     }
 
     pub async fn get_pool_ids(

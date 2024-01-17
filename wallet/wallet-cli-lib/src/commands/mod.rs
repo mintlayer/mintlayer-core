@@ -294,8 +294,8 @@ pub enum WalletCommand {
     #[clap(name = "staking-list-created-block-ids")]
     ListCreatedBlocksIds,
 
-    /// Get the current staking VRF key for this account
-    #[clap(name = "staking-get-vrf-key")]
+    /// Show the issued staking VRF keys for this account
+    #[clap(name = "staking-show-vrf-key")]
     GetVrfPublicKey,
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
@@ -1182,9 +1182,24 @@ impl CommandHandler {
 
             WalletCommand::GetVrfPublicKey => {
                 let selected_account = self.get_selected_acc()?;
-                let vrf_public_key =
-                    self.wallet_rpc.get_vrf_key(selected_account).await?.vrf_public_key;
-                Ok(ConsoleCommand::Print(vrf_public_key))
+                let addresses_with_usage =
+                    self.wallet_rpc.get_vrf_key_usage(selected_account).await?;
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
+
+                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
+                        let is_used = if info.used { "Yes" } else { "No" };
+                        prettytable::row![info.child_number, info.vrf_public_key, is_used]
+                    }));
+
+                    addresses_table
+                };
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
             WalletCommand::GetTransaction { transaction_id } => {
