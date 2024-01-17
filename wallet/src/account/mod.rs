@@ -100,6 +100,14 @@ impl PartiallySignedTransaction {
         Self { tx, witnesses }
     }
 
+    pub fn count_inputs(&self) -> usize {
+        self.tx.inputs().len()
+    }
+
+    pub fn count_completed_signatures(&self) -> usize {
+        self.witnesses.iter().filter(|w| w.is_some()).count()
+    }
+
     pub fn is_fully_signed(&self) -> bool {
         self.witnesses.iter().all(|w| w.is_some())
     }

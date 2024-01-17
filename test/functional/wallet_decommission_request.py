@@ -298,7 +298,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # create decommission request
             decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
-            decommission_req = decommission_req_output.split('\n')[1]
+            decommission_req = decommission_req_output.split('\n')[2]
 
             # try to sign decommission request from hot wallet
             assert_in("Wallet error: Wallet error: Input cannot be signed",
@@ -313,7 +313,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # sign decommission request
             decommission_signed_tx_output = await wallet.sign_raw_transaction(decommission_req)
-            decommission_signed_tx = decommission_signed_tx_output.split('\n')[1]
+            decommission_signed_tx = decommission_signed_tx_output.split('\n')[2]
 
         async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # open hot wallet

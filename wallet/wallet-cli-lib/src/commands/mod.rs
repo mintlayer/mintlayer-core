@@ -921,9 +921,10 @@ impl CommandHandler {
                         let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
 
                         format!(
-                            "Transaction has been signed. \
-                             Pass the following string into the wallet to broadcast:\n{result_hex}\n\
-                             Or scan the Qr code with it:\n{qr_code_string}"
+                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
                         )
                     }
                     Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
@@ -935,9 +936,9 @@ impl CommandHandler {
                         let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
 
                         format!(
-                            "Not all transaction inputs have been signed. \
-                             Pass the following string into the wallet that has appropriate keys for the inputs to sign:\n{result_hex}\n\
-                             Or scan the Qr code with it:\n{qr_code_string}"
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
                         )
                     }
                     Err(err) => {
@@ -1327,8 +1328,8 @@ impl CommandHandler {
 
                 let output_str = format!(
                     "Decommission transaction created. \
-                    Pass the following string into the wallet with private key to sign:\n{result_hex}\n\
-                    Or scan the Qr code with it:\n{qr_code_string}"
+                    Pass the following string into the wallet with private key to sign:\n\n{result_hex}\n\n\
+                    Or scan the Qr code with it:\n\n{qr_code_string}"
                 );
                 Ok(ConsoleCommand::Print(output_str))
             }
