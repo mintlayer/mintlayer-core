@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    key::hdkd::{chain_code::ChainCode, child_number::ChildNumber},
+    key::hdkd::{chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError},
     random::{CryptoRng, Rng},
 };
 use merlin::Transcript;
@@ -62,6 +62,25 @@ impl SchnorrkelPublicKey {
             .vrf_verify(message, vrf_data.preout(), vrf_data.proof())
             .map_err(|_| VRFError::VerificationError)?;
         Ok(())
+    }
+
+    pub fn derive_child(
+        &self,
+        chain_code: ChainCode,
+        child_number: ChildNumber,
+    ) -> Result<(Self, ChainCode), DerivationError> {
+        if child_number.is_hardened() {
+            Err(DerivationError::CannotDeriveHardenedKeyFromPublicKey(
+                child_number,
+            ))
+        } else {
+            let (secret_key, new_chain_code) = self.key.derived_key_simple(
+                schnorrkel::derive::ChainCode(chain_code.into_array()),
+                child_number.into_encoded_be_bytes(),
+            );
+
+            Ok((Self { key: secret_key }, new_chain_code.0.into()))
+        }
     }
 }
 

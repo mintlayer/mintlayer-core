@@ -230,6 +230,13 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBKeychainUsageStates, _, _>(id)
             }
 
+            fn get_vrf_keychain_usage_state(
+                &self,
+                id: &AccountId,
+            ) -> crate::Result<Option<KeychainUsageState>> {
+                self.read::<db::DBVrfKeychainUsageStates, _, _>(id)
+            }
+
             fn get_keychain_usage_states(
                 &self,
                 account_id: &AccountId,
@@ -449,9 +456,24 @@ macro_rules! impl_write_ops {
                 self.write::<db::DBKeychainUsageStates, _, _, _>(id, usage_state)
             }
 
+            fn set_vrf_keychain_usage_state(
+                &mut self,
+                id: &AccountId,
+                usage_state: &KeychainUsageState,
+            ) -> crate::Result<()> {
+                self.write::<db::DBVrfKeychainUsageStates, _, _, _>(id, usage_state)
+            }
+
             fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()> {
                 self.storage
                     .get_mut::<db::DBKeychainUsageStates, _>()
+                    .del(id)
+                    .map_err(Into::into)
+            }
+
+            fn del_vrf_keychain_usage_state(&mut self, id: &AccountId) -> crate::Result<()> {
+                self.storage
+                    .get_mut::<db::DBVrfKeychainUsageStates, _>()
                     .del(id)
                     .map_err(Into::into)
             }

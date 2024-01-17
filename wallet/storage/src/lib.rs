@@ -82,6 +82,7 @@ pub trait WalletStorageReadLocked {
         &self,
         id: &AccountKeyPurposeId,
     ) -> Result<Option<KeychainUsageState>>;
+    fn get_vrf_keychain_usage_state(&self, id: &AccountId) -> Result<Option<KeychainUsageState>>;
     fn get_keychain_usage_states(
         &self,
         account_id: &AccountId,
@@ -135,7 +136,13 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountKeyPurposeId,
         usage_state: &KeychainUsageState,
     ) -> Result<()>;
+    fn set_vrf_keychain_usage_state(
+        &mut self,
+        id: &AccountId,
+        usage_state: &KeychainUsageState,
+    ) -> Result<()>;
     fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> Result<()>;
+    fn del_vrf_keychain_usage_state(&mut self, id: &AccountId) -> Result<()>;
     fn set_public_key(
         &mut self,
         id: &AccountDerivationPathId,

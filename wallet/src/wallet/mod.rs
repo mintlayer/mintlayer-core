@@ -869,8 +869,8 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?.get_vrf_public_key(&db_tx)
+        let mut db_tx = self.db.transaction_rw(None)?;
+        Self::get_account_mut(&mut self.accounts, account_index)?.get_vrf_public_key(&mut db_tx)
     }
 
     /// Creates a transaction to send funds to specified addresses.
@@ -1226,11 +1226,7 @@ impl<B: storage::Backend> Wallet<B> {
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?.get_pos_gen_block_data(
-            &db_tx,
-            self.latest_median_time,
-            pool_id,
-        )
+        self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
     }
 
     /// Returns the last scanned block hash and height for all accounts.

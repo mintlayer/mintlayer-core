@@ -34,6 +34,8 @@ storage::decl_schema! {
         pub DBAccounts: Map<AccountId, AccountInfo>,
         /// Store keychain usage states
         pub DBKeychainUsageStates: Map<AccountKeyPurposeId, KeychainUsageState>,
+        /// Store keychain usage states
+        pub DBVrfKeychainUsageStates: Map<AccountId, KeychainUsageState>,
         /// Store for all the private keys in this wallet
         pub DBRootKeys: Map<RootKeyConstant, MaybeEncrypted<RootKeys>>,
         /// Store for all the public keys in this wallet

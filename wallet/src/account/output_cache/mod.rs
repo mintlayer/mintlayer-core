@@ -31,6 +31,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, Id},
 };
+use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use pos_accounting::make_delegation_id;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
@@ -70,6 +71,8 @@ pub struct PoolData {
     pub utxo_outpoint: UtxoOutPoint,
     pub creation_block: BlockInfo,
     pub decommission_key: Destination,
+    pub stake_destination: Destination,
+    pub vrf_public_key: VRFPublicKey,
 }
 
 impl PoolData {
@@ -77,11 +80,15 @@ impl PoolData {
         utxo_outpoint: UtxoOutPoint,
         creation_block: BlockInfo,
         decommission_key: Destination,
+        stake_destination: Destination,
+        vrf_public_key: VRFPublicKey,
     ) -> Self {
         PoolData {
             utxo_outpoint,
             creation_block,
             decommission_key,
+            stake_destination,
+            vrf_public_key,
         }
     }
 }
@@ -722,6 +729,8 @@ impl OutputCache {
                                     UtxoOutPoint::new(tx.id(), idx as u32),
                                     block_info,
                                     data.decommission_key().clone(),
+                                    data.staker().clone(),
+                                    data.vrf_public_key().clone(),
                                 )
                             });
                     }
