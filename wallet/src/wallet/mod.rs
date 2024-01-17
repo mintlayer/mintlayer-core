@@ -66,7 +66,8 @@ pub const WALLET_VERSION_V1: u32 = 1;
 pub const WALLET_VERSION_V2: u32 = 2;
 pub const WALLET_VERSION_V3: u32 = 3;
 pub const WALLET_VERSION_V4: u32 = 4;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V4;
+pub const WALLET_VERSION_V5: u32 = 5;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V5;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -360,6 +361,22 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    /// Migrate the wallet DB from version 4 to version 5
+    /// * set vrf key_chain usage
+    fn migration_v5(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
+
+        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+        db_tx.set_storage_version(WALLET_VERSION_V5)?;
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V5
+        );
+
+        Ok(())
+    }
+
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
         db: &Store<B>,
@@ -381,6 +398,10 @@ impl<B: storage::Backend> Wallet<B> {
             WALLET_VERSION_V3 => {
                 pre_migration(WALLET_VERSION_V3)?;
                 Self::migration_v4(db)?;
+            }
+            WALLET_VERSION_V4 => {
+                pre_migration(WALLET_VERSION_V4)?;
+                Self::migration_v5(db, chain_config.clone())?;
             }
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
@@ -440,6 +461,10 @@ impl<B: storage::Backend> Wallet<B> {
                 )?;
                 db_tx.set_keychain_usage_state(
                     &AccountKeyPurposeId::new(id.clone(), KeyPurpose::ReceiveFunds),
+                    &KeychainUsageState::new(None, None),
+                )?;
+                db_tx.set_vrf_keychain_usage_state(
+                    &id.clone(),
                     &KeychainUsageState::new(None, None),
                 )?;
                 let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
