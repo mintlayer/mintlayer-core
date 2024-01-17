@@ -238,8 +238,8 @@ class WalletCliController:
                                 amount: int,
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
-                                decommission_key: Optional[str] = '') -> str:
-        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
+                                decommission_addr: Optional[str] = '') -> str:
+        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr}\n")
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
         return await self._write_command(f"staking-decommission-pool {pool_id}\n")

@@ -183,11 +183,11 @@ pub enum WalletError {
     ReducedLookaheadSize(u32, u32),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
-    #[error("Missing inputs signatures in a tx")]
-    InputsSignatureAreMissing,
-    #[error("Cannot use partially signed transaction in a decommission command")]
+    #[error("Failed to completely sign the decommission transaction. \
+            This wallet does not seem to have the decommission key. \
+            Consider using a decommission-request, and passing it to the wallet that has the decommission key")]
     PartiallySignedTransactionInDecommissionCommand,
-    #[error("Cannot use fully signed transaction in a decommission request")]
+    #[error("Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command.")]
     FullySignedTransactionInDecommissionReq,
     #[error("Input cannot be signed")]
     InputCannotBeSigned,

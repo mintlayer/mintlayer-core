@@ -324,7 +324,7 @@ pub enum WalletCommand {
         margin_ratio_per_thousand: String,
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.
-        decommission_key: String,
+        decommission_address: String,
     },
 
     /// Decommission a staking pool, given its id. This assumes that the decommission key is owned
@@ -1263,7 +1263,7 @@ impl CommandHandler {
                 amount,
                 cost_per_block,
                 margin_ratio_per_thousand,
-                decommission_key,
+                decommission_address,
             } => {
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
@@ -1272,7 +1272,7 @@ impl CommandHandler {
                         amount,
                         cost_per_block,
                         margin_ratio_per_thousand,
-                        decommission_key,
+                        decommission_address,
                         self.config,
                     )
                     .await?;

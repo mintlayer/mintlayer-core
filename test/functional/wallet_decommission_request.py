@@ -34,8 +34,8 @@ from test_framework.mintlayer import (
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_in
-from test_framework.mintlayer import block_input_data_obj, destination_obj, destination_from_pub_key
-from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
+from test_framework.mintlayer import block_input_data_obj
+from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
 import sys
@@ -236,14 +236,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        decommission_pub_key_encoded = ""
+        decommission_address = ""
 
         async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 
-            decommission_pub_key_bytes = await wallet.new_public_key()
-            decommission_pub_key_encoded = destination_obj.encode(destination_from_pub_key(decommission_pub_key_bytes)).to_hex()[2:]
+            decommission_address = await wallet.new_address()
 
         decommission_req = ""
 
@@ -284,7 +283,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 50000", balance)
 
-            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_pub_key_encoded))
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_address))
             transactions = node.mempool_transactions()
 
             self.gen_pos_block(transactions, 2)
@@ -292,18 +291,17 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 1)
-            assert_equal(pools[0].balance, 40000)
+            assert_equal(pools[0].balance, '40000')
 
             # try decommission from hot wallet
-            assert_in("Controller error: Wallet error: Cannot use partially signed transaction in a decommission command",
-                       await wallet.decommission_stake_pool(pools[0].pool_id))
+            assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
 
             # create decommission request
             decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
             decommission_req = decommission_req_output.split('\n')[1]
 
             # try to sign decommission request from hot wallet
-            assert_in("Controller error: Wallet error: Input cannot be signed",
+            assert_in("Wallet error: Wallet error: Input cannot be signed",
                        await wallet.sign_raw_transaction(decommission_req))
 
         decommission_signed_tx = ""
@@ -323,7 +321,9 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(decommission_signed_tx))
 
-            self.gen_pos_block(node.mempool_transactions(), 3)
+            transactions = node.mempool_transactions()
+            assert_in(decommission_signed_tx, transactions)
+            self.gen_pos_block(transactions, 3)
             assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()

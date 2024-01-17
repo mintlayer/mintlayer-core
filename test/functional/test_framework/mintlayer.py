@@ -28,7 +28,6 @@ block_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockV1'
 outpoint_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('OutPoint')
 signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
 vec_output_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Vec<TxOutput>')
-destination_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Destination')
 
 
 def mintlayer_hash(data):
@@ -161,14 +160,3 @@ def make_delegation_id(outpoint):
 
     # Truncate output to match Rust's split()
     return hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
-
-def destination_from_pub_key(pub_key_bytes):
-    return {
-        "PublicKey": {
-            "key": {
-                "Secp256k1Schnorr": {
-                    "pubkey_data": hex_to_dec_array(pub_key_bytes.hex()),
-                },
-            },
-        }
-    }
