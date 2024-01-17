@@ -1294,16 +1294,18 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
+    let decommission_key = wallet.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
-            None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
             },
         )
         .unwrap();
@@ -1389,13 +1391,13 @@ fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
 
     let result = wallet.create_stake_pool_tx(
         DEFAULT_ACCOUNT_INDEX,
-        None,
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
         StakePoolDataArguments {
             amount: not_enough,
             margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
             cost_per_block: Amount::ZERO,
+            decommission_key: Destination::AnyoneCanSpend,
         },
     );
     // check that result is an error and we last issued address is still the same
@@ -1513,13 +1515,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
-            None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             StakePoolDataArguments {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
+                decommission_key: Destination::AnyoneCanSpend,
             },
         )
         .unwrap();
@@ -3554,4 +3556,285 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
     let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
     assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
     assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_pool_wrong_account(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let acc_0_index = DEFAULT_ACCOUNT_INDEX;
+    let acc_1_index = U31::ONE;
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = block1_amount;
+
+    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
+
+    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            acc_0_index,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
+            },
+        )
+        .unwrap();
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Try to decommission the pool with default account
+    let pool_id = pool_ids.first().unwrap().0;
+    let decommission_cmd_res = wallet.decommission_stake_pool(
+        acc_0_index,
+        pool_id,
+        pool_amount,
+        FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+    );
+    assert_eq!(
+        decommission_cmd_res.unwrap_err(),
+        WalletError::PartiallySignedTransactionInDecommissionCommand
+    );
+
+    // Decommission from the account that holds the key
+    let decommission_tx = wallet
+        .decommission_stake_pool(
+            acc_1_index,
+            pool_id,
+            pool_amount,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![decommission_tx],
+        Amount::ZERO,
+        2,
+    );
+
+    let currency_balances = wallet
+        .get_balance(
+            acc_1_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        pool_amount,
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let acc_0_index = DEFAULT_ACCOUNT_INDEX;
+    let acc_1_index = U31::ONE;
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = block1_amount;
+
+    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
+
+    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            acc_0_index,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
+            },
+        )
+        .unwrap();
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // Try to create decommission request from account that holds the key
+    let pool_id = pool_ids.first().unwrap().0;
+    let decommission_req_res = wallet.decommission_stake_pool_request(
+        acc_1_index,
+        pool_id,
+        pool_amount,
+        FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+    );
+    assert_eq!(
+        decommission_req_res.unwrap_err(),
+        WalletError::FullySignedTransactionInDecommissionReq
+    );
+
+    let decommission_partial_tx = wallet
+        .decommission_stake_pool_request(
+            acc_0_index,
+            pool_id,
+            pool_amount,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .unwrap();
+    assert!(!decommission_partial_tx.is_fully_signed());
+    matches!(
+        decommission_partial_tx.into_signed_tx().unwrap_err(),
+        WalletError::FailedToConvertPartiallySignedTx(_)
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let acc_0_index = DEFAULT_ACCOUNT_INDEX;
+    let acc_1_index = U31::ONE;
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = block1_amount;
+
+    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
+
+    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            acc_0_index,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
+            },
+        )
+        .unwrap();
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_id = pool_ids.first().unwrap().0;
+    let decommission_partial_tx = wallet
+        .decommission_stake_pool_request(
+            acc_0_index,
+            pool_id,
+            pool_amount,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .unwrap();
+
+    // Try to sign decommission request with wrong account
+    let sign_from_acc0_res =
+        wallet.sign_raw_transaction(acc_0_index, decommission_partial_tx.clone());
+    assert_eq!(
+        sign_from_acc0_res.unwrap_err(),
+        WalletError::InputCannotBeSigned
+    );
+
+    let signed_tx = wallet
+        .sign_raw_transaction(acc_1_index, decommission_partial_tx)
+        .unwrap()
+        .into_signed_tx()
+        .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 1);
+
+    let currency_balances = wallet
+        .get_balance(
+            acc_1_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        pool_amount,
+    );
 }

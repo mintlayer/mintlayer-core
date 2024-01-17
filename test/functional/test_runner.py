@@ -142,6 +142,7 @@ BASE_SCRIPTS = [
     'wallet_nfts.py',
     'wallet_delegations.py',
     'wallet_delegations_rpc.py',
+    'wallet_decommission_request.py',
     'wallet_high_fee.py',
     'wallet_generate_addresses.py',
     'wallet_set_lookahead_size.py',

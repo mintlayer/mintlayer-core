@@ -15,9 +15,9 @@
 
 use std::path::PathBuf;
 
-use common::address::AddressError;
 use crypto::key::hdkd::u31::U31;
-use utils::cookie::LoadCookieError;
+use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
+use wallet::WalletError;
 use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
@@ -48,12 +48,14 @@ pub enum WalletCliError {
     NoSelectedAccount,
     #[error("Account not found for index: {0}")]
     AccountNotFound(U31),
-    #[error("Address encoding error: {0}")]
-    AddressEncodingError(#[from] AddressError),
+    #[error("QR Code encoding error: {0}")]
+    QrCodeEncoding(#[from] QrCodeError),
     #[error("Retrieving addresses with usage failed for account {0}: {1}")]
     AddressesRetrievalFailed(U31, String),
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
     #[error("{0}")]
     WalletRpcError(#[from] RpcError),
+    #[error("Failed to convert to signed transaction: {0}")]
+    FailedToConvertToSignedTransaction(#[from] WalletError),
 }

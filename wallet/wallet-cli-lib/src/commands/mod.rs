@@ -31,7 +31,8 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::version::get_version;
+use utils::qrcode::QrCode;
+use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
 use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
 
@@ -77,6 +78,16 @@ pub enum WalletCommand {
         /// The state of utxos to be included (confirmed, unconfirmed, etc)
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
+    },
+
+    /// Signs the inputs that are not yet signed.
+    /// The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
+    /// in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
+    /// to the network.
+    #[clap(name = "account-sign-raw-transaction")]
+    SignRawTransaction {
+        /// Hex encoded transaction.
+        transaction: HexEncoded<PartiallySignedTransaction>,
     },
 
     /// Issue a new non-fungible token (NFT) from scratch
@@ -316,9 +327,7 @@ pub enum WalletCommand {
         margin_ratio_per_thousand: String,
 
         /// The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.
-        /// If not provided, the selected account in this wallet will control both decommission and staking.
-        /// This is NOT RECOMMENDED.
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_address: String,
     },
 
     /// Decommission a staking pool, given its id. This assumes that the decommission key is owned
@@ -327,6 +336,16 @@ pub enum WalletCommand {
     DecommissionStakePool {
         /// The pool id of the pool to be decommissioned.
         /// Notice that this only works if the selected account in this wallet owns the decommission key.
+        pool_id: String,
+    },
+
+    /// Create a request to decommission a pool. This assumes that the decommission key is owned
+    /// by another wallet. The output of this command should be passed to account-sign-raw-transaction
+    /// in the wallet that owns the decommission key. The result from signing, assuming success, can
+    /// then be broadcast to network to commence with decommissioning.
+    #[clap(name = "staking-decommission-pool-request")]
+    DecommissionStakePoolRequest {
+        /// The pool id of the pool to be decommissioned.
         pool_id: String,
     },
 
@@ -487,6 +506,10 @@ pub enum WalletCommand {
     /// Returns the current best block height
     #[clap(name = "node-best-block-height")]
     BestBlockHeight,
+
+    /// Returns the current best block timestamp
+    #[clap(name = "node-best-block-timestamp")]
+    BestBlockTimestamp,
 
     /// Get the block ID of the block at a given height
     #[clap(name = "node-block-id")]
@@ -798,6 +821,15 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
+            WalletCommand::BestBlockTimestamp => {
+                let timestamp = self.wallet_rpc.chainstate_info().await?.best_block_timestamp;
+                Ok(ConsoleCommand::Print(format!(
+                    "{} ({})",
+                    timestamp,
+                    timestamp.into_time().as_standard_printable_time()
+                )))
+            }
+
             WalletCommand::BlockId { height } => {
                 let hash = self.wallet_rpc.node_block_id(height).await?;
                 match hash {
@@ -884,6 +916,50 @@ impl CommandHandler {
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
                 Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::SignRawTransaction { transaction } => {
+                let selected_account = self.get_selected_acc()?;
+                let result = self
+                    .wallet_rpc
+                    .sign_raw_transaction(selected_account, transaction, self.config)
+                    .await?;
+
+                let output_str = match result.into_signed_tx() {
+                    Ok(signed_tx) => {
+                        let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
+
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                        )
+                    }
+                    Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
+                        let result_hex: HexEncoded<PartiallySignedTransaction> =
+                            partially_signed_tx.into();
+
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                        )
+                    }
+                    Err(err) => {
+                        return Err(WalletCliError::FailedToConvertToSignedTransaction(err))
+                    }
+                };
+
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
@@ -1226,7 +1302,7 @@ impl CommandHandler {
                 amount,
                 cost_per_block,
                 margin_ratio_per_thousand,
-                decommission_key,
+                decommission_address,
             } => {
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
@@ -1235,7 +1311,7 @@ impl CommandHandler {
                         amount,
                         cost_per_block,
                         margin_ratio_per_thousand,
-                        decommission_key,
+                        decommission_address,
                         self.config,
                     )
                     .await?;
@@ -1249,6 +1325,26 @@ impl CommandHandler {
                     .decommission_stake_pool(selected_account, pool_id, self.config)
                     .await?;
                 Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::DecommissionStakePoolRequest { pool_id } => {
+                let selected_account = self.get_selected_acc()?;
+                let result = self
+                    .wallet_rpc
+                    .decommission_stake_pool_request(selected_account, pool_id, self.config)
+                    .await?;
+                let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
+
+                let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                let output_str = format!(
+                    "Decommission transaction created. \
+                    Pass the following string into the wallet with private key to sign:\n\n{result_hex}\n\n\
+                    Or scan the Qr code with it:\n\n{qr_code_string}"
+                );
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::DepositData { hex_data } => {

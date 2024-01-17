@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
-    Currency, CurrentFeeRate, DelegationData, UnconfirmedTokenInfo, UtxoSelectorError,
+    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, UnconfirmedTokenInfo,
+    UtxoSelectorError,
 };
 use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
@@ -182,6 +183,16 @@ pub enum WalletError {
     ReducedLookaheadSize(u32, u32),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
+    #[error("Failed to completely sign the decommission transaction. \
+            This wallet does not seem to have the decommission key. \
+            Consider using a decommission-request, and passing it to the wallet that has the decommission key")]
+    PartiallySignedTransactionInDecommissionCommand,
+    #[error("Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command.")]
+    FullySignedTransactionInDecommissionReq,
+    #[error("Input cannot be signed")]
+    InputCannotBeSigned,
+    #[error("Failed to convert partially signed tx to signed")]
+    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
 }
 
 /// Result type used for the wallet
@@ -1157,7 +1168,6 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
-        decommission_key: Option<PublicKey>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         stake_pool_arguments: StakePoolDataArguments,
@@ -1167,7 +1177,6 @@ impl<B: storage::Backend> Wallet<B> {
             account.create_stake_pool_tx(
                 db_tx,
                 stake_pool_arguments,
-                decommission_key,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
@@ -1186,6 +1195,28 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)
+        })
+    }
+
+    pub fn decommission_stake_pool_request(
+        &mut self,
+        account_index: U31,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<PartiallySignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.decommission_stake_pool_request(db_tx, pool_id, pool_balance, current_fee_rate)
+        })
+    }
+
+    pub fn sign_raw_transaction(
+        &mut self,
+        account_index: U31,
+        tx: PartiallySignedTransaction,
+    ) -> WalletResult<PartiallySignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.sign_raw_transaction(tx, db_tx)
         })
     }
 

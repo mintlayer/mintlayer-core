@@ -18,7 +18,6 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use crypto::key::PublicKey;
 use p2p_types::bannable_address::BannableAddress;
 use wallet_controller::ConnectedPeer;
 use wallet_types::with_locked::WithLocked;
@@ -138,7 +137,7 @@ trait WalletRpc {
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_address: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<()>;
 

@@ -39,7 +39,7 @@ use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
-    account::UnconfirmedTokenInfo,
+    account::{PartiallySignedTransaction, UnconfirmedTokenInfo},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, StakePoolDataArguments,
@@ -526,7 +526,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn create_stake_pool_tx(
         &mut self,
         amount: Amount,
-        decommission_key: Option<PublicKey>,
+        decommission_key: Destination,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
     ) -> Result<(), ControllerError<T>> {
@@ -537,13 +537,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                   account_index: U31| {
                 wallet.create_stake_pool_tx(
                     account_index,
-                    decommission_key,
                     current_fee_rate,
                     consolidate_fee_rate,
                     StakePoolDataArguments {
                         amount,
                         margin_ratio_per_thousand,
                         cost_per_block,
+                        decommission_key,
                     },
                 )
             },
@@ -580,6 +580,31 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    pub async fn decommission_stake_pool_request(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
+        let staker_balance = self
+            .rpc_client
+            .get_staker_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+                pool_id,
+            )))?;
+
+        let (current_fee_rate, _) = self.get_current_and_consolidation_fee_rate().await?;
+
+        self.wallet
+            .decommission_stake_pool_request(
+                self.account_index,
+                pool_id,
+                staker_balance,
+                current_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
@@ -591,6 +616,15 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         log::info!("Start staking, account_index: {}", self.account_index);
         self.staking_started.insert(self.account_index);
         Ok(())
+    }
+
+    pub fn sign_raw_transaction(
+        &mut self,
+        tx: PartiallySignedTransaction,
+    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
+        self.wallet
+            .sign_raw_transaction(self.account_index, tx)
+            .map_err(ControllerError::WalletError)
     }
 
     async fn get_current_and_consolidation_fee_rate(

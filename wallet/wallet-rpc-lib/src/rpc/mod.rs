@@ -18,7 +18,7 @@ mod server_impl;
 pub mod types;
 
 use chainstate::{ChainInfo, TokenIssuanceError};
-use crypto::key::{hdkd::u31::U31, PublicKey};
+use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{
@@ -27,7 +27,7 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
-use wallet::WalletError;
+use wallet::{account::PartiallySignedTransaction, WalletError};
 
 use common::{
     address::Address,
@@ -309,6 +309,25 @@ impl WalletRpc {
             .map_err(RpcError::RpcError)
     }
 
+    pub async fn sign_raw_transaction(
+        &self,
+        account_index: U31,
+        tx: HexEncoded<PartiallySignedTransaction>,
+        config: ControllerConfig,
+    ) -> WRpcResult<PartiallySignedTransaction> {
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let tx = controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .sign_raw_transaction(tx.take())?;
+                    Ok::<PartiallySignedTransaction, ControllerError<_>>(tx)
+                })
+            })
+            .await?
+    }
+
     pub async fn send_coins(
         &self,
         account_index: U31,
@@ -375,17 +394,20 @@ impl WalletRpc {
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
-        decommission_key: Option<HexEncoded<PublicKey>>,
+        decommission_address: String,
         config: ControllerConfig,
     ) -> WRpcResult<()> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let cost_per_block =
             cost_per_block.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-        let decommission_key = decommission_key.map(HexEncoded::take);
 
         let margin_ratio_per_thousand = PerThousand::from_decimal_str(&margin_ratio_per_thousand)
             .ok_or(RpcError::InvalidMarginRatio)?;
+
+        let decommission_destination = Address::from_str(&self.chain_config, &decommission_address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
             .call_async(move |controller| {
@@ -395,7 +417,7 @@ impl WalletRpc {
                         .await?
                         .create_stake_pool_tx(
                             amount,
-                            decommission_key,
+                            decommission_destination,
                             margin_ratio_per_thousand,
                             cost_per_block,
                         )
@@ -425,6 +447,30 @@ impl WalletRpc {
                         .decommission_stake_pool(pool_id)
                         .await?;
                     Ok::<(), ControllerError<_>>(())
+                })
+            })
+            .await?
+    }
+
+    pub async fn decommission_stake_pool_request(
+        &self,
+        account_index: U31,
+        pool_id: String,
+        config: ControllerConfig,
+    ) -> WRpcResult<PartiallySignedTransaction> {
+        let pool_id = Address::from_str(&self.chain_config, &pool_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidPoolId)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let tx = controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .decommission_stake_pool_request(pool_id)
+                        .await?;
+                    Ok::<PartiallySignedTransaction, ControllerError<_>>(tx)
                 })
             })
             .await?

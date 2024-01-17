@@ -25,9 +25,9 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (ATOMS_PER_COIN, make_tx, reward_input, tx_input)
+from test_framework.mintlayer import (ATOMS_PER_COIN, make_tx, reward_input)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
@@ -62,6 +62,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
         self.wait_until(lambda: node.mempool_local_best_block_id() == block_id, timeout = 5)
 
         return block_id
+
 
     def run_test(self):
         if 'win32' in sys.platform:
@@ -134,14 +135,16 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             for (line, expected_line) in zip(output.split(), expected_output.split()):
                 assert_equal(line, expected_line)
 
+            decommission_address = await wallet.new_address()
+
             for _ in range(100):
-                assert_in("Not enough funds", await wallet.create_stake_pool(stake_pool_amount + 1, 0, 0.5))
+                assert_in("Not enough funds", await wallet.create_stake_pool(stake_pool_amount + 1, 0, 0.5, decommission_address))
 
             output = await wallet.get_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_output.split()):
                 assert_equal(line, expected_line)
 
-            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(stake_pool_amount, 0, 0.5))
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(stake_pool_amount, 0, 0.5, decommission_address))
 
             expected_output = """+-------+----------------------------------------------+--------------------------------+
 | Index | Address                                      | Is used in transaction history |

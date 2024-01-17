@@ -106,9 +106,13 @@ class WalletCliController:
         await self.process.stdin.drain()
         return await self._read_available_output()
 
-    async def create_wallet(self) -> str:
-        wallet_file = os.path.join(self.node.datadir, "wallet")
+    async def create_wallet(self, name: str = "wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
         return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase\n")
+
+    async def open_wallet(self, name: str) -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
+        return await self._write_command(f"wallet-open {wallet_file}\n")
 
     async def recover_wallet(self, mnemonic: str) -> str:
         wallet_file = os.path.join(self.node.datadir, "recovered_wallet")
@@ -234,11 +238,20 @@ class WalletCliController:
                                 amount: int,
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
-                                decommission_key: Optional[str] = '') -> str:
-        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
+                                decommission_addr: Optional[str] = '') -> str:
+        return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr}\n")
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
         return await self._write_command(f"staking-decommission-pool {pool_id}\n")
+
+    async def decommission_stake_pool_request(self, pool_id: str) -> str:
+        return await self._write_command(f"staking-decommission-pool-request {pool_id}\n")
+
+    async def sign_raw_transaction(self, transaction: str) -> str:
+        return await self._write_command(f"account-sign-raw-transaction {transaction}\n")
+
+    async def submit_transaction(self, transaction: str) -> str:
+        return await self._write_command(f"node-submit-transaction {transaction}\n")
 
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n")

@@ -29,4 +29,10 @@ pub enum BackendError {
     AddressError(String),
     #[error("Invalid amount: {0}")]
     InvalidAmount(String),
+    #[error("Invalid pledge amount: {0}")]
+    InvalidPledgeAmount(String),
+    #[error("Invalid cost per block amount: {0}")]
+    InvalidCostPerBlockAmount(String),
+    #[error("Failed to parse margin per thousand: {0}. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
+    InvalidMarginPerThousand(String),
 }

@@ -15,8 +15,8 @@
 
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
 
-use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
+use chainstate::{BlockSource, CheckBlockError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, get_output_value, TestFramework, TransactionBuilder,
@@ -299,6 +299,106 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 ConnectTransactionError::IOPolicyError(
                     IOPolicyError::MultiplePoolCreated,
                     tx_id.into()
+                )
+            ))
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn stake_pool_twice_two_blocks(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let min_stake_pool_pledge =
+            tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+        let amount_to_stake =
+            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let (stake_pool_data, _) =
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
+        let genesis_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.clone().into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data.clone()),
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.clone().into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
+            .build();
+        let result = tf.make_block_builder().add_transaction(tx2).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent(genesis_outpoint)
+            ))
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn stake_pool_twice_two_txs(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let min_stake_pool_pledge =
+            tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+        let amount_to_stake =
+            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let (stake_pool_data, _) =
+            create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
+        let genesis_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.clone().into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data.clone()),
+            ))
+            .build();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
+            .build();
+
+        let block = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build();
+        let block_id = block.get_id();
+        let result = tf.process_block(block, BlockSource::Local);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    chainstate::CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
                 )
             ))
         );

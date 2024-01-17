@@ -14,41 +14,32 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet delegations test
+"""Wallet decommission request test
 
 Check that:
 * We can create a new wallet,
-* get an address
-* send coins to the wallet's address
-* sync the wallet with the node
-* check balance
-* create a stake pool
-* in another account create a delegation to that pool
-* stake to that delegation
-* transfer from that delegation
-* get reward to that delegation
+* create 2 accounts
+* generate decommission keys from account1
+* create a stake pool from account0 and provide decommission keys from account1
+* create a decommission request from account0
+* sign decommission request from account1 and submit a tx with it
+* check that the pool was decommissioned
 """
 
-from hashlib import blake2b
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
-    base_tx_obj,
     block_input_data_obj,
-    mintlayer_hash,
     ATOMS_PER_COIN,
-    outpoint_obj,
-    signed_tx_obj,
 )
-from scalecodec.base import ScaleBytes
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
-from test_framework.util import assert_equal, assert_greater_than, assert_in
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
+from test_framework.util import assert_equal, assert_in
+from test_framework.mintlayer import block_input_data_obj
+from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
 import sys
-import time, re
+import time
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
@@ -62,10 +53,9 @@ GENESIS_VRF_PRIVATE_KEY = (
 
 GENESIS_POOL_ID_ADDR = "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v"
 
-class WalletDelegationsCLI(BitcoinTestFramework):
+class WalletSubmitTransaction(BitcoinTestFramework):
 
     def set_test_params(self):
-        self.wallet_controller = WalletCliController
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
@@ -97,6 +87,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
     def block_height(self, n):
         tip = self.nodes[n].chainstate_best_block_id()
         return self.nodes[n].chainstate_block_height_in_main_chain(tip)
+
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
 
@@ -120,59 +111,17 @@ class WalletDelegationsCLI(BitcoinTestFramework):
         # self.assert_pos_consensus(block)
         # self.assert_chain(block, previous_block_id)
 
-    def generate_pool_id(self, transaction_id):
-        kernel_input_outpoint = outpoint_obj.encode({
-            "id": {
-                "Transaction": self.hex_to_dec_array(transaction_id),
-            },
-            "index": 0,
-        }).to_hex()[2:]
-
-        # Include PoolId pre-image suffix of [0, 0, 0, 0]
-        blake2b_hasher = blake2b()
-        blake2b_hasher.update(bytes.fromhex(kernel_input_outpoint))
-        blake2b_hasher.update(bytes.fromhex("00000000"))
-
-        # Truncate output to match Rust's split()
-        return self.hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
-
     def genesis_pool_id(self):
         return self.hex_to_dec_array(GENESIS_POOL_ID)
 
     def hex_to_dec_array(self, hex_string):
         return [int(hex_string[i:i+2], 16) for i in range(0, len(hex_string), 2)]
 
-    def new_stake_keys(self):
-        new_stake_private_key_hex = self.nodes[0].test_functions_new_private_key()
-        new_stake_private_key = self.stake_private_key(new_stake_private_key_hex[2:])
-
-        new_stake_public_key_hex = self.nodes[0].test_functions_public_key_from_private_key(new_stake_private_key_hex)
-        new_stake_public_key = self.stake_public_key(new_stake_public_key_hex[2:])
-
-        return (new_stake_private_key, new_stake_public_key)
-
-    def new_vrf_keys(self):
-        new_vrf_private_key_hex = self.nodes[0].test_functions_new_vrf_private_key()
-        new_vrf_private_key = self.vrf_private_key(new_vrf_private_key_hex[2:])
-
-        new_vrf_public_key_hex = self.nodes[0].test_functions_vrf_public_key_from_private_key(new_vrf_private_key_hex)
-        new_vrf_public_key = self.vrf_public_key(new_vrf_public_key_hex[2:])
-
-        return (new_vrf_private_key, new_vrf_public_key)
-
-    def pack_transaction(self, transaction):
-        transaction_encoded = signed_tx_obj.encode(transaction).to_hex()[2:]
-        transaction_id = ScaleBytes(
-            mintlayer_hash(base_tx_obj.encode(transaction["transaction"]).data)
-        ).to_hex()[2:]
-
-        return (transaction_encoded, transaction_id)
-
     def previous_block_id(self):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
         return self.hex_to_dec_array(previous_block_id)
 
-    def stake_private_key(self, stake_private_key):
+    def private_key(self, stake_private_key):
         return {
             "key": {
                 "Secp256k1Schnorr": {
@@ -181,7 +130,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             },
         }
 
-    def stake_public_key(self, stake_public_key):
+    def public_key(self, stake_public_key):
         return {
             "key": {
                 "Secp256k1Schnorr": {
@@ -216,7 +165,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
     def setup_pool_and_transfer(self, transactions):
         block_input_data = block_input_data_obj.encode({
             "PoS": {
-                "stake_private_key": self.stake_private_key(GENESIS_STAKE_PRIVATE_KEY),
+                "stake_private_key": self.private_key(GENESIS_STAKE_PRIVATE_KEY),
                 "vrf_private_key": self.vrf_private_key(GENESIS_VRF_PRIVATE_KEY),
                 "pool_id": self.genesis_pool_id(),
                 "kernel_inputs": [
@@ -236,11 +185,11 @@ class WalletDelegationsCLI(BitcoinTestFramework):
                             {
                                 "value": 40_000*ATOMS_PER_COIN,
                                 "staker": {
-                                    "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                    "PublicKey": self.public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
                                 "vrf_public_key": self.vrf_public_key(GENESIS_VRF_PUBLIC_KEY),
                                 "decommission_key": {
-                                    "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                    "PublicKey": self.public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
                                 "margin_ratio_per_thousand": 1000,
                                 "cost_per_block" : "0"
@@ -257,7 +206,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
         block_id = self.previous_block_id() if block_id is None else block_id
         block_input_data = block_input_data_obj.encode({
             "PoS": {
-                "stake_private_key": self.stake_private_key(GENESIS_STAKE_PRIVATE_KEY),
+                "stake_private_key": self.private_key(GENESIS_STAKE_PRIVATE_KEY),
                 "vrf_private_key": self.vrf_private_key(GENESIS_VRF_PRIVATE_KEY),
                 "pool_id": self.genesis_pool_id(),
                 "kernel_inputs": [
@@ -274,7 +223,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
                     {
                         "ProduceBlockFromStake": [
                             {
-                                "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                "PublicKey": self.public_key(GENESIS_STAKE_PUBLIC_KEY),
                             },
                             self.genesis_pool_id(),
                         ],
@@ -287,9 +236,19 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
-            # new wallet
-            await wallet.create_wallet()
+        decommission_address = ""
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # new cold wallet
+            await wallet.create_wallet("cold_wallet")
+
+            decommission_address = await wallet.new_address()
+
+        decommission_req = ""
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # new hot wallet
+            await wallet.create_wallet("hot_wallet")
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
@@ -324,21 +283,8 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 50000", balance)
 
-            assert_in("Success", await wallet.create_new_account())
-            assert_in("Success", await wallet.select_account(1))
-            acc1_address = await wallet.new_address()
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 5000))
-            assert_in("Success", await wallet.select_account(1))
-            transactions = node.mempool_transactions()
-
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            decommission_address = await wallet.new_address()
             assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_address))
-            transactions2 = node.mempool_transactions()
-            for tx in transactions2:
-                if tx not in transactions:
-                    transactions.append(tx)
+            transactions = node.mempool_transactions()
 
             self.gen_pos_block(transactions, 2)
             assert_in("Success", await wallet.sync())
@@ -347,106 +293,42 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_equal(len(pools), 1)
             assert_equal(pools[0].balance, '40000')
 
-            assert_in("Success", await wallet.select_account(1))
-            balance = await wallet.get_balance()
-            assert_in("Coins amount: 5000", balance)
-            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
-            assert delegation_id is not None
+            # try decommission from hot wallet
+            assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
+
+            # create decommission request
+            decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
+            decommission_req = decommission_req_output.split('\n')[2]
+
+            # try to sign decommission request from hot wallet
+            assert_in("Wallet error: Wallet error: Input cannot be signed",
+                       await wallet.sign_raw_transaction(decommission_req))
+
+        decommission_signed_tx = ""
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # open cold wallet
+            await wallet.open_wallet("cold_wallet")
+            assert_in("Success", await wallet.sync())
+
+            # sign decommission request
+            decommission_signed_tx_output = await wallet.sign_raw_transaction(decommission_req)
+            decommission_signed_tx = decommission_signed_tx_output.split('\n')[2]
+
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # open hot wallet
+            await wallet.open_wallet("hot_wallet")
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(decommission_signed_tx))
+
             transactions = node.mempool_transactions()
-
-            # still not in a block
-            delegations = await wallet.list_delegation_ids()
-            assert_equal(len(delegations), 0)
-
-            assert_in("Success", await wallet.stake_delegation(1000, delegation_id))
-            transactions2 = node.mempool_transactions()
-            for tx in transactions2:
-                if tx not in transactions:
-                    transactions.append(tx)
-
+            assert_in(decommission_signed_tx, transactions)
             self.gen_pos_block(transactions, 3)
-            assert_in("Success", await wallet.sync())
-            last_block_id = self.previous_block_id()
-
-            delegations = await wallet.list_delegation_ids()
-            assert_equal(len(delegations), 1)
-            assert_equal(delegations[0].balance, '1000')
-
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            created_block_ids = await wallet.list_created_blocks_ids()
-            # no created block by us yet
-            assert_equal(0, len(created_block_ids))
-            assert_in("Staking started successfully", await wallet.start_staking())
-            assert_in("Success", await wallet.select_account(1))
-
-            block_ids = []
-            last_delegation_balance = delegations[0].balance
-            for _ in range(4, 10):
-                tip_id = node.chainstate_best_block_id()
-                assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 1))
-                transactions = node.mempool_transactions()
-                self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-                assert_in("Success", await wallet.sync())
-
-                delegations = await wallet.list_delegation_ids()
-                assert_equal(len(delegations), 1)
-                assert_greater_than(float(delegations[0].balance), float(last_delegation_balance))
-                last_delegation_balance = delegations[0].balance
-                block_ids.append(node.chainstate_best_block_id())
-
-
-            # stake to acc1 delegation from acc 0
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("Success", await wallet.stake_delegation(10, delegation_id))
-            self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-            assert_in("Success", await wallet.sync())
-            block_ids.append(node.chainstate_best_block_id())
-
-            # check that we still don't have any delegations for this account
-            delegations = await wallet.list_delegation_ids()
-            assert_equal(len(delegations), 0)
-
-            # create a delegation from acc 0 but with destination address for acc1
-            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
-            tip_id = node.chainstate_best_block_id()
-            self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-            assert_in("Success", await wallet.sync())
-            block_ids.append(node.chainstate_best_block_id())
-
-            # check that we still don't have any delegations for this account
-            delegations = await wallet.list_delegation_ids()
-            assert_equal(len(delegations), 0)
-
-            assert_in("Success", await wallet.select_account(1))
-            delegations = await wallet.list_delegation_ids()
-            assert_equal(len(delegations), 2)
-            assert delegation_id in [delegation.delegation_id for delegation in delegations]
-
-            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("Success", await wallet.stop_staking())
-            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id))
-
-            transactions = node.mempool_transactions()
-            block_height = await wallet.get_best_block_height()
-            self.gen_pos_block(transactions, int(block_height)+1, last_block_id)
             assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
 
-            balance = await wallet.get_balance("locked")
-            pattern = r"Coins amount: (\d{5})"
-            result = re.search(pattern, balance)
-            assert(result)
-            g = result.group(1)
-            self.log.info(f"extracted group {g}")
-            assert_greater_than(int(g), 40000)
-
-            created_block_ids = await wallet.list_created_blocks_ids()
-
-            for block_id in block_ids:
-                assert_in(block_id, created_block_ids)
-
 
 if __name__ == '__main__':
-    WalletDelegationsCLI().main()
+    WalletSubmitTransaction().main()

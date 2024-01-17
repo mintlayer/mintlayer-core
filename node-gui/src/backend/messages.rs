@@ -94,7 +94,10 @@ pub struct SendRequest {
 pub struct StakeRequest {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
-    pub amount: String,
+    pub pledge_amount: String,
+    pub mpt: String,
+    pub cost_per_block: String,
+    pub decommission_address: String,
 }
 
 #[derive(Debug, Clone)]
