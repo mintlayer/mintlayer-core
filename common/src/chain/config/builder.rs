@@ -152,7 +152,7 @@ impl ChainType {
             ChainType::Mainnet => {
                 let upgrades = vec![(
                     BlockHeight::new(0),
-                    ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                    ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
