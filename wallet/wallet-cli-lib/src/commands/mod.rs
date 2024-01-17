@@ -19,7 +19,7 @@ use std::{fmt::Write, path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::{
-    address::{Address, AddressError},
+    address::Address,
     chain::{
         tokens::{Metadata, TokenCreator},
         Block, ChainConfig, SignedTransaction, Transaction, UtxoOutPoint,
@@ -80,7 +80,10 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
-    /// Signs the inputs that are not yet signed
+    /// Signs the inputs that are not yet signed.
+    /// The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
+    /// in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
+    /// to the network.
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
         /// Hex encoded transaction.
@@ -337,8 +340,9 @@ pub enum WalletCommand {
     },
 
     /// Create a request to decommission a pool. This assumes that the decommission key is owned
-    /// by another wallet. The output of this command should be passed to SignRawTransaction for
-    /// signing.
+    /// by another wallet. The output of this command should be passed to account-sign-raw-transaction
+    /// in the wallet that owns the decommission key. The result from signing, assuming success, can
+    /// then be broadcast to network to commence with decommissioning.
     #[clap(name = "staking-decommission-pool-request")]
     DecommissionStakePoolRequest {
         /// The pool id of the pool to be decommissioned.
@@ -909,10 +913,8 @@ impl CommandHandler {
                     .await?;
                 let result_hex: HexEncoded<SignedTransaction> = result.into();
 
-                let qr_code =
-                    utils::qrcode::qrcode_from_str(result_hex.to_string()).map_err(|e| {
-                        WalletCliError::AddressEncodingError(AddressError::QrCodeError(e))
-                    })?;
+                let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
                 let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
 
                 let output_str = format!(
@@ -1296,10 +1298,8 @@ impl CommandHandler {
                     .await?;
                 let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
 
-                let qr_code =
-                    utils::qrcode::qrcode_from_str(result_hex.to_string()).map_err(|e| {
-                        WalletCliError::AddressEncodingError(AddressError::QrCodeError(e))
-                    })?;
+                let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
                 let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
 
                 let output_str = format!(
