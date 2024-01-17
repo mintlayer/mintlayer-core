@@ -136,12 +136,21 @@ impl ChainType {
         }
     }
 
-    const fn default_rpc_port(&self) -> u16 {
+    const fn default_node_rpc_port(&self) -> u16 {
         match self {
             ChainType::Mainnet => 3030,
             ChainType::Testnet => 13030,
             ChainType::Regtest => 23030,
             ChainType::Signet => 33030,
+        }
+    }
+
+    const fn default_wallet_rpc_port(&self) -> u16 {
+        match self {
+            ChainType::Mainnet => 3034,
+            ChainType::Testnet => 13034,
+            ChainType::Regtest => 23034,
+            ChainType::Signet => 33034,
         }
     }
 
@@ -197,7 +206,8 @@ pub struct ChainConfig {
     p2p_port: u16,
     dns_seeds: Vec<&'static str>,
     predefined_peer_addresses: Vec<SocketAddr>,
-    default_rpc_port: u16,
+    default_node_rpc_port: u16,
+    default_wallet_rpc_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
     software_version: SemVer,
@@ -324,10 +334,16 @@ impl ChainConfig {
         &self.predefined_peer_addresses
     }
 
-    /// The default port that the rpc server will listen on
+    /// The default port that the node rpc server will listen on
     #[must_use]
-    pub fn default_rpc_port(&self) -> u16 {
-        self.default_rpc_port
+    pub fn default_node_rpc_port(&self) -> u16 {
+        self.default_node_rpc_port
+    }
+
+    /// The default port that the wallet rpc server will listen on
+    #[must_use]
+    pub fn default_wallet_rpc_port(&self) -> u16 {
+        self.default_wallet_rpc_port
     }
 
     /// The current version of this software.

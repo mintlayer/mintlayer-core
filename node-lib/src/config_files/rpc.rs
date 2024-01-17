@@ -44,8 +44,11 @@ pub struct RpcConfigFile {
 
 impl RpcConfigFile {
     pub fn default_bind_address(chain_config: &ChainConfig) -> SocketAddr {
-        SocketAddr::from_str(&format!("127.0.0.1:{}", chain_config.default_rpc_port()))
-            .expect("Can't fail")
+        SocketAddr::from_str(&format!(
+            "127.0.0.1:{}",
+            chain_config.default_node_rpc_port()
+        ))
+        .expect("Can't fail")
     }
 
     pub fn with_run_options(

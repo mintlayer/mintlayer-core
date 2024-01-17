@@ -52,7 +52,8 @@ impl WalletService {
 
         let node_rpc = {
             let rpc_address = {
-                let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
+                let default_addr =
+                    || format!("127.0.0.1:{}", chain_config.default_wallet_rpc_port());
                 config.node_rpc_address.unwrap_or_else(default_addr)
             };
 
