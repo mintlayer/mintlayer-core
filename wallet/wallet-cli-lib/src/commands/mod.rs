@@ -507,6 +507,10 @@ pub enum WalletCommand {
     #[clap(name = "node-best-block-height")]
     BestBlockHeight,
 
+    /// Returns the current best block timestamp
+    #[clap(name = "node-best-block-timestamp")]
+    BestBlockTimestamp,
+
     /// Get the block ID of the block at a given height
     #[clap(name = "node-block-id")]
     BlockId {
@@ -815,6 +819,15 @@ impl CommandHandler {
             WalletCommand::BestBlockHeight => {
                 let height = self.wallet_rpc.node_best_block_height().await?;
                 Ok(ConsoleCommand::Print(height.to_string()))
+            }
+
+            WalletCommand::BestBlockTimestamp => {
+                let timestamp = self.wallet_rpc.chainstate_info().await?.best_block_timestamp;
+                Ok(ConsoleCommand::Print(format!(
+                    "{} ({})",
+                    timestamp,
+                    timestamp.into_time().as_standard_printable_time()
+                )))
             }
 
             WalletCommand::BlockId { height } => {
