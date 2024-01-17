@@ -314,7 +314,7 @@ impl WalletRpc {
         account_index: U31,
         tx: HexEncoded<PartiallySignedTransaction>,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransaction> {
+    ) -> WRpcResult<PartiallySignedTransaction> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -322,7 +322,7 @@ impl WalletRpc {
                         .synced_controller(account_index, config)
                         .await?
                         .sign_raw_transaction(tx.take())?;
-                    Ok::<SignedTransaction, ControllerError<_>>(tx)
+                    Ok::<PartiallySignedTransaction, ControllerError<_>>(tx)
                 })
             })
             .await?

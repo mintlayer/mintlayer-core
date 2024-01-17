@@ -1214,7 +1214,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         tx: PartiallySignedTransaction,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<PartiallySignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.sign_raw_transaction(tx, db_tx)
         })

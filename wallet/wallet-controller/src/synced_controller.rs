@@ -621,7 +621,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub fn sign_raw_transaction(
         &mut self,
         tx: PartiallySignedTransaction,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
         self.wallet
             .sign_raw_transaction(self.account_index, tx)
             .map_err(ControllerError::WalletError)

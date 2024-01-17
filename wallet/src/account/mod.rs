@@ -1082,49 +1082,45 @@ impl Account {
         &self,
         tx: PartiallySignedTransaction,
         db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<SignedTransaction> {
-        match tx.into_signed_tx() {
-            Ok(tx) => Ok(tx),
-            Err(WalletError::FailedToConvertPartiallySignedTx(tx)) => {
-                let (tx, witnesses) = tx.take();
+    ) -> WalletResult<PartiallySignedTransaction> {
+        let (tx, witnesses) = tx.take();
 
-                let input_utxos = tx
-                    .inputs()
-                    .iter()
-                    .map(|input| match input {
-                        TxInput::Utxo(outpoint) => Ok(Some(
-                            self.output_cache.get_txo(outpoint).ok_or(WalletError::NoUtxos)?,
-                        )),
-                        TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
-                            Err(WalletError::InputCannotBeSigned)
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+        let input_utxos = tx
+            .inputs()
+            .iter()
+            .map(|input| match input {
+                TxInput::Utxo(outpoint) => Ok(Some(
+                    self.output_cache.get_txo(outpoint).ok_or(WalletError::NoUtxos)?,
+                )),
+                TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
+                    Err(WalletError::InputCannotBeSigned)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-                ensure!(
-                    input_utxos.len() == witnesses.len(),
-                    TransactionCreationError::InvalidWitnessCount
-                );
+        ensure!(
+            input_utxos.len() == witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
 
-                let witnesses = witnesses
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, witness)| match witness {
-                        Some(w) => Ok(w),
-                        None => {
-                            let destination =
-                                get_tx_output_destination(input_utxos[i].expect("cannot be none"))
-                                    .ok_or(WalletError::InputCannotBeSigned)?;
-                            self.sign_input(&tx, destination, i, &input_utxos, db_tx)?
-                                .ok_or(WalletError::InputCannotBeSigned)
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+        let witnesses = witnesses
+            .into_iter()
+            .enumerate()
+            .map(|(i, witness)| match witness {
+                Some(w) => Ok(Some(w)),
+                None => match get_tx_output_destination(input_utxos[i].expect("cannot be none")) {
+                    Some(destination) => {
+                        let s = self
+                            .sign_input(&tx, destination, i, &input_utxos, db_tx)?
+                            .ok_or(WalletError::InputCannotBeSigned)?;
+                        Ok(Some(s))
+                    }
+                    None => Ok(None),
+                },
+            })
+            .collect::<Result<Vec<_>, WalletError>>()?;
 
-                Ok(SignedTransaction::new(tx, witnesses)?)
-            }
-            Err(err) => Err(err),
-        }
+        Ok(PartiallySignedTransaction::new(tx, witnesses))
     }
 
     pub fn account_index(&self) -> U31 {

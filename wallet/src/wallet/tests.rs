@@ -3817,7 +3817,11 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         WalletError::InputCannotBeSigned
     );
 
-    let signed_tx = wallet.sign_raw_transaction(acc_1_index, decommission_partial_tx).unwrap();
+    let signed_tx = wallet
+        .sign_raw_transaction(acc_1_index, decommission_partial_tx)
+        .unwrap()
+        .into_signed_tx()
+        .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 1);
 

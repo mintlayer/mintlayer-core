@@ -32,7 +32,7 @@ use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSoc
 use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
-use wallet::{account::PartiallySignedTransaction, version::get_version};
+use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
 use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
 
@@ -911,17 +911,40 @@ impl CommandHandler {
                     .wallet_rpc
                     .sign_raw_transaction(selected_account, transaction, self.config)
                     .await?;
-                let result_hex: HexEncoded<SignedTransaction> = result.into();
 
-                let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
-                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                let output_str = match result.into_signed_tx() {
+                    Ok(signed_tx) => {
+                        let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                let output_str = format!(
-                    "Transaction has been signed. \
-                    Pass the following string into the wallet to broadcast:\n{result_hex}\n\
-                    Or scan the Qr code with it:\n{qr_code_string}"
-                );
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "Transaction has been signed. \
+                             Pass the following string into the wallet to broadcast:\n{result_hex}\n\
+                             Or scan the Qr code with it:\n{qr_code_string}"
+                        )
+                    }
+                    Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
+                        let result_hex: HexEncoded<PartiallySignedTransaction> =
+                            partially_signed_tx.into();
+
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "Not all transaction inputs have been signed. \
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign:\n{result_hex}\n\
+                             Or scan the Qr code with it:\n{qr_code_string}"
+                        )
+                    }
+                    Err(err) => {
+                        return Err(WalletCliError::FailedToConvertToSignedTransaction(err))
+                    }
+                };
+
                 Ok(ConsoleCommand::Print(output_str))
             }
 

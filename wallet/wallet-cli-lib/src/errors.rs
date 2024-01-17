@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 use crypto::key::hdkd::u31::U31;
 use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
+use wallet::WalletError;
 use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
@@ -55,4 +56,6 @@ pub enum WalletCliError {
     SerdeJsonFormatError(#[from] serde_json::Error),
     #[error("{0}")]
     WalletRpcError(#[from] RpcError),
+    #[error("Failed to convert to signed transaction: {0}")]
+    FailedToConvertToSignedTransaction(#[from] WalletError),
 }
