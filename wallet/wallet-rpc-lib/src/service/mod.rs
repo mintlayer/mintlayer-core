@@ -54,10 +54,10 @@ impl WalletService {
             let rpc_address = {
                 let default_addr =
                     || format!("127.0.0.1:{}", chain_config.default_wallet_rpc_port());
-                config.node_rpc_address.unwrap_or_else(default_addr)
+                config.wallet_rpc_address.unwrap_or_else(default_addr)
             };
 
-            wallet_controller::make_rpc_client(rpc_address, config.node_credentials).await?
+            wallet_controller::make_rpc_client(rpc_address, config.wallet_rpc_credentials).await?
         };
 
         let controller = if let Some(wallet_file) = &config.wallet_file {

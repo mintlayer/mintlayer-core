@@ -30,10 +30,10 @@ pub struct WalletServiceConfig {
     pub wallet_file: Option<PathBuf>,
 
     /// RPC address of the node to connect to
-    pub node_rpc_address: Option<String>,
+    pub wallet_rpc_address: Option<String>,
 
     /// Node RPC authentication
-    pub node_credentials: RpcAuthData,
+    pub wallet_rpc_credentials: RpcAuthData,
 }
 
 impl WalletServiceConfig {
@@ -49,8 +49,8 @@ impl WalletServiceConfig {
         Ok(Self {
             chain_config,
             wallet_file,
-            node_rpc_address: None,
-            node_credentials: RpcAuthData::None,
+            wallet_rpc_address: None,
+            wallet_rpc_credentials: RpcAuthData::None,
         })
     }
 
@@ -60,7 +60,7 @@ impl WalletServiceConfig {
     }
 
     pub fn with_node_rpc_address(mut self, node_rpc_address: String) -> Self {
-        self.node_rpc_address = Some(node_rpc_address);
+        self.wallet_rpc_address = Some(node_rpc_address);
         self
     }
 
@@ -73,7 +73,7 @@ impl WalletServiceConfig {
     }
 
     pub fn with_node_credentials(mut self, creds: RpcAuthData) -> Self {
-        self.node_credentials = creds;
+        self.wallet_rpc_credentials = creds;
         self
     }
 

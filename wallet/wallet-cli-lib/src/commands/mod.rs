@@ -618,14 +618,14 @@ impl CommandHandler {
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
-        node_rpc_address: Option<String>,
-        node_credentials: RpcAuthData,
+        wallet_rpc_address: Option<String>,
+        wallet_rpc_credentials: RpcAuthData,
     ) -> Result<Self, WalletCliError> {
         let wallet_config = WalletServiceConfig {
             chain_config,
             wallet_file: None,
-            node_rpc_address,
-            node_credentials,
+            wallet_rpc_address,
+            wallet_rpc_credentials,
         };
 
         let wallet_service = WalletService::start(wallet_config)
