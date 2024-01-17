@@ -652,7 +652,7 @@ fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
 }
 
 fn create_mainnet_genesis() -> Genesis {
-    let genesis_message = "TestnetStartOne".to_string();
+    let genesis_message = "TestnetStartTwo".to_string();
 
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
