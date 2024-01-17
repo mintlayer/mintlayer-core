@@ -3564,7 +3564,7 @@ fn wallet_set_lookahead_size(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_mainnet());
+    let chain_config = Arc::new(create_regtest());
 
     let acc_0_index = DEFAULT_ACCOUNT_INDEX;
     let acc_1_index = U31::ONE;
@@ -3749,7 +3749,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_mainnet());
+    let chain_config = Arc::new(create_regtest());
 
     let acc_0_index = DEFAULT_ACCOUNT_INDEX;
     let acc_1_index = U31::ONE;
