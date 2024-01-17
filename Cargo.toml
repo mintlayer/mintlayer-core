@@ -156,7 +156,7 @@ iced_aw = "0.7"
 itertools = "0.12"
 jsonrpsee = { version = "0.21", default-features = false }
 lazy_static = "1.4"
-libtest-mimic = "0.6"
+libtest-mimic = "0.7"
 log = "0.4"
 loom = "0.7"
 mockall = "0.12"
@@ -178,7 +178,7 @@ rand_chacha = "0.3"
 reedline = "0.28"
 ref-cast = "1.0"
 replace_with = "0.1"
-rfd = { version = "0.12", default-features = false }
+rfd = { version = "0.13", default-features = false }
 ripemd = "0.1"
 rlimit = "0.10"
 rstest = "0.18"
