@@ -71,6 +71,9 @@ pub enum WalletMessage {
     SendSucceed,
 
     StakeAmountEdit(String),
+    MarginPerThousandEdit(String),
+    CostPerBlockEdit(String),
+    DecommissionAddressEdit(String),
     CreateStakingPool,
     CreateStakingPoolSucceed,
 
@@ -88,6 +91,9 @@ pub struct AccountState {
     send_amount: String,
     send_address: String,
     stake_amount: String,
+    margin_per_thousand: String,
+    cost_per_block_amount: String,
+    decommission_address: String,
 }
 
 pub struct WalletTab {
@@ -197,17 +203,36 @@ impl WalletTab {
                 self.account_state.stake_amount = value;
                 Command::none()
             }
+            WalletMessage::MarginPerThousandEdit(value) => {
+                self.account_state.margin_per_thousand = value;
+                Command::none()
+            }
+            WalletMessage::CostPerBlockEdit(value) => {
+                self.account_state.cost_per_block_amount = value;
+                Command::none()
+            }
+            WalletMessage::DecommissionAddressEdit(value) => {
+                self.account_state.decommission_address = value;
+                Command::none()
+            }
+
             WalletMessage::CreateStakingPool => {
                 let request = StakeRequest {
                     wallet_id: self.wallet_id,
                     account_id: self.selected_account,
-                    amount: self.account_state.stake_amount.clone(),
+                    pledge_amount: self.account_state.stake_amount.clone(),
+                    mpt: self.account_state.margin_per_thousand.clone(),
+                    cost_per_block: self.account_state.cost_per_block_amount.clone(),
+                    decommission_address: self.account_state.decommission_address.clone(),
                 };
                 backend_sender.send(BackendRequest::StakeAmount(request));
                 Command::none()
             }
             WalletMessage::CreateStakingPoolSucceed => {
                 self.account_state.stake_amount.clear();
+                self.account_state.margin_per_thousand.clear();
+                self.account_state.cost_per_block_amount.clear();
+                self.account_state.decommission_address.clear();
                 Command::none()
             }
             WalletMessage::ToggleStaking(enabled) => {
@@ -290,6 +315,9 @@ impl Tab for WalletTab {
                             &node_state.chain_config,
                             account,
                             &self.account_state.stake_amount,
+                            &self.account_state.margin_per_thousand,
+                            &self.account_state.cost_per_block_amount,
+                            &self.account_state.decommission_address,
                             still_syncing.clone(),
                         ),
                     };

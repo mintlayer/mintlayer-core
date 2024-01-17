@@ -28,6 +28,9 @@ pub fn view_stake(
     chain_config: &ChainConfig,
     account: &AccountInfo,
     stake_amount: &str,
+    mpt: &str,
+    cost_per_block: &str,
+    decommission_key: &str,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
@@ -73,14 +76,24 @@ pub fn view_stake(
     };
 
     column![
-        row![
-            text_input("Pledge amount for the new staking pool", stake_amount)
-                .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
-                .padding(15),
-            iced::widget::button(Text::new("Create staking pool"))
-                .padding(15)
-                .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool))
-        ],
+        text_input("Pledge amount for the new staking pool", stake_amount)
+            .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
+            .padding(15),
+        text_input("Cost per block", cost_per_block)
+            .on_input(|value| { WalletMessage::CostPerBlockEdit(value) })
+            .padding(15),
+        text_input("Margin ratio per thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]", mpt)
+            .on_input(|value| { WalletMessage::MarginPerThousandEdit(value) })
+            .padding(15),
+        text_input(
+            "Decommission address",
+            decommission_key
+        )
+        .on_input(|value| { WalletMessage::DecommissionAddressEdit(value) })
+        .padding(15),
+        iced::widget::button(Text::new("Create staking pool"))
+            .padding(15)
+            .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool)),
         staking_enabled_row.spacing(10).align_items(Alignment::Center),
         iced::widget::horizontal_rule(10),
         staking_balance_grid,

@@ -34,11 +34,11 @@ The logging of mintlayer-core is configured via the `RUST_LOG` environment varia
 Here are the commands as recommended for different scenarios:
 
 For normal operation
-- Node daemon: `RUST_LOG=info cargo run --bin node-daemon -- testnet 2>&1 | tee ../mintlayer.log`
-- CLI Wallet:  `RUST_LOG=info cargo run --bin wallet-cli -- --network testnet 2>&1 | tee ../wallet-cli.log`
-- GUI:         `RUST_LOG=info cargo run --bin node-gui 2>&1 | tee ../node-gui.log`
+- Node daemon: `RUST_LOG=info cargo run --release --bin node-daemon -- testnet 2>&1 | tee ../mintlayer.log`
+- CLI Wallet:  `RUST_LOG=info cargo run --release --bin wallet-cli -- testnet 2>&1 | tee ../wallet-cli.log`
+- GUI:         `RUST_LOG=info cargo run --release --bin node-gui 2>&1 | tee ../node-gui.log`
 
 For heavy debugging operation
 - Node daemon: `RUST_LOG=debug cargo run --bin node-daemon -- testnet 2>&1 | tee ../mintlayer.log`
-- CLI Wallet:  `RUST_LOG=debug cargo run --bin wallet-cli -- --network testnet 2>&1 | tee ../wallet-cli.log`
+- CLI Wallet:  `RUST_LOG=debug cargo run --bin wallet-cli -- testnet 2>&1 | tee ../wallet-cli.log`
 - GUI:         `RUST_LOG=debug cargo run --bin node-gui 2>&1 | tee ../node-gui.log`
