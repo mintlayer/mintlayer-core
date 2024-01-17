@@ -1178,6 +1178,8 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         output: &TxOutput,
     ) -> WalletResult<bool> {
+        self.mark_create_stake_pool_as_seen(output, db_tx)?;
+
         if let Some(d) = get_tx_output_destination(output) {
             match d {
                 Destination::Address(pkh) => {
@@ -1197,6 +1199,30 @@ impl Account {
             }
         }
         Ok(false)
+    }
+
+    /// check if a the output is a CreateStakePool and check if VRR key or decommission_key
+    /// are tracked by this wallet and mark them as used
+    fn mark_create_stake_pool_as_seen(
+        &mut self,
+        output: &TxOutput,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> Result<(), WalletError> {
+        if let TxOutput::CreateStakePool(_, data) = output {
+            self.key_chain.mark_vrf_public_key_as_used(db_tx, data.vrf_public_key())?;
+            match data.decommission_key() {
+                Destination::Address(pkh) => {
+                    self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                }
+                Destination::PublicKey(pk) => {
+                    self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                }
+                Destination::AnyoneCanSpend
+                | Destination::ClassicMultisig(_)
+                | Destination::ScriptHash(_) => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn get_balance(

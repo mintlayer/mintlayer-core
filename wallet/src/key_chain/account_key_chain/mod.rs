@@ -420,6 +420,19 @@ impl AccountKeyChain {
         Ok(false)
     }
 
+    /// Marks a vrf public key as being used. Returns true if a key was found and set to used.
+    pub fn mark_vrf_public_key_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &VRFPublicKey,
+    ) -> KeyChainResult<bool> {
+        let lookahead_size = self.lookahead_size();
+        if self.vrf_chain.mark_pubkey_as_used(db_tx, public_key, lookahead_size)? {
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
