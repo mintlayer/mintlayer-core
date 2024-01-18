@@ -99,21 +99,27 @@ impl AccountKeyChain {
 
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
         let legacy_key_path = make_path_to_vrf_key(&chain_config, account_index);
-        let legacy_public_key =
+        let legacy_vrf_key =
             root_vrf_key.clone().derive_absolute_path(&legacy_key_path)?.to_public_key();
-
-        db_tx.set_legacy_vrf_public_key(&account_id, &legacy_public_key)?;
 
         let account_vrf_pub_key = root_vrf_key
             .derive_absolute_path(&account_path)?
             .derive_child(VRF_INDEX)?
             .to_public_key();
 
+        db_tx.set_account_vrf_public_keys(
+            &account_id,
+            &wallet_types::account_info::AccountVrfKeys {
+                account_vrf_key: account_vrf_pub_key.clone(),
+                legacy_vrf_key: legacy_vrf_key.clone(),
+            },
+        )?;
+
         let vrf_chain = VrfKeySoftChain::new_empty(
             chain_config.clone(),
             account_id,
             account_vrf_pub_key.clone(),
-            legacy_public_key,
+            legacy_vrf_key,
         );
         vrf_chain.save_usage_state(db_tx)?;
 
@@ -169,18 +175,13 @@ impl AccountKeyChain {
             id,
         )?;
 
-        let vrf_chain = VrfKeySoftChain::load_keys(
-            chain_config.clone(),
-            account_info.account_vrf_key().clone(),
-            db_tx,
-            id,
-        )?;
+        let vrf_chain = VrfKeySoftChain::load_keys(chain_config.clone(), db_tx, id)?;
 
         Ok(AccountKeyChain {
             chain_config,
             account_index: account_info.account_index(),
             account_public_key: pubkey_id,
-            account_vrf_public_key: account_info.account_vrf_key().clone().into(),
+            account_vrf_public_key: vrf_chain.get_account_vrf_public_key().clone().into(),
             sub_chains,
             vrf_chain,
             lookahead_size: account_info.lookahead_size().into(),
@@ -247,12 +248,8 @@ impl AccountKeyChain {
             &self.get_account_id(),
         )?;
 
-        self.vrf_chain = VrfKeySoftChain::load_keys(
-            self.chain_config.clone(),
-            self.account_vrf_public_key.clone().take(),
-            db_tx,
-            &self.get_account_id(),
-        )?;
+        self.vrf_chain =
+            VrfKeySoftChain::load_keys(self.chain_config.clone(), db_tx, &self.get_account_id())?;
 
         Ok(())
     }
