@@ -1252,7 +1252,7 @@ async fn discovered_node_2_groups() {
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_separate_groups() {
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_regtest());
     let time_getter = P2pBasicTestTimeGetter::new();
 
     // Start the first peer manager
