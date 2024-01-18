@@ -15,14 +15,16 @@
 
 use std::collections::BTreeMap;
 
+use crate::{
+    schema::{self as db, Schema},
+    WalletStorageEncryptionRead, WalletStorageEncryptionWrite, WalletStorageReadLocked,
+    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+};
 use common::{
     address::Address,
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{
-    kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey,
-    vrf::ExtendedVRFPublicKey,
-};
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::{schema, MakeMapRef};
 use utils::{
@@ -30,6 +32,7 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
+    account_info::AccountVrfKeys,
     chain_info::ChainInfo,
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
@@ -37,16 +40,10 @@ use wallet_types::{
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
-use crate::{
-    schema::{self as db, Schema},
-    WalletStorageEncryptionRead, WalletStorageEncryptionWrite, WalletStorageReadLocked,
-    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
-};
-
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
-    use crypto::{kdf::KdfChallenge, vrf::ExtendedVRFPublicKey};
-    use wallet_types::chain_info::ChainInfo;
+    use crypto::kdf::KdfChallenge;
+    use wallet_types::{account_info::AccountVrfKeys, chain_info::ChainInfo};
 
     use super::Codec;
 
@@ -73,7 +70,7 @@ mod well_known {
     declare_entry!(MedianTime: BlockTimestamp);
     declare_entry!(StoreChainInfo: ChainInfo);
     declare_entry!(LookaheadSize: u32);
-    declare_entry!(LegacyVfrPubKey: ExtendedVRFPublicKey);
+    declare_entry!(LegacyVfrPubKey: AccountVrfKeys);
 }
 
 #[derive(PartialEq, Clone)]
@@ -227,11 +224,11 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBUnconfirmedTxCounters, _, _>(account_id)
             }
 
-            fn get_legacy_vrf_public_key(
+            fn get_account_vrf_public_keys(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<Option<ExtendedVRFPublicKey>> {
-                self.read::<db::DBLegacyVRFPublicKeys, _, _>(account_id)
+            ) -> crate::Result<Option<AccountVrfKeys>> {
+                self.read::<db::DBVRFPublicKeys, _, _>(account_id)
             }
 
             fn get_keychain_usage_state(
@@ -427,12 +424,12 @@ macro_rules! impl_write_ops {
                 self.write::<db::DBUnconfirmedTxCounters, _, _, _>(id, counter)
             }
 
-            fn set_legacy_vrf_public_key(
+            fn set_account_vrf_public_keys(
                 &mut self,
                 id: &AccountId,
-                legacy_testnet_public_key: &ExtendedVRFPublicKey,
+                account_vrf_keys: &AccountVrfKeys,
             ) -> crate::Result<()> {
-                self.write::<db::DBLegacyVRFPublicKeys, _, _, _>(id, legacy_testnet_public_key)
+                self.write::<db::DBVRFPublicKeys, _, _, _>(id, account_vrf_keys)
             }
 
             fn set_user_transaction(

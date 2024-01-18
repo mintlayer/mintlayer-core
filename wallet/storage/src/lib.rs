@@ -23,17 +23,14 @@ use common::{
     address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{
-    kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey,
-    vrf::ExtendedVRFPublicKey,
-};
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    chain_info::ChainInfo, keys::RootKeys, seed_phrase::SerializableSeedPhrase,
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
+    account_info::AccountVrfKeys, chain_info::ChainInfo, keys::RootKeys,
+    seed_phrase::SerializableSeedPhrase, AccountDerivationPathId, AccountId, AccountInfo,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -74,10 +71,8 @@ pub trait WalletStorageReadLocked {
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
-    fn get_legacy_vrf_public_key(
-        &self,
-        account_id: &AccountId,
-    ) -> Result<Option<ExtendedVRFPublicKey>>;
+    fn get_account_vrf_public_keys(&self, account_id: &AccountId)
+        -> Result<Option<AccountVrfKeys>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -124,10 +119,10 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
     fn clear_transactions(&mut self) -> Result<()>;
     fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> Result<()>;
-    fn set_legacy_vrf_public_key(
+    fn set_account_vrf_public_keys(
         &mut self,
         id: &AccountId,
-        legacy_testnet_public_key: &ExtendedVRFPublicKey,
+        vrf_public_keys: &AccountVrfKeys,
     ) -> Result<()>;
     fn set_user_transaction(
         &mut self,

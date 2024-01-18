@@ -170,7 +170,6 @@ impl Account {
             &chain_config,
             key_chain.account_index(),
             key_chain.account_public_key().clone(),
-            key_chain.account_vrf_public_key().clone(),
             key_chain.lookahead_size(),
             name,
         );

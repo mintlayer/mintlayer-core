@@ -25,6 +25,7 @@ use std::sync::Arc;
 use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageWriteLocked};
+use wallet_types::account_info::AccountVrfKeys;
 use wallet_types::keys::KeychainUsageState;
 use wallet_types::AccountId;
 
@@ -97,12 +98,14 @@ impl VrfKeySoftChain {
 
     pub fn load_keys(
         chain_config: Arc<ChainConfig>,
-        account_pubkey: ExtendedVRFPublicKey,
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> KeyChainResult<VrfKeySoftChain> {
-        let legacy_public_key = db_tx
-            .get_legacy_vrf_public_key(id)?
+        let AccountVrfKeys {
+            account_vrf_key,
+            legacy_vrf_key,
+        } = db_tx
+            .get_account_vrf_public_keys(id)?
             .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
 
         let usage = db_tx
@@ -114,7 +117,7 @@ impl VrfKeySoftChain {
                 let child_number = ChildNumber::from_index_with_hardened_bit(index);
                 Ok((
                     child_number,
-                    account_pubkey.clone().derive_child(child_number)?,
+                    account_vrf_key.clone().derive_child(child_number)?,
                 ))
             })
             .collect::<Result<_, DerivationError>>()?;
@@ -122,11 +125,15 @@ impl VrfKeySoftChain {
         VrfKeySoftChain::new_from_parts(
             chain_config.clone(),
             id.clone(),
-            account_pubkey,
+            account_vrf_key,
             public_keys,
             usage,
-            legacy_public_key,
+            legacy_vrf_key,
         )
+    }
+
+    pub fn get_account_vrf_public_key(&self) -> &ExtendedVRFPublicKey {
+        &self.parent_pubkey
     }
 
     /// Issue a new key
