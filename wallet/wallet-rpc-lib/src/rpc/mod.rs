@@ -78,6 +78,10 @@ impl WalletRpc {
         }
     }
 
+    pub fn chain_config(&self) -> &ChainConfig {
+        &self.chain_config
+    }
+
     fn shutdown(&self) -> WRpcResult<()> {
         self.wallet.shallow_clone().stop().map_err(RpcError::SubmitError)
     }

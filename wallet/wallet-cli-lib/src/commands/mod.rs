@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator},
-        Block, ChainConfig, SignedTransaction, Transaction, UtxoOutPoint,
+        Block, ChainConfig, Destination, SignedTransaction, Transaction, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, H256},
 };
@@ -88,6 +88,13 @@ pub enum WalletCommand {
     SignRawTransaction {
         /// Hex encoded transaction.
         transaction: HexEncoded<PartiallySignedTransaction>,
+    },
+
+    /// Creates a QR code of the provided address
+    #[clap(name = "address-qrcode")]
+    AddressQRCode {
+        /// A Destination address
+        address: String,
     },
 
     /// Issue a new non-fungible token (NFT) from scratch
@@ -924,6 +931,17 @@ impl CommandHandler {
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
                 Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::AddressQRCode { address } => {
+                let addr: Address<Destination> =
+                    Address::from_str(self.wallet_rpc.chain_config(), &address)
+                        .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
+
+                let qr_code = utils::qrcode::qrcode_from_str(addr.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                Ok(ConsoleCommand::Print(qr_code_string))
             }
 
             WalletCommand::SignRawTransaction { transaction } => {
