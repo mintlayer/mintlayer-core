@@ -1737,14 +1737,21 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
 
+    // True for fungible, false for NFT
+    let issue_fungible_token = rng.gen::<bool>();
+
+    let issuance_fee = if issue_fungible_token {
+        chain_config.fungible_token_issuance_fee()
+    } else {
+        chain_config.nft_issuance_fee()
+    };
+
     // Generate a new block which sends reward to the wallet
     let mut block1_amount =
-        (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-            + chain_config.fungible_token_issuance_fee())
-        .unwrap();
+        (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000)) + issuance_fee)
+            .unwrap();
 
-    let issue_token = rng.gen::<bool>();
-    if issue_token {
+    if issue_fungible_token {
         block1_amount = (block1_amount + chain_config.token_supply_change_fee()).unwrap();
     }
 
@@ -1758,7 +1765,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
-    let (issued_token_id, token_issuance_transaction) = if issue_token {
+    let (issued_token_id, token_issuance_transaction) = if issue_fungible_token {
         let token_issuance = TokenIssuanceV1 {
             token_ticker: "XXXX".as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
@@ -1841,12 +1848,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
-    let mut expected_amount =
-        ((block1_amount * 2).unwrap() - chain_config.fungible_token_issuance_fee()).unwrap();
-    if issue_token {
+
+    let mut expected_amount = ((block1_amount * 2).unwrap() - issuance_fee).unwrap();
+
+    if issue_fungible_token {
         expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
     }
-    assert_eq!(coin_balance, expected_amount,);
+
+    assert_eq!(coin_balance, expected_amount);
     assert_eq!(token_balances.len(), 1);
     let (token_id, token_amount) = token_balances.first().expect("some");
     assert_eq!(*token_id, issued_token_id);
@@ -1883,9 +1892,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
-    let mut expected_amount =
-        ((block1_amount * 3).unwrap() - chain_config.fungible_token_issuance_fee()).unwrap();
-    if issue_token {
+    let mut expected_amount = ((block1_amount * 3).unwrap() - issuance_fee).unwrap();
+    if issue_fungible_token {
         expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
     }
     assert_eq!(coin_balance, expected_amount,);

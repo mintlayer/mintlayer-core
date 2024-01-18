@@ -268,6 +268,30 @@ impl Builder {
         let target_block_spacing = super::DEFAULT_TARGET_BLOCK_SPACING;
         let consensus_upgrades = chain_type.default_consensus_upgrades(target_block_spacing);
 
+        let nft_issuance_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_NFT_ISSUANCE_FEE
+        } else {
+            super::MAINNET_NFT_ISSUANCE_FEE
+        };
+
+        let token_supply_change_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_SUPPLY_CHANGE_FEE
+        } else {
+            super::MAINNET_TOKEN_SUPPLY_CHANGE_FEE
+        };
+
+        let token_freeze_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_FREEZE_FEE
+        } else {
+            super::MAINNET_TOKEN_FREEZE_FEE
+        };
+
+        let token_change_authority_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_CHANGE_AUTHORITY_FEE
+        } else {
+            super::MAINNET_TOKEN_CHANGE_AUTHORITY_FEE
+        };
+
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
@@ -299,10 +323,10 @@ impl Builder {
             data_deposit_max_size: super::DATA_DEPOSIT_MAX_SIZE,
             data_deposit_fee: super::DATA_DEPOSIT_MIN_FEE,
             fungible_token_issuance_fee: super::FUNGIBLE_TOKEN_MIN_ISSUANCE_FEE,
-            nft_issuance_fee: super::NFT_MIN_ISSUANCE_FEE,
-            token_supply_change_fee: super::TOKEN_MIN_SUPPLY_CHANGE_FEE,
-            token_freeze_fee: super::TOKEN_MIN_FREEZE_FEE,
-            token_change_authority_fee: super::TOKEN_CHANGE_AUTHORITY_FEE,
+            nft_issuance_fee,
+            token_supply_change_fee,
+            token_freeze_fee,
+            token_change_authority_fee,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
