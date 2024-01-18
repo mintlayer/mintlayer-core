@@ -41,7 +41,7 @@ pub struct VrfKeySoftChain {
     parent_pubkey: ConstValue<ExtendedVRFPublicKey>,
 
     /// The parent key of this key chain
-    legacy_testnet_pubkey: ConstValue<ExtendedVRFPublicKey>,
+    legacy_pubkey: ConstValue<ExtendedVRFPublicKey>,
 
     /// The derived keys for the receiving funds or change. Those are derived as needed.
     derived_public_keys: BTreeMap<ChildNumber, ExtendedVRFPublicKey>,
@@ -58,7 +58,7 @@ impl VrfKeySoftChain {
         chain_config: Arc<ChainConfig>,
         account_id: AccountId,
         parent_pubkey: ExtendedVRFPublicKey,
-        legacy_testnet_pubkey: ExtendedVRFPublicKey,
+        legacy_pubkey: ExtendedVRFPublicKey,
     ) -> Self {
         Self {
             chain_config,
@@ -66,7 +66,7 @@ impl VrfKeySoftChain {
             parent_pubkey: parent_pubkey.into(),
             derived_public_keys: BTreeMap::new(),
             public_key_to_index: BTreeMap::new(),
-            legacy_testnet_pubkey: legacy_testnet_pubkey.into(),
+            legacy_pubkey: legacy_pubkey.into(),
             usage_state: KeychainUsageState::default(),
         }
     }
@@ -77,7 +77,7 @@ impl VrfKeySoftChain {
         parent_pubkey: ExtendedVRFPublicKey,
         derived_public_keys: BTreeMap<ChildNumber, ExtendedVRFPublicKey>,
         usage_state: KeychainUsageState,
-        legacy_testnet_pubkey: ExtendedVRFPublicKey,
+        legacy_pubkey: ExtendedVRFPublicKey,
     ) -> KeyChainResult<Self> {
         let public_key_to_index: BTreeMap<VRFPublicKey, ChildNumber> = derived_public_keys
             .iter()
@@ -90,7 +90,7 @@ impl VrfKeySoftChain {
             parent_pubkey: parent_pubkey.into(),
             derived_public_keys,
             public_key_to_index,
-            legacy_testnet_pubkey: legacy_testnet_pubkey.into(),
+            legacy_pubkey: legacy_pubkey.into(),
             usage_state,
         })
     }
@@ -101,7 +101,7 @@ impl VrfKeySoftChain {
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> KeyChainResult<VrfKeySoftChain> {
-        let legacy_testnet_public_key = db_tx
+        let legacy_public_key = db_tx
             .get_legacy_vrf_public_key(id)?
             .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
 
@@ -125,7 +125,7 @@ impl VrfKeySoftChain {
             account_pubkey,
             public_keys,
             usage,
-            legacy_testnet_public_key,
+            legacy_public_key,
         )
     }
 
@@ -262,15 +262,15 @@ impl VrfKeySoftChain {
 
     pub fn is_public_key_mine(&self, public_key: &VRFPublicKey) -> bool {
         self.public_key_to_index.contains_key(public_key)
-            || public_key == self.legacy_testnet_pubkey.public_key()
+            || public_key == self.legacy_pubkey.public_key()
     }
 
     pub fn get_derived_xpub_from_public_key(
         &self,
         pub_key: &VRFPublicKey,
     ) -> Option<&ExtendedVRFPublicKey> {
-        if self.legacy_testnet_pubkey.public_key() == pub_key {
-            return Some(&self.legacy_testnet_pubkey);
+        if self.legacy_pubkey.public_key() == pub_key {
+            return Some(&self.legacy_pubkey);
         }
 
         self.public_key_to_index
@@ -318,6 +318,10 @@ impl VrfKeySoftChain {
     /// Get the index of the last issued key or None if no key is issued
     pub fn last_issued(&self) -> Option<U31> {
         self.usage_state.last_issued()
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        Address::new(&self.chain_config, self.legacy_pubkey.public_key()).expect("addressable")
     }
 
     pub fn get_all_issued_keys(&self) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {

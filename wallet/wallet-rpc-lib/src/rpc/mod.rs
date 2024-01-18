@@ -56,8 +56,9 @@ use crate::{
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, BlockInfo, DelegationInfo, EmptyArgs, NewAccountInfo,
-    NewDelegation, PoolInfo, PublicKeyInfo, VrfPublicKeyInfo,
+    AddressInfo, AddressWithUsageInfo, BlockInfo, DelegationInfo, EmptyArgs,
+    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, PoolInfo, PublicKeyInfo,
+    VrfPublicKeyInfo,
 };
 
 pub struct WalletRpc {
@@ -204,6 +205,22 @@ impl WalletRpc {
             })
             .await??;
         Ok(PublicKeyInfo::new(publick_key))
+    }
+
+    pub async fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<LegacyVrfPublicKeyInfo> {
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(
+                    async move { w.readonly_controller(account_index).get_legacy_vrf_public_key() },
+                )
+            })
+            .await?
+            .map(|vrf_public_key| LegacyVrfPublicKeyInfo {
+                vrf_public_key: vrf_public_key.to_string(),
+            })
     }
 
     pub async fn get_vrf_key_usage(&self, account_index: U31) -> WRpcResult<Vec<VrfPublicKeyInfo>> {

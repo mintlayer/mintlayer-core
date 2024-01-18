@@ -178,10 +178,11 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             for (line, expected_line) in zip(output.split(), expected_output.split()):
                 assert_equal(line, expected_line)
 
-            expected_vrf_output = """+-------+--------------------------------------------------------------------+--------------------------------+
+            vrf_public_key = "rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme"
+            expected_vrf_output = f"""+-------+--------------------------------------------------------------------+--------------------------------+
             | Index | Address                                                            | Is used in transaction history |
             +=======+====================================================================+================================+
-            | 0     | rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme | Yes                             |
+            | 0     | {vrf_public_key} | Yes                             |
             +-------+--------------------------------------------------------------------+--------------------------------+"""
             output = await wallet.get_vrf_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
@@ -196,6 +197,16 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             output = await wallet.get_vrf_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
                 assert_equal(line, expected_line)
+
+            pools = await wallet.list_pool_ids()
+            assert_equal(pools[0].balance, '40000')
+            assert_equal(pools[0].creation_block_height, 2)
+            assert_equal(pools[0].vrf_public_key, vrf_public_key)
+            assert_equal(pools[0].staker, "rpmt1qgqq92qeytkezwypc2ydcm78rv9v2m85fqnxh46cnrw7c2huc79f638zcx8l48")
+            assert_equal(pools[0].decommission_key, "rmt1q824xhhlcdazxj38yuqr6llqz3wm7whhgvmyvyjz")
+
+            assert_equal("rvrfpk1qqe29knh5xdmtn6jqznq3w753dr9jcnryllnjfcgktcedu5dkruksvcupzm", await wallet.get_legacy_vrf_public_key())
+
 
 
 if __name__ == '__main__':

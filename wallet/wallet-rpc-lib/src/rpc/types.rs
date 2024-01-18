@@ -162,6 +162,11 @@ impl PublicKeyInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LegacyVrfPublicKeyInfo {
+    pub vrf_public_key: String,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VrfPublicKeyInfo {
     pub vrf_public_key: String,
     pub child_number: u32,

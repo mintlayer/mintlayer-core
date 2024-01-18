@@ -201,7 +201,7 @@ trait WalletRpc {
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<Id<GenBlock>>>;
 
-    #[method(name = "staking-get-vrf-key")]
+    #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(
         &self,
         account_index: AccountIndexArg,

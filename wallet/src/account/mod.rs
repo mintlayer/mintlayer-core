@@ -1144,6 +1144,10 @@ impl Account {
         self.key_chain.get_all_issued_vrf_public_keys()
     }
 
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        self.key_chain.get_legacy_vrf_public_key()
+    }
+
     pub fn get_addresses_usage(&self) -> &KeychainUsageState {
         self.key_chain.get_addresses_usage_state()
     }
@@ -1184,7 +1188,7 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         output: &TxOutput,
     ) -> WalletResult<bool> {
-        self.mark_create_stake_pool_as_seen(output, db_tx)?;
+        self.mark_created_stake_pool_as_seen(output, db_tx)?;
 
         if let Some(d) = get_tx_output_destination(output) {
             match d {
@@ -1207,9 +1211,9 @@ impl Account {
         Ok(false)
     }
 
-    /// check if a the output is a CreateStakePool and check if VRR key or decommission_key
+    /// check if the output is a CreateStakePool and check if the VRF key or decommission_key
     /// are tracked by this wallet and mark them as used
-    fn mark_create_stake_pool_as_seen(
+    fn mark_created_stake_pool_as_seen(
         &mut self,
         output: &TxOutput,
         db_tx: &mut impl WalletStorageWriteLocked,

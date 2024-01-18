@@ -294,9 +294,17 @@ pub enum WalletCommand {
     #[clap(name = "staking-list-created-block-ids")]
     ListCreatedBlocksIds,
 
-    /// Show the issued staking VRF keys for this account
-    #[clap(name = "staking-show-vrf-key")]
+    /// Show the issued staking VRF (Verifiable Random Function) keys for this account.
+    /// These keys are generated when pools are created.
+    /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
+    /// where no one can control the possible outcomes, to ensure decentralization.
+    #[clap(name = "staking-show-vrf-public-keys")]
     GetVrfPublicKey,
+
+    /// Shows the legacy VRF key that uses an abandoned derivation mechanism.
+    /// This will not be used for new pools and should be avoided
+    #[clap(name = "staking-show-legacy-vrf-key")]
+    GetLegacyVrfPublicKey,
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.
@@ -1200,6 +1208,13 @@ impl CommandHandler {
                     addresses_table
                 };
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            WalletCommand::GetLegacyVrfPublicKey => {
+                let selected_account = self.get_selected_acc()?;
+                let legacy_pubkey =
+                    self.wallet_rpc.get_legacy_vrf_public_key(selected_account).await?;
+                Ok(ConsoleCommand::Print(legacy_pubkey.vrf_public_key))
             }
 
             WalletCommand::GetTransaction { transaction_id } => {

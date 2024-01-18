@@ -896,6 +896,14 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(account.get_all_issued_vrf_public_keys())
     }
 
+    pub fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Address<VRFPublicKey>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_legacy_vrf_public_key())
+    }
+
     pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
         let account = self.get_account(account_index)?;
         Ok(account.get_addresses_usage())

@@ -242,7 +242,7 @@ impl Derivable for ExtendedVRFPrivateKey {
 }
 
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
-/// the private key at one of the nodes of this tree.
+/// the public key at one of the nodes of this tree.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct ExtendedVRFPublicKey {
     /// The absolute derivation path that was used to derive this key

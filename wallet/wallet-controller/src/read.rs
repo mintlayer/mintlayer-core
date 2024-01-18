@@ -52,6 +52,7 @@ pub struct ReadOnlyController<'a, T> {
     account_index: U31,
 }
 
+/// A Map between the derived chilee number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
 impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
@@ -166,6 +167,12 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
         self.wallet
             .get_all_issued_vrf_public_keys(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Result<Address<VRFPublicKey>, ControllerError<T>> {
+        self.wallet
+            .get_legacy_vrf_public_key(self.account_index)
             .map_err(ControllerError::WalletError)
     }
 

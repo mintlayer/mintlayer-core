@@ -98,13 +98,11 @@ impl AccountKeyChain {
         change_key_chain.save_usage_state(db_tx)?;
 
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
-        let legacy_testnet_key_path = make_path_to_vrf_key(&chain_config, account_index);
-        let legacy_testnet_public_key = root_vrf_key
-            .clone()
-            .derive_absolute_path(&legacy_testnet_key_path)?
-            .to_public_key();
+        let legacy_key_path = make_path_to_vrf_key(&chain_config, account_index);
+        let legacy_public_key =
+            root_vrf_key.clone().derive_absolute_path(&legacy_key_path)?.to_public_key();
 
-        db_tx.set_legacy_vrf_public_key(&account_id, &legacy_testnet_public_key)?;
+        db_tx.set_legacy_vrf_public_key(&account_id, &legacy_public_key)?;
 
         let account_vrf_pub_key = root_vrf_key
             .derive_absolute_path(&account_path)?
@@ -115,7 +113,7 @@ impl AccountKeyChain {
             chain_config.clone(),
             account_id,
             account_vrf_pub_key.clone(),
-            legacy_testnet_public_key,
+            legacy_public_key,
         );
         vrf_chain.save_usage_state(db_tx)?;
 
@@ -447,6 +445,10 @@ impl AccountKeyChain {
         &self,
     ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
         self.vrf_chain.get_all_issued_keys()
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        self.vrf_chain.get_legacy_vrf_public_key()
     }
 
     pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
