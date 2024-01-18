@@ -21,6 +21,7 @@ use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, get_output_value, TestFramework, TransactionBuilder,
 };
+use common::primitives::BlockHeight;
 use common::{
     chain::{
         output_value::OutputValue,
@@ -203,7 +204,9 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
                 anyonecanspend_address(),
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_supply_change_fee()),
+                OutputValue::Coin(
+                    tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero()),
+                ),
                 Destination::AnyoneCanSpend,
             ))
             .build();

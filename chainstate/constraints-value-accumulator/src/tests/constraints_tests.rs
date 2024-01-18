@@ -94,7 +94,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -150,7 +150,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -224,7 +224,8 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
         let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
@@ -251,7 +252,8 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
@@ -331,7 +333,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
     let result = inputs_accumulator.satisfy_with(outputs_accumulator);
 
@@ -370,7 +372,8 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
@@ -464,7 +467,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
     let result = inputs_accumulator.satisfy_with(outputs_accumulator);
     assert_eq!(
@@ -496,7 +499,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     .unwrap();
 
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
 
     let accumulated_fee = inputs_accumulator
         .satisfy_with(outputs_accumulator)
@@ -575,7 +578,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
         let result = inputs_accumulator.satisfy_with(outputs_accumulator);
         assert_eq!(
@@ -611,7 +615,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         .unwrap();
 
         let outputs_accumulator =
-            ConstrainedValueAccumulator::from_outputs(&chain_config, &outputs).unwrap();
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }

@@ -68,9 +68,9 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{make_token_id, TokenIssuanceVersion},
+        tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, TokenIssuanceVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };

@@ -29,9 +29,10 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{
             make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
-            TokenIssuanceVersion, TokenTotalSupply,
+            TokenTotalSupply,
         },
-        ChainConfig, ChainstateUpgrade, Destination, NetUpgrades, TxInput, TxOutput, UtxoOutPoint,
+        ChainConfig, ChainstateUpgrade, Destination, NetUpgrades, TokenIssuanceVersion,
+        TokensFeeVersionVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -574,6 +575,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V0,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersionVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -699,7 +701,9 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin((chain_config.token_supply_change_fee() * 2).unwrap()),
+                OutputValue::Coin(
+                    (chain_config.token_supply_change_fee(BlockHeight::zero()) * 2).unwrap(),
+                ),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -724,7 +728,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(chain_config.token_supply_change_fee()),
+                OutputValue::Coin(chain_config.token_supply_change_fee(BlockHeight::zero())),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -753,7 +757,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
             effective_height: BlockHeight::new(1),
         };
 
-        let expected_fee = Fee(chain_config.token_supply_change_fee());
+        let expected_fee = Fee(chain_config.token_supply_change_fee(BlockHeight::zero()));
         let actual_fee = verifier
             .connect_transaction(&tx_source, &tx, &tf.genesis().timestamp())
             .unwrap()

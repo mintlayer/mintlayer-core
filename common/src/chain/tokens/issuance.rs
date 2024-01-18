@@ -17,14 +17,6 @@ use super::Destination;
 use crate::primitives::Amount;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub enum TokenIssuanceVersion {
-    /// Initial issuance implementation
-    V0,
-    /// Enable modifying token supply
-    V1,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenTotalSupply {
     #[codec(index = 0)]

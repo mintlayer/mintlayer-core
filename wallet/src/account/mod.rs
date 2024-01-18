@@ -224,6 +224,7 @@ impl Account {
             },
             Amount::ZERO,
             &self.chain_config,
+            self.account_info.best_block_height(),
         )?;
 
         let network_fee: Amount = current_fee_rate
@@ -234,8 +235,12 @@ impl Account {
         let (coin_change_fee, token_change_fee) =
             coin_and_token_output_change_fees(current_fee_rate)?;
 
-        let mut preselected_inputs =
-            group_preselected_inputs(&request, current_fee_rate, &self.chain_config)?;
+        let mut preselected_inputs = group_preselected_inputs(
+            &request,
+            current_fee_rate,
+            &self.chain_config,
+            self.account_info.best_block_height(),
+        )?;
 
         let (utxos, selection_algo) = if input_utxos.is_empty() {
             (
@@ -1648,6 +1653,7 @@ fn group_preselected_inputs(
     request: &SendRequest,
     current_fee_rate: FeeRate,
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
 ) -> Result<BTreeMap<Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination) in request.inputs().iter().zip(request.destinations()) {
@@ -1687,7 +1693,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         *amount,
-                        (*fee + chain_config.token_supply_change_fee())
+                        (*fee + chain_config.token_supply_change_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1696,7 +1702,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_supply_change_fee())
+                        (*fee + chain_config.token_supply_change_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1705,7 +1711,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_freeze_fee())
+                        (*fee + chain_config.token_freeze_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1713,7 +1719,7 @@ fn group_preselected_inputs(
                     update_preselected_inputs(
                         Currency::Token(*token_id),
                         Amount::ZERO,
-                        (*fee + chain_config.token_change_authority_fee())
+                        (*fee + chain_config.token_change_authority_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
@@ -1782,6 +1788,7 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
     init: Grouped,
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
 ) -> WalletResult<BTreeMap<Currency, Grouped>> {
     let mut coin_grouped = init.clone();
     let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
@@ -1798,7 +1805,9 @@ fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             TxOutput::IssueFungibleToken(_) => {
                 OutputValue::Coin(chain_config.fungible_token_issuance_fee())
             }
-            TxOutput::IssueNft(_, _, _) => OutputValue::Coin(chain_config.nft_issuance_fee()),
+            TxOutput::IssueNft(_, _, _) => {
+                OutputValue::Coin(chain_config.nft_issuance_fee(block_height))
+            }
             TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_fee()),
             TxOutput::CreateDelegationId(_, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {

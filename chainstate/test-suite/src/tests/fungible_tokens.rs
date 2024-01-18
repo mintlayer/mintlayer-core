@@ -27,8 +27,9 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, TokenData, TokenId, TokenIssuanceVersion},
-        ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput,
+        tokens::{make_token_id, TokenData, TokenId},
+        ChainstateUpgrade, Destination, OutPointSourceId, TokenIssuanceVersion,
+        TokensFeeVersionVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -54,6 +55,7 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V1,
+                            TokensFeeVersionVersion::V1,
                         ),
                     )])
                     .unwrap(),
@@ -956,6 +958,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersionVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1013,6 +1016,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                 ChainstateUpgrade::new(
                                     TokenIssuanceVersion::V0,
                                     RewardDistributionVersion::V1,
+                                    TokensFeeVersionVersion::V1,
                                 ),
                             ),
                             (
@@ -1020,6 +1024,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                 ChainstateUpgrade::new(
                                     TokenIssuanceVersion::V1,
                                     RewardDistributionVersion::V1,
+                                    TokensFeeVersionVersion::V1,
                                 ),
                             ),
                         ])

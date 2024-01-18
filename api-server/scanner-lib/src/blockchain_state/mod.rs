@@ -438,7 +438,8 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     )
     .expect("valid block");
     let outputs_accumulator =
-        ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs()).expect("valid block");
+        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
+            .expect("valid block");
     let consumed_accumulator =
         inputs_accumulator.satisfy_with(outputs_accumulator).expect("valid block");
     Ok(consumed_accumulator)

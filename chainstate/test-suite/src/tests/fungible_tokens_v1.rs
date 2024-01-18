@@ -33,7 +33,7 @@ use common::{
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{signed_amount::SignedAmount, Amount, CoinOrTokenId, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -125,7 +125,8 @@ fn mint_tokens_in_block(
     amount_to_mint: Amount,
     produce_change: bool,
 ) -> (Id<Block>, Id<Transaction>) {
-    let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+    let token_supply_change_fee =
+        tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
     let nonce = BlockchainStorageRead::get_account_nonce_count(
         &tf.storage.transaction_ro().unwrap(),
@@ -182,7 +183,8 @@ fn unmint_tokens_in_block(
     utxo_to_pay_fee: UtxoOutPoint,
     amount_to_unmint: Amount,
 ) -> (Id<Block>, Id<Transaction>) {
-    let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+    let token_supply_change_fee =
+        tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
     let nonce = BlockchainStorageRead::get_account_nonce_count(
         &tf.storage.transaction_ro().unwrap(),
@@ -608,7 +610,8 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let mut nonce = AccountNonce::new(0);
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let total_supply = Amount::from_atoms(rng.gen_range(2..100_000_000));
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -1232,7 +1235,8 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..=i128::MAX as u128));
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -1317,7 +1321,8 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -2086,7 +2091,8 @@ fn check_lockable_supply(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let mut nonce = AccountNonce::new(0);
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -2296,7 +2302,8 @@ fn try_lock_twice(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let mut nonce = AccountNonce::new(0);
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -2483,7 +2490,8 @@ fn mint_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let some_amount = Amount::from_atoms(rng.gen_range(100..100_000));
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -2577,7 +2585,8 @@ fn unmint_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let some_amount = Amount::from_atoms(rng.gen_range(100..100_000));
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -2676,7 +2685,8 @@ fn lock_supply_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -2904,7 +2914,8 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
         let token_id = make_token_id(&[TxInput::from_utxo(genesis_source_id.clone(), 0)]).unwrap();
 
@@ -3118,7 +3129,8 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
 
         let amount_to_mint_1 = Amount::from_atoms(rng.gen_range(2..100_000_000));
         let amount_to_mint_2 = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         // create another block with 2 outputs to use them on tokens issuance and get 2 distinct token ids
         let tx_a = TransactionBuilder::new()
@@ -3345,7 +3357,8 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
         let genesis_block_id = tf.genesis().get_id();
 
         let (controller_sk, controller_pk) =
@@ -3670,7 +3683,8 @@ fn mint_with_timelock(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let amount_to_mint =
             Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
@@ -3857,7 +3871,8 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
         let data_deposit_fee = tf.chainstate.get_chain_config().data_deposit_fee();
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -3959,7 +3974,8 @@ fn check_freezable_supply(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_supply_change_fee = tf.chainstate.get_chain_config().token_supply_change_fee();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -4220,7 +4236,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let ok_fee = tf.chainstate.get_chain_config().token_freeze_fee();
+        let ok_fee = tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
         let not_ok_fee = (ok_fee - Amount::from_atoms(1)).unwrap();
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -4307,7 +4323,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let ok_fee = tf.chainstate.get_chain_config().token_freeze_fee();
+        let ok_fee = tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
         let not_ok_fee = (ok_fee - Amount::from_atoms(1)).unwrap();
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
@@ -4421,7 +4437,8 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let token_freeze_fee = tf.chainstate.get_chain_config().token_freeze_fee();
+        let token_freeze_fee =
+            tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
         let genesis_block_id = tf.genesis().get_id();
 
         let (controller_sk, controller_pk) =
@@ -4646,7 +4663,9 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(tf.chain_config().token_change_authority_fee()),
+                OutputValue::Coin(
+                    tf.chain_config().token_change_authority_fee(BlockHeight::zero()),
+                ),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -4943,8 +4962,9 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let unfreeze_fee = tf.chain_config().token_freeze_fee();
-        let change_authority_fee = tf.chain_config().token_change_authority_fee();
+        let unfreeze_fee = tf.chain_config().token_freeze_fee(BlockHeight::zero());
+        let change_authority_fee =
+            tf.chain_config().token_change_authority_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,
@@ -5074,7 +5094,7 @@ fn change_authority_fee(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let token_change_authority_fee =
-            tf.chainstate.get_chain_config().token_change_authority_fee();
+            tf.chainstate.get_chain_config().token_change_authority_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,

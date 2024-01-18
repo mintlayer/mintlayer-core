@@ -18,8 +18,9 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, TokenId, TokenIssuanceVersion},
-        Block, ChainConfig, DelegationId, PoolId, Transaction, TxInput, TxOutput,
+        tokens::{get_tokens_issuance_count, TokenId},
+        Block, ChainConfig, DelegationId, PoolId, TokenIssuanceVersion, Transaction, TxInput,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
@@ -105,13 +106,14 @@ pub fn check_reward_inputs_outputs_policy(
                 )
                 .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
-                let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(
-                    chain_config,
-                    outputs,
-                )
-                .map_err(|e| {
-                    ConnectTransactionError::ConstrainedValueAccumulatorError(e, block_id.into())
-                })?;
+                let outputs_accumulator =
+                    ConstrainedValueAccumulator::from_outputs(chain_config, block_height, outputs)
+                        .map_err(|e| {
+                            ConnectTransactionError::ConstrainedValueAccumulatorError(
+                                e,
+                                block_id.into(),
+                            )
+                        })?;
 
                 inputs_accumulator.satisfy_with(outputs_accumulator).map_err(|e| {
                     ConnectTransactionError::ConstrainedValueAccumulatorError(e, block_id.into())
@@ -205,10 +207,11 @@ pub fn check_tx_inputs_outputs_policy(
         ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
     })?;
 
-    let outputs_accumulator = ConstrainedValueAccumulator::from_outputs(chain_config, tx.outputs())
-        .map_err(|e| {
-            ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
-        })?;
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(chain_config, block_height, tx.outputs())
+            .map_err(|e| {
+                ConnectTransactionError::ConstrainedValueAccumulatorError(e, tx.get_id().into())
+            })?;
 
     let consumed_accumulator =
         inputs_accumulator.satisfy_with(outputs_accumulator).map_err(|e| {

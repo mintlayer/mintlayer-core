@@ -20,9 +20,9 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, NftIssuance, TokenId, TokenIssuanceVersion},
+        tokens::{make_token_id, NftIssuance, TokenId},
         ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, RewardDistributionVersion,
-        TxInput, TxOutput,
+        TokenIssuanceVersion, TokensFeeVersionVersion, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId},
 };
@@ -183,7 +183,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
 
         // Issuance a few different NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
         let first_token_id =
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
 
@@ -367,6 +368,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersionVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -379,7 +381,8 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
         let token_id =
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         let nft_issuance = random_nft_issuance(tf.chainstate.get_chain_config(), &mut rng);
 
