@@ -52,7 +52,7 @@ pub struct ReadOnlyController<'a, T> {
     account_index: U31,
 }
 
-/// A Map between the derived chilee number and the Address with whether it is marked as used or not
+/// A Map between the derived child number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
 impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
