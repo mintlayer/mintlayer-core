@@ -33,14 +33,14 @@ use futures::{stream::FuturesUnordered, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
 use wallet::{
-    account::{transaction_list::TransactionList, Currency, DelegationData},
+    account::{transaction_list::TransactionList, Currency, DelegationData, PoolData},
     DefaultWallet,
 };
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoType, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    BlockInfo, KeychainUsageState,
+    KeychainUsageState,
 };
 
 use crate::{types::Balances, ControllerError};
@@ -208,7 +208,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
 
     pub async fn get_pool_ids(
         &self,
-    ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
+    ) -> Result<Vec<(PoolId, PoolData, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
             .get_pool_ids(self.account_index)
@@ -225,8 +225,8 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     async fn get_pool_info(
         &self,
         pool_id: PoolId,
-        block_info: BlockInfo,
-    ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
+        pool_data: PoolData,
+    ) -> Result<(PoolId, PoolData, Amount), ControllerError<T>> {
         self.rpc_client
             .get_stake_pool_balance(pool_id)
             .await
@@ -237,7 +237,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                     Address::new(self.chain_config, &pool_id)?
                 )))
             })
-            .map(|balance| (pool_id, block_info, balance))
+            .map(|balance| (pool_id, pool_data, balance))
             .log_err()
     }
 

@@ -67,6 +67,7 @@ impl DelegationData {
     }
 }
 
+#[derive(Clone)]
 pub struct PoolData {
     pub utxo_outpoint: UtxoOutPoint,
     pub creation_block: BlockInfo,
@@ -511,12 +512,12 @@ impl OutputCache {
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
     }
 
-    pub fn pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+    pub fn pool_ids(&self) -> Vec<(PoolId, PoolData)> {
         self.pools
             .iter()
             .filter_map(|(pool_id, pool_data)| {
                 (!self.consumed.contains_key(&pool_data.utxo_outpoint))
-                    .then_some((*pool_id, pool_data.creation_block))
+                    .then_some((*pool_id, (*pool_data).clone()))
             })
             .collect()
     }

@@ -1407,14 +1407,7 @@ impl CommandHandler {
                     .list_pool_ids(selected_account)
                     .await?
                     .into_iter()
-                    .map(|info| {
-                        format_pool_info(
-                            info.pool_id,
-                            info.balance.to_string(),
-                            info.height,
-                            info.block_timestamp,
-                        )
-                    })
+                    .map(format_pool_info)
                     .collect();
                 Ok(ConsoleCommand::Print(pool_ids.join("\n").to_string()))
             }

@@ -78,7 +78,7 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, FungibleTokenInfo, PoolData, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -623,7 +623,7 @@ impl Account {
         Ok(self.key_chain.issue_vrf_key(db_tx)?.into_public_key())
     }
 
-    pub fn get_pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+    pub fn get_pool_ids(&self) -> Vec<(PoolId, PoolData)> {
         self.output_cache.pool_ids()
     }
 

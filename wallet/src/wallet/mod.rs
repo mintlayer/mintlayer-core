@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
-    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, UnconfirmedTokenInfo,
-    UtxoSelectorError,
+    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, PoolData,
+    UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
@@ -59,7 +59,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, AccountKeyPurposeId, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -813,7 +813,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, BlockInfo)>> {
+    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, PoolData)>> {
         let pool_ids = self.get_account(account_index)?.get_pool_ids();
         Ok(pool_ids)
     }

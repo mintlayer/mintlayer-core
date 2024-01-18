@@ -27,7 +27,10 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
-use wallet::{account::PartiallySignedTransaction, WalletError};
+use wallet::{
+    account::{PartiallySignedTransaction, PoolData},
+    WalletError,
+};
 
 use common::{
     address::Address,
@@ -44,11 +47,7 @@ use wallet_controller::{
     types::Balances, ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates,
     UtxoTypes,
 };
-use wallet_types::{
-    seed_phrase::StoreSeedPhrase,
-    wallet_tx::{self, TxData},
-    with_locked::WithLocked,
-};
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
 use crate::{
     service::{CreatedWallet, NodeRpcClient},
@@ -889,11 +888,11 @@ impl WalletRpc {
                 })
             })
             .await?
-            .map(|pools: Vec<(PoolId, wallet_tx::BlockInfo, Amount)>| {
+            .map(|pools: Vec<(PoolId, PoolData, Amount)>| {
                 pools
                     .into_iter()
-                    .map(|(pool_id, block_data, balance)| {
-                        PoolInfo::new(pool_id, block_data, balance, &self.chain_config)
+                    .map(|(pool_id, pool_data, balance)| {
+                        PoolInfo::new(pool_id, pool_data, balance, &self.chain_config)
                     })
                     .collect()
             })

@@ -36,8 +36,8 @@ use serialization::hex::HexEncode;
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
+use wallet::account::PoolData;
 pub use wallet_controller::types::{Balances, DecimalAmount};
-use wallet_types::wallet_tx;
 
 use crate::service::SubmitError;
 
@@ -214,12 +214,15 @@ pub struct PoolInfo {
     pub balance: DecimalAmount,
     pub height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
+    pub vrf_public_key: String,
+    pub decommission_key: String,
+    pub staker: String,
 }
 
 impl PoolInfo {
     pub fn new(
         pool_id: PoolId,
-        block_info: wallet_tx::BlockInfo,
+        pool_data: PoolData,
         balance: Amount,
         chain_config: &ChainConfig,
     ) -> Self {
@@ -227,10 +230,19 @@ impl PoolInfo {
         let balance = DecimalAmount::from_amount_minimal(balance, decimals);
 
         Self {
-            pool_id: Address::new(chain_config, &pool_id).expect("addressable").get().to_owned(),
+            pool_id: Address::new(chain_config, &pool_id).expect("addressable").to_string(),
             balance,
-            height: block_info.height,
-            block_timestamp: block_info.timestamp,
+            height: pool_data.creation_block.height,
+            block_timestamp: pool_data.creation_block.timestamp,
+            vrf_public_key: Address::new(chain_config, &pool_data.vrf_public_key)
+                .expect("addressable")
+                .to_string(),
+            decommission_key: Address::new(chain_config, &pool_data.decommission_key)
+                .expect("addressable")
+                .to_string(),
+            staker: Address::new(chain_config, &pool_data.stake_destination)
+                .expect("addressable")
+                .to_string(),
         }
     }
 }
