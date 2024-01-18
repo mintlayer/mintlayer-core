@@ -1778,13 +1778,28 @@ where
 
     /// Return true if we need to load predefined addresses into peerdb.
     fn need_load_predefined_addresses(&self) -> bool {
-        let peerdb_is_empty = self.peerdb.known_addresses().next().is_none();
+        if self.chain_config.predefined_peer_addresses().is_empty() {
+            return false;
+        }
 
-        // Predefined addresses are only loaded if the dns seed has already been queried, but
-        // the peerdb is still empty.
-        peerdb_is_empty
-            && self.last_dns_query_time.is_some()
-            && !self.chain_config.predefined_peer_addresses().is_empty()
+        // Predefined addressed are only loaded after we've queried the dns seed.
+        if self.last_dns_query_time.is_none() {
+            return false;
+        }
+
+        // Before iterating the entire peerdb looking for a reachable address, first check if
+        // we have peers (if we have a peer, we have a reachable address).
+        if !(self.pending_outbound_connects.is_empty() && self.peers.is_empty()) {
+            return false;
+        }
+
+        // Now check if we have a potentially reachable address. If not, the predefined addresses
+        // should be loaded.
+        // Note: the check for reachability is a protection against a misconfigured dns seed,
+        // which may return bogus addresses.
+        let peerdb_has_no_reachable_addresses = self.peerdb.reachable_addresses().next().is_none();
+
+        peerdb_has_no_reachable_addresses
     }
 
     fn load_predefined_addresses(&mut self) {

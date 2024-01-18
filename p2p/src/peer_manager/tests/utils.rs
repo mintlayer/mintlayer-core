@@ -103,6 +103,20 @@ pub fn expect_connect_cmd(cmd: &Command, addresses: &mut BTreeSet<SocketAddress>
     }
 }
 
+pub fn expect_cmd_connect_to(cmd: &Command, expected_address: &SocketAddress) {
+    match cmd {
+        Command::Connect {
+            address,
+            local_services_override: _,
+        } => {
+            assert_eq!(address, expected_address);
+        }
+        cmd => {
+            panic!("Unexpected command received: {cmd:?}");
+        }
+    }
+}
+
 pub async fn wait_for_heartbeat(
     peer_mgr_notification_receiver: &mut mpsc::UnboundedReceiver<PeerManagerNotification>,
 ) {
