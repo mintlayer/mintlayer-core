@@ -25,19 +25,22 @@ use common::{
     },
     primitives::{id::WithId, Amount, DecimalAmount, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::{
+    key::hdkd::{child_number::ChildNumber, u31::U31},
+    vrf::VRFPublicKey,
+};
 use futures::{stream::FuturesUnordered, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
 use wallet::{
-    account::{transaction_list::TransactionList, Currency, DelegationData},
+    account::{transaction_list::TransactionList, Currency, DelegationData, PoolData},
     DefaultWallet,
 };
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoType, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    BlockInfo, KeychainUsageState,
+    KeychainUsageState,
 };
 
 use crate::{types::Balances, ControllerError};
@@ -48,6 +51,9 @@ pub struct ReadOnlyController<'a, T> {
     chain_config: &'a ChainConfig,
     account_index: U31,
 }
+
+/// A Map between the derived child number and the Address with whether it is marked as used or not
+type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
 impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub fn new(
@@ -156,6 +162,20 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .map_err(ControllerError::WalletError)
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
+        self.wallet
+            .get_all_issued_vrf_public_keys(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Result<Address<VRFPublicKey>, ControllerError<T>> {
+        self.wallet
+            .get_legacy_vrf_public_key(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn get_addresses_usage(&self) -> Result<&'a KeychainUsageState, ControllerError<T>> {
         self.wallet
             .get_addresses_usage(self.account_index)
@@ -167,10 +187,9 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     /// Note that the usage statistics follow strictly the rules of the wallet. For example,
     /// the initial wallet only stored information about the last used address, so the usage
     /// of all addresses after the first unused address will have the result `false`.
-    #[allow(clippy::type_complexity)]
     pub fn get_addresses_with_usage(
         &self,
-    ) -> Result<BTreeMap<ChildNumber, (Address<Destination>, bool)>, ControllerError<T>> {
+    ) -> Result<MapAddressWithUsage<Destination>, ControllerError<T>> {
         let addresses = self.get_all_issued_addresses()?;
         let usage = self.get_addresses_usage()?;
 
@@ -183,9 +202,20 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .collect())
     }
 
+    /// Get all addresses with usage information
+    /// The boolean in the BTreeMap's value is true if the address is used, false is otherwise
+    /// Note that the usage statistics follow strictly the rules of the wallet. For example,
+    /// the initial wallet only stored information about the last used address, so the usage
+    /// of all addresses after the first unused address will have the result `false`.
+    pub fn get_vrf_public_key_with_usage(
+        &self,
+    ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
+        self.get_all_issued_vrf_public_keys()
+    }
+
     pub async fn get_pool_ids(
         &self,
-    ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
+    ) -> Result<Vec<(PoolId, PoolData, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
             .get_pool_ids(self.account_index)
@@ -202,8 +232,8 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     async fn get_pool_info(
         &self,
         pool_id: PoolId,
-        block_info: BlockInfo,
-    ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
+        pool_data: PoolData,
+    ) -> Result<(PoolId, PoolData, Amount), ControllerError<T>> {
         self.rpc_client
             .get_stake_pool_balance(pool_id)
             .await
@@ -214,7 +244,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                     Address::new(self.chain_config, &pool_id)?
                 )))
             })
-            .map(|balance| (pool_id, block_info, balance))
+            .map(|balance| (pool_id, pool_data, balance))
             .log_err()
     }
 

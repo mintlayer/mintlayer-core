@@ -201,11 +201,11 @@ trait WalletRpc {
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<Id<GenBlock>>>;
 
-    #[method(name = "staking-get-vrf-key")]
+    #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<VrfPublicKeyInfo>;
+    ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
 
     #[method(name = "token_nft_issue_new")]
     async fn issue_new_nft(

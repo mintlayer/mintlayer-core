@@ -517,8 +517,8 @@ impl WalletRpcServer for WalletRpc {
     async fn get_vrf_public_key(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<VrfPublicKeyInfo> {
-        rpc::handle_result(self.get_vrf_key(account_index.index()?).await)
+    ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>> {
+        rpc::handle_result(self.get_vrf_key_usage(account_index.index()?).await)
     }
 
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion> {

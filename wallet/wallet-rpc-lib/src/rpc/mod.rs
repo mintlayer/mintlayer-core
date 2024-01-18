@@ -27,7 +27,10 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
-use wallet::{account::PartiallySignedTransaction, WalletError};
+use wallet::{
+    account::{PartiallySignedTransaction, PoolData},
+    WalletError,
+};
 
 use common::{
     address::Address,
@@ -44,11 +47,7 @@ use wallet_controller::{
     types::Balances, ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates,
     UtxoTypes,
 };
-use wallet_types::{
-    seed_phrase::StoreSeedPhrase,
-    wallet_tx::{self, TxData},
-    with_locked::WithLocked,
-};
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
 use crate::{
     service::{CreatedWallet, NodeRpcClient},
@@ -57,8 +56,9 @@ use crate::{
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, BlockInfo, DelegationInfo, EmptyArgs, NewAccountInfo,
-    NewDelegation, PoolInfo, PublicKeyInfo, VrfPublicKeyInfo,
+    AddressInfo, AddressWithUsageInfo, BlockInfo, DelegationInfo, EmptyArgs,
+    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, PoolInfo, PublicKeyInfo,
+    VrfPublicKeyInfo,
 };
 
 pub struct WalletRpc {
@@ -207,17 +207,37 @@ impl WalletRpc {
         Ok(PublicKeyInfo::new(publick_key))
     }
 
-    pub async fn get_vrf_key(&self, account_index: U31) -> WRpcResult<VrfPublicKeyInfo> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
-        let publick_key = self
-            .wallet
+    pub async fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<LegacyVrfPublicKeyInfo> {
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(
+                    async move { w.readonly_controller(account_index).get_legacy_vrf_public_key() },
+                )
+            })
+            .await?
+            .map(|vrf_public_key| LegacyVrfPublicKeyInfo {
+                vrf_public_key: vrf_public_key.to_string(),
+            })
+    }
+
+    pub async fn get_vrf_key_usage(&self, account_index: U31) -> WRpcResult<Vec<VrfPublicKeyInfo>> {
+        self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config).await?.get_vrf_public_key()
+                    w.readonly_controller(account_index).get_all_issued_vrf_public_keys()
                 })
             })
-            .await??;
-        Ok(VrfPublicKeyInfo::new(publick_key, &self.chain_config))
+            .await?
+            .map(|keys| {
+                keys.into_iter()
+                    .map(|(child_number, (pub_key, used))| {
+                        VrfPublicKeyInfo::new(pub_key, child_number, used)
+                    })
+                    .collect()
+            })
     }
 
     pub async fn get_issued_addresses(
@@ -885,11 +905,11 @@ impl WalletRpc {
                 })
             })
             .await?
-            .map(|pools: Vec<(PoolId, wallet_tx::BlockInfo, Amount)>| {
+            .map(|pools: Vec<(PoolId, PoolData, Amount)>| {
                 pools
                     .into_iter()
-                    .map(|(pool_id, block_data, balance)| {
-                        PoolInfo::new(pool_id, block_data, balance, &self.chain_config)
+                    .map(|(pool_id, pool_data, balance)| {
+                        PoolInfo::new(pool_id, pool_data, balance, &self.chain_config)
                     })
                     .collect()
             })

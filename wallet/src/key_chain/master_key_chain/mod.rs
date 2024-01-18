@@ -133,10 +133,12 @@ impl MasterKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
         let root_key = Self::load_root_key(db_tx)?;
+        let root_vrf_key = Self::load_root_vrf_key(db_tx)?;
         AccountKeyChain::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
             root_key,
+            root_vrf_key,
             account_index,
             lookahead_size,
         )

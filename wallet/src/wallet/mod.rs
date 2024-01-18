@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
-    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, UnconfirmedTokenInfo,
-    UtxoSelectorError,
+    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, PoolData,
+    UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
@@ -59,14 +59,15 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, AccountKeyPurposeId, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
 pub const WALLET_VERSION_V2: u32 = 2;
 pub const WALLET_VERSION_V3: u32 = 3;
 pub const WALLET_VERSION_V4: u32 = 4;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V4;
+pub const WALLET_VERSION_V5: u32 = 5;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V5;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -360,6 +361,22 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    /// Migrate the wallet DB from version 4 to version 5
+    /// * set vrf key_chain usage
+    fn migration_v5(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
+
+        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+        db_tx.set_storage_version(WALLET_VERSION_V5)?;
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V5
+        );
+
+        Ok(())
+    }
+
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
         db: &Store<B>,
@@ -381,6 +398,10 @@ impl<B: storage::Backend> Wallet<B> {
             WALLET_VERSION_V3 => {
                 pre_migration(WALLET_VERSION_V3)?;
                 Self::migration_v4(db)?;
+            }
+            WALLET_VERSION_V4 => {
+                pre_migration(WALLET_VERSION_V4)?;
+                Self::migration_v5(db, chain_config.clone())?;
             }
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
@@ -407,7 +428,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// Reset all scanned transactions and revert all accounts to the genesis block
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
@@ -417,7 +438,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<BTreeMap<U31, Account>> {
         db_tx.clear_transactions()?;
         db_tx.clear_addresses()?;
@@ -440,6 +461,10 @@ impl<B: storage::Backend> Wallet<B> {
                 )?;
                 db_tx.set_keychain_usage_state(
                     &AccountKeyPurposeId::new(id.clone(), KeyPurpose::ReceiveFunds),
+                    &KeychainUsageState::new(None, None),
+                )?;
+                db_tx.set_vrf_keychain_usage_state(
+                    &id.clone(),
                     &KeychainUsageState::new(None, None),
                 )?;
                 let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
@@ -576,7 +601,7 @@ impl<B: storage::Backend> Wallet<B> {
             );
         }
 
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
         let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
@@ -788,7 +813,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, BlockInfo)>> {
+    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, PoolData)>> {
         let pool_ids = self.get_account(account_index)?.get_pool_ids();
         Ok(pool_ids)
     }
@@ -863,14 +888,25 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(account.get_all_issued_addresses())
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_issued_vrf_public_keys())
+    }
+
+    pub fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Address<VRFPublicKey>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_legacy_vrf_public_key())
+    }
+
     pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
         let account = self.get_account(account_index)?;
         Ok(account.get_addresses_usage())
-    }
-
-    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?.get_vrf_public_key(&db_tx)
     }
 
     /// Creates a transaction to send funds to specified addresses.
@@ -1226,11 +1262,7 @@ impl<B: storage::Backend> Wallet<B> {
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?.get_pos_gen_block_data(
-            &db_tx,
-            self.latest_median_time,
-            pool_id,
-        )
+        self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
     }
 
     /// Returns the last scanned block hash and height for all accounts.

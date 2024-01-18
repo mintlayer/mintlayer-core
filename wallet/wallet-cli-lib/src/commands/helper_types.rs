@@ -20,12 +20,12 @@ use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
         tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenTotalSupply},
         OutPointSourceId, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{Amount, Id, H256},
 };
+use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::errors::WalletCliError;
@@ -102,15 +102,10 @@ impl CliUtxoState {
     }
 }
 
-pub fn format_pool_info(
-    pool_id: String,
-    balance: String,
-    block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
-) -> String {
+pub fn format_pool_info(pool_info: PoolInfo) -> String {
     format!(
-        "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
-        pool_id, balance, block_height, block_timestamp
+        "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}, staker {}, decommission_key {}, vrf_public_key {}",
+        pool_info.pool_id, pool_info.balance, pool_info.height, pool_info.block_timestamp, pool_info.staker, pool_info.decommission_key, pool_info.vrf_public_key
     )
 }
 

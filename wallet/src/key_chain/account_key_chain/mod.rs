@@ -25,7 +25,7 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
-use crypto::vrf::ExtendedVRFPrivateKey;
+use crypto::vrf::{ExtendedVRFPrivateKey, ExtendedVRFPublicKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
@@ -35,7 +35,8 @@ use wallet_storage::{
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
-use super::MasterKeyChain;
+use super::vrf_key_chain::VrfKeySoftChain;
+use super::{make_path_to_vrf_key, MasterKeyChain, VRF_INDEX};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -46,8 +47,14 @@ pub struct AccountKeyChain {
     /// The account public key from which all the addresses are derived
     account_public_key: ConstValue<ExtendedPublicKey>,
 
+    /// The account vrf public key from which all the pool addresses are derived
+    account_vrf_public_key: ConstValue<ExtendedVRFPublicKey>,
+
     /// Key chains for receiving and change funds
     sub_chains: WithPurpose<LeafKeySoftChain>,
+
+    /// VRF key chain
+    vrf_chain: VrfKeySoftChain,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -58,6 +65,7 @@ impl AccountKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
         root_key: ExtendedPrivateKey,
+        root_vrf_key: ExtendedVRFPrivateKey,
         account_index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
@@ -81,7 +89,7 @@ impl AccountKeyChain {
 
         let change_key_chain = LeafKeySoftChain::new_empty(
             chain_config.clone(),
-            account_id,
+            account_id.clone(),
             KeyPurpose::Change,
             account_pubkey
                 .clone()
@@ -90,12 +98,32 @@ impl AccountKeyChain {
         change_key_chain.save_usage_state(db_tx)?;
 
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
+        let legacy_key_path = make_path_to_vrf_key(&chain_config, account_index);
+        let legacy_public_key =
+            root_vrf_key.clone().derive_absolute_path(&legacy_key_path)?.to_public_key();
+
+        db_tx.set_legacy_vrf_public_key(&account_id, &legacy_public_key)?;
+
+        let account_vrf_pub_key = root_vrf_key
+            .derive_absolute_path(&account_path)?
+            .derive_child(VRF_INDEX)?
+            .to_public_key();
+
+        let vrf_chain = VrfKeySoftChain::new_empty(
+            chain_config.clone(),
+            account_id,
+            account_vrf_pub_key.clone(),
+            legacy_public_key,
+        );
+        vrf_chain.save_usage_state(db_tx)?;
 
         let mut new_account = AccountKeyChain {
             chain_config,
             account_index,
             account_public_key: account_pubkey.into(),
+            account_vrf_public_key: account_vrf_pub_key.into(),
             sub_chains,
+            vrf_chain,
             lookahead_size: lookahead_size.into(),
         };
 
@@ -141,11 +169,20 @@ impl AccountKeyChain {
             id,
         )?;
 
+        let vrf_chain = VrfKeySoftChain::load_keys(
+            chain_config.clone(),
+            account_info.account_vrf_key().clone(),
+            db_tx,
+            id,
+        )?;
+
         Ok(AccountKeyChain {
             chain_config,
             account_index: account_info.account_index(),
             account_public_key: pubkey_id,
+            account_vrf_public_key: account_info.account_vrf_key().clone().into(),
             sub_chains,
+            vrf_chain,
             lookahead_size: account_info.lookahead_size().into(),
         })
     }
@@ -160,6 +197,10 @@ impl AccountKeyChain {
 
     pub fn account_public_key(&self) -> &ExtendedPublicKey {
         self.account_public_key.as_ref()
+    }
+
+    pub fn account_vrf_public_key(&self) -> &ExtendedVRFPublicKey {
+        self.account_vrf_public_key.as_ref()
     }
 
     /// Issue a new address that hasn't been used before
@@ -186,12 +227,29 @@ impl AccountKeyChain {
         Ok(key)
     }
 
+    /// Issue a new derived vrf key that hasn't been used before
+    pub fn issue_vrf_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> KeyChainResult<ExtendedVRFPublicKey> {
+        let lookahead_size = self.lookahead_size();
+        let (_index, key) = self.vrf_chain.issue_new(db_tx, lookahead_size)?;
+        Ok(key)
+    }
+
     /// Reload the sub chain keys from DB to restore the cache
     /// Should be called after issuing a new key but not using committing it to the DB
     pub fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> KeyChainResult<()> {
         self.sub_chains = LeafKeySoftChain::load_leaf_keys(
             self.chain_config.clone(),
             &self.account_public_key,
+            db_tx,
+            &self.get_account_id(),
+        )?;
+
+        self.vrf_chain = VrfKeySoftChain::load_keys(
+            self.chain_config.clone(),
+            self.account_vrf_public_key.clone().take(),
             db_tx,
             &self.get_account_id(),
         )?;
@@ -204,6 +262,20 @@ impl AccountKeyChain {
         parent_key: &ExtendedPrivateKey,
         requested_key: &ExtendedPublicKey,
     ) -> KeyChainResult<ExtendedPrivateKey> {
+        let derived_key =
+            parent_key.clone().derive_absolute_path(requested_key.get_derivation_path())?;
+        if &derived_key.to_public_key() == requested_key {
+            Ok(derived_key)
+        } else {
+            Err(KeyChainError::KeysNotInSameHierarchy)
+        }
+    }
+
+    /// Get the private key that corresponds to the provided public key
+    fn get_vrf_private_key(
+        parent_key: &ExtendedVRFPrivateKey,
+        requested_key: &ExtendedVRFPublicKey,
+    ) -> KeyChainResult<ExtendedVRFPrivateKey> {
         let derived_key =
             parent_key.clone().derive_absolute_path(requested_key.get_derivation_path())?;
         if &derived_key.to_public_key() == requested_key {
@@ -249,6 +321,19 @@ impl AccountKeyChain {
         xpriv.derive_absolute_path(path).map_err(KeyChainError::Derivation)
     }
 
+    pub fn get_vrf_private_key_for_public_key(
+        &self,
+        public_key: &VRFPublicKey,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<Option<ExtendedVRFPrivateKey>> {
+        let xpriv = self.derive_account_private_vrf_key(db_tx)?;
+
+        if let Some(xpub) = self.vrf_chain.get_derived_xpub_from_public_key(public_key) {
+            return Self::get_vrf_private_key(&xpriv, xpub).map(Option::Some);
+        }
+        Ok(None)
+    }
+
     pub fn get_private_vrf_key_for_path(
         &self,
         path: &DerivationPath,
@@ -267,6 +352,11 @@ impl AccountKeyChain {
     /// database persistence done externally.
     fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeySoftChain {
         self.sub_chains.mut_for(purpose)
+    }
+
+    /// Get the vrf key chain for
+    pub fn get_vrf_key_chain(&self) -> &VrfKeySoftChain {
+        &self.vrf_chain
     }
 
     // Return true if the provided destination belongs to this key chain
@@ -295,7 +385,8 @@ impl AccountKeyChain {
         let lookahead_size = self.lookahead_size();
         KeyPurpose::ALL.iter().try_for_each(|purpose| {
             self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
-        })
+        })?;
+        self.vrf_chain.top_up(lookahead_size)
     }
 
     pub fn lookahead_size(&self) -> u32 {
@@ -333,8 +424,31 @@ impl AccountKeyChain {
         Ok(false)
     }
 
+    /// Marks a vrf public key as being used. Returns true if a key was found and set to used.
+    pub fn mark_vrf_public_key_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &VRFPublicKey,
+    ) -> KeyChainResult<bool> {
+        let lookahead_size = self.lookahead_size();
+        if self.vrf_chain.mark_pubkey_as_used(db_tx, public_key, lookahead_size)? {
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
+    }
+
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        self.vrf_chain.get_all_issued_keys()
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        self.vrf_chain.get_legacy_vrf_public_key()
     }
 
     pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {

@@ -40,6 +40,11 @@ class UtxoOutpoint:
 class PoolData:
     pool_id: str
     balance: str
+    creation_block_height: int
+    timestamp: int
+    staker: str
+    decommission_key: str
+    vrf_public_key: str
 
 @dataclass
 class DelegationData:
@@ -255,9 +260,10 @@ class WalletCliController:
 
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n")
-        pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'
+        self.log.info(f"pools: {output}");
+        pattern = r"Pool Id: ([a-zA-Z0-9]+), Balance: (\d+), Creation Block heigh: (\d+), timestamp: (\d+), staker ([a-zA-Z0-9]+), decommission_key ([a-zA-Z0-9]+), vrf_public_key ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
-        return [PoolData(pool_id, balance) for pool_id, balance in matches]
+        return [PoolData(pool_id, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
 
     async def list_created_blocks_ids(self) -> List[str]:
         output =  await self._write_command("staking-list-created-block-ids\n")
@@ -288,6 +294,9 @@ class WalletCliController:
     async def sync(self) -> str:
         return await self._write_command("wallet-sync\n")
 
+    async def rescan(self) -> str:
+        return await self._write_command("wallet-rescan\n")
+
     async def start_staking(self) -> str:
         return await self._write_command(f"staking-start\n")
 
@@ -296,6 +305,12 @@ class WalletCliController:
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")
+
+    async def get_vrf_addresses_usage(self) -> str:
+        return await self._write_command("staking-show-vrf-public-keys\n")
+
+    async def get_legacy_vrf_public_key(self) -> str:
+        return await self._write_command("staking-show-legacy-vrf-key\n")
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         return await self._write_command(f"account-balance {with_locked} {' '.join(utxo_states)}\n")

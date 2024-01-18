@@ -34,7 +34,7 @@ use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
-use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
+use crate::key_chain::{AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_reward_output_destination, make_address_output, make_address_output_from_delegation,
     make_address_output_token, make_decommission_stake_pool_output, make_mint_token_outputs,
@@ -58,7 +58,7 @@ use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
-use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use serialization::{Decode, Encode};
 use std::cmp::Reverse;
@@ -78,7 +78,7 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, FungibleTokenInfo, PoolData, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -170,6 +170,7 @@ impl Account {
             &chain_config,
             key_chain.account_index(),
             key_chain.account_public_key().clone(),
+            key_chain.account_vrf_public_key().clone(),
             key_chain.lookahead_size(),
             name,
         );
@@ -615,27 +616,14 @@ impl Account {
             .into_signed_tx()
     }
 
-    fn get_vrf_key(
-        &self,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
-        let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
-        let vrf_private_key =
-            self.key_chain.get_private_vrf_key_for_path(&vrf_key_path, db_tx)?.private_key();
-        let vrf_public_key = VRFPublicKey::from_private_key(&vrf_private_key);
-
-        Ok((vrf_private_key, vrf_public_key))
-    }
-
-    pub fn get_vrf_public_key(
-        &self,
-        db_tx: &impl WalletStorageReadUnlocked,
+    fn get_vrf_public_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<VRFPublicKey> {
-        let vrf_keys = self.get_vrf_key(db_tx)?;
-        Ok(vrf_keys.1)
+        Ok(self.key_chain.issue_vrf_key(db_tx)?.into_public_key())
     }
 
-    pub fn get_pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+    pub fn get_pool_ids(&self) -> Vec<(PoolId, PoolData)> {
         self.output_cache.pool_ids()
     }
 
@@ -680,7 +668,7 @@ impl Account {
         let staker = Destination::PublicKey(
             self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
         );
-        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
+        let vrf_public_key = self.get_vrf_public_key(db_tx)?;
 
         // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
         // and then replace it with when we can calculate the pool_id
@@ -973,44 +961,25 @@ impl Account {
     pub fn get_pos_gen_block_data(
         &self,
         db_tx: &impl WalletStorageReadUnlocked,
-        median_time: BlockTimestamp,
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let utxos = self.get_utxos(
-            UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
-            median_time,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        );
-        let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) = utxos
-            .into_iter()
-            .find(|(_kernel_input_outpoint, (kernel_input_utxo, _token_id))| {
-                let utxo_pool_id = match kernel_input_utxo {
-                    TxOutput::CreateStakePool(pool_id, _) => *pool_id,
-                    TxOutput::ProduceBlockFromStake(_, pool_id) => *pool_id,
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_) => panic!("Unexpected UTXO"),
-                };
-                pool_id == utxo_pool_id
-            })
-            .ok_or(WalletError::UnknownPoolId(pool_id))?;
-        let kernel_input: TxInput = kernel_input_outpoint.into();
+        let pool_data = self.output_cache.pool_data(pool_id)?;
+        let kernel_input: TxInput = pool_data.utxo_outpoint.clone().into();
+        let stake_destination = &pool_data.stake_destination;
+        let kernel_input_utxo =
+            self.output_cache.get_txo(&pool_data.utxo_outpoint).expect("must exist");
 
-        let stake_destination = get_reward_output_destination(kernel_input_utxo)
-            .expect("must succeed for CreateStakePool and ProduceBlockFromStake outputs");
         let stake_private_key = self
             .key_chain
             .get_private_key_for_destination(stake_destination, db_tx)?
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
-        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key(db_tx)?;
+        let vrf_private_key = self
+            .key_chain
+            .get_vrf_private_key_for_public_key(&pool_data.vrf_public_key, db_tx)?
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+            .private_key();
 
         let data = PoSGenerateBlockInputData::new(
             stake_private_key,
@@ -1169,6 +1138,16 @@ impl Account {
         self.key_chain.get_all_issued_addresses()
     }
 
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        self.key_chain.get_all_issued_vrf_public_keys()
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        self.key_chain.get_legacy_vrf_public_key()
+    }
+
     pub fn get_addresses_usage(&self) -> &KeychainUsageState {
         self.key_chain.get_addresses_usage_state()
     }
@@ -1209,6 +1188,8 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         output: &TxOutput,
     ) -> WalletResult<bool> {
+        self.mark_created_stake_pool_as_seen(output, db_tx)?;
+
         if let Some(d) = get_tx_output_destination(output) {
             match d {
                 Destination::Address(pkh) => {
@@ -1228,6 +1209,30 @@ impl Account {
             }
         }
         Ok(false)
+    }
+
+    /// check if the output is a CreateStakePool and check if the VRF key or decommission_key
+    /// are tracked by this wallet and mark them as used
+    fn mark_created_stake_pool_as_seen(
+        &mut self,
+        output: &TxOutput,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> Result<(), WalletError> {
+        if let TxOutput::CreateStakePool(_, data) = output {
+            self.key_chain.mark_vrf_public_key_as_used(db_tx, data.vrf_public_key())?;
+            match data.decommission_key() {
+                Destination::Address(pkh) => {
+                    self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                }
+                Destination::PublicKey(pk) => {
+                    self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                }
+                Destination::AnyoneCanSpend
+                | Destination::ClassicMultisig(_)
+                | Destination::ScriptHash(_) => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn get_balance(

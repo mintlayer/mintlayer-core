@@ -294,9 +294,17 @@ pub enum WalletCommand {
     #[clap(name = "staking-list-created-block-ids")]
     ListCreatedBlocksIds,
 
-    /// Get the current staking VRF key for this account
-    #[clap(name = "staking-get-vrf-key")]
+    /// Show the issued staking VRF (Verifiable Random Function) keys for this account.
+    /// These keys are generated when pools are created.
+    /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
+    /// where no one can control the possible outcomes, to ensure decentralization.
+    #[clap(name = "staking-show-vrf-public-keys")]
     GetVrfPublicKey,
+
+    /// Shows the legacy VRF key that uses an abandoned derivation mechanism.
+    /// This will not be used for new pools and should be avoided
+    #[clap(name = "staking-show-legacy-vrf-key")]
+    GetLegacyVrfPublicKey,
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.
@@ -1182,9 +1190,31 @@ impl CommandHandler {
 
             WalletCommand::GetVrfPublicKey => {
                 let selected_account = self.get_selected_acc()?;
-                let vrf_public_key =
-                    self.wallet_rpc.get_vrf_key(selected_account).await?.vrf_public_key;
-                Ok(ConsoleCommand::Print(vrf_public_key))
+                let addresses_with_usage =
+                    self.wallet_rpc.get_vrf_key_usage(selected_account).await?;
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
+
+                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
+                        let is_used = if info.used { "Yes" } else { "No" };
+                        prettytable::row![info.child_number, info.vrf_public_key, is_used]
+                    }));
+
+                    addresses_table
+                };
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            WalletCommand::GetLegacyVrfPublicKey => {
+                let selected_account = self.get_selected_acc()?;
+                let legacy_pubkey =
+                    self.wallet_rpc.get_legacy_vrf_public_key(selected_account).await?;
+                Ok(ConsoleCommand::Print(legacy_pubkey.vrf_public_key))
             }
 
             WalletCommand::GetTransaction { transaction_id } => {
@@ -1392,14 +1422,7 @@ impl CommandHandler {
                     .list_pool_ids(selected_account)
                     .await?
                     .into_iter()
-                    .map(|info| {
-                        format_pool_info(
-                            info.pool_id,
-                            info.balance.to_string(),
-                            info.height,
-                            info.block_timestamp,
-                        )
-                    })
+                    .map(format_pool_info)
                     .collect();
                 Ok(ConsoleCommand::Print(pool_ids.join("\n").to_string()))
             }

@@ -29,6 +29,7 @@
 mod account_key_chain;
 mod leaf_key_chain;
 mod master_key_chain;
+mod vrf_key_chain;
 mod with_purpose;
 
 pub use account_key_chain::AccountKeyChain;
@@ -113,6 +114,8 @@ pub fn make_account_path(chain_config: &ChainConfig, account_index: U31) -> Deri
     path.try_into().expect("Path creation should not fail")
 }
 
+pub const VRF_INDEX: ChildNumber = ChildNumber::from_hardened(U31::TWO);
+
 /// Create a deterministic path for the default VRF key for the account
 pub fn make_path_to_vrf_key(chain_config: &ChainConfig, account_index: U31) -> DerivationPath {
     // The path is m/44'/<coin_type>'/<account_index>'/2'/0'.
@@ -123,7 +126,7 @@ pub fn make_path_to_vrf_key(chain_config: &ChainConfig, account_index: U31) -> D
         BIP44_PATH,
         chain_config.bip44_coin_type(),
         ChildNumber::from_hardened(account_index),
-        ChildNumber::from_hardened(U31::TWO),
+        VRF_INDEX,
         ChildNumber::from_hardened(U31::ZERO),
     ];
     debug_assert!(path.iter().all(ChildNumber::is_hardened));

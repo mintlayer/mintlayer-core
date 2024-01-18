@@ -142,6 +142,10 @@ impl VRFPrivateKey {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf_data(message).into(),
         }
     }
+
+    pub fn to_public_key(&self) -> VRFPublicKey {
+        VRFPublicKey::from_private_key(self)
+    }
 }
 
 impl VRFPublicKey {
@@ -205,6 +209,10 @@ impl ExtendedVRFPrivateKey {
     pub fn private_key(self) -> VRFPrivateKey {
         self.private_key
     }
+
+    pub fn to_public_key(&self) -> ExtendedVRFPublicKey {
+        ExtendedVRFPublicKey::from_private_key(self)
+    }
 }
 
 impl Derivable for ExtendedVRFPrivateKey {
@@ -220,6 +228,63 @@ impl Derivable for ExtendedVRFPrivateKey {
                 Ok(ExtendedVRFPrivateKey {
                     private_key: VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(private_key),
+                    },
+                    chain_code,
+                    derivation_path: new_derivaton_path,
+                })
+            }
+        }
+    }
+
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self.derivation_path
+    }
+}
+
+/// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
+/// the public key at one of the nodes of this tree.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct ExtendedVRFPublicKey {
+    /// The absolute derivation path that was used to derive this key
+    derivation_path: DerivationPath,
+    /// The chain code is used in BIP32 in conjunction with the private key to allow derivation
+    /// of child keys
+    chain_code: ChainCode,
+    /// The public key to be used to derive child keys of this node using BIP32 rules
+    public_key: VRFPublicKey,
+}
+
+impl ExtendedVRFPublicKey {
+    pub fn from_private_key(private_key: &ExtendedVRFPrivateKey) -> Self {
+        Self {
+            derivation_path: private_key.derivation_path.clone(),
+            chain_code: private_key.chain_code,
+            public_key: private_key.private_key.to_public_key(),
+        }
+    }
+
+    pub fn public_key(&self) -> &VRFPublicKey {
+        &self.public_key
+    }
+
+    pub fn into_public_key(self) -> VRFPublicKey {
+        self.public_key
+    }
+}
+
+impl Derivable for ExtendedVRFPublicKey {
+    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
+        match self.public_key.pub_key {
+            VRFPublicKeyHolder::Schnorrkel(key) => {
+                let (public_key, chain_code) = key.derive_child(self.chain_code, num)?;
+                let new_derivaton_path = {
+                    let mut child_path = self.derivation_path.into_vec();
+                    child_path.push(num);
+                    child_path.try_into()?
+                };
+                Ok(Self {
+                    public_key: VRFPublicKey {
+                        pub_key: VRFPublicKeyHolder::Schnorrkel(public_key),
                     },
                     chain_code,
                     derivation_path: new_derivaton_path,

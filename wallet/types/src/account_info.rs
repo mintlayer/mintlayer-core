@@ -17,7 +17,10 @@ use common::{
     chain::{ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use crypto::key::{extended::ExtendedPublicKey, hdkd::u31::U31};
+use crypto::{
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31},
+    vrf::ExtendedVRFPublicKey,
+};
 use serialization::{Decode, Encode};
 
 pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
@@ -32,6 +35,7 @@ pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
 pub struct AccountInfo {
     account_index: U31,
     account_key: ExtendedPublicKey,
+    account_vrf_key: ExtendedVRFPublicKey,
     lookahead_size: u32,
     best_block_height: BlockHeight,
     best_block_id: Id<GenBlock>,
@@ -43,12 +47,14 @@ impl AccountInfo {
         chain_config: &ChainConfig,
         account_index: U31,
         account_key: ExtendedPublicKey,
+        account_vrf_key: ExtendedVRFPublicKey,
         lookahead_size: u32,
         name: Option<String>,
     ) -> Self {
         Self {
             account_index,
             account_key,
+            account_vrf_key,
             lookahead_size,
             best_block_height: BlockHeight::zero(),
             best_block_id: chain_config.genesis_block_id(),
@@ -62,6 +68,10 @@ impl AccountInfo {
 
     pub fn account_key(&self) -> &ExtendedPublicKey {
         &self.account_key
+    }
+
+    pub fn account_vrf_key(&self) -> &ExtendedVRFPublicKey {
+        &self.account_vrf_key
     }
 
     pub fn lookahead_size(&self) -> u32 {

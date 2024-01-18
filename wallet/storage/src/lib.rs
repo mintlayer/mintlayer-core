@@ -23,7 +23,10 @@ use common::{
     address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey,
+    vrf::ExtendedVRFPublicKey,
+};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
@@ -71,6 +74,10 @@ pub trait WalletStorageReadLocked {
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
+    fn get_legacy_vrf_public_key(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Option<ExtendedVRFPublicKey>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -82,6 +89,7 @@ pub trait WalletStorageReadLocked {
         &self,
         id: &AccountKeyPurposeId,
     ) -> Result<Option<KeychainUsageState>>;
+    fn get_vrf_keychain_usage_state(&self, id: &AccountId) -> Result<Option<KeychainUsageState>>;
     fn get_keychain_usage_states(
         &self,
         account_id: &AccountId,
@@ -116,6 +124,11 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
     fn clear_transactions(&mut self) -> Result<()>;
     fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> Result<()>;
+    fn set_legacy_vrf_public_key(
+        &mut self,
+        id: &AccountId,
+        legacy_testnet_public_key: &ExtendedVRFPublicKey,
+    ) -> Result<()>;
     fn set_user_transaction(
         &mut self,
         id: &AccountWalletCreatedTxId,
@@ -135,7 +148,13 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountKeyPurposeId,
         usage_state: &KeychainUsageState,
     ) -> Result<()>;
+    fn set_vrf_keychain_usage_state(
+        &mut self,
+        id: &AccountId,
+        usage_state: &KeychainUsageState,
+    ) -> Result<()>;
     fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> Result<()>;
+    fn del_vrf_keychain_usage_state(&mut self, id: &AccountId) -> Result<()>;
     fn set_public_key(
         &mut self,
         id: &AccountDerivationPathId,
