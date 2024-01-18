@@ -75,7 +75,7 @@ async fn basic_test(#[case] seed: Seed) {
     let bind_address12 = TestAddressMaker::new_random_address_with_rng(&mut rng);
     let bind_address3 = TestAddressMaker::new_random_address_with_rng(&mut rng);
 
-    let chain_config = Arc::new(chain::config::create_mainnet());
+    let chain_config = Arc::new(chain::config::create_unit_test_config());
     let p2p_config = Arc::new(make_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 

@@ -16,7 +16,7 @@
 use std::{sync::Arc, time::Duration};
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
-use common::chain::config::create_mainnet;
+use common::chain::config::create_unit_test_config;
 use mempool::MempoolConfig;
 use storage_inmemory::InMemory;
 
@@ -33,7 +33,7 @@ fn init() {
 // Check that the p2p shutdown isn't timed out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn shutdown_timeout() {
-    let chain_config = Arc::new(create_mainnet());
+    let chain_config = Arc::new(create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
     let timeout = Duration::from_secs(3);

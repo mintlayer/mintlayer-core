@@ -84,7 +84,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![addr1.ip_addr()]));
 
     let (mut pm1, _, _shutdown_sender, _subscribers_sender) = make_peer_manager_custom::<T>(
@@ -166,7 +166,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
 
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&chain_config)).await;
@@ -274,7 +274,7 @@ fn manual_ban_overrides_whitelisting() {
     let address_1 = TestAddressMaker::new_random_address();
     let address_2 = TestAddressMaker::new_random_address();
 
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![address_1.ip_addr()]));
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
