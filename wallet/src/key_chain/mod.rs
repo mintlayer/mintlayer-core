@@ -114,6 +114,25 @@ pub fn make_account_path(chain_config: &ChainConfig, account_index: U31) -> Deri
     path.try_into().expect("Path creation should not fail")
 }
 
+pub const VRF_INDEX: ChildNumber = ChildNumber::from_hardened(U31::TWO);
+
+/// Create a deterministic path for the default VRF key for the account
+pub fn make_path_to_vrf_key(chain_config: &ChainConfig, account_index: U31) -> DerivationPath {
+    // The path is m/44'/<coin_type>'/<account_index>'/2'/0'.
+    // Index 2' is used to ensure that the key is different from potential receive/change keys.
+    // The VRF key is only needed to create pool transactions and to generate PoS blocks,
+    // and in both cases the private key should be unlocked (so using the hard derivation is not a problem).
+    let path = vec![
+        BIP44_PATH,
+        chain_config.bip44_coin_type(),
+        ChildNumber::from_hardened(account_index),
+        VRF_INDEX,
+        ChildNumber::from_hardened(U31::ZERO),
+    ];
+    debug_assert!(path.iter().all(ChildNumber::is_hardened));
+    path.try_into().expect("Path creation should not fail")
+}
+
 fn get_purpose_and_index(
     derivation_path: &DerivationPath,
 ) -> KeyChainResult<(KeyPurpose, ChildNumber)> {

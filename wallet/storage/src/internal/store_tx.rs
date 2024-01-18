@@ -19,7 +19,10 @@ use common::{
     address::Address,
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey,
+    vrf::ExtendedVRFPublicKey,
+};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::{schema, MakeMapRef};
 use utils::{
@@ -42,7 +45,7 @@ use crate::{
 
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
-    use crypto::kdf::KdfChallenge;
+    use crypto::{kdf::KdfChallenge, vrf::ExtendedVRFPublicKey};
     use wallet_types::chain_info::ChainInfo;
 
     use super::Codec;
@@ -70,6 +73,7 @@ mod well_known {
     declare_entry!(MedianTime: BlockTimestamp);
     declare_entry!(StoreChainInfo: ChainInfo);
     declare_entry!(LookaheadSize: u32);
+    declare_entry!(LegacyVfrPubKey: ExtendedVRFPublicKey);
 }
 
 #[derive(PartialEq, Clone)]
@@ -221,6 +225,13 @@ macro_rules! impl_read_ops {
                 account_id: &AccountId,
             ) -> crate::Result<Option<u64>> {
                 self.read::<db::DBUnconfirmedTxCounters, _, _>(account_id)
+            }
+
+            fn get_legacy_vrf_public_key(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Option<ExtendedVRFPublicKey>> {
+                self.read::<db::DBLegacyVRFPublicKeys, _, _>(account_id)
             }
 
             fn get_keychain_usage_state(
@@ -414,6 +425,14 @@ macro_rules! impl_write_ops {
                 counter: u64,
             ) -> crate::Result<()> {
                 self.write::<db::DBUnconfirmedTxCounters, _, _, _>(id, counter)
+            }
+
+            fn set_legacy_vrf_public_key(
+                &mut self,
+                id: &AccountId,
+                legacy_testnet_public_key: &ExtendedVRFPublicKey,
+            ) -> crate::Result<()> {
+                self.write::<db::DBLegacyVRFPublicKeys, _, _, _>(id, legacy_testnet_public_key)
             }
 
             fn set_user_transaction(

@@ -16,7 +16,7 @@
 //! Wallet database schema
 
 use common::chain::SignedTransaction;
-use crypto::key::extended::ExtendedPublicKey;
+use crypto::{key::extended::ExtendedPublicKey, vrf::ExtendedVRFPublicKey};
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     keys::{RootKeyConstant, RootKeys},
@@ -50,5 +50,7 @@ storage::decl_schema! {
         pub DBSeedPhrase: Map<SeedPhraseConstant, MaybeEncrypted<SerializableSeedPhrase>>,
         /// Store for each account's unconfirmed transaction order counter
         pub DBUnconfirmedTxCounters: Map<AccountId, u64>,
+        /// Store for each account's legacy VRF public key
+        pub DBLegacyVRFPublicKeys: Map<AccountId, ExtendedVRFPublicKey>,
     }
 }

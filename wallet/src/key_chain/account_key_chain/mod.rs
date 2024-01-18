@@ -36,7 +36,7 @@ use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::vrf_key_chain::VrfKeySoftChain;
-use super::MasterKeyChain;
+use super::{make_path_to_vrf_key, MasterKeyChain, VRF_INDEX};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -98,14 +98,24 @@ impl AccountKeyChain {
         change_key_chain.save_usage_state(db_tx)?;
 
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
+        let legacy_testnet_key_path = make_path_to_vrf_key(&chain_config, account_index);
+        let legacy_testnet_public_key = root_vrf_key
+            .clone()
+            .derive_absolute_path(&legacy_testnet_key_path)?
+            .to_public_key();
 
-        let account_vrf_pub_key = root_vrf_key.derive_absolute_path(&account_path)?.to_public_key();
+        db_tx.set_legacy_vrf_public_key(&account_id, &legacy_testnet_public_key)?;
+
+        let account_vrf_pub_key = root_vrf_key
+            .derive_absolute_path(&account_path)?
+            .derive_child(VRF_INDEX)?
+            .to_public_key();
+
         let vrf_chain = VrfKeySoftChain::new_empty(
             chain_config.clone(),
             account_id,
-            account_vrf_pub_key
-                .clone()
-                .derive_child(KeyPurpose::ReceiveFunds.get_deterministic_index())?,
+            account_vrf_pub_key.clone(),
+            legacy_testnet_public_key,
         );
         vrf_chain.save_usage_state(db_tx)?;
 
@@ -163,7 +173,7 @@ impl AccountKeyChain {
 
         let vrf_chain = VrfKeySoftChain::load_keys(
             chain_config.clone(),
-            account_info.account_vrf_key(),
+            account_info.account_vrf_key().clone(),
             db_tx,
             id,
         )?;
@@ -241,7 +251,7 @@ impl AccountKeyChain {
 
         self.vrf_chain = VrfKeySoftChain::load_keys(
             self.chain_config.clone(),
-            &self.account_vrf_public_key,
+            self.account_vrf_public_key.clone().take(),
             db_tx,
             &self.get_account_id(),
         )?;
@@ -320,11 +330,7 @@ impl AccountKeyChain {
     ) -> KeyChainResult<Option<ExtendedVRFPrivateKey>> {
         let xpriv = self.derive_account_private_vrf_key(db_tx)?;
 
-        if let Some(xpub) = self
-            .vrf_chain
-            .get_child_num_from_public_key(public_key)
-            .and_then(|child_num| self.vrf_chain.get_derived_xpub(child_num))
-        {
+        if let Some(xpub) = self.vrf_chain.get_derived_xpub_from_public_key(public_key) {
             return Self::get_vrf_private_key(&xpriv, xpub).map(Option::Some);
         }
         Ok(None)

@@ -181,7 +181,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             expected_vrf_output = """+-------+--------------------------------------------------------------------+--------------------------------+
             | Index | Address                                                            | Is used in transaction history |
             +=======+====================================================================+================================+
-            | 0     | rvrfpk1qpdw6kxmjggz65wck0tgtn7g8exhp975zcww0x6syzpg2ulegz58jjvqg8v | Yes                             |
+            | 0     | rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme | Yes                             |
             +-------+--------------------------------------------------------------------+--------------------------------+"""
             output = await wallet.get_vrf_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):

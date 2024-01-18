@@ -25,7 +25,7 @@ use std::sync::Arc;
 use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageWriteLocked};
-use wallet_types::keys::{KeyPurpose, KeychainUsageState};
+use wallet_types::keys::KeychainUsageState;
 use wallet_types::AccountId;
 
 /// A child key hierarchy for an AccountKeyChain. This normally implements the receiving and change
@@ -39,6 +39,9 @@ pub struct VrfKeySoftChain {
 
     /// The parent key of this key chain
     parent_pubkey: ConstValue<ExtendedVRFPublicKey>,
+
+    /// The parent key of this key chain
+    legacy_testnet_pubkey: ConstValue<ExtendedVRFPublicKey>,
 
     /// The derived keys for the receiving funds or change. Those are derived as needed.
     derived_public_keys: BTreeMap<ChildNumber, ExtendedVRFPublicKey>,
@@ -55,6 +58,7 @@ impl VrfKeySoftChain {
         chain_config: Arc<ChainConfig>,
         account_id: AccountId,
         parent_pubkey: ExtendedVRFPublicKey,
+        legacy_testnet_pubkey: ExtendedVRFPublicKey,
     ) -> Self {
         Self {
             chain_config,
@@ -62,6 +66,7 @@ impl VrfKeySoftChain {
             parent_pubkey: parent_pubkey.into(),
             derived_public_keys: BTreeMap::new(),
             public_key_to_index: BTreeMap::new(),
+            legacy_testnet_pubkey: legacy_testnet_pubkey.into(),
             usage_state: KeychainUsageState::default(),
         }
     }
@@ -72,8 +77,9 @@ impl VrfKeySoftChain {
         parent_pubkey: ExtendedVRFPublicKey,
         derived_public_keys: BTreeMap<ChildNumber, ExtendedVRFPublicKey>,
         usage_state: KeychainUsageState,
+        legacy_testnet_pubkey: ExtendedVRFPublicKey,
     ) -> KeyChainResult<Self> {
-        let public_keys_to_index: BTreeMap<VRFPublicKey, ChildNumber> = derived_public_keys
+        let public_key_to_index: BTreeMap<VRFPublicKey, ChildNumber> = derived_public_keys
             .iter()
             .map(|(idx, xpub)| (xpub.clone().into_public_key(), *idx))
             .collect();
@@ -83,17 +89,22 @@ impl VrfKeySoftChain {
             account_id,
             parent_pubkey: parent_pubkey.into(),
             derived_public_keys,
-            public_key_to_index: public_keys_to_index,
+            public_key_to_index,
+            legacy_testnet_pubkey: legacy_testnet_pubkey.into(),
             usage_state,
         })
     }
 
     pub fn load_keys(
         chain_config: Arc<ChainConfig>,
-        account_pubkey: &ExtendedVRFPublicKey,
+        account_pubkey: ExtendedVRFPublicKey,
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> KeyChainResult<VrfKeySoftChain> {
+        let legacy_testnet_public_key = db_tx
+            .get_legacy_vrf_public_key(id)?
+            .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
+
         let usage = db_tx
             .get_vrf_keychain_usage_state(id)?
             .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
@@ -111,11 +122,10 @@ impl VrfKeySoftChain {
         VrfKeySoftChain::new_from_parts(
             chain_config.clone(),
             id.clone(),
-            account_pubkey
-                .clone()
-                .derive_child(KeyPurpose::ReceiveFunds.get_deterministic_index())?,
+            account_pubkey,
             public_keys,
             usage,
+            legacy_testnet_public_key,
         )
     }
 
@@ -252,10 +262,20 @@ impl VrfKeySoftChain {
 
     pub fn is_public_key_mine(&self, public_key: &VRFPublicKey) -> bool {
         self.public_key_to_index.contains_key(public_key)
+            || public_key == self.legacy_testnet_pubkey.public_key()
     }
 
-    pub fn get_derived_xpub(&self, child_num: ChildNumber) -> Option<&ExtendedVRFPublicKey> {
-        self.derived_public_keys.get(&child_num)
+    pub fn get_derived_xpub_from_public_key(
+        &self,
+        pub_key: &VRFPublicKey,
+    ) -> Option<&ExtendedVRFPublicKey> {
+        if self.legacy_testnet_pubkey.public_key() == pub_key {
+            return Some(&self.legacy_testnet_pubkey);
+        }
+
+        self.public_key_to_index
+            .get(pub_key)
+            .and_then(|child_number| self.derived_public_keys.get(child_number))
     }
 
     /// Get the extended public key provided a public key or None if no key found

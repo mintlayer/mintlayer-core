@@ -428,7 +428,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// Reset all scanned transactions and revert all accounts to the genesis block
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
@@ -438,7 +438,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<BTreeMap<U31, Account>> {
         db_tx.clear_transactions()?;
         db_tx.clear_addresses()?;
@@ -601,7 +601,7 @@ impl<B: storage::Backend> Wallet<B> {
             );
         }
 
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
         let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
