@@ -30,6 +30,7 @@ Check that:
 """
 
 from hashlib import blake2b
+from random import choice
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
@@ -382,6 +383,13 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             block_ids = []
             last_delegation_balance = delegations[0].balance
             for _ in range(4, 10):
+                if choice([True, False]):
+                    await wallet.close_wallet()
+                    await wallet.open_wallet('wallet')
+                    assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+                    assert_in("Staking started successfully", await wallet.start_staking())
+                    assert_in("Success", await wallet.select_account(1))
+
                 tip_id = node.chainstate_best_block_id()
                 assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 1))
                 transactions = node.mempool_transactions()
