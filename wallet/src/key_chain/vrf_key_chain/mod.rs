@@ -79,13 +79,14 @@ impl VrfKeySoftChain {
         derived_public_keys: BTreeMap<ChildNumber, ExtendedVRFPublicKey>,
         usage_state: KeychainUsageState,
         legacy_pubkey: ExtendedVRFPublicKey,
+        lookahead_size: u32,
     ) -> KeyChainResult<Self> {
         let public_key_to_index: BTreeMap<VRFPublicKey, ChildNumber> = derived_public_keys
             .iter()
             .map(|(idx, xpub)| (xpub.clone().into_public_key(), *idx))
             .collect();
 
-        Ok(Self {
+        let mut vrf_chain = Self {
             chain_config,
             account_id,
             parent_pubkey: parent_pubkey.into(),
@@ -93,13 +94,16 @@ impl VrfKeySoftChain {
             public_key_to_index,
             legacy_pubkey: legacy_pubkey.into(),
             usage_state,
-        })
+        };
+        vrf_chain.top_up(lookahead_size)?;
+        Ok(vrf_chain)
     }
 
     pub fn load_keys(
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
+        lookahead_size: u32,
     ) -> KeyChainResult<VrfKeySoftChain> {
         let AccountVrfKeys {
             account_vrf_key,
@@ -112,7 +116,7 @@ impl VrfKeySoftChain {
             .get_vrf_keychain_usage_state(id)?
             .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
 
-        let public_keys = (0..usage.last_issued().map_or(0, |issued| issued.into_u32()))
+        let public_keys = (0..=usage.last_issued().map_or(0, |issued| issued.into_u32()))
             .map(|index| {
                 let child_number = ChildNumber::from_index_with_hardened_bit(index);
                 Ok((
@@ -129,6 +133,7 @@ impl VrfKeySoftChain {
             public_keys,
             usage,
             legacy_vrf_key,
+            lookahead_size,
         )
     }
 

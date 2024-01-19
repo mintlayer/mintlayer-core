@@ -175,7 +175,12 @@ impl AccountKeyChain {
             id,
         )?;
 
-        let vrf_chain = VrfKeySoftChain::load_keys(chain_config.clone(), db_tx, id)?;
+        let vrf_chain = VrfKeySoftChain::load_keys(
+            chain_config.clone(),
+            db_tx,
+            id,
+            account_info.lookahead_size(),
+        )?;
 
         Ok(AccountKeyChain {
             chain_config,
@@ -248,8 +253,12 @@ impl AccountKeyChain {
             &self.get_account_id(),
         )?;
 
-        self.vrf_chain =
-            VrfKeySoftChain::load_keys(self.chain_config.clone(), db_tx, &self.get_account_id())?;
+        self.vrf_chain = VrfKeySoftChain::load_keys(
+            self.chain_config.clone(),
+            db_tx,
+            &self.get_account_id(),
+            self.lookahead_size(),
+        )?;
 
         Ok(())
     }

@@ -111,10 +111,18 @@ class WalletRpcController:
         self.wallet_commands_file.write(response.read())
         return json.loads(body)
 
-    async def create_wallet(self) -> str:
-        wallet_file = os.path.join(self.node.datadir, "wallet")
+    async def create_wallet(self, name: str = "wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
         self._write_command("wallet_create", [wallet_file, True])
-        return "Sucess"
+        return "Success"
+
+    async def open_wallet(self, name: str = "wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
+        self._write_command("wallet_open", [wallet_file, None])
+        return "Success"
+
+    async def close_wallet(self) -> str:
+        return self._write_command("wallet-close", [])
 
     async def get_best_block_height(self) -> str:
         return str(self._write_command("wallet_best_block", [{}])['result']['height'])

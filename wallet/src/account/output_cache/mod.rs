@@ -522,6 +522,37 @@ impl OutputCache {
             .collect()
     }
 
+    fn is_txo_for_pool_id(pool_id_to_find: PoolId, output: &TxOutput) -> bool {
+        match output {
+            TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                *pool_id == pool_id_to_find
+            }
+            TxOutput::Burn(_)
+            | TxOutput::Transfer(_, _)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::IssueFungibleToken(_) => false,
+        }
+    }
+
+    fn find_latest_utxo_for_pool(&self, pool_id: PoolId) -> Option<UtxoOutPoint> {
+        self.txs
+            .values()
+            .flat_map(|tx| {
+                tx.outputs()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, output)| (output, UtxoOutPoint::new(tx.id(), idx as u32)))
+                    .filter(move |(_output, outpoint)| !self.consumed.contains_key(outpoint))
+            })
+            .find_map(|(output, outpoint)| {
+                Self::is_txo_for_pool_id(pool_id, output).then_some(outpoint)
+            })
+    }
+
     pub fn pool_data(&self, pool_id: PoolId) -> WalletResult<&PoolData> {
         self.pools.get(&pool_id).ok_or(WalletError::UnknownPoolId(pool_id))
     }
@@ -968,6 +999,29 @@ impl OutputCache {
                             }
                         }
                     },
+                }
+            }
+            for output in tx.outputs() {
+                match output {
+                    TxOutput::CreateStakePool(pool_id, _) => {
+                        self.pools.remove(pool_id);
+                    }
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        if self.pools.contains_key(pool_id) {
+                            let latest_utxo = self.find_latest_utxo_for_pool(*pool_id);
+                            if let Some(pool_data) = self.pools.get_mut(pool_id) {
+                                pool_data.utxo_outpoint = latest_utxo.expect("must be present");
+                            }
+                        }
+                    }
+                    TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::IssueFungibleToken(_) => {}
                 }
             }
         }
