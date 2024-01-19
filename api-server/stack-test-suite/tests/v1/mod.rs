@@ -87,7 +87,7 @@ async fn chain_genesis() {
 
                 _ = tx.send(json!({
                     "block_id": expected_genesis.get_id(),
-                    "fun_message": expected_genesis.genesis_message(),
+                    "genesis_message": expected_genesis.genesis_message(),
                     "timestamp": expected_genesis.timestamp(),
                     "utxos": expected_genesis.utxos()
                              .iter()
