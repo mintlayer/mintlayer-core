@@ -97,6 +97,8 @@ pub enum KeyChainError {
     KeyNotRoot,
     #[error("No private key found")]
     NoPrivateKeyFound,
+    #[error("No VRF private key found")]
+    NoVRFPrivateKeyFound,
 }
 
 /// Result type used for the key chain

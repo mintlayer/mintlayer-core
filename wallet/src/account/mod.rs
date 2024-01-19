@@ -977,7 +977,9 @@ impl Account {
         let vrf_private_key = self
             .key_chain
             .get_vrf_private_key_for_public_key(&pool_data.vrf_public_key, db_tx)?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+            .ok_or(WalletError::KeyChainError(
+                KeyChainError::NoVRFPrivateKeyFound,
+            ))?
             .private_key();
 
         let data = PoSGenerateBlockInputData::new(
