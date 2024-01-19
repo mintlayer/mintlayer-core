@@ -40,7 +40,7 @@ impl Genesis {
         }
     }
 
-    pub fn fun_message(&self) -> &str {
+    pub fn genesis_message(&self) -> &str {
         &self.genesis_message
     }
 
