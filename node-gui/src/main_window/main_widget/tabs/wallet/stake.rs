@@ -24,19 +24,19 @@ use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
 
 use super::WalletMessage;
 
-const PLEDGE_AMOUNT_TOOLTIP_TEXT: &str ="The amount to be pledged to the pool. There is a minimum to be accepted.\
-        This amount, and the rewards gained by the pool, CANNOT be taken out without decommissioning the pool.\
-        If you'd like to withdraw rewards, consider creating a pool and delegating to yourself.\
-        Delegators have no restrictions on withdrawals.\
-        The likelihood to win block rewards, by creating blocks while staking, is proportional to how much the pool owns,\
+const PLEDGE_AMOUNT_TOOLTIP_TEXT: &str ="The amount to be pledged to the pool. There is a minimum to be accepted. \
+        This amount, and the rewards gained by the pool, CANNOT be taken out without decommissioning the pool. \
+        If you'd like to withdraw rewards, consider creating a pool and delegating to yourself. \
+        Delegators have no restrictions on withdrawals. \
+        The likelihood to win block rewards, by creating blocks while staking, is proportional to how much the pool owns, \
         up to a maximum, to discourage heavy centralization of power.";
 
-const COST_PER_BLOCK_TOOLTIP_TEXT: &str = "An amount in coins to be subtracted from the total rewards in a block and handed to the staker\
+const COST_PER_BLOCK_TOOLTIP_TEXT: &str = "An amount in coins to be subtracted from the total rewards in a block and handed to the staker \
         as a constant/fixed cost for running the pool.";
 
-const MARGIN_PER_THOUSAND_TOOLTIP_TEXT: &str = "After subtracting \"cost per block\" from the reward, this ratio is taken from the rewards and is handed to the staker.\
-        What is left is distributed among delegators, pro-rata, based on their delegation amounts.\
-        The amount here is written as a percentage with per-mill accuracy. For example, 0.1% is valid,\
+const MARGIN_PER_THOUSAND_TOOLTIP_TEXT: &str = "After subtracting \"cost per block\" from the reward, this ratio is taken from the rewards and is handed to the staker. \
+        What is left is distributed among delegators, pro-rata, based on their delegation amounts. \
+        The amount here is written as a percentage with per-mill accuracy. For example, 0.1% is valid, \
         and is equivalent to 0.001. Also 5% is valid and is equivalent to 0.05.";
 
 const DECOMMISSION_ADDRESS_TOOLTIP_TEXT: &str = "The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.";
