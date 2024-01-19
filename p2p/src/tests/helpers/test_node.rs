@@ -44,7 +44,7 @@ use crate::{
         ConnectivityService,
     },
     peer_manager::{
-        peerdb::storage_impl::PeerDbStorageImpl, PeerManager, PeerManagerQueryInterface,
+        peerdb::storage_impl::PeerDbStorageImpl, test_utils::query_peer_manager, PeerManager,
     },
     protocol::ProtocolVersion,
     sync::SyncManager,
@@ -300,19 +300,10 @@ where
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {
-        let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
-
-        self.peer_mgr_event_sender
-            .send(PeerManagerEvent::GenericQuery(Box::new(
-                move |mgr: &dyn PeerManagerQueryInterface| {
-                    response_sender
-                        .send(TestPeersInfo::from_peer_mgr_peer_contexts(mgr.peers()))
-                        .unwrap();
-                },
-            )))
-            .unwrap();
-
-        response_receiver.recv().await.unwrap()
+        query_peer_manager(&self.peer_mgr_event_sender, |peer_mgr| {
+            TestPeersInfo::from_peer_mgr_peer_contexts(peer_mgr.peers())
+        })
+        .await
     }
 
     pub async fn assert_connected_to(&self, expected_connections: &[(SocketAddress, PeerRole)]) {

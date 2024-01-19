@@ -28,7 +28,7 @@ use tokio::{
 };
 
 use crypto::random::Rng;
-use p2p_test_utils::{expect_no_recv, run_with_timeout, P2pBasicTestTimeGetter};
+use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout, P2pBasicTestTimeGetter};
 use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use test_utils::random::Seed;
 
@@ -43,18 +43,25 @@ use crate::{
         types::{services::Service, ConnectivityEvent, PeerRole},
     },
     peer_manager::{
-        peerdb::{self, config::PeerDbConfig},
+        peerdb::{
+            self, config::PeerDbConfig,
+            test_utils::make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups,
+        },
         tests::{
-            get_connected_peers, run_peer_manager,
-            utils::{expect_connect_cmd, make_full_relay_peer_info, recv_command_advance_time},
+            get_connected_peers, make_standalone_peer_manager, run_peer_manager,
+            utils::{
+                expect_cmd_connect_to, expect_connect_cmd,
+                inbound_block_relay_peer_accepted_by_backend, make_full_relay_peer_info,
+                mutate_peer_manager, recv_command_advance_time,
+            },
         },
         MaxInboundConnections, PeerManager, PeerManagerConfig,
     },
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         make_transport_with_local_addr_in_group, peerdb_inmemory_store, test_p2p_config,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
-        TEST_PROTOCOL_VERSION,
+        test_p2p_config_with_peer_mgr_config, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -92,7 +99,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.try_connect(remote_addr, None).unwrap();
+    peer_manager.try_connect(remote_addr, None, PeerRole::OutboundManual).unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -922,9 +929,32 @@ where
 
     let time_getter = P2pBasicTestTimeGetter::new();
 
+    let peer_manager_config = PeerManagerConfig {
+        allow_same_ip_connections: true.into(),
+
+        max_inbound_connections: Default::default(),
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        outbound_full_relay_count: Default::default(),
+        outbound_full_relay_extra_count: Default::default(),
+        outbound_block_relay_count: Default::default(),
+        outbound_block_relay_extra_count: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        peerdb_config: Default::default(),
+    };
+
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -942,7 +972,6 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -971,6 +1000,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes: reserved_nodes.clone(),
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -987,7 +1017,6 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1003,6 +1032,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
+        peer_manager_config,
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1019,7 +1049,6 @@ where
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1048,6 +1077,8 @@ where
             counts.sort();
             counts
         };
+
+        log::debug!("counts = {counts:?}");
 
         // There should be:
         // - 1 outbound and 2 inbound connections to/from reserved peer.
@@ -1107,9 +1138,32 @@ async fn discovered_node_2_groups() {
     let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
+    let peer_manager_config = PeerManagerConfig {
+        allow_same_ip_connections: true.into(),
+
+        max_inbound_connections: Default::default(),
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        outbound_full_relay_count: Default::default(),
+        outbound_full_relay_extra_count: Default::default(),
+        outbound_block_relay_count: Default::default(),
+        outbound_block_relay_extra_count: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        peerdb_config: Default::default(),
+    };
+
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1127,7 +1181,6 @@ async fn discovered_node_2_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1157,6 +1210,7 @@ async fn discovered_node_2_groups() {
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes: reserved_nodes.clone(),
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1173,7 +1227,6 @@ async fn discovered_node_2_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1190,6 +1243,7 @@ async fn discovered_node_2_groups() {
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
+        peer_manager_config,
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1206,7 +1260,6 @@ async fn discovered_node_2_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -1229,6 +1282,8 @@ async fn discovered_node_2_groups() {
             get_connected_peers(&peer_mgr_event_sender3)
         );
         let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+
+        log::debug!("counts = {counts:?}");
 
         // There should be:
         // - 2 outbound and 2 inbound connections to/from reserved peers.
@@ -1255,9 +1310,32 @@ async fn discovered_node_separate_groups() {
     let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
+    let peer_manager_config = PeerManagerConfig {
+        allow_same_ip_connections: true.into(),
+
+        max_inbound_connections: Default::default(),
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        outbound_full_relay_count: Default::default(),
+        outbound_full_relay_extra_count: Default::default(),
+        outbound_block_relay_count: Default::default(),
+        outbound_block_relay_extra_count: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        peerdb_config: Default::default(),
+    };
+
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1275,7 +1353,6 @@ async fn discovered_node_separate_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
@@ -1305,6 +1382,7 @@ async fn discovered_node_separate_groups() {
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes: reserved_nodes.clone(),
         allow_discover_private_ips: true.into(),
+        peer_manager_config: peer_manager_config.clone(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1321,7 +1399,6 @@ async fn discovered_node_separate_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
@@ -1338,6 +1415,7 @@ async fn discovered_node_separate_groups() {
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
+        peer_manager_config,
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -1354,7 +1432,6 @@ async fn discovered_node_separate_groups() {
         node_type: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         sync_stalling_timeout: Default::default(),
-        peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
@@ -1377,6 +1454,8 @@ async fn discovered_node_separate_groups() {
             get_connected_peers(&peer_mgr_event_sender3)
         );
         let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
+
+        log::debug!("counts = {counts:?}");
 
         // Each peer has 2 outbound and 2 inbound connections with 2 other peers
         if counts == [4, 4, 4] {
@@ -1644,6 +1723,7 @@ mod feeler_connections_test_utils {
                 enable_feeler_connections: Default::default(),
                 main_loop_tick_interval: Default::default(),
                 force_dns_query_if_no_global_addresses_known: Default::default(),
+                allow_same_ip_connections: Default::default(),
             },
             // Disable pings to simplify the test.
             ping_check_period: Duration::ZERO.into(),
@@ -1687,4 +1767,103 @@ mod feeler_connections_test_utils {
             .copied()
             .collect::<BTreeSet<_>>()
     }
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn foo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = Arc::new(config::create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config_with_peer_mgr_config(PeerManagerConfig {
+        outbound_full_relay_count: 2.into(),
+        outbound_full_relay_extra_count: 0.into(),
+        outbound_block_relay_count: 0.into(),
+        outbound_block_relay_extra_count: 0.into(),
+
+        max_inbound_connections: Default::default(),
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
+        peerdb_config: Default::default(),
+    }));
+
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address();
+
+    let (
+        peer_mgr,
+        conn_event_sender,
+        peer_mgr_event_sender,
+        mut cmd_receiver,
+        _peer_mgr_notification_receiver,
+    ) = make_standalone_peer_manager(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        vec![bind_addr],
+        time_getter.get_time_getter(),
+    );
+
+    let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
+        &peer_mgr.peerdb,
+        2,
+        &mut rng,
+    );
+    let [peer1_addr, peer2_addr]: [_; 2] = peer_addrs.try_into().unwrap();
+    log::debug!("peer1_addr = {peer1_addr:?}, {peer2_addr:?}");
+
+    let outbound_peer1_addr = peer1_addr;
+    let inbound_peer1_addr = {
+        let mut socket_addr = peer1_addr.socket_addr();
+        socket_addr.set_port(socket_addr.port().wrapping_add(1));
+        SocketAddress::new(socket_addr)
+    };
+
+    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
+        let mut peer_mgr = peer_mgr;
+        let _ = peer_mgr.run_internal(None).await;
+        peer_mgr
+    });
+
+    let peer1_id = inbound_block_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        inbound_peer1_addr,
+        bind_addr,
+        &chain_config,
+    );
+
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(cmd, Command::Accept { peer_id: peer1_id });
+
+    mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
+        peer_mgr.peerdb_mut().peer_discovered(outbound_peer1_addr);
+    })
+    .await;
+    time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
+    expect_no_recv!(cmd_receiver);
+
+    mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
+        peer_mgr.peerdb_mut().peer_discovered(peer2_addr)
+    })
+    .await;
+    time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
+    let cmd = expect_recv!(cmd_receiver);
+    expect_cmd_connect_to(&cmd, &peer2_addr);
+
+    drop(conn_event_sender);
+    drop(peer_mgr_event_sender);
+
+    let _peer_mgr = peer_mgr_join_handle.await.unwrap();
 }

@@ -44,21 +44,25 @@ pub enum Role {
 }
 
 // TODO: Rename to ConnectionType
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum PeerRole {
     Inbound,
     OutboundFullRelay,
     OutboundBlockRelay,
+    OutboundReserved,
     OutboundManual,
     Feeler,
 }
 
 // TODO: Use something like enum_iterator
 impl PeerRole {
-    pub const ALL: [PeerRole; 4] = [
+    pub const ALL: [PeerRole; 5] = [
         PeerRole::Inbound,
         PeerRole::OutboundFullRelay,
         PeerRole::OutboundBlockRelay,
+        PeerRole::OutboundReserved,
         PeerRole::OutboundManual,
     ];
 
@@ -67,7 +71,18 @@ impl PeerRole {
 
         match self {
             Inbound => false,
-            OutboundFullRelay | OutboundBlockRelay | OutboundManual | Feeler => true,
+            OutboundFullRelay | OutboundBlockRelay | OutboundReserved | OutboundManual | Feeler => {
+                true
+            }
+        }
+    }
+
+    pub fn is_outbound_manual(&self) -> bool {
+        use PeerRole::*;
+
+        match self {
+            OutboundManual => true,
+            Inbound | OutboundFullRelay | OutboundBlockRelay | OutboundReserved | Feeler => false,
         }
     }
 }
