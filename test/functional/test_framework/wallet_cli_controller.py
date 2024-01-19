@@ -272,7 +272,8 @@ class WalletCliController:
 
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output =  await self._write_command("staking-list-created-block-ids\n")
-        pattern = r"\(\s*BlockHeight\(\s*(\d+),\s*\),\s*Id<GenBlock>\{0x([^}]*)\},\s*\)"
+        self.log.info(output)
+        pattern = r"\((\d+),\s*0x([^)]*)\)"
         matches = re.findall(pattern, output)
         return [CreatedBlockInfo(block_id, block_height) for block_height, block_id in matches]
 

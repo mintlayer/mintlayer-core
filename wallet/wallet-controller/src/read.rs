@@ -19,11 +19,8 @@ use std::collections::BTreeMap;
 
 use common::{
     address::Address,
-    chain::{
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
-        UtxoOutPoint,
-    },
-    primitives::{id::WithId, Amount, BlockHeight, DecimalAmount, Id},
+    chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
+    primitives::{id::WithId, Amount, DecimalAmount, Id},
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, u31::U31},
@@ -43,7 +40,10 @@ use wallet_types::{
     KeychainUsageState,
 };
 
-use crate::{types::Balances, ControllerError};
+use crate::{
+    types::{Balances, BlockInfo},
+    ControllerError,
+};
 
 pub struct ReadOnlyController<'a, T> {
     wallet: &'a DefaultWallet,
@@ -264,12 +264,11 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         tasks.try_collect().await
     }
 
-    pub fn get_created_blocks(
-        &self,
-    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ControllerError<T>> {
+    pub fn get_created_blocks(&self) -> Result<Vec<BlockInfo>, ControllerError<T>> {
         self.wallet
             .get_created_blocks(self.account_index)
             .map_err(ControllerError::WalletError)
+            .map(|blocks| blocks.into_iter().map(|(height, id)| BlockInfo { id, height }).collect())
     }
 
     async fn get_delegation_share(

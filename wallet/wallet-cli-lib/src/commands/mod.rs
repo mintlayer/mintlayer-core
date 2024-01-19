@@ -1466,12 +1466,12 @@ impl CommandHandler {
                     .list_created_blocks_ids(selected_account)
                     .await?
                     .into_iter()
-                    .map(|(h, id)| (h.into_int(), *id.as_hash()))
+                    .map(|block_info| (block_info.height.into_int(), *block_info.id.as_hash()))
                     .collect::<Vec<_>>();
                 block_ids.sort_by(|(a0, _), (a1, _)| a0.cmp(a1));
                 let result = block_ids
                     .into_iter()
-                    .map(|(h, id)| format!("({h}, {})", id))
+                    .map(|(h, id)| format!("({h}, {id:?})"))
                     .fold("".to_string(), |curr, v| curr + &v + "\n");
                 Ok(ConsoleCommand::Print(result))
             }

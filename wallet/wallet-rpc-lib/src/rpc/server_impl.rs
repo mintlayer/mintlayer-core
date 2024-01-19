@@ -24,15 +24,15 @@ use p2p_types::{
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::str::FromStr;
-use wallet_controller::{ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
+use wallet_controller::{types::BlockInfo, ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
     rpc::{WalletRpc, WalletRpcServer},
     types::{
-        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, CreatedBlockInfo,
-        DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo,
-        NewDelegation, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
+        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
+        DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
         StakePoolBalance, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
@@ -317,18 +317,8 @@ impl WalletRpcServer for WalletRpc {
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<CreatedBlockInfo>> {
-        rpc::handle_result(
-            self.list_created_blocks_ids(account_index.index()?).await.map(|blocks| {
-                blocks
-                    .into_iter()
-                    .map(|(block_height, block_id)| CreatedBlockInfo {
-                        block_id,
-                        block_height,
-                    })
-                    .collect::<Vec<_>>()
-            }),
-        )
+    ) -> rpc::RpcResult<Vec<BlockInfo>> {
+        rpc::handle_result(self.list_created_blocks_ids(account_index.index()?).await)
     }
 
     async fn issue_new_nft(

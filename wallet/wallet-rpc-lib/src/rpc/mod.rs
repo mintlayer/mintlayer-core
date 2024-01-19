@@ -44,8 +44,8 @@ use common::{
 pub use interface::WalletRpcServer;
 pub use rpc::{rpc_creds::RpcCreds, Rpc, RpcAuthData};
 use wallet_controller::{
-    types::Balances, ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates,
-    UtxoTypes,
+    types::{Balances, BlockInfo},
+    ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
@@ -56,9 +56,8 @@ use crate::{
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, BlockInfo, DelegationInfo, EmptyArgs,
-    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, PoolInfo, PublicKeyInfo,
-    VrfPublicKeyInfo,
+    AddressInfo, AddressWithUsageInfo, DelegationInfo, EmptyArgs, LegacyVrfPublicKeyInfo,
+    NewAccountInfo, NewDelegation, PoolInfo, PublicKeyInfo, VrfPublicKeyInfo,
 };
 
 pub struct WalletRpc {
@@ -937,10 +936,7 @@ impl WalletRpc {
             })
     }
 
-    pub async fn list_created_blocks_ids(
-        &self,
-        account_index: U31,
-    ) -> WRpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
+    pub async fn list_created_blocks_ids(&self, account_index: U31) -> WRpcResult<Vec<BlockInfo>> {
         self.wallet
             .call(move |controller| {
                 controller.readonly_controller(account_index).get_created_blocks()
