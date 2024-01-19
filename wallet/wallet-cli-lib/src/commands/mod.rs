@@ -1471,7 +1471,10 @@ impl CommandHandler {
                 block_ids.sort_by(|(a0, _), (a1, _)| a0.cmp(a1));
                 let result = block_ids
                     .into_iter()
-                    .map(|(h, id)| format!("({h}, {id:?})"))
+                    .map(|(h, id)| {
+                        let id = &format!("{:?}", id)[2..];
+                        format!("({h}, {})", id)
+                    })
                     .fold("".to_string(), |curr, v| curr + &v + "\n");
                 Ok(ConsoleCommand::Print(result))
             }
