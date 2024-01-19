@@ -26,7 +26,7 @@ use super::*;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, Builder, ChainType},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
@@ -39,6 +39,7 @@ use common::{
 use crypto::{
     key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
     random::{CryptoRng, Rng, SliceRandom},
+    vrf::transcript::TranscriptAssembler,
 };
 use itertools::Itertools;
 use rstest::rstest;
@@ -1305,11 +1306,12 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: Destination::PublicKey(decommission_key.clone()),
             },
         )
         .unwrap();
-    let _ = create_block(
+    let stake_pool_transaction_id = stake_pool_transaction.transaction().get_id();
+    let (addr, block2) = create_block(
         &chain_config,
         &mut wallet,
         vec![stake_pool_transaction],
@@ -1333,11 +1335,65 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
-    let pool_id = pool_ids.first().unwrap().0;
+    let (pool_id, pool_data) = pool_ids.first().unwrap();
+    assert_eq!(
+        pool_data.decommission_key,
+        Destination::PublicKey(decommission_key)
+    );
+    assert_eq!(
+        &pool_data.utxo_outpoint,
+        &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
+    );
+
+    let pos_data = wallet.get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX, *pool_id).unwrap();
+
+    let block3 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::PoS(Box::new(PoSData::new(
+            vec![TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(stake_pool_transaction_id),
+                0,
+            ))],
+            vec![],
+            *pool_id,
+            pos_data
+                .vrf_private_key()
+                .produce_vrf_data(TranscriptAssembler::new(&[]).finalize().into()),
+            common::primitives::Compact(0),
+        ))),
+        BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
+            addr.decode_object(&chain_config).unwrap(),
+            *pool_id,
+        )]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3.clone()]);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+    let (_pool_id, pool_data) = pool_ids.first().unwrap();
+    assert_eq!(
+        &pool_data.utxo_outpoint,
+        &UtxoOutPoint::new(OutPointSourceId::BlockReward(block3.get_id().into()), 0)
+    );
+
+    // do a reorg back to block 2
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2.clone()]);
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+    let (pool_id, pool_data) = pool_ids.first().unwrap();
+    assert_eq!(
+        &pool_data.utxo_outpoint,
+        &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
+    );
+
     let decommission_tx = wallet
         .decommission_stake_pool(
             DEFAULT_ACCOUNT_INDEX,
-            pool_id,
+            *pool_id,
             pool_amount,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
@@ -1350,6 +1406,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         Amount::ZERO,
         2,
     );
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert!(pool_ids.is_empty());
 
     let currency_balances = wallet
         .get_balance(
