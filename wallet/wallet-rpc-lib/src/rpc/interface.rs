@@ -23,10 +23,10 @@ use wallet_controller::ConnectedPeer;
 use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
-    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
-    DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, TokenMetadata,
-    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, CreatedBlockInfo,
+    DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
+    TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -199,7 +199,7 @@ trait WalletRpc {
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<Id<GenBlock>>>;
+    ) -> rpc::RpcResult<Vec<CreatedBlockInfo>>;
 
     #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(

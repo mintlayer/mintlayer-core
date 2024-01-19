@@ -940,7 +940,7 @@ impl WalletRpc {
     pub async fn list_created_blocks_ids(
         &self,
         account_index: U31,
-    ) -> WRpcResult<Vec<Id<GenBlock>>> {
+    ) -> WRpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
         self.wallet
             .call(move |controller| {
                 controller.readonly_controller(account_index).get_created_blocks()

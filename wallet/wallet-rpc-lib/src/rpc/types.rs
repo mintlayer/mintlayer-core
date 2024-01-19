@@ -376,3 +376,9 @@ pub struct RpcTokenId {
 pub struct NodeVersion {
     pub version: String,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CreatedBlockInfo {
+    pub block_id: Id<GenBlock>,
+    pub block_height: BlockHeight,
+}

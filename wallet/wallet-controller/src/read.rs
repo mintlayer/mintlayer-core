@@ -23,7 +23,7 @@ use common::{
         ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, DecimalAmount, Id},
+    primitives::{id::WithId, Amount, BlockHeight, DecimalAmount, Id},
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, u31::U31},
@@ -264,7 +264,9 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         tasks.try_collect().await
     }
 
-    pub fn get_created_blocks(&self) -> Result<Vec<Id<GenBlock>>, ControllerError<T>> {
+    pub fn get_created_blocks(
+        &self,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ControllerError<T>> {
         self.wallet
             .get_created_blocks(self.account_index)
             .map_err(ControllerError::WalletError)
