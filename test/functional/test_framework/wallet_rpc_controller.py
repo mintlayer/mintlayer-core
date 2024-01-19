@@ -114,12 +114,12 @@ class WalletRpcController:
     async def create_wallet(self, name: str = "wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
         self._write_command("wallet_create", [wallet_file, True])
-        return "Sucess"
+        return "Success"
 
     async def open_wallet(self, name: str = "wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
         self._write_command("wallet_open", [wallet_file, None])
-        return "Sucess"
+        return "Success"
 
     async def close_wallet(self) -> str:
         return self._write_command("wallet-close", [])
