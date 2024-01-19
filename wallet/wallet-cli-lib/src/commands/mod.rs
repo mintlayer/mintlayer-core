@@ -1461,8 +1461,19 @@ impl CommandHandler {
 
             WalletCommand::ListCreatedBlocksIds => {
                 let selected_account = self.get_selected_acc()?;
-                let block_ids = self.wallet_rpc.list_created_blocks_ids(selected_account).await?;
-                Ok(ConsoleCommand::Print(format!("{block_ids:#?}")))
+                let mut block_ids = self
+                    .wallet_rpc
+                    .list_created_blocks_ids(selected_account)
+                    .await?
+                    .into_iter()
+                    .map(|(h, id)| (h.into_int(), *id.as_hash()))
+                    .collect::<Vec<_>>();
+                block_ids.sort_by(|(a0, _), (a1, _)| a0.cmp(a1));
+                let result = block_ids
+                    .into_iter()
+                    .map(|(h, id)| format!("({h}, {})", id))
+                    .fold("".to_string(), |curr, v| curr + &v + "\n");
+                Ok(ConsoleCommand::Print(result))
             }
 
             WalletCommand::NodeShutdown => {
