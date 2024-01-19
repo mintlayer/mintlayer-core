@@ -42,7 +42,7 @@ fn validate_services() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     for node_type in [NodeType::Full, NodeType::BlocksOnly] {
-        let chain_config = Arc::new(config::create_mainnet());
+        let chain_config = Arc::new(config::create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
             node_type: node_type.into(),
 

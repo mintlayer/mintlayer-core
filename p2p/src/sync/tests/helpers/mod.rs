@@ -44,7 +44,7 @@ use common::{
             signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
             ConsensusData,
         },
-        config::create_mainnet,
+        config::create_unit_test_config,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
@@ -497,7 +497,7 @@ pub struct TestNodeBuilder {
 impl TestNodeBuilder {
     pub fn new(protocol_version: ProtocolVersion) -> Self {
         Self {
-            chain_config: Arc::new(create_mainnet()),
+            chain_config: Arc::new(create_unit_test_config()),
             mempool_config: Arc::new(MempoolConfig::new()),
             p2p_config: Arc::new(test_p2p_config()),
             chainstate: None,

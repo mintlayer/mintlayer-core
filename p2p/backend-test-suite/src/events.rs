@@ -46,7 +46,7 @@ where
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();

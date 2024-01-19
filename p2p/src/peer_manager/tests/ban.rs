@@ -57,7 +57,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -115,7 +115,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -181,7 +181,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -254,7 +254,7 @@ where
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
-        let config = Arc::new(config::create_mainnet());
+        let config = Arc::new(config::create_unit_test_config());
         let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
                 .await;
@@ -319,7 +319,7 @@ where
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
-        Arc::new(config::create_mainnet()),
+        Arc::new(config::create_unit_test_config()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
@@ -384,7 +384,7 @@ fn ban_and_disconnect() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let bind_address = TestTransportTcp::make_address();
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();

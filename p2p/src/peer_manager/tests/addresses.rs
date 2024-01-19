@@ -67,7 +67,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let bind_address = A::make_address();
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
     let (mut pm, _peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) =
@@ -140,7 +140,7 @@ fn test_addr_list_handling_inbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let bind_address = TestTransportTcp::make_address();
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -226,7 +226,7 @@ fn test_addr_list_handling_outbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let bind_address = TestTransportTcp::make_address();
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -328,7 +328,7 @@ async fn resend_own_addresses() {
     let outbound_addresses: Vec<SocketAddress> =
         vec!["1.2.3.4:12345".parse().unwrap(), "[2001:bc8:1600::1]:23456".parse().unwrap()];
 
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
