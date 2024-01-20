@@ -88,7 +88,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(transport, bind_addr, config).await;
 
@@ -144,7 +144,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -197,7 +197,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -241,7 +241,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
@@ -298,7 +298,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -355,7 +355,7 @@ where
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
-        Arc::new(config::create_mainnet()),
+        Arc::new(config::create_unit_test_config()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
@@ -381,7 +381,7 @@ where
         ),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
-            *config::create_mainnet().magic_bytes(),
+            *config::create_unit_test_config().magic_bytes(),
         )))
     );
 }
@@ -428,13 +428,13 @@ where
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
-        Arc::new(config::create_mainnet()),
+        Arc::new(config::create_unit_test_config()),
     )
     .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(config::create_mainnet()),
+        Arc::new(config::create_unit_test_config()),
     )
     .await;
 
@@ -483,7 +483,7 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
@@ -516,7 +516,7 @@ where
 #[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_tcp() {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
@@ -543,7 +543,7 @@ async fn inbound_connection_too_many_peers_tcp() {
 #[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_channels() {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
@@ -570,7 +570,7 @@ async fn inbound_connection_too_many_peers_channels() {
 #[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_noise() {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
@@ -599,7 +599,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -675,7 +675,7 @@ async fn connection_timeout_rpc_notified<T>(
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let config = Arc::new(config::create_mainnet());
+    let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
         outbound_connection_timeout: Duration::from_secs(1).into(),
 
@@ -788,7 +788,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let time_getter = P2pBasicTestTimeGetter::new();
-    let chain_config = Arc::new(config::create_mainnet());
+    let chain_config = Arc::new(config::create_unit_test_config());
 
     // Start first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
@@ -918,7 +918,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let chain_config = Arc::new(config::create_regtest());
+    let chain_config = Arc::new(config::create_unit_test_config());
 
     let time_getter = P2pBasicTestTimeGetter::new();
 
@@ -1104,7 +1104,7 @@ async fn discovered_node_channel() {
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_2_groups() {
-    let chain_config = Arc::new(config::create_regtest());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
     // Start the first peer manager
@@ -1252,7 +1252,7 @@ async fn discovered_node_2_groups() {
 #[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_separate_groups() {
-    let chain_config = Arc::new(config::create_regtest());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
     // Start the first peer manager

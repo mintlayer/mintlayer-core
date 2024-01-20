@@ -45,7 +45,7 @@ use crate::{
 async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
-    let chain_config = Arc::new(config::create_regtest());
+    let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
         ping_check_period: Duration::from_secs(1).into(),
         ping_timeout: Duration::from_secs(5).into(),

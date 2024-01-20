@@ -52,7 +52,7 @@ async fn connect_to_remote_impl<A, T>(
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -145,7 +145,7 @@ async fn accept_incoming_impl<A, T>(
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -234,7 +234,7 @@ where
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -308,7 +308,7 @@ where
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -426,7 +426,7 @@ where
         let _ = socket.write_all(b"invalid message").await;
     });
 
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -490,7 +490,7 @@ async fn general_protocol_version_selection_impl<A, T>(
     A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();

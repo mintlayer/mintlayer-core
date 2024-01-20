@@ -137,9 +137,9 @@ async fn invalid_timestamp() {
 async fn invalid_consensus_data() {
     for_each_protocol_version(|protocol_version| async move {
         let chain_config = Arc::new(
-            ChainConfigBuilder::new(ChainType::Mainnet)
+            ChainConfigBuilder::new(ChainType::Regtest)
                 // Enable consensus, so blocks with `ConsensusData::None` would be rejected.
-                .consensus_upgrades(NetUpgrades::new_for_chain(ChainType::Mainnet))
+                .consensus_upgrades(NetUpgrades::new_for_chain(ChainType::Regtest))
                 .build(),
         );
         let mut node = TestNode::builder(protocol_version)

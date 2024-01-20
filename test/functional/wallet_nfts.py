@@ -35,6 +35,8 @@ from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
 import sys
+import random
+import string
 
 class WalletNfts(BitcoinTestFramework):
 
@@ -111,7 +113,46 @@ class WalletNfts(BitcoinTestFramework):
             assert_in("Coins amount: 1000", await wallet.get_balance())
 
             address = await wallet.new_address()
-            nft_id = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", "XXX")
+
+            # invalid ticker
+            # > max len
+            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(6, 10)))
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
+            assert nft_id is None
+            assert err is not None
+            assert_in("Invalid ticker length", err)
+            # non alphanumeric
+            invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[\]^_`{|}~")
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
+            assert nft_id is None
+            assert err is not None
+            assert_in("Invalid character in token ticker", err)
+
+            # invalid name
+            # > max len
+            invalid_name = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(11, 20)))
+            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", "XXX")
+            assert nft_id is None
+            assert err is not None
+            assert_in("Invalid name length", err)
+            # non alphanumeric
+            invalid_name = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[\]^_`{|}~")
+            nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", "XXX")
+            assert nft_id is None
+            assert err is not None
+            assert_in("Invalid character in token name", err)
+
+            # invalid description
+            # > max len
+            invalid_desc = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(101, 200)))
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", invalid_desc, "XXX")
+            assert nft_id is None
+            assert err is not None
+            assert_in("Invalid description length", err)
+
+            # issue a valid NFT
+            nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", "XXX")
+            assert err is None
             assert nft_id is not None
             self.log.info(f"new nft id: '{nft_id}'")
 

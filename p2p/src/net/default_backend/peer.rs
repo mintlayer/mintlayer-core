@@ -494,7 +494,7 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
@@ -577,7 +577,7 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
@@ -661,7 +661,7 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
@@ -729,7 +729,7 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
@@ -843,7 +843,7 @@ mod tests {
 
         let (socket1, socket2) =
             get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
-        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
         let (tx1, _rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_tx2, rx2) = mpsc::unbounded_channel();

@@ -168,7 +168,7 @@ pub enum TokenIssuanceError {
     IssueErrorInvalidNameLength,
     #[error("Invalid ticker length")]
     IssueErrorInvalidTickerLength,
-    #[error("Invalid ticker length")]
+    #[error("Invalid description length")]
     IssueErrorInvalidDescriptionLength,
     #[error("Invalid character in token ticker")]
     IssueErrorTickerHasNoneAlphaNumericChar,

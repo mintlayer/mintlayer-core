@@ -17,6 +17,7 @@ mod output_cache;
 pub mod transaction_list;
 mod utxo_selector;
 
+use chainstate::check_nft_issuance_data;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
@@ -725,14 +726,17 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
+        let nft_issuance = NftIssuanceV0 {
+            metadata: nft_issue_arguments.metadata,
+        };
+        check_nft_issuance_data(&self.chain_config, &nft_issuance)?;
+
         // the first UTXO is needed in advance to issue a new nft, so just make a dummy one
         // and then replace it with when we can calculate the pool_id
         let dummy_token_id = TokenId::new(H256::zero());
         let dummy_issuance_output = TxOutput::IssueNft(
             dummy_token_id,
-            Box::new(NftIssuance::V0(NftIssuanceV0 {
-                metadata: nft_issue_arguments.metadata,
-            })),
+            Box::new(NftIssuance::V0(nft_issuance)),
             nft_issue_arguments.destination,
         );
 

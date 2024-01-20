@@ -776,7 +776,7 @@ pub fn create_regtest() -> ChainConfig {
 }
 
 pub fn create_unit_test_config_builder() -> Builder {
-    Builder::new(ChainType::Testnet)
+    Builder::new(ChainType::Regtest)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .chainstate_upgrades(
             NetUpgrades::initialize(vec![(
