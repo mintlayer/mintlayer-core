@@ -196,6 +196,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.addresses.keys()
     }
 
+    /// Iterator of all reachable addresses.
+    pub fn reachable_addresses(&self) -> impl Iterator<Item = &SocketAddress> {
+        self.addresses
+            .iter()
+            .filter_map(|(addr, addr_data)| (!addr_data.is_unreachable()).then_some(addr))
+    }
+
     /// Selects peer addresses for outbound connections, excluding reserved ones.
     /// Only one outbound connection is allowed per address group.
     pub fn select_non_reserved_outbound_addresses(
