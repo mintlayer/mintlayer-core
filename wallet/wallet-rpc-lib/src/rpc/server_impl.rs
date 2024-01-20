@@ -24,13 +24,13 @@ use p2p_types::{
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::str::FromStr;
-use wallet_controller::{ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
+use wallet_controller::{types::BlockInfo, ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
     rpc::{WalletRpc, WalletRpcServer},
     types::{
-        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DecimalAmount,
+        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
         StakePoolBalance, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
@@ -317,7 +317,7 @@ impl WalletRpcServer for WalletRpc {
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<Id<GenBlock>>> {
+    ) -> rpc::RpcResult<Vec<BlockInfo>> {
         rpc::handle_result(self.list_created_blocks_ids(account_index.index()?).await)
     }
 

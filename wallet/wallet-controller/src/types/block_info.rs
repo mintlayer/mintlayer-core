@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support types for presenting data in user-facing settings
+use common::{
+    chain::GenBlock,
+    primitives::{BlockHeight, Id},
+};
 
-mod balances;
-mod block_info;
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BlockInfo {
+    pub id: Id<GenBlock>,
+    pub height: BlockHeight,
+}
 
-pub use balances::Balances;
-pub use block_info::BlockInfo;
-pub use common::primitives::DecimalAmount;
+impl BlockInfo {
+    pub fn from_tuple((id, height): (Id<GenBlock>, BlockHeight)) -> Self {
+        Self { id, height }
+    }
+}

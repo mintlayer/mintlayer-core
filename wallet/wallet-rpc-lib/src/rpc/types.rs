@@ -20,9 +20,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
-        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxOutput, UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, PoolId, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight},
 };
 use crypto::{
     key::{
@@ -101,18 +101,6 @@ pub struct AccountIndexArg {
 impl AccountIndexArg {
     pub fn index(&self) -> Result<U31, RpcError> {
         U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BlockInfo {
-    pub id: Id<GenBlock>,
-    pub height: BlockHeight,
-}
-
-impl BlockInfo {
-    pub fn from_tuple((id, height): (Id<GenBlock>, BlockHeight)) -> Self {
-        Self { id, height }
     }
 }
 

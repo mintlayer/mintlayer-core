@@ -29,7 +29,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id},
+    primitives::{id::WithId, Amount, BlockHeight, Id},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -1254,7 +1254,10 @@ impl OutputCache {
         }
     }
 
-    pub fn get_created_blocks<F: Fn(&Destination) -> bool>(&self, is_mine: F) -> Vec<Id<GenBlock>> {
+    pub fn get_created_blocks<F: Fn(&Destination) -> bool>(
+        &self,
+        is_mine: F,
+    ) -> Vec<(BlockHeight, Id<GenBlock>)> {
         self.txs
             .values()
             .filter_map(|wtx| match wtx {
@@ -1263,7 +1266,7 @@ impl OutputCache {
                     .kernel_inputs()
                     .iter()
                     .any(|inp| self.created_by_our_stake_pool(inp, &is_mine))
-                    .then_some(*block.block_id()),
+                    .then_some((block.height(), *block.block_id())),
             })
             .collect_vec()
     }

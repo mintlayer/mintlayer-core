@@ -23,9 +23,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use utils::{make_seedable_rng, ClientT, JsonValue, Seed, ACCOUNT0_ARG, ACCOUNT1_ARG};
-use wallet_rpc_lib::types::{
-    AddressInfo, Balances, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions,
-};
+use wallet_controller::types::BlockInfo;
+use wallet_rpc_lib::types::{AddressInfo, Balances, EmptyArgs, NewAccountInfo, TransactionOptions};
 
 #[rstest]
 #[trace]
