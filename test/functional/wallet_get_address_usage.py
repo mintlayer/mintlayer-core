@@ -75,7 +75,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
         # new wallet
         async with WalletCliController(node, self.config, self.log) as wallet:
             mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-            assert_in("New wallet created successfully", await wallet.recover_wallet(mnemonic))
+            assert_in("New wallet created successfully", await wallet.recover_wallet(mnemonic, "wallet"))
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
@@ -189,6 +189,26 @@ class WalletGetAddressUsage(BitcoinTestFramework):
                 assert_equal(line, expected_line)
 
             assert_in("Successfully rescanned the blockchain", await wallet.rescan())
+
+            output = await wallet.get_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert_equal(line, expected_line)
+
+            output = await wallet.get_vrf_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_vrf_output.split()):
+                assert_equal(line, expected_line)
+
+            pools = await wallet.list_pool_ids()
+            assert_equal(pools[0].balance, '40000')
+            assert_equal(pools[0].creation_block_height, 2)
+            assert_equal(pools[0].vrf_public_key, vrf_public_key)
+            assert_equal(pools[0].staker, "rpmt1qgqq92qeytkezwypc2ydcm78rv9v2m85fqnxh46cnrw7c2huc79f638zcx8l48")
+            assert_equal(pools[0].decommission_key, "rmt1q824xhhlcdazxj38yuqr6llqz3wm7whhgvmyvyjz")
+
+            assert_equal("rvrfpk1qqe29knh5xdmtn6jqznq3w753dr9jcnryllnjfcgktcedu5dkruksvcupzm", await wallet.get_legacy_vrf_public_key())
+
+            await wallet.close_wallet()
+            await wallet.open_wallet('wallet')
 
             output = await wallet.get_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_output.split()):

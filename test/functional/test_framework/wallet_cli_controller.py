@@ -51,6 +51,11 @@ class DelegationData:
     delegation_id: str
     balance: str
 
+@dataclass
+class CreatedBlockInfo:
+    block_id: str
+    block_height: str
+
 class WalletCliController:
 
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -119,8 +124,8 @@ class WalletCliController:
         wallet_file = os.path.join(self.node.datadir, name)
         return await self._write_command(f"wallet-open {wallet_file}\n")
 
-    async def recover_wallet(self, mnemonic: str) -> str:
-        wallet_file = os.path.join(self.node.datadir, "recovered_wallet")
+    async def recover_wallet(self, mnemonic: str, name: str = "recovered_wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
         return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
 
     async def close_wallet(self) -> str:
@@ -265,10 +270,12 @@ class WalletCliController:
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
 
-    async def list_created_blocks_ids(self) -> List[str]:
+    async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output =  await self._write_command("staking-list-created-block-ids\n")
-        pattern = r'Id<GenBlock>\{0x([^}]*)\}'
-        return re.findall(pattern, output)
+        self.log.info(output)
+        pattern = r"\((\d+),\s*([0-9a-fA-F]+)\)"
+        matches = re.findall(pattern, output)
+        return [CreatedBlockInfo(block_id, block_height) for block_height, block_id in matches]
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
         output = await self._write_command(f"delegation-create {address} {pool_id}\n")

@@ -51,7 +51,7 @@ pub async fn run(
     args: config::WalletCliArgs,
     chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
-    let chain_type = args.network.as_ref().map_or(ChainType::Testnet, |network| network.into());
+    let chain_type = args.network.as_ref().map_or(ChainType::Mainnet, |network| network.into());
     let chain_config = match chain_config {
         Some(chain_config) => chain_config,
         None => match &args.network {

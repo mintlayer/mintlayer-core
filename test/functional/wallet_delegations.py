@@ -30,6 +30,7 @@ Check that:
 """
 
 from hashlib import blake2b
+from random import choice
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
@@ -379,28 +380,40 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_in("Staking started successfully", await wallet.start_staking())
             assert_in("Success", await wallet.select_account(1))
 
+            block_height = await wallet.get_best_block_height()
             block_ids = []
             last_delegation_balance = delegations[0].balance
             for _ in range(4, 10):
+                if choice([True, False]):
+                    await wallet.close_wallet()
+                    await wallet.open_wallet('wallet')
+                    assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+                    assert_in("Staking started successfully", await wallet.start_staking())
+                    assert_in("Success", await wallet.select_account(1))
+
                 tip_id = node.chainstate_best_block_id()
                 assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 1))
                 transactions = node.mempool_transactions()
                 self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+                block_height = node.chainstate_best_block_height()
+                block_id = node.chainstate_block_id_at_height(block_height)
                 assert_in("Success", await wallet.sync())
 
                 delegations = await wallet.list_delegation_ids()
                 assert_equal(len(delegations), 1)
                 assert_greater_than(float(delegations[0].balance), float(last_delegation_balance))
                 last_delegation_balance = delegations[0].balance
-                block_ids.append(node.chainstate_best_block_id())
+                block_ids.append((block_id, block_height))
 
 
             # stake to acc1 delegation from acc 0
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("Success", await wallet.stake_delegation(10, delegation_id))
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+            block_height = node.chainstate_best_block_height()
+            block_id = node.chainstate_block_id_at_height(block_height)
             assert_in("Success", await wallet.sync())
-            block_ids.append(node.chainstate_best_block_id())
+            block_ids.append((block_id, block_height))
 
             # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
@@ -410,8 +423,9 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             tip_id = node.chainstate_best_block_id()
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+            block_id = node.chainstate_block_id_at_height(block_height)
             assert_in("Success", await wallet.sync())
-            block_ids.append(node.chainstate_best_block_id())
+            block_ids.append((block_id, block_height))
 
             # check that we still don't have any delegations for this account
             delegations = await wallet.list_delegation_ids()
@@ -444,8 +458,10 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
             created_block_ids = await wallet.list_created_blocks_ids()
 
-            for block_id in block_ids:
-                assert_in(block_id, created_block_ids)
+            self.log.info(created_block_ids)
+            for block_id, block_height in block_ids:
+                self.log.info(f"{block_id} {block_height}")
+                assert(any([block.block_id == block_id and str(block.block_height) == str(block_height) for block in created_block_ids]))
 
 
 if __name__ == '__main__':

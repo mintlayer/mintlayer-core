@@ -22,7 +22,10 @@ use crate::account::{
     Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, PoolData,
     UnconfirmedTokenInfo, UtxoSelectorError,
 };
-use crate::key_chain::{KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE};
+use crate::key_chain::{
+    make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
+    VRF_INDEX,
+};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
@@ -42,6 +45,7 @@ use common::primitives::{Amount, BlockHeight, Id};
 use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
+use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
@@ -366,7 +370,34 @@ impl<B: storage::Backend> Wallet<B> {
     fn migration_v5(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
-        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
+        for (id, info) in db_tx.get_accounts_info()? {
+            let root_vrf_key = MasterKeyChain::load_root_vrf_key(&db_tx)?;
+            let account_path = make_account_path(&chain_config, info.account_index());
+            let legacy_key_path = make_path_to_vrf_key(&chain_config, info.account_index());
+            let legacy_vrf_key = root_vrf_key
+                .clone()
+                .derive_absolute_path(&legacy_key_path)
+                .map_err(|err| WalletError::KeyChainError(KeyChainError::Derivation(err)))?
+                .to_public_key();
+
+            let account_vrf_pub_key = root_vrf_key
+                .derive_absolute_path(&account_path)
+                .map_err(|err| WalletError::KeyChainError(KeyChainError::Derivation(err)))?
+                .derive_child(VRF_INDEX)
+                .map_err(|err| WalletError::KeyChainError(KeyChainError::Derivation(err)))?
+                .to_public_key();
+
+            db_tx.set_account_vrf_public_keys(
+                &id,
+                &wallet_types::account_info::AccountVrfKeys {
+                    account_vrf_key: account_vrf_pub_key.clone(),
+                    legacy_vrf_key: legacy_vrf_key.clone(),
+                },
+            )?;
+        }
+
+        Self::reset_wallet_transactions_and_load(chain_config.clone(), &mut db_tx)?;
+
         db_tx.set_storage_version(WALLET_VERSION_V5)?;
         db_tx.commit()?;
         logging::log::info!(
@@ -429,7 +460,8 @@ impl<B: storage::Backend> Wallet<B> {
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
-        let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        let mut accounts =
+            Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
         db_tx.commit()?;
@@ -439,7 +471,7 @@ impl<B: storage::Backend> Wallet<B> {
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<BTreeMap<U31, Account>> {
+    ) -> WalletResult<()> {
         db_tx.clear_transactions()?;
         db_tx.clear_addresses()?;
         db_tx.clear_public_keys()?;
@@ -447,26 +479,37 @@ impl<B: storage::Backend> Wallet<B> {
         let lookahead_size = db_tx.get_lookahead_size()?;
 
         // set all accounts best block to genesis
+        for (id, mut info) in db_tx.get_accounts_info()? {
+            info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
+            info.set_lookahead_size(lookahead_size);
+            db_tx.set_account(&id, &info)?;
+            db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
+            db_tx.set_keychain_usage_state(
+                &AccountKeyPurposeId::new(id.clone(), KeyPurpose::Change),
+                &KeychainUsageState::new(None, None),
+            )?;
+            db_tx.set_keychain_usage_state(
+                &AccountKeyPurposeId::new(id.clone(), KeyPurpose::ReceiveFunds),
+                &KeychainUsageState::new(None, None),
+            )?;
+            db_tx
+                .set_vrf_keychain_usage_state(&id.clone(), &KeychainUsageState::new(None, None))?;
+        }
+
+        Ok(())
+    }
+
+    fn reset_wallet_transactions_and_load(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> WalletResult<BTreeMap<U31, Account>> {
+        Self::reset_wallet_transactions(chain_config.clone(), db_tx)?;
+
+        // set all accounts best block to genesis
         db_tx
             .get_accounts_info()?
-            .into_iter()
-            .map(|(id, mut info)| {
-                info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
-                info.set_lookahead_size(lookahead_size);
-                db_tx.set_account(&id, &info)?;
-                db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
-                db_tx.set_keychain_usage_state(
-                    &AccountKeyPurposeId::new(id.clone(), KeyPurpose::Change),
-                    &KeychainUsageState::new(None, None),
-                )?;
-                db_tx.set_keychain_usage_state(
-                    &AccountKeyPurposeId::new(id.clone(), KeyPurpose::ReceiveFunds),
-                    &KeychainUsageState::new(None, None),
-                )?;
-                db_tx.set_vrf_keychain_usage_state(
-                    &id.clone(),
-                    &KeychainUsageState::new(None, None),
-                )?;
+            .into_keys()
+            .map(|id| {
                 let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
                 account.top_up_addresses(db_tx)?;
                 account.scan_genesis(db_tx, &WalletEventsNoOp)?;
@@ -603,7 +646,8 @@ impl<B: storage::Backend> Wallet<B> {
 
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
-        let mut accounts = Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        let mut accounts =
+            Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
         db_tx.commit()?;
@@ -834,7 +878,10 @@ impl<B: storage::Backend> Wallet<B> {
         self.get_account(account_index)?.find_delegation(&delegation_id)
     }
 
-    pub fn get_created_blocks(&self, account_index: U31) -> WalletResult<Vec<Id<GenBlock>>> {
+    pub fn get_created_blocks(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Vec<(BlockHeight, Id<GenBlock>)>> {
         let block_ids = self.get_account(account_index)?.get_created_blocks();
         Ok(block_ids)
     }

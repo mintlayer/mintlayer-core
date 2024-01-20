@@ -67,7 +67,32 @@ impl ChainType {
         target_block_spacing: Duration,
     ) -> NetUpgrades<ConsensusUpgrade> {
         match self {
-            ChainType::Mainnet | ChainType::Regtest => {
+            ChainType::Mainnet => {
+                let target_limit = (Uint256::MAX
+                    / Uint256::from_u64(target_block_spacing.as_secs()))
+                .expect("Target block time cannot be zero as per NonZeroU64");
+
+                let upgrades = vec![
+                    (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+                    (
+                        BlockHeight::new(1),
+                        ConsensusUpgrade::PoS {
+                            initial_difficulty: Some(
+                                pos_initial_difficulty(ChainType::Mainnet).into(),
+                            ),
+                            config: PoSChainConfig::new(
+                                target_limit,
+                                DEFAULT_MATURITY_BLOCK_COUNT_V1,
+                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                PerThousand::new(1).expect("must be valid"),
+                                PoSConsensusVersion::V1,
+                            ),
+                        },
+                    ),
+                ];
+                NetUpgrades::initialize(upgrades).expect("net upgrades")
+            }
+            ChainType::Regtest => {
                 let pow_config = PoWChainConfig::new(*self);
                 let upgrades = vec![
                     (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
@@ -124,7 +149,14 @@ impl ChainType {
 
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
-            ChainType::Mainnet | ChainType::Regtest | ChainType::Signet => {
+            ChainType::Mainnet => {
+                let upgrades = vec![(
+                    BlockHeight::new(0),
+                    ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
+                )];
+                NetUpgrades::initialize(upgrades).expect("net upgrades")
+            }
+            ChainType::Regtest | ChainType::Signet => {
                 let upgrades = vec![(
                     BlockHeight::new(0),
                     ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
@@ -236,6 +268,30 @@ impl Builder {
         let target_block_spacing = super::DEFAULT_TARGET_BLOCK_SPACING;
         let consensus_upgrades = chain_type.default_consensus_upgrades(target_block_spacing);
 
+        let nft_issuance_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_NFT_ISSUANCE_FEE
+        } else {
+            super::MAINNET_NFT_ISSUANCE_FEE
+        };
+
+        let token_supply_change_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_SUPPLY_CHANGE_FEE
+        } else {
+            super::MAINNET_TOKEN_SUPPLY_CHANGE_FEE
+        };
+
+        let token_freeze_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_FREEZE_FEE
+        } else {
+            super::MAINNET_TOKEN_FREEZE_FEE
+        };
+
+        let token_change_authority_fee = if chain_type == ChainType::Testnet {
+            super::TESTNET_TOKEN_CHANGE_AUTHORITY_FEE
+        } else {
+            super::MAINNET_TOKEN_CHANGE_AUTHORITY_FEE
+        };
+
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
@@ -265,12 +321,12 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades: chain_type.default_chainstate_upgrades(),
             data_deposit_max_size: super::DATA_DEPOSIT_MAX_SIZE,
-            data_deposit_fee: super::DATA_DEPOSIT_MIN_FEE,
-            fungible_token_issuance_fee: super::FUNGIBLE_TOKEN_MIN_ISSUANCE_FEE,
-            nft_issuance_fee: super::NFT_MIN_ISSUANCE_FEE,
-            token_supply_change_fee: super::TOKEN_MIN_SUPPLY_CHANGE_FEE,
-            token_freeze_fee: super::TOKEN_MIN_FREEZE_FEE,
-            token_change_authority_fee: super::TOKEN_CHANGE_AUTHORITY_FEE,
+            data_deposit_fee: super::DATA_DEPOSIT_FEE,
+            fungible_token_issuance_fee: super::FUNGIBLE_TOKEN_ISSUANCE_FEE,
+            nft_issuance_fee,
+            token_supply_change_fee,
+            token_freeze_fee,
+            token_change_authority_fee,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,

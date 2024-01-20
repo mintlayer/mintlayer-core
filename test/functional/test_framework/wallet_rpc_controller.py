@@ -48,6 +48,11 @@ class DelegationData:
     delegation_id: str
     balance: str
 
+@dataclass
+class CreatedBlockInfo:
+    block_id: str
+    block_height: str
+
 class WalletRpcController:
 
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -111,10 +116,18 @@ class WalletRpcController:
         self.wallet_commands_file.write(response.read())
         return json.loads(body)
 
-    async def create_wallet(self) -> str:
-        wallet_file = os.path.join(self.node.datadir, "wallet")
+    async def create_wallet(self, name: str = "wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
         self._write_command("wallet_create", [wallet_file, True])
-        return "Sucess"
+        return "Success"
+
+    async def open_wallet(self, name: str = "wallet") -> str:
+        wallet_file = os.path.join(self.node.datadir, name)
+        self._write_command("wallet_open", [wallet_file, None])
+        return "Success"
+
+    async def close_wallet(self) -> str:
+        return self._write_command("wallet-close", [])
 
     async def get_best_block_height(self) -> str:
         return str(self._write_command("wallet_best_block", [{}])['result']['height'])
@@ -238,8 +251,9 @@ class WalletRpcController:
         pools = self._write_command("staking_list_pool_ids", [self.account])['result']
         return [PoolData(pool['pool_id'], pool['balance']) for pool in pools]
 
-    async def list_created_blocks_ids(self) -> List[str]:
-        return self._write_command("staking_list_created_block_ids", [self.account])['result']
+    async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
+        output = self._write_command("staking_list_created_block_ids", [self.account])['result']
+        return [CreatedBlockInfo(block['id'], block['height']) for block in output]
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
         return self._write_command("delegation_create", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']

@@ -210,7 +210,7 @@ pub async fn chain_genesis<T: ApiServerStorage>(
 
     Ok(Json(json!({
         "block_id": genesis.get_id(),
-        "fun_message": genesis.fun_message(),
+        "genesis_message": genesis.genesis_message(),
         "timestamp": genesis.timestamp(),
         "utxos": genesis.utxos()
                  .iter()

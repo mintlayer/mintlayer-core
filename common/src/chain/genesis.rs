@@ -24,7 +24,7 @@ use crate::primitives::{id, Id, Idable};
 #[derive(Eq, PartialEq, Clone, Encode, Decode, Debug, TypeName)]
 pub struct Genesis {
     /// Arbitrary message included in the genesis
-    fun_message: String,
+    genesis_message: String,
     /// Timestamp
     timestamp: BlockTimestamp,
     /// The initial UTXO set
@@ -34,14 +34,14 @@ pub struct Genesis {
 impl Genesis {
     pub fn new(fun_message: String, timestamp: BlockTimestamp, utxos: Vec<TxOutput>) -> Self {
         Self {
-            fun_message,
+            genesis_message: fun_message,
             timestamp,
             utxos,
         }
     }
 
-    pub fn fun_message(&self) -> &str {
-        &self.fun_message
+    pub fn genesis_message(&self) -> &str {
+        &self.genesis_message
     }
 
     pub fn utxos(&self) -> &[TxOutput] {

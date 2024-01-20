@@ -171,7 +171,6 @@ impl Account {
             &chain_config,
             key_chain.account_index(),
             key_chain.account_public_key().clone(),
-            key_chain.account_vrf_public_key().clone(),
             key_chain.lookahead_size(),
             name,
         );
@@ -982,7 +981,9 @@ impl Account {
         let vrf_private_key = self
             .key_chain
             .get_vrf_private_key_for_public_key(&pool_data.vrf_public_key, db_tx)?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+            .ok_or(WalletError::KeyChainError(
+                KeyChainError::NoVRFPrivateKeyFound,
+            ))?
             .private_key();
 
         let data = PoSGenerateBlockInputData::new(
@@ -1626,7 +1627,7 @@ impl Account {
         Ok(())
     }
 
-    pub fn get_created_blocks(&self) -> Vec<Id<GenBlock>> {
+    pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>)> {
         self.output_cache
             .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
     }

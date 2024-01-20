@@ -118,8 +118,7 @@ impl ChainType {
 
     fn dns_seeds(&self) -> Vec<&'static str> {
         match self {
-            // TODO: Specify actual values
-            ChainType::Mainnet => Vec::new(),
+            ChainType::Mainnet => vec!["seed.mintlayer.org", "seed2.mintlayer.org"],
             ChainType::Testnet => vec!["testnet-seed.mintlayer.org"],
             ChainType::Regtest => Vec::new(),
             ChainType::Signet => Vec::new(),
@@ -128,9 +127,18 @@ impl ChainType {
 
     fn predefined_peer_addresses(&self) -> Vec<SocketAddr> {
         match self {
-            // TODO: Specify actual values
-            ChainType::Mainnet => Vec::new(),
-            ChainType::Testnet => Vec::new(),
+            ChainType::Mainnet => {
+                vec![
+                    "51.159.232.144:3031".parse().expect("Cannot fail"),
+                    "172.232.50.132:3031".parse().expect("Cannot fail"),
+                ]
+            }
+            ChainType::Testnet => {
+                vec![
+                    "51.15.103.154:13031".parse().expect("Cannot fail"),
+                    "51.15.59.248:13031".parse().expect("Cannot fail"),
+                ]
+            }
             ChainType::Regtest => Vec::new(),
             ChainType::Signet => Vec::new(),
         }
@@ -620,13 +628,17 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
-const FUNGIBLE_TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const NFT_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TOKEN_MIN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TOKEN_MIN_FREEZE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const FUNGIBLE_TOKEN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TESTNET_NFT_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TESTNET_TOKEN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TESTNET_TOKEN_FREEZE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TESTNET_TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const MAINNET_NFT_ISSUANCE_FEE: Amount = CoinUnit::from_coins(5).to_amount_atoms();
+const MAINNET_TOKEN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(50).to_amount_atoms();
+const MAINNET_TOKEN_FREEZE_FEE: Amount = CoinUnit::from_coins(50).to_amount_atoms();
+const MAINNET_TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 const DATA_DEPOSIT_MAX_SIZE: usize = 128;
-const DATA_DEPOSIT_MIN_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
 const TOKEN_MIN_HASH_LEN: usize = 4;
@@ -644,31 +656,54 @@ fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
 }
 
 fn create_mainnet_genesis() -> Genesis {
+    let genesis_message = "TestnetStartTwo".to_string();
+
+    let decommission_pub_key = decode_hex::<PublicKey>(
+        "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
+    );
+
+    let staker_pub_key = decode_hex::<PublicKey>(
+        "0002ddd59a9187481582c160794a20dfe194087f2dcd1faee18d023fc0cce7904e79",
+    );
+
+    let vrf_pub_key = decode_hex::<VRFPublicKey>(
+        "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f",
+    );
+
+    let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
+    let mint_output_amount = (DEFAULT_INITIAL_MINT - initial_pool_amount).expect("must be valid");
+
     // TODO: replace this with our mint key
-    // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
-    // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
-    // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
-    let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
+    let genesis_mint_pubkeyhash_hex_encoded = "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f";
     let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
-    let genesis_message = String::new();
-
-    // TODO: replace this with the real genesis mint value
-    let output = TxOutput::Transfer(
-        OutputValue::Coin(DEFAULT_INITIAL_MINT),
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
         genesis_mint_destination,
+    );
+
+    let initial_pool = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            initial_pool_amount,
+            Destination::PublicKey(staker_pub_key),
+            vrf_pub_key,
+            Destination::PublicKey(decommission_pub_key),
+            PerThousand::new(1000).expect("must be valid"),
+            Amount::ZERO,
+        )),
     );
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1639975460),
-        vec![output],
+        BlockTimestamp::from_int_seconds(1705576200),
+        vec![mint_output, initial_pool],
     )
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // We add 3_600_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
-    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * CoinUnit::ATOMS_PER_COIN);
+    // We add 3_300_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
+    let extra_testnet_mint = Amount::from_atoms(3_300_000_000 * CoinUnit::ATOMS_PER_COIN);
     let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
@@ -680,6 +715,12 @@ fn create_testnet_genesis() -> Genesis {
     let genesis_mint_destination = decode_hex::<PublicKey>(
         "0003e9d79eb6487c28dad9679461faa1ffcdbc52a10033e1ad625101a97db1ba8edd",
     );
+
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
+        Destination::PublicKey(genesis_mint_destination),
+    );
+
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
     );
@@ -689,11 +730,6 @@ fn create_testnet_genesis() -> Genesis {
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
         "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
-    );
-
-    let mint_output = TxOutput::Transfer(
-        OutputValue::Coin(mint_output_amount),
-        Destination::PublicKey(genesis_mint_destination),
     );
 
     let initial_pool = TxOutput::CreateStakePool(
