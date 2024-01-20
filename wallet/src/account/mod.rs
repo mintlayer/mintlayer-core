@@ -36,12 +36,12 @@ use wallet_types::with_locked::WithLocked;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{AccountKeyChain, KeyChainError};
 use crate::send_request::{
-    get_reward_output_destination, make_address_output, make_address_output_from_delegation,
-    make_address_output_token, make_decommission_stake_pool_output, make_mint_token_outputs,
-    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
+    make_address_output, make_address_output_from_delegation, make_address_output_token,
+    make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
+    make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
+use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -391,7 +391,8 @@ impl Account {
 
         let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
 
-        request.with_inputs(selected_inputs)
+        let pool_data_getter = |pool_id: &PoolId| self.output_cache.pool_data(*pool_id).ok();
+        request.with_inputs(selected_inputs, &pool_data_getter)
     }
 
     fn utxo_output_groups_by_currency(
@@ -1089,15 +1090,27 @@ impl Account {
             .enumerate()
             .map(|(i, witness)| match witness {
                 Some(w) => Ok(Some(w)),
-                None => match get_tx_output_destination(input_utxos[i].expect("cannot be none")) {
-                    Some(destination) => {
-                        let s = self
-                            .sign_input(&tx, destination, i, &input_utxos, db_tx)?
-                            .ok_or(WalletError::InputCannotBeSigned)?;
-                        Ok(Some(s))
-                    }
-                    None => Ok(None),
-                },
+                None => {
+                    let destination = match input_utxos[i].expect("cannot be none") {
+                        TxOutput::Transfer(_, d)
+                        | TxOutput::LockThenTransfer(_, d, _)
+                        | TxOutput::CreateDelegationId(d, _)
+                        | TxOutput::IssueNft(_, _, d) => d,
+                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            &self.output_cache.pool_data(*pool_id)?.decommission_key
+                        }
+                        TxOutput::CreateStakePool(_, data) => data.decommission_key(),
+                        TxOutput::IssueFungibleToken(_)
+                        | TxOutput::Burn(_)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::DataDeposit(_) => return Ok(None),
+                    };
+
+                    let s = self
+                        .sign_input(&tx, destination, i, &input_utxos, db_tx)?
+                        .ok_or(WalletError::InputCannotBeSigned)?;
+                    Ok(Some(s))
+                }
             })
             .collect::<Result<Vec<_>, WalletError>>()?;
 
@@ -1156,12 +1169,35 @@ impl Account {
         self.key_chain.get_addresses_usage_state()
     }
 
-    /// Return true if this transaction output is can be spent by this account or if it is being
+    fn collect_output_destinations(&self, txo: &TxOutput) -> Vec<Destination> {
+        match txo {
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::CreateDelegationId(d, _)
+            | TxOutput::IssueNft(_, _, d) => vec![d.clone()],
+            | TxOutput::ProduceBlockFromStake(d, pool_id) => {
+                let mut destinations = vec![d.clone()];
+                if let Ok(pool_data) = self.output_cache.pool_data(*pool_id) {
+                    destinations.push(pool_data.decommission_key.clone());
+                }
+                destinations
+            }
+            TxOutput::CreateStakePool(_, data) => {
+                vec![data.decommission_key().clone(), data.staker().clone()]
+            }
+            TxOutput::IssueFungibleToken(_)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::DataDeposit(_) => Vec::new(),
+        }
+    }
+
+    /// Return true if this transaction output can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        get_tx_output_destination(txo).map_or(false, |d| self.is_mine_or_watched_destination(d))
-            || get_reward_output_destination(txo)
-                .map_or(false, |d| self.is_mine_or_watched_destination(d))
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|d| self.is_mine_or_watched_destination(d))
     }
 
     /// Return true if this destination can be spent by this account or if it is being watched.
@@ -1194,16 +1230,16 @@ impl Account {
     ) -> WalletResult<bool> {
         self.mark_created_stake_pool_as_seen(output, db_tx)?;
 
-        if let Some(d) = get_tx_output_destination(output) {
-            match d {
+        for destination in self.collect_output_destinations(output) {
+            match destination {
                 Destination::Address(pkh) => {
-                    let found = self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                    let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
                     if found {
                         return Ok(true);
                     }
                 }
                 Destination::PublicKey(pk) => {
-                    let found = self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                    let found = self.key_chain.mark_public_key_as_used(db_tx, &pk)?;
                     if found {
                         return Ok(true);
                     }
@@ -1212,6 +1248,7 @@ impl Account {
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             }
         }
+
         Ok(false)
     }
 
