@@ -15,7 +15,7 @@
 
 use super::*;
 
-use api_server_common::storage::storage_api::block_aux_data::BlockAuxData;
+use api_server_common::storage::storage_api::{block_aux_data::BlockAuxData, TransactionInfo};
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block},
     primitives::{Id, H256},
@@ -109,10 +109,12 @@ async fn get_block_failed(#[case] seed: Seed) {
                 .unwrap()
                 .into();
 
-                db_tx
-                    .set_transaction(transaction_id, Some(block_id), &signed_transaction)
-                    .await
-                    .unwrap();
+                let tx_info = TransactionInfo {
+                    tx: signed_transaction,
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                };
+
+                db_tx.set_transaction(transaction_id, Some(block_id), &tx_info).await.unwrap();
 
                 db_tx
                     .set_block_aux_data(
@@ -232,7 +234,11 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
                 let mut storage = local_node.storage().clone_storage().await;
                 let mut db_tx = storage.transaction_rw().await.unwrap();
 
-                db_tx.set_transaction(transaction_id, None, &signed_transaction).await.unwrap();
+                let tx_info = TransactionInfo {
+                    tx: signed_transaction,
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                };
+                db_tx.set_transaction(transaction_id, None, &tx_info).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage

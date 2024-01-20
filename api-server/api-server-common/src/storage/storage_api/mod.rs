@@ -186,6 +186,12 @@ impl FungibleTokenData {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct TransactionInfo {
+    pub tx: SignedTransaction,
+    pub fee: Amount,
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -248,13 +254,13 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_transaction_with_block(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError>;
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError>;
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
         -> Result<Option<Utxo>, ApiServerStorageError>;
@@ -335,7 +341,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
-        transaction: &SignedTransaction,
+        transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_block_aux_data(

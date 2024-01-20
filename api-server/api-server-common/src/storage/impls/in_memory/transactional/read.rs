@@ -18,8 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         tokens::{NftIssuance, TokenId},
-        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -27,7 +26,7 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-    FungibleTokenData, Utxo,
+    FungibleTokenData, TransactionInfo, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -60,7 +59,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_transaction_with_block(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         self.transaction.get_transaction_with_block(transaction_id)
     }
 
@@ -97,7 +96,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 

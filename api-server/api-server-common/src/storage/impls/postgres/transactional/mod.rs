@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, PoolId, Transaction},
     primitives::{BlockHeight, Id},
 };
 use pos_accounting::PoolData;
@@ -28,7 +28,7 @@ use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo,
-    ApiServerTransactionRw, Transactional,
+    ApiServerTransactionRw, TransactionInfo, Transactional,
 };
 
 use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
@@ -131,7 +131,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
     pub async fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
 

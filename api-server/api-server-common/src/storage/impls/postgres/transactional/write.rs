@@ -18,8 +18,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -29,7 +29,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, Delegation, FungibleTokenData, Utxo,
+        ApiServerStorageWrite, Delegation, FungibleTokenData, TransactionInfo, Utxo,
     },
 };
 
@@ -133,7 +133,7 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
-        transaction: &SignedTransaction,
+        transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.set_transaction(transaction_id, owning_block, transaction).await?;
@@ -347,7 +347,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_transaction_with_block(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction_with_block(transaction_id).await?;
 
@@ -401,7 +401,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
 

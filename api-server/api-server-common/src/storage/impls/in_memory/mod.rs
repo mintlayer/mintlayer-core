@@ -16,13 +16,14 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
+    TransactionInfo, Utxo,
 };
 use common::{
     chain::{
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -44,7 +45,7 @@ struct ApiServerInMemoryStorage {
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
-    transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
+    transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, TransactionInfo)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
@@ -119,7 +120,7 @@ impl ApiServerInMemoryStorage {
     fn get_transaction_with_block(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         let transaction_result = self.transaction_table.get(&transaction_id);
         let (block_id, tx) = match transaction_result {
             Some(tx) => tx,
@@ -136,7 +137,7 @@ impl ApiServerInMemoryStorage {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
         let transaction_result = self.transaction_table.get(&transaction_id);
         let tx = match transaction_result {
             Some(tx) => tx,
@@ -470,7 +471,7 @@ impl ApiServerInMemoryStorage {
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
-        transaction: &SignedTransaction,
+        transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction_table
             .insert(transaction_id, (owning_block, transaction.clone()));

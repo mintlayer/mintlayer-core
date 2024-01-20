@@ -25,7 +25,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-        FungibleTokenData, Utxo,
+        FungibleTokenData, TransactionInfo, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -135,10 +135,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_transaction_with_block(
         &self,
         transaction_id: Id<common::chain::Transaction>,
-    ) -> Result<
-        Option<(Option<BlockAuxData>, common::chain::SignedTransaction)>,
-        ApiServerStorageError,
-    > {
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction_with_block(transaction_id).await?;
 
@@ -182,13 +179,8 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_transaction(
         &self,
         transaction_id: Id<common::chain::Transaction>,
-    ) -> Result<
-        Option<(
-            Option<Id<common::chain::Block>>,
-            common::chain::SignedTransaction,
-        )>,
-        ApiServerStorageError,
-    > {
+    ) -> Result<Option<(Option<Id<common::chain::Block>>, TransactionInfo)>, ApiServerStorageError>
+    {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
 
