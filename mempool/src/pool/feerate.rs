@@ -33,6 +33,10 @@ pub struct FeeRate {
 }
 
 impl FeeRate {
+    pub fn from_atoms_per_kb(atoms_per_kb: u128) -> Self {
+        Self::from_amount_per_kb(Amount::from_atoms(atoms_per_kb))
+    }
+
     pub const fn from_amount_per_kb(amount_per_kb: Amount) -> Self {
         Self { amount_per_kb }
     }

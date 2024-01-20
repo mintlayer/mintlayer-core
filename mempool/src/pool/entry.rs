@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use common::{
     chain::{
         AccountCommand, AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction,
@@ -102,7 +104,7 @@ pub struct TxEntry<O = TxOrigin> {
     tx_id: Id<Transaction>,
     transaction: SignedTransaction,
     creation_time: Time,
-    encoded_size: usize,
+    encoded_size: NonZeroUsize,
     origin: O,
     options: TxOptions,
 }
@@ -117,6 +119,7 @@ impl<O: IsOrigin> TxEntry<O> {
     ) -> Self {
         let tx_id = transaction.transaction().get_id();
         let encoded_size = serialization::Encode::encoded_size(&transaction);
+        let encoded_size = NonZeroUsize::new(encoded_size).expect("Encoded tx size is non-zero");
         Self {
             tx_id,
             transaction,
@@ -143,7 +146,7 @@ impl<O: IsOrigin> TxEntry<O> {
     }
 
     /// Encoded size of this entry
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> NonZeroUsize {
         self.encoded_size
     }
 

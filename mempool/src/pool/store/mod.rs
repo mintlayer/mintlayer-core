@@ -18,12 +18,13 @@ mod mem_usage;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
     ops::Deref,
 };
 
 use common::{
     chain::{SignedTransaction, Transaction, TxInput},
-    primitives::{Amount, Id},
+    primitives::Id,
 };
 use logging::log;
 use utils::newtype;
@@ -59,24 +60,19 @@ newtype! {
 
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
-    pub struct DescendantScore(Fee);
+    pub struct DescendantScore(FeeRate);
 }
 
 impl DescendantScore {
     /// Converts a `DescendantScore` to a `FeeRate` using a minimum fee rate as a lower bound.
-    pub fn to_feerate(self, min_feerate: FeeRate) -> Result<FeeRate, MempoolPolicyError> {
-        (Amount::from_atoms(self.into_atoms()) * 1000)
-            .ok_or(MempoolPolicyError::FeeOverflow)
-            .map(|amount| {
-                let feerate = FeeRate::from_amount_per_kb(amount);
-                std::cmp::max(feerate, min_feerate)
-            })
+    pub fn to_feerate(self, min_feerate: FeeRate) -> FeeRate {
+        std::cmp::max(self.0, min_feerate)
     }
 }
 
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
-    pub struct AncestorScore(Fee);
+    pub struct AncestorScore(FeeRate);
 }
 
 #[cfg(test)]
@@ -267,7 +263,10 @@ impl MempoolStore {
                         let total_fee = (ancestor.fees_with_descendants + entry.fee)
                             .ok_or(MempoolPolicyError::AncestorFeeUpdateOverflow)?;
                         ancestor.fees_with_descendants = total_fee;
-                        ancestor.size_with_descendants += entry.size();
+                        ancestor.size_with_descendants = entry
+                            .size()
+                            .checked_add(ancestor.size_with_descendants.get())
+                            .expect("non-zero size");
                         ancestor.count_with_descendants += 1;
                         Ok(())
                     },
@@ -286,7 +285,9 @@ impl MempoolStore {
                         ancestor.fees_with_descendants = (ancestor.fees_with_descendants
                             - entry.fee)
                             .expect("fee with descendants");
-                        ancestor.size_with_descendants -= entry.size();
+                        let size_desc = ancestor.size_with_descendants.get() - entry.size().get();
+                        ancestor.size_with_descendants =
+                            NonZeroUsize::new(size_desc).expect("non-zero size");
                         ancestor.count_with_descendants -= 1;
                     },
                 )
@@ -417,7 +418,9 @@ impl MempoolStore {
                         descendant.fees_with_ancestors = (descendant.fees_with_ancestors
                             - entry.fee)
                             .expect("fee with descendants");
-                        descendant.size_with_ancestors -= entry.size();
+                        let size_anc = descendant.size_with_ancestors.get() - entry.size().get();
+                        descendant.size_with_ancestors =
+                            NonZeroUsize::new(size_anc).expect("non-zero size");
                         descendant.count_with_ancestors -= 1;
                     },
                 )
@@ -548,8 +551,8 @@ pub struct TxMempoolEntry {
     count_with_ancestors: usize,
     fees_with_descendants: Fee,
     fees_with_ancestors: Fee,
-    size_with_descendants: usize,
-    size_with_ancestors: usize,
+    size_with_descendants: NonZeroUsize,
+    size_with_ancestors: NonZeroUsize,
 }
 
 impl TxMempoolEntry {
@@ -561,8 +564,9 @@ impl TxMempoolEntry {
         let fee = entry.fee();
         let entry = entry.into_tx_entry();
         let size = entry.size();
-        let size_with_ancestors: usize =
-            ancestors.iter().map(TxMempoolEntry::size).sum::<usize>() + size;
+        let size_with_ancestors = size
+            .checked_add(ancestors.iter().map(|x| x.size().get()).sum())
+            .expect("Sizes should not overflow");
         let ancestor_fees = ancestors
             .iter()
             .map(TxMempoolEntry::fee)
@@ -622,13 +626,10 @@ impl TxMempoolEntry {
     }
 
     pub fn descendant_score(&self) -> DescendantScore {
-        let a: Fee = (*self.fees_with_descendants
-            / u128::try_from(self.size_with_descendants).expect("conversion"))
-        .expect("nonzero tx_size")
-        .into();
-        let b: Fee = (*self.fee / u128::try_from(self.size()).expect("conversion"))
-            .expect("nonzero tx size")
-            .into();
+        let a = FeeRate::from_total_tx_fee(self.fees_with_descendants, self.size_with_descendants)
+            .expect("cannot overflow due to max supply");
+        let b = FeeRate::from_total_tx_fee(self.fee, self.size())
+            .expect("cannot overflow due to max supply");
         std::cmp::max(a, b).into()
     }
 
@@ -641,13 +642,10 @@ impl TxMempoolEntry {
             self.fee,
             self.size(),
         );
-        let a: Fee = (*self.fees_with_ancestors
-            / u128::try_from(self.size_with_ancestors).expect("conversion"))
-        .expect("nonzero tx_size")
-        .into();
-        let b: Fee = (*self.fee / u128::try_from(self.size()).expect("conversion"))
-            .expect("nonzero tx size")
-            .into();
+        let a = FeeRate::from_total_tx_fee(self.fees_with_ancestors, self.size_with_ancestors)
+            .expect("cannot overflow due to max supply");
+        let b = FeeRate::from_total_tx_fee(self.fee, self.size())
+            .expect("cannot overflow due to max supply");
         std::cmp::min(a, b).into()
     }
 
@@ -659,7 +657,7 @@ impl TxMempoolEntry {
         &self.entry
     }
 
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> NonZeroUsize {
         // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
         self.entry.size()
     }
