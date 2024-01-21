@@ -239,12 +239,20 @@ fn verify_wallet_balance(
 
 #[track_caller]
 fn create_wallet(chain_config: Arc<ChainConfig>) -> Wallet<DefaultBackend> {
+    create_wallet_with_mnemonic(chain_config, MNEMONIC)
+}
+
+#[track_caller]
+fn create_wallet_with_mnemonic(
+    chain_config: Arc<ChainConfig>,
+    mnemonic: &str,
+) -> Wallet<DefaultBackend> {
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
         chain_config,
         db,
-        MNEMONIC,
+        mnemonic,
         None,
         StoreSeedPhrase::DoNotStore,
         BlockHeight::new(0),
@@ -3895,6 +3903,102 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let currency_balances = wallet
         .get_balance(
             acc_1_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        pool_amount,
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut hot_wallet = create_wallet(chain_config.clone());
+
+    // create cold wallet that is not synced and only contains decommission key
+    let another_mnemonic =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
+    let decommission_key = cold_wallet.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0);
+
+    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = block1_amount;
+
+    let res = hot_wallet.create_next_account(Some("name".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
+
+    let stake_pool_transaction = hot_wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
+            },
+        )
+        .unwrap();
+    let _ = create_block(
+        &chain_config,
+        &mut hot_wallet,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_id = pool_ids.first().unwrap().0;
+    let decommission_partial_tx = hot_wallet
+        .decommission_stake_pool_request(
+            DEFAULT_ACCOUNT_INDEX,
+            pool_id,
+            pool_amount,
+            FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
+        )
+        .unwrap();
+
+    // sign the tx with cold wallet
+    let signed_tx = cold_wallet
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, decommission_partial_tx)
+        .unwrap()
+        .into_signed_tx()
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut hot_wallet,
+        vec![signed_tx],
+        Amount::ZERO,
+        1,
+    );
+
+    let currency_balances = hot_wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,

@@ -93,11 +93,60 @@ pub struct CurrentFeeRate {
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
+
+    input_utxos: Vec<Option<TxOutput>>,
+    destinations: Vec<Option<Destination>>,
 }
 
 impl PartiallySignedTransaction {
-    pub fn new(tx: Transaction, witnesses: Vec<Option<InputWitness>>) -> Self {
-        Self { tx, witnesses }
+    pub fn new(
+        tx: Transaction,
+        witnesses: Vec<Option<InputWitness>>,
+        input_utxos: Vec<Option<TxOutput>>,
+        destinations: Vec<Option<Destination>>,
+    ) -> WalletResult<Self> {
+        ensure!(
+            tx.inputs().len() == witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        ensure!(
+            input_utxos.len() == witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        ensure!(
+            input_utxos.len() == destinations.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        Ok(Self {
+            tx,
+            witnesses,
+            input_utxos,
+            destinations,
+        })
+    }
+
+    pub fn new_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
+        self.witnesses = witnesses;
+        self
+    }
+
+    pub fn tx(&self) -> &Transaction {
+        &self.tx
+    }
+
+    pub fn input_utxos(&self) -> &[Option<TxOutput>] {
+        self.input_utxos.as_ref()
+    }
+
+    pub fn destinations(&self) -> &[Option<Destination>] {
+        self.destinations.as_ref()
+    }
+
+    pub fn witnesses(&self) -> &[Option<InputWitness>] {
+        self.witnesses.as_ref()
     }
 
     pub fn count_inputs(&self) -> usize {
@@ -119,10 +168,6 @@ impl PartiallySignedTransaction {
         } else {
             Err(WalletError::FailedToConvertPartiallySignedTx(self))
         }
-    }
-
-    pub fn take(self) -> (Transaction, Vec<Option<InputWitness>>) {
-        (self.tx, self.witnesses)
     }
 }
 
@@ -1056,8 +1101,10 @@ impl Account {
             .enumerate()
             .map(|(i, destination)| self.sign_input(&tx, destination, i, input_utxos, db_tx))
             .collect::<Result<Vec<Option<InputWitness>>, _>>()?;
+        let input_utxos: Vec<_> = input_utxos.iter().map(|u| u.cloned()).collect();
+        let destinations: Vec<_> = destinations.iter().map(|d| Some((*d).clone())).collect();
 
-        Ok(PartiallySignedTransaction::new(tx, witnesses))
+        PartiallySignedTransaction::new(tx, witnesses, input_utxos, destinations)
     }
 
     pub fn sign_raw_transaction(
@@ -1065,56 +1112,27 @@ impl Account {
         tx: PartiallySignedTransaction,
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<PartiallySignedTransaction> {
-        let (tx, witnesses) = tx.take();
+        let inputs_utxo_refs: Vec<_> = tx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
-        let input_utxos = tx
-            .inputs()
+        let witnesses = tx
+            .witnesses()
             .iter()
-            .map(|input| match input {
-                TxInput::Utxo(outpoint) => Ok(Some(
-                    self.output_cache.get_txo(outpoint).ok_or(WalletError::NoUtxos)?,
-                )),
-                TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
-                    Err(WalletError::InputCannotBeSigned)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        ensure!(
-            input_utxos.len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        let witnesses = witnesses
-            .into_iter()
             .enumerate()
             .map(|(i, witness)| match witness {
-                Some(w) => Ok(Some(w)),
-                None => {
-                    let destination = match input_utxos[i].expect("cannot be none") {
-                        TxOutput::Transfer(_, d)
-                        | TxOutput::LockThenTransfer(_, d, _)
-                        | TxOutput::CreateDelegationId(d, _)
-                        | TxOutput::IssueNft(_, _, d) => d,
-                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            &self.output_cache.pool_data(*pool_id)?.decommission_key
-                        }
-                        TxOutput::CreateStakePool(_, data) => data.decommission_key(),
-                        TxOutput::IssueFungibleToken(_)
-                        | TxOutput::Burn(_)
-                        | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::DataDeposit(_) => return Ok(None),
-                    };
-
-                    let s = self
-                        .sign_input(&tx, destination, i, &input_utxos, db_tx)?
-                        .ok_or(WalletError::InputCannotBeSigned)?;
-                    Ok(Some(s))
-                }
+                Some(w) => Ok(Some(w.clone())),
+                None => match tx.destinations().get(i).expect("cannot fail") {
+                    Some(destination) => {
+                        let s = self
+                            .sign_input(tx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
+                            .ok_or(WalletError::InputCannotBeSigned)?;
+                        Ok(Some(s.clone()))
+                    }
+                    None => Ok(None),
+                },
             })
             .collect::<Result<Vec<_>, WalletError>>()?;
 
-        Ok(PartiallySignedTransaction::new(tx, witnesses))
+        Ok(tx.new_witnesses(witnesses))
     }
 
     pub fn account_index(&self) -> U31 {
