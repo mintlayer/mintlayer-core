@@ -113,6 +113,7 @@ BASE_SCRIPTS = [
     # vv Tests less than 2m vv
 
     # vv Tests less than 60s vv
+    'wallet_decommission_request.py',
 
     # vv Tests less than 30s vv
     'blockprod_generate_blocks_all_sources.py',
@@ -142,7 +143,6 @@ BASE_SCRIPTS = [
     'wallet_nfts.py',
     'wallet_delegations.py',
     'wallet_delegations_rpc.py',
-    'wallet_decommission_request.py',
     'wallet_high_fee.py',
     'wallet_generate_addresses.py',
     'wallet_set_lookahead_size.py',
