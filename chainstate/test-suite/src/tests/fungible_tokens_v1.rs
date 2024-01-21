@@ -46,8 +46,11 @@ use test_utils::{
     random_ascii_alphanumeric_string, split_value,
 };
 use tokens_accounting::TokensAccountingStorageRead;
-use tx_verifier::transaction_verifier::{
-    error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
+use tx_verifier::{
+    transaction_verifier::{
+        error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
+    },
+    CheckTransactionError,
 };
 
 fn make_issuance(
@@ -282,16 +285,17 @@ fn token_issue_test(#[case] seed: Seed) {
             authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
-        let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+        let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidTickerLength,
-                        tx_id,
-                        block_id
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidTickerLength,
+                            tx_id,
+                        ))
+                    )
                 ))
             ))
         );
@@ -305,16 +309,17 @@ fn token_issue_test(#[case] seed: Seed) {
             authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
-        let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+        let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidTickerLength,
-                        tx_id,
-                        block_id
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidTickerLength,
+                            tx_id,
+                        ))
+                    )
                 ))
             ))
         );
@@ -340,17 +345,18 @@ fn token_issue_test(#[case] seed: Seed) {
                     authority: Destination::AnyoneCanSpend,
                     is_freezable: IsTokenFreezable::No,
                 });
-                let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+                let (result, tx_id, _) = process_block_with_issuance(issuance);
 
                 assert_eq!(
                     result,
                     Err(ChainstateError::ProcessBlockError(
                         BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                            CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                                TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
-                                tx_id,
-                                block_id
-                            ))
+                            CheckBlockTransactionsError::CheckTransactionError(
+                                CheckTransactionError::TokensError(TokensError::IssueError(
+                                    TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                                    tx_id,
+                                ))
+                            )
                         ))
                     ))
                 );
@@ -371,16 +377,17 @@ fn token_issue_test(#[case] seed: Seed) {
                 authority: Destination::AnyoneCanSpend,
                 is_freezable: IsTokenFreezable::No,
             });
-            let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+            let (result, tx_id, _) = process_block_with_issuance(issuance);
             assert_eq!(
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorTooManyDecimals,
-                            tx_id,
-                            block_id
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorTooManyDecimals,
+                                tx_id,
+                            ))
+                        )
                     ))
                 ))
             );
@@ -400,16 +407,17 @@ fn token_issue_test(#[case] seed: Seed) {
                 authority: Destination::AnyoneCanSpend,
                 is_freezable: IsTokenFreezable::No,
             });
-            let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+            let (result, tx_id, _) = process_block_with_issuance(issuance);
             assert_eq!(
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorIncorrectMetadataURI,
-                            tx_id,
-                            block_id
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                                tx_id,
+                            ))
+                        )
                     ))
                 ))
             );
@@ -424,16 +432,17 @@ fn token_issue_test(#[case] seed: Seed) {
             authority: Destination::AnyoneCanSpend,
             is_freezable: IsTokenFreezable::No,
         });
-        let (result, tx_id, block_id) = process_block_with_issuance(issuance);
+        let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorIncorrectMetadataURI,
-                        tx_id,
-                        block_id
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                            tx_id,
+                        ))
+                    )
                 ))
             ))
         );
@@ -3798,19 +3807,19 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
         let block = tf.make_block_builder().add_transaction(tx).build();
-        let block_id = block.get_id();
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
-                        tx_id,
-                        block_id
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                            tx_id,
+                        ))
                     )
-                ))
+                )
             ))
         );
 

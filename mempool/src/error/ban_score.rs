@@ -15,8 +15,11 @@
 
 use chainstate::{
     ban_score::BanScore,
-    tx_verifier::transaction_verifier::{
-        signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
+    tx_verifier::{
+        transaction_verifier::{
+            signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
+        },
+        CheckTransactionError,
     },
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
     TransactionVerifierStorageError,
@@ -128,6 +131,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.mempool_ban_score(),
             ConnectTransactionError::RewardDistributionError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::MissingTxInputs => 100,
@@ -408,6 +412,21 @@ impl MempoolBanScore for RewardDistributionError {
             RewardDistributionError::DelegationRewardOverflow(_, _, _, _) => 0,
             RewardDistributionError::DelegationsRewardSumFailed(_, _) => 0,
             RewardDistributionError::StakerRewardOverflow(_, _, _, _) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for CheckTransactionError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            CheckTransactionError::PropertyQueryError(_) => 0,
+            CheckTransactionError::DuplicateInputInTransaction(_) => 100,
+            CheckTransactionError::InvalidWitnessCount => 100,
+            CheckTransactionError::EmptyInputsInTransaction(_) => 100,
+            CheckTransactionError::TokensError(err) => err.mempool_ban_score(),
+            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _) => 100,
+            CheckTransactionError::NoSignatureDataNotAllowed(_) => 100,
+            CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
         }
     }
 }

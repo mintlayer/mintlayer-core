@@ -35,8 +35,7 @@ use common::{
             ConsensusData,
         },
         config::EpochIndex,
-        tokens::{get_tokens_issuance_count, TokenId},
-        tokens::{NftIssuance, TokenAuxiliaryData},
+        tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -50,17 +49,14 @@ use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
-use crate::{
-    check_nft_issuance_data, detail::tokens::check_tokens_issuance, BlockError, ChainstateConfig,
-};
+use crate::{BlockError, ChainstateConfig};
 
 use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
-    median_time::calculate_median_time_past,
-    transaction_verifier::{error::TokensError, flush::flush_to_storage},
-    tx_verification_strategy::TransactionVerificationStrategy,
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
+    median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
+    tx_verification_strategy::TransactionVerificationStrategy, BlockSizeError, CheckBlockError,
+    CheckBlockTransactionsError,
 };
 
 pub use epoch_seal::EpochSealError;
@@ -662,37 +658,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_witness_count(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        for tx in block.transactions() {
-            ensure!(
-                tx.inputs().len() == tx.signatures().len(),
-                CheckBlockTransactionsError::InvalidWitnessCount
-            )
-        }
-        Ok(())
-    }
-
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            ensure!(
-                !tx.inputs().is_empty(),
-                CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(
-                    tx.transaction().get_id(),
-                    block.get_id(),
-                ),
-            );
-
-            let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
-                ensure!(
-                    tx_inputs.insert(input),
-                    CheckBlockTransactionsError::DuplicateInputInTransaction(
-                        tx.transaction().get_id(),
-                        block.get_id()
-                    )
-                );
                 ensure!(
                     block_inputs.insert(input),
                     CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
@@ -702,124 +672,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_data_deposit_outputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        for tx in block.transactions() {
-            for output in tx.outputs() {
-                match output {
-                    TxOutput::Transfer(..)
-                    | TxOutput::LockThenTransfer(..)
-                    | TxOutput::Burn(..)
-                    | TxOutput::CreateStakePool(..)
-                    | TxOutput::ProduceBlockFromStake(..)
-                    | TxOutput::CreateDelegationId(..)
-                    | TxOutput::DelegateStaking(..)
-                    | TxOutput::IssueFungibleToken(..)
-                    | TxOutput::IssueNft(..) => { /* Do nothing */ }
-                    TxOutput::DataDeposit(v) => {
-                        // Ensure the size of the data doesn't exceed the max allowed
-                        if v.len() > self.chain_config.data_deposit_max_size() {
-                            return Err(CheckBlockTransactionsError::DataDepositMaxSizeExceeded(
-                                v.len(),
-                                self.chain_config.data_deposit_max_size(),
-                                tx.transaction().get_id(),
-                                block.get_id(),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        for tx in block.transactions() {
-            // We can't issue multiple tokens in a single tx
-            let issuance_count = get_tokens_issuance_count(tx.outputs());
-            ensure!(
-                issuance_count <= 1,
-                CheckBlockTransactionsError::TokensError(
-                    TokensError::MultipleTokenIssuanceInTransaction(
-                        tx.transaction().get_id(),
-                        block.get_id()
-                    ),
-                )
-            );
-
-            // Check tokens
-            tx.outputs()
-                .iter()
-                .try_for_each(|output| match output {
-                    TxOutput::IssueFungibleToken(issuance) => {
-                        check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
-                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
-                        })
-                    }
-                    TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                        NftIssuance::V0(data) => check_nft_issuance_data(self.chain_config, data)
-                            .map_err(|e| {
-                                TokensError::IssueError(
-                                    e,
-                                    tx.transaction().get_id(),
-                                    block.get_id(),
-                                )
-                            }),
-                    },
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::DataDeposit(_) => Ok(()),
-                })
-                .map_err(CheckBlockTransactionsError::TokensError)
-                .log_err()?;
-        }
-        Ok(())
-    }
-
-    fn check_no_signature_size(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        for tx in block.transactions() {
-            for signature in tx.signatures() {
-                match signature {
-                    common::chain::signature::inputsig::InputWitness::NoSignature(data) => {
-                        if !self.chain_config.data_in_no_signature_witness_allowed()
-                            && data.is_some()
-                        {
-                            return Err(CheckBlockTransactionsError::NoSignatureDataNotAllowed(
-                                tx.transaction().get_id(),
-                                block.get_id(),
-                            ));
-                        }
-
-                        if let Some(inner_data) = data {
-                            ensure!(
-                                inner_data.len()
-                                    <= self.chain_config.data_in_no_signature_witness_max_size(),
-                                CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
-                                    inner_data.len(),
-                                    self.chain_config.data_in_no_signature_witness_max_size(),
-                                )
-                            )
-                        }
-                    }
-                    common::chain::signature::inputsig::InputWitness::Standard(_) => (),
-                }
-            }
-        }
-        Ok(())
-    }
-
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            tx_verifier::check_transaction(self.chain_config, tx)?;
+        }
+
         // Note: duplicate txs are detected through duplicate inputs
-        self.check_witness_count(block).log_err()?;
         self.check_duplicate_inputs(block).log_err()?;
-        self.check_tokens_txs(block).log_err()?;
-        self.check_no_signature_size(block).log_err()?;
-        self.check_data_deposit_outputs(block).log_err()?;
+
         Ok(())
     }
 

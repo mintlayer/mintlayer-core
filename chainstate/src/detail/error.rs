@@ -21,8 +21,7 @@ use super::{
     chainstateref::EpochSealError,
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
-        error::{ConnectTransactionError, TokensError},
-        storage::TransactionVerifierStorageError,
+        error::ConnectTransactionError, storage::TransactionVerifierStorageError,
     },
 };
 use chainstate_storage::ChainstateStorageVersion;
@@ -30,7 +29,7 @@ use chainstate_types::{GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
-        Block, GenBlock, Transaction,
+        Block, GenBlock,
     },
     primitives::{BlockHeight, Id},
 };
@@ -150,25 +149,9 @@ pub enum CheckBlockError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockTransactionsError {
     #[error("Blockchain storage error: {0}")]
-    PropertyQueryError(#[from] PropertyQueryError),
-    #[error("Duplicate input in transaction {0} in block {1}")]
-    DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
+    CheckTransactionError(#[from] tx_verifier::CheckTransactionError),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
-    #[error("Number of signatures differs from number of inputs")]
-    InvalidWitnessCount,
-    #[error("Empty inputs in transaction {0} found in block {1}")]
-    EmptyInputsInTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Tokens error: {0}")]
-    TokensError(TokensError),
-    #[error("No signature data size is too large: {0} > {1}")]
-    NoSignatureDataSizeTooLarge(usize, usize),
-    #[error("No signature data is not allowed. Found in transaction {0} and block {1}")]
-    NoSignatureDataNotAllowed(Id<Transaction>, Id<Block>),
-    #[error(
-        "Data deposit size {0} exceeded max allowed {1}. Found in transaction {2} and block {3}"
-    )]
-    DataDepositMaxSizeExceeded(usize, usize, Id<Transaction>, Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

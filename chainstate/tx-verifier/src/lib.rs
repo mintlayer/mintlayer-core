@@ -16,11 +16,14 @@
 pub mod transaction_verifier;
 
 pub use transaction_verifier::{
+    check_transaction::{check_transaction, CheckTransactionError},
     error,
     flush::flush_to_storage,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
-    timelock_check, TransactionSource, TransactionVerifier,
+    timelock_check,
+    tokens_check::{check_nft_issuance_data, check_tokens_issuance},
+    TransactionSource, TransactionVerifier,
 };

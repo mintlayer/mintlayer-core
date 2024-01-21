@@ -405,9 +405,11 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
                     chainstate::ChainstateError::ProcessBlockError(
                         chainstate::BlockError::CheckBlockFailed(
                             chainstate::CheckBlockError::CheckTransactionFailed(
-                                chainstate::CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
-                                    max_no_sig_data_size + 1,
-                                    max_no_sig_data_size
+                                chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                    tx_verifier::CheckTransactionError::NoSignatureDataSizeTooLarge(
+                                        max_no_sig_data_size + 1,
+                                        max_no_sig_data_size
+                                    )
                                 )
                             )
                         )
@@ -480,18 +482,19 @@ fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
                         tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
                     assert_eq!(
-                            process_result.unwrap_err(),
-                            chainstate::ChainstateError::ProcessBlockError(
-                                chainstate::BlockError::CheckBlockFailed(
-                                    chainstate::CheckBlockError::CheckTransactionFailed(
-                                        chainstate::CheckBlockTransactionsError::NoSignatureDataNotAllowed(
+                        process_result.unwrap_err(),
+                        chainstate::ChainstateError::ProcessBlockError(
+                            chainstate::BlockError::CheckBlockFailed(
+                                chainstate::CheckBlockError::CheckTransactionFailed(
+                                    chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                        tx_verifier::CheckTransactionError::NoSignatureDataNotAllowed(
                                             tx.transaction().get_id(),
-                                            block.get_id()
                                         )
                                     )
                                 )
                             )
-                        );
+                        )
+                    );
                 }
             }
         }

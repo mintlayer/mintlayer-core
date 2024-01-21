@@ -24,7 +24,6 @@ pub mod block_checking;
 pub mod block_invalidation;
 pub mod bootstrap;
 pub mod query;
-pub mod tokens;
 pub mod tx_verification_strategy;
 
 use std::{collections::VecDeque, sync::Arc};
@@ -64,12 +63,7 @@ use utils::{
 };
 use utxo::UtxosDB;
 
-pub use self::{
-    error::*,
-    info::ChainInfo,
-    median_time::calculate_median_time_past,
-    tokens::{check_nft_issuance_data, check_tokens_issuance, is_rfc3986_valid_symbol},
-};
+pub use self::{error::*, info::ChainInfo, median_time::calculate_median_time_past};
 pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,

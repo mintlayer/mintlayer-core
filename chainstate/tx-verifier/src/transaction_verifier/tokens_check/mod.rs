@@ -15,25 +15,24 @@
 
 use self::check_utils::check_media_hash;
 
+use crate::error::TokenIssuanceError;
+
 use common::chain::{
     tokens::{NftIssuanceV0, TokenIssuance},
     ChainConfig,
 };
 use serialization::{DecodeAll, Encode};
-use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 
 mod check_utils;
-pub use check_utils::is_rfc3986_valid_symbol;
-use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_uri_valid};
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
     issuance: &NftIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
-    check_token_ticker(chain_config, &issuance.metadata.ticker)?;
-    check_nft_name(chain_config, &issuance.metadata.name)?;
-    check_nft_description(chain_config, &issuance.metadata.description)?;
+    check_utils::check_token_ticker(chain_config, &issuance.metadata.ticker)?;
+    check_utils::check_nft_name(chain_config, &issuance.metadata.name)?;
+    check_utils::check_nft_description(chain_config, &issuance.metadata.description)?;
 
     let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
         .map_err(|_| TokenIssuanceError::IssueErrorIncorrectIconURI)?;
@@ -43,7 +42,7 @@ pub fn check_nft_issuance_data(
             TokenIssuanceError::IssueErrorIncorrectIconURI
         );
         ensure!(
-            is_uri_valid(&icon_uri),
+            check_utils::is_uri_valid(&icon_uri),
             TokenIssuanceError::IssueErrorIncorrectIconURI
         );
     }
@@ -57,7 +56,7 @@ pub fn check_nft_issuance_data(
             TokenIssuanceError::IssueErrorIncorrectMetadataURI
         );
         ensure!(
-            is_uri_valid(&additional_metadata_uri),
+            check_utils::is_uri_valid(&additional_metadata_uri),
             TokenIssuanceError::IssueErrorIncorrectMetadataURI
         );
     }
@@ -70,7 +69,7 @@ pub fn check_nft_issuance_data(
             TokenIssuanceError::IssueErrorIncorrectMediaURI
         );
         ensure!(
-            is_uri_valid(&media_uri),
+            check_utils::is_uri_valid(&media_uri),
             TokenIssuanceError::IssueErrorIncorrectMediaURI
         );
     }
@@ -85,7 +84,7 @@ pub fn check_tokens_issuance(
     match issuance {
         TokenIssuance::V1(issuance_data) => {
             // Check token ticker
-            check_token_ticker(chain_config, &issuance_data.token_ticker)?;
+            check_utils::check_token_ticker(chain_config, &issuance_data.token_ticker)?;
 
             // Check decimals
             ensure!(
@@ -95,7 +94,7 @@ pub fn check_tokens_issuance(
 
             // Check URI
             ensure!(
-                is_uri_valid(&issuance_data.metadata_uri),
+                check_utils::is_uri_valid(&issuance_data.metadata_uri),
                 TokenIssuanceError::IssueErrorIncorrectMetadataURI
             );
 

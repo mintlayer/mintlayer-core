@@ -87,6 +87,7 @@ impl OrphanType {
             | CTE::ConstrainedValueAccumulatorError(_, _)
             | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
+            | CTE::CheckTransactionError(_)
             | CTE::IOPolicyError(_, _) => None,
         }
     }
