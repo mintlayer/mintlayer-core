@@ -390,6 +390,7 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
                     anyonecanspend_address(),
                 ))
                 .build();
+            let tx_id = tx.transaction().get_id();
 
             if valid_size {
                 let process_result =
@@ -408,7 +409,8 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
                                 chainstate::CheckBlockTransactionsError::CheckTransactionError(
                                     tx_verifier::CheckTransactionError::NoSignatureDataSizeTooLarge(
                                         max_no_sig_data_size + 1,
-                                        max_no_sig_data_size
+                                        max_no_sig_data_size,
+                                        tx_id
                                     )
                                 )
                             )

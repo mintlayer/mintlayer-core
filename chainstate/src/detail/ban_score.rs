@@ -276,9 +276,9 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::DuplicateInputInTransaction(_) => 100,
             CheckTransactionError::EmptyInputsInTransaction(_) => 100,
             CheckTransactionError::TokensError(err) => err.ban_score(),
-            CheckTransactionError::InvalidWitnessCount => 100,
+            CheckTransactionError::InvalidWitnessCount(_) => 100,
             CheckTransactionError::NoSignatureDataNotAllowed(_) => 100,
-            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _) => 100,
+            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
         }
     }

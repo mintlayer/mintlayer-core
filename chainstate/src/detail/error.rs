@@ -148,9 +148,9 @@ pub enum CheckBlockError {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockTransactionsError {
-    #[error("Blockchain storage error: {0}")]
+    #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] tx_verifier::CheckTransactionError),
-    #[error("Duplicate input in block")]
+    #[error("Duplicate input in block: {0}")]
     DuplicateInputInBlock(Id<Block>),
 }
 

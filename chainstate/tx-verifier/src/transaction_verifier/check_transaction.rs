@@ -38,14 +38,14 @@ pub enum CheckTransactionError {
     PropertyQueryError(#[from] PropertyQueryError),
     #[error("Duplicate input in transaction {0}")]
     DuplicateInputInTransaction(Id<Transaction>),
-    #[error("Number of signatures differs from number of inputs")]
-    InvalidWitnessCount,
+    #[error("Number of signatures differs from number of inputs in tx {0}")]
+    InvalidWitnessCount(Id<Transaction>),
     #[error("Empty inputs in transaction {0} found")]
     EmptyInputsInTransaction(Id<Transaction>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
-    #[error("No signature data size is too large: {0} > {1}")]
-    NoSignatureDataSizeTooLarge(usize, usize),
+    #[error("No signature data size is too large: {0} > {1} in tx {2}")]
+    NoSignatureDataSizeTooLarge(usize, usize, Id<Transaction>),
     #[error("No signature data is not allowed. Found in transaction {0}")]
     NoSignatureDataNotAllowed(Id<Transaction>),
     #[error("Data deposit size {0} exceeded max allowed {1}. Found in transaction {2}")]
@@ -85,7 +85,7 @@ fn check_duplicate_inputs(tx: &SignedTransaction) -> Result<(), CheckTransaction
 fn check_witness_count(tx: &SignedTransaction) -> Result<(), CheckTransactionError> {
     ensure!(
         tx.inputs().len() == tx.signatures().len(),
-        CheckTransactionError::InvalidWitnessCount
+        CheckTransactionError::InvalidWitnessCount(tx.transaction().get_id())
     );
 
     Ok(())
@@ -147,6 +147,7 @@ fn check_no_signature_size(
                         CheckTransactionError::NoSignatureDataSizeTooLarge(
                             inner_data.len(),
                             chain_config.data_in_no_signature_witness_max_size(),
+                            tx.transaction().get_id()
                         )
                     )
                 }

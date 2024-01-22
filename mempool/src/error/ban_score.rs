@@ -421,10 +421,10 @@ impl MempoolBanScore for CheckTransactionError {
         match self {
             CheckTransactionError::PropertyQueryError(_) => 0,
             CheckTransactionError::DuplicateInputInTransaction(_) => 100,
-            CheckTransactionError::InvalidWitnessCount => 100,
+            CheckTransactionError::InvalidWitnessCount(_) => 100,
             CheckTransactionError::EmptyInputsInTransaction(_) => 100,
             CheckTransactionError::TokensError(err) => err.mempool_ban_score(),
-            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _) => 100,
+            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::NoSignatureDataNotAllowed(_) => 100,
             CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
         }
