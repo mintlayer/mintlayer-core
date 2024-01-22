@@ -21,7 +21,7 @@ use chainstate::{
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
-use common::chain::{RewardDistributionVersion, UtxoOutPoint};
+use common::chain::{RewardDistributionVersion, TokensTickerMaxLengthVersion, UtxoOutPoint};
 use common::primitives::{id, BlockHeight, Id};
 use common::{
     chain::{
@@ -56,6 +56,7 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V1,
                             TokensFeeVersionVersion::V1,
+                            TokensTickerMaxLengthVersion::V1,
                         ),
                     )])
                     .unwrap(),
@@ -959,6 +960,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersionVersion::V1,
+                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1017,6 +1019,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokenIssuanceVersion::V0,
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersionVersion::V1,
+                                    TokensTickerMaxLengthVersion::V1,
                                 ),
                             ),
                             (
@@ -1025,6 +1028,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokenIssuanceVersion::V1,
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersionVersion::V1,
+                                    TokensTickerMaxLengthVersion::V1,
                                 ),
                             ),
                         ])

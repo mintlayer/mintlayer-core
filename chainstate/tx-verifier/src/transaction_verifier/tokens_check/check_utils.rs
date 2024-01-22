@@ -15,7 +15,10 @@
 
 use crate::error::TokenIssuanceError;
 
-use common::chain::{tokens::is_rfc3986_valid_symbol, ChainConfig};
+use common::{
+    chain::{tokens::is_rfc3986_valid_symbol, ChainConfig},
+    primitives::BlockHeight,
+};
 use utils::ensure;
 
 fn check_is_text_ascii_alphanumeric(str: &[u8]) -> bool {
@@ -46,11 +49,12 @@ pub fn check_media_hash(chain_config: &ChainConfig, hash: &[u8]) -> Result<(), T
 
 pub fn check_token_ticker(
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
     ticker: &[u8],
 ) -> Result<(), TokenIssuanceError> {
     // Check length
     ensure!(
-        ticker.len() <= chain_config.token_max_ticker_len() && !ticker.is_empty(),
+        ticker.len() <= chain_config.token_max_ticker_len(block_height) && !ticker.is_empty(),
         TokenIssuanceError::IssueErrorInvalidTickerLength
     );
 

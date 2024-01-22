@@ -21,8 +21,7 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, NftIssuance, TokenId},
-        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersionVersion, TxInput, TxOutput,
+        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId},
 };
@@ -365,11 +364,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                TokenIssuanceVersion::V1,
-                                RewardDistributionVersion::V1,
-                                TokensFeeVersionVersion::V1,
-                            ),
+                            ChainstateUpgrade::latest(),
                         )])
                         .unwrap(),
                     )

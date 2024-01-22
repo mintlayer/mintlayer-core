@@ -30,7 +30,7 @@ use crate::{
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersionVersion,
+        TokenIssuanceVersion, TokensFeeVersionVersion, TokensTickerMaxLengthVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -42,8 +42,8 @@ use crypto::key::hdkd::child_number::ChildNumber;
 
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
-// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance
-// and also changed various tokens fees
+// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance,
+// changed various tokens fees and also increased max ticker length for tokens
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
 
 impl ChainType {
@@ -151,25 +151,11 @@ impl ChainType {
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
             ChainType::Mainnet => {
-                let upgrades = vec![(
-                    BlockHeight::new(0),
-                    ChainstateUpgrade::new(
-                        TokenIssuanceVersion::V1,
-                        RewardDistributionVersion::V1,
-                        TokensFeeVersionVersion::V1,
-                    ),
-                )];
+                let upgrades = vec![(BlockHeight::new(0), ChainstateUpgrade::latest())];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Regtest | ChainType::Signet => {
-                let upgrades = vec![(
-                    BlockHeight::new(0),
-                    ChainstateUpgrade::new(
-                        TokenIssuanceVersion::V1,
-                        RewardDistributionVersion::V1,
-                        TokensFeeVersionVersion::V1,
-                    ),
-                )];
+                let upgrades = vec![(BlockHeight::new(0), ChainstateUpgrade::latest())];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
@@ -180,6 +166,7 @@ impl ChainType {
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V0,
                             TokensFeeVersionVersion::V0,
+                            TokensTickerMaxLengthVersion::V0,
                         ),
                     ),
                     (
@@ -188,6 +175,7 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V0,
                             TokensFeeVersionVersion::V0,
+                            TokensTickerMaxLengthVersion::V0,
                         ),
                     ),
                     (
@@ -196,6 +184,7 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
                             TokensFeeVersionVersion::V1,
+                            TokensTickerMaxLengthVersion::V1,
                         ),
                     ),
                 ];
@@ -259,7 +248,6 @@ pub struct Builder {
     data_deposit_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
-    token_max_ticker_len: usize,
     token_max_name_len: usize,
     token_max_description_len: usize,
     token_min_hash_len: usize,
@@ -307,7 +295,6 @@ impl Builder {
             data_deposit_fee: super::DATA_DEPOSIT_FEE,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
-            token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
             token_max_name_len: super::TOKEN_MAX_NAME_LEN,
             token_max_description_len: super::TOKEN_MAX_DESCRIPTION_LEN,
             token_min_hash_len: super::TOKEN_MIN_HASH_LEN,
@@ -357,7 +344,6 @@ impl Builder {
             data_deposit_fee,
             token_max_uri_len,
             token_max_dec_count,
-            token_max_ticker_len,
             token_max_name_len,
             token_max_description_len,
             token_min_hash_len,
@@ -441,7 +427,6 @@ impl Builder {
             data_deposit_fee,
             token_max_uri_len,
             token_max_dec_count,
-            token_max_ticker_len,
             empty_consensus_reward_maturity_block_count,
             token_max_name_len,
             token_max_description_len,

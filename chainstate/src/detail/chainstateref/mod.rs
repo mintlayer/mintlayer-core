@@ -672,9 +672,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_transactions(
+        &self,
+        block: &Block,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
-            tx_verifier::check_transaction(self.chain_config, tx)?;
+            tx_verifier::check_transaction(self.chain_config, block_height, tx)?;
         }
 
         // Note: duplicate txs are detected through duplicate inputs
@@ -722,7 +726,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             );
         }
 
-        self.check_transactions(block)
+        let prev_block_height = self
+            .get_gen_block_index(&block.prev_block_id())
+            .log_err()?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(
+                block.prev_block_id(),
+            ))?
+            .block_height();
+
+        self.check_transactions(block, prev_block_height.next_height())
             .map_err(CheckBlockError::CheckTransactionFailed)
             .log_err()?;
 

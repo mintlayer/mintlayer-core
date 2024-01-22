@@ -44,6 +44,7 @@ use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
+use super::TokensTickerMaxLengthVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
 use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersionVersion};
@@ -227,7 +228,6 @@ pub struct ChainConfig {
     data_deposit_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
-    token_max_ticker_len: usize,
     token_max_name_len: usize,
     token_max_description_len: usize,
     token_min_hash_len: usize,
@@ -554,8 +554,16 @@ impl ChainConfig {
 
     /// The maximum length of a ticker of a token
     #[must_use]
-    pub fn token_max_ticker_len(&self) -> usize {
-        self.token_max_ticker_len
+    pub fn token_max_ticker_len(&self, height: BlockHeight) -> usize {
+        let ticker_version = self
+            .chainstate_upgrades
+            .version_at_height(height)
+            .1
+            .tokens_ticker_length_version();
+        match ticker_version {
+            TokensTickerMaxLengthVersion::V0 => TOKEN_MAX_TICKER_LEN_V0,
+            TokensTickerMaxLengthVersion::V1 => TOKEN_MAX_TICKER_LEN_V1,
+        }
     }
 
     /// The maximum length of a description of a token
@@ -657,7 +665,8 @@ const DATA_DEPOSIT_MAX_SIZE: usize = 128;
 const DATA_DEPOSIT_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
-const TOKEN_MAX_TICKER_LEN: usize = 5;
+const TOKEN_MAX_TICKER_LEN_V0: usize = 5;
+const TOKEN_MAX_TICKER_LEN_V1: usize = 12;
 const TOKEN_MIN_HASH_LEN: usize = 4;
 const TOKEN_MAX_HASH_LEN: usize = 32;
 const TOKEN_MAX_NAME_LEN: usize = 10;
@@ -802,6 +811,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     TokenIssuanceVersion::V1,
                     RewardDistributionVersion::V1,
                     TokensFeeVersionVersion::V1,
+                    TokensTickerMaxLengthVersion::V1,
                 ),
             )])
             .expect("cannot fail"),
