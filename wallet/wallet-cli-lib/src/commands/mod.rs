@@ -1472,8 +1472,9 @@ impl CommandHandler {
                 let result = block_ids
                     .into_iter()
                     .map(|(h, id)| {
-                        let id = &format!("{:?}", id)[2..];
-                        format!("({h}, {})", id)
+                        let hex_string = format!("{:?}", id);
+                        let id = hex_string.strip_prefix("0x").unwrap_or(&hex_string);
+                        format!("({h}, {id})")
                     })
                     .fold("".to_string(), |curr, v| curr + &v + "\n");
                 Ok(ConsoleCommand::Print(result))

@@ -122,7 +122,7 @@ class WalletNfts(BitcoinTestFramework):
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
-            invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[\]^_`{|}~")
+            invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
             nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
             assert nft_id is None
             assert err is not None
@@ -136,7 +136,7 @@ class WalletNfts(BitcoinTestFramework):
             assert err is not None
             assert_in("Invalid name length", err)
             # non alphanumeric
-            invalid_name = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[\]^_`{|}~")
+            invalid_name = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
             nft_id, err = await wallet.issue_new_nft(address, "123456", invalid_name, "SomeNFT", "XXX")
             assert nft_id is None
             assert err is not None

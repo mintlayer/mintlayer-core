@@ -449,11 +449,11 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_equal(len(pools), 0)
 
             balance = await wallet.get_balance("locked")
-            pattern = r"Coins amount: (\d{5})"
+            pattern = r"Coins amount: (\d{5,})"
             result = re.search(pattern, balance)
             assert(result)
             g = result.group(1)
-            self.log.info(f"extracted group {g}")
+            self.log.info(f"balance {balance}, extracted group {g}")
             assert_greater_than(int(g), 40000)
 
             created_block_ids = await wallet.list_created_blocks_ids()

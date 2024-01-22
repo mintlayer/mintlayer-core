@@ -122,7 +122,7 @@ class WalletTokens(BitcoinTestFramework):
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
-            invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[\]^_`{|}~")
+            invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
             token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
