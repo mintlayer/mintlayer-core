@@ -18,7 +18,7 @@ mod consensus_upgrade;
 mod netupgrade;
 
 pub use chainstate_upgrade::{
-    ChainstateUpgrade, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersionVersion,
+    ChainstateUpgrade, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
     TokensTickerMaxLengthVersion,
 };
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};

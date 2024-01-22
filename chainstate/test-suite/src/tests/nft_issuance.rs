@@ -23,7 +23,7 @@ use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
     Block, ChainstateUpgrade, Destination, OutPointSourceId, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersionVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
+    TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::{CryptoRng, Rng};
@@ -1668,7 +1668,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
-                                TokensFeeVersionVersion::V1,
+                                TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
@@ -1727,7 +1727,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
-                                TokensFeeVersionVersion::V1,
+                                TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                             ),
                         )])

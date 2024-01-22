@@ -32,7 +32,7 @@ pub enum RewardDistributionVersion {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub enum TokensFeeVersionVersion {
+pub enum TokensFeeVersion {
     /// Initial tokens fee values
     V0,
     /// Updated tokens fee values
@@ -51,7 +51,7 @@ pub enum TokensTickerMaxLengthVersion {
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
     reward_distribution_version: RewardDistributionVersion,
-    tokens_fee_version: TokensFeeVersionVersion,
+    tokens_fee_version: TokensFeeVersion,
     tokens_ticker_length_version: TokensTickerMaxLengthVersion,
 }
 
@@ -59,7 +59,7 @@ impl ChainstateUpgrade {
     pub fn new(
         token_issuance_version: TokenIssuanceVersion,
         reward_distribution_version: RewardDistributionVersion,
-        tokens_fee_version: TokensFeeVersionVersion,
+        tokens_fee_version: TokensFeeVersion,
         tokens_ticker_length_version: TokensTickerMaxLengthVersion,
     ) -> Self {
         Self {
@@ -74,7 +74,7 @@ impl ChainstateUpgrade {
         ChainstateUpgrade::new(
             TokenIssuanceVersion::V1,
             RewardDistributionVersion::V1,
-            TokensFeeVersionVersion::V1,
+            TokensFeeVersion::V1,
             TokensTickerMaxLengthVersion::V1,
         )
     }
@@ -87,7 +87,7 @@ impl ChainstateUpgrade {
         self.reward_distribution_version
     }
 
-    pub fn tokens_fee_version(&self) -> TokensFeeVersionVersion {
+    pub fn tokens_fee_version(&self) -> TokensFeeVersion {
         self.tokens_fee_version
     }
 

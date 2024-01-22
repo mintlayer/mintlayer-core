@@ -47,7 +47,7 @@ use super::output_value::OutputValue;
 use super::TokensTickerMaxLengthVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
-use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersionVersion};
+use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -508,8 +508,8 @@ impl ChainConfig {
     pub fn nft_issuance_fee(&self, height: BlockHeight) -> Amount {
         let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
         match fee_version {
-            TokensFeeVersionVersion::V0 => NFT_ISSUANCE_FEE_V0,
-            TokensFeeVersionVersion::V1 => NFT_ISSUANCE_FEE_V1,
+            TokensFeeVersion::V0 => NFT_ISSUANCE_FEE_V0,
+            TokensFeeVersion::V1 => NFT_ISSUANCE_FEE_V1,
         }
     }
 
@@ -517,8 +517,8 @@ impl ChainConfig {
     pub fn token_supply_change_fee(&self, height: BlockHeight) -> Amount {
         let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
         match fee_version {
-            TokensFeeVersionVersion::V0 => TOKEN_SUPPLY_CHANGE_FEE_V0,
-            TokensFeeVersionVersion::V1 => TOKEN_SUPPLY_CHANGE_FEE_V1,
+            TokensFeeVersion::V0 => TOKEN_SUPPLY_CHANGE_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_SUPPLY_CHANGE_FEE_V1,
         }
     }
 
@@ -526,8 +526,8 @@ impl ChainConfig {
     pub fn token_freeze_fee(&self, height: BlockHeight) -> Amount {
         let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
         match fee_version {
-            TokensFeeVersionVersion::V0 => TOKEN_FREEZE_FEE_V0,
-            TokensFeeVersionVersion::V1 => TOKEN_FREEZE_FEE_V1,
+            TokensFeeVersion::V0 => TOKEN_FREEZE_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_FREEZE_FEE_V1,
         }
     }
 
@@ -535,8 +535,8 @@ impl ChainConfig {
     pub fn token_change_authority_fee(&self, height: BlockHeight) -> Amount {
         let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
         match fee_version {
-            TokensFeeVersionVersion::V0 => TOKEN_CHANGE_AUTHORITY_FEE_V0,
-            TokensFeeVersionVersion::V1 => TOKEN_CHANGE_AUTHORITY_FEE_V1,
+            TokensFeeVersion::V0 => TOKEN_CHANGE_AUTHORITY_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_CHANGE_AUTHORITY_FEE_V1,
         }
     }
 
@@ -810,7 +810,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                 ChainstateUpgrade::new(
                     TokenIssuanceVersion::V1,
                     RewardDistributionVersion::V1,
-                    TokensFeeVersionVersion::V1,
+                    TokensFeeVersion::V1,
                     TokensTickerMaxLengthVersion::V1,
                 ),
             )])

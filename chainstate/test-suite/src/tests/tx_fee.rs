@@ -35,7 +35,7 @@ use common::{
             TokenTotalSupply,
         },
         ChainConfig, ChainstateUpgrade, Destination, NetUpgrades, TokenIssuanceVersion,
-        TokensFeeVersionVersion, TxInput, TxOutput, UtxoOutPoint,
+        TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -578,7 +578,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V0,
                                 RewardDistributionVersion::V1,
-                                TokensFeeVersionVersion::V1,
+                                TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                             ),
                         )])

@@ -30,7 +30,7 @@ use crate::{
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersionVersion, TokensTickerMaxLengthVersion,
+        TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -165,7 +165,7 @@ impl ChainType {
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V0,
-                            TokensFeeVersionVersion::V0,
+                            TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
                         ),
                     ),
@@ -174,7 +174,7 @@ impl ChainType {
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V0,
-                            TokensFeeVersionVersion::V0,
+                            TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
                         ),
                     ),
@@ -183,7 +183,7 @@ impl ChainType {
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
-                            TokensFeeVersionVersion::V1,
+                            TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                         ),
                     ),
