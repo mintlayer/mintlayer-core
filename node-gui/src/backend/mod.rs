@@ -82,7 +82,18 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
         std::env::set_var("RUST_LOG", "info");
     }
 
-    let opts = node_lib::Options::from_args(std::env::args_os());
+    let opts = {
+        let mut opts = node_lib::Options::from_args(std::env::args_os());
+        opts.command = opts.command.clone().or_else(|| {
+            let options = node_lib::RunOptions {
+                http_rpc_enabled: Some(false),
+                ..Default::default()
+            };
+            Some(node_lib::Command::Mainnet(options))
+        });
+        opts
+    };
+
     logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
