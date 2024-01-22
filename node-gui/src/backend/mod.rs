@@ -77,21 +77,26 @@ pub struct InitializedNode {
     pub chain_info: ChainInfo,
 }
 
+/// For the GUI, we disable the RPC server by default
+fn disable_rpc_port_binding_by_default(opts: node_lib::Options) -> node_lib::Options {
+    opts.command = opts.command.clone().or_else(|| {
+        let options = node_lib::RunOptions {
+            http_rpc_enabled: Some(false),
+            ..Default::default()
+        };
+        Some(node_lib::Command::Mainnet(options))
+    });
+    opts
+}
+
 pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<BackendControls> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
 
     let opts = {
-        let mut opts = node_lib::Options::from_args(std::env::args_os());
-        opts.command = opts.command.clone().or_else(|| {
-            let options = node_lib::RunOptions {
-                http_rpc_enabled: Some(false),
-                ..Default::default()
-            };
-            Some(node_lib::Command::Mainnet(options))
-        });
-        opts
+        let opts = node_lib::Options::from_args(std::env::args_os());
+        disable_rpc_port_binding_by_default(opts)
     };
 
     logging::init_logging();
