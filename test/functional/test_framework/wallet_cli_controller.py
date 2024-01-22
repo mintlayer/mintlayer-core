@@ -237,7 +237,7 @@ class WalletCliController:
                             icon_uri: Optional[str] = '',
                             media_uri: Optional[str] = '',
                             additional_metadata_uri: Optional[str] = ''):
-        output = await self._write_command(f'token-nft-issue-new {destination_address} {media_hash} {name} {description} "{ticker}" {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n')
+        output = await self._write_command(f'token-nft-issue-new {destination_address} "{media_hash}" "{name}" "{description}" "{ticker}" {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n')
         if output.startswith("A new NFT has been issued with ID"):
             return output[output.find(':')+2:], None
 
