@@ -83,10 +83,11 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     }
 
     let opts = node_lib::Options::from_args(std::env::args_os());
+
     logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
-    let setup_result = node_lib::setup(opts).await?;
+    let setup_result = node_lib::setup(opts, true).await?;
     let node = match setup_result {
         node_lib::NodeSetupResult::Node(node) => node,
         node_lib::NodeSetupResult::DataDirCleanedUp => {
