@@ -25,6 +25,7 @@ pub mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    net::IpAddr,
     sync::Arc,
     time::Duration,
 };
@@ -1258,6 +1259,7 @@ where
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
+        let mut cur_conn_ip_port_to_role_map = BTreeMap::new();
         for (addr, role) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
@@ -1278,6 +1280,9 @@ where
                     cur_feeler_conn_count += 1;
                 }
             }
+
+            let socket_addr = addr.socket_addr();
+            cur_conn_ip_port_to_role_map.insert((socket_addr.ip(), socket_addr.port()), role);
         }
 
         let needed_outbound_full_relay_conn_count = {
@@ -1294,7 +1299,11 @@ where
         let new_full_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
             &|addr| {
-                !self.should_reject_because_already_connected(addr, PeerRole::OutboundFullRelay)
+                self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundFullRelay,
+                )
             },
             needed_outbound_full_relay_conn_count,
         );
@@ -1324,7 +1333,11 @@ where
         let new_block_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
             &|addr| {
-                !self.should_reject_because_already_connected(addr, PeerRole::OutboundBlockRelay)
+                self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundBlockRelay,
+                )
             },
             needed_outbound_block_relay_conn_count,
         );
@@ -1340,11 +1353,16 @@ where
 
         let cur_pending_outbound_conn_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
-        let new_reserved_conn_addresses = self
-            .peerdb
-            .select_reserved_outbound_addresses(&cur_pending_outbound_conn_addresses, &|addr| {
-                !self.should_reject_because_already_connected(addr, PeerRole::OutboundReserved)
-            });
+        let new_reserved_conn_addresses = self.peerdb.select_reserved_outbound_addresses(
+            &cur_pending_outbound_conn_addresses,
+            &|addr| {
+                self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundReserved,
+                )
+            },
+        );
 
         for address in &new_reserved_conn_addresses {
             self.connect(*address, OutboundConnectType::Reserved);
@@ -1702,7 +1720,7 @@ where
     // by `new_peer_role`.
     fn should_reject_because_already_connected(
         &self,
-        address: &SocketAddress,
+        new_peer_addr: &SocketAddress,
         new_peer_role: PeerRole,
     ) -> bool {
         if !new_peer_role.is_outbound() {
@@ -1711,34 +1729,88 @@ where
             return false;
         }
 
-        let should_reject = self.peers.values().any(|peer| {
-            if peer.peer_address == *address {
-                // Can't have multiple connections to the same socket address.
-                return true;
-            }
+        let should_reject =
+            self.peer_addresses_iter().any(|(existing_peer_addr, existing_peer_role)| {
+                // If the ip addresses are different, allow the connection.
+                if existing_peer_addr.ip_addr() != new_peer_addr.ip_addr() {
+                    return false;
+                }
 
-            // If the ip addresses are different, allow the connection. Also allow it if explicitly
-            // told to do so.
-            if peer.peer_address.ip_addr() != address.ip_addr()
-                || *self.p2p_config.peer_manager_config.allow_same_ip_connections
-            {
-                return false;
-            }
-
-            if peer.peer_role.is_outbound() {
-                // Outbound connections to different socket addresses are ok.
-                return false;
-            }
-
-            // The existing connection is inbound, the new one is outbound and the ip addresses
-            // are the same. We assume that the connections are to the same node (and therefore
-            // reject the new connection) unless the new connection is a manual one
-            // (because the user should know better; also, functional tests use manual
-            // connections for test nodes and those nodes do share the same ip address).
-            !new_peer_role.is_outbound_manual()
-        });
+                !self.may_allow_outbound_connection_to_existing_ip(
+                    existing_peer_addr.socket_addr().port(),
+                    existing_peer_role,
+                    new_peer_addr.socket_addr().port(),
+                    new_peer_role,
+                )
+            });
 
         should_reject
+    }
+
+    /// Return true if the specified `new_peer_addr` can be used for a new outbound connection.
+    ///
+    /// This is basically a replacement for `should_reject_because_already_connected` that
+    /// is used when selecting addresses for new automatic outbound connections; it will be
+    /// called for every address in peerdb, so we want to avoid the linear complexity of
+    /// `should_reject_because_already_connected`.
+    /// Note that this function mainly serves as an optimization - we don't want to select
+    /// addresses that will be rejected anyway when trying to connect to them.
+    fn allow_new_outbound_connection(
+        &self,
+        existing_connections: &BTreeMap<(IpAddr, /*port:*/ u16), PeerRole>,
+        new_peer_addr: &SocketAddress,
+        new_peer_role: PeerRole,
+    ) -> bool {
+        assert!(new_peer_role.is_outbound());
+
+        let new_peer_ip = new_peer_addr.socket_addr().ip();
+        let new_peer_port = new_peer_addr.socket_addr().port();
+        existing_connections.range((new_peer_ip, 0)..=(new_peer_ip, u16::MAX)).all(
+            |((_, existing_peer_port), existing_peer_role)| {
+                self.may_allow_outbound_connection_to_existing_ip(
+                    *existing_peer_port,
+                    *existing_peer_role,
+                    new_peer_port,
+                    new_peer_role,
+                )
+            },
+        )
+    }
+
+    /// This function is supposed to be called for every existing peer whose ip address
+    /// equals the ip address of some "new peer"; it returns true if connection to the new peer
+    /// *may* be allowed. If it returns true for all such existing peers, then the connection
+    /// will be allowed.
+    fn may_allow_outbound_connection_to_existing_ip(
+        &self,
+        existing_peer_port: u16,
+        existing_peer_role: PeerRole,
+        new_peer_port: u16,
+        new_peer_role: PeerRole,
+    ) -> bool {
+        assert!(new_peer_role.is_outbound());
+
+        if existing_peer_port == new_peer_port {
+            // Can't have multiple connections to the same socket address.
+            return false;
+        }
+
+        // Allow the connection if explicitly told to do so.
+        if *self.p2p_config.peer_manager_config.allow_same_ip_connections {
+            return true;
+        }
+
+        if existing_peer_role.is_outbound() {
+            // Outbound connections to different socket addresses are ok.
+            return true;
+        }
+
+        // The existing connection is inbound, the new one is outbound and the ip addresses
+        // are the same. We assume that the connections are to the same node (and therefore
+        // reject the new connection) unless the new connection is a manual one
+        // (because the user should know better; also, functional tests use manual
+        // connections for test nodes and those nodes do share the same ip address).
+        new_peer_role.is_outbound_manual()
     }
 
     /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)

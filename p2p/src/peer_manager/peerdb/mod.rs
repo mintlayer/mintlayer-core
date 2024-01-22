@@ -237,7 +237,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 addr_data.connect_now(now)
                     && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
-                    && additional_filter(*addr)
+                    && additional_filter(addr)
                     && !addr_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
             }
