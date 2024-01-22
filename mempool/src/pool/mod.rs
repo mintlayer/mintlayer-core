@@ -101,7 +101,7 @@ pub struct Mempool<M> {
 
 impl<M> std::fmt::Debug for Mempool<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.store)
+        self.store.fmt(f)
     }
 }
 
@@ -447,7 +447,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         );
 
         ensure!(
-            entry.size() <= self.chain_config.max_tx_size_for_mempool(),
+            entry.size().get() <= self.chain_config.max_tx_size_for_mempool(),
             MempoolPolicyError::ExceedsMaxBlockSize,
         );
 
@@ -495,9 +495,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.
+        let size: usize = transaction.size().into();
         ensure!(
-            transaction.size() <= config::MAX_ORPHAN_TX_SIZE,
-            OrphanPoolError::TooLarge(transaction.size(), config::MAX_ORPHAN_TX_SIZE),
+            size <= config::MAX_ORPHAN_TX_SIZE,
+            OrphanPoolError::TooLarge(size, config::MAX_ORPHAN_TX_SIZE),
         );
 
         // Account nonces are supposed to be consecutive. If the distance between the expected and
@@ -845,10 +846,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 removed.descendant_score(),
                 removed.size()
             );
-            removed_fees.push(FeeRate::from_total_tx_fee(
-                removed.fee(),
-                NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
-            )?);
+            removed_fees.push(FeeRate::from_total_tx_fee(removed.fee(), removed.size())?);
             self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
@@ -1049,7 +1047,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         self.orphans.remove_by_origin(RemoteTxOrigin::new(peer_id));
     }
 
-    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
+    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
         let min_feerate = std::cmp::max(
             self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
             *self.mempool_config.min_tx_relay_fee_rate,
@@ -1060,13 +1058,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .iter()
             .rev()
             .find(|(_score, tx_id)| {
-                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size());
+                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
                 (total_size / 1_000_000) >= in_top_x_mb
             })
-            .map_or_else(
-                || Ok(min_feerate),
-                |(score, _txs)| score.to_feerate(min_feerate),
-            )
+            .map_or(min_feerate, |(score, _txs)| score.to_feerate(min_feerate))
     }
 
     pub fn get_fee_rate_points(
@@ -1077,9 +1072,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
             *self.mempool_config.min_tx_relay_fee_rate,
         );
-        let min_score = DescendantScore::new(Fee::new(Amount::from_atoms(
-            min_feerate.atoms_per_kb() / 1000,
-        )));
+        let min_score = DescendantScore::new(min_feerate);
 
         let size_to_score: BTreeMap<_, _> = self
             .store
@@ -1087,7 +1080,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .iter()
             .rev()
             .map(|(score, tx_id)| {
-                let size = self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size());
+                let size = self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
                 (score, size)
             })
             .chain(std::iter::once((&min_score, 1)))
@@ -1103,17 +1096,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let points = feerate_points::generate_equidistant_span(*first, *last, num_points.get());
 
         if points.len() >= size_to_score.len() {
-            size_to_score
+            Ok(size_to_score
                 .into_iter()
-                .map(|(point, score)| score.to_feerate(min_feerate).map(|feerate| (point, feerate)))
-                .collect()
+                .map(|(point, score)| (point, score.to_feerate(min_feerate)))
+                .collect())
         } else {
             points
                 .into_iter()
                 .map(|point| {
                     let score = feerate_points::find_interpolated_value(&size_to_score, point)
                         .ok_or(MempoolPolicyError::FeeOverflow)?;
-                    score.to_feerate(min_feerate).map(|feerate| (point, feerate))
+                    Ok((point, score.to_feerate(min_feerate)))
                 })
                 .collect()
         }

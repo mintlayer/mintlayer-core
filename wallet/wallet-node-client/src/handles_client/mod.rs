@@ -313,7 +313,7 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
-        let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await??;
+        let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await?;
         Ok(res)
     }
 

@@ -134,14 +134,14 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
             node.mempool_submit_transaction(encoded_tx, {})
 
             tx_size = len(encoded_tx) // 2
-            feerate = (out_amount - to_transfer) // tx_size
+            feerate = 1000 * (out_amount - to_transfer) // tx_size
             accumulated_size = accumulated_size + tx_size
             feerates[accumulated_size] = feerate
             if first is None:
                 first = accumulated_size
 
         accumulated_size = accumulated_size + 1
-        feerates[accumulated_size] = expected_lowest_feerate / 1000
+        feerates[accumulated_size] = expected_lowest_feerate
         last = accumulated_size
 
         if len(feerates) > 10:
@@ -156,7 +156,6 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
         for (i, expected_point, (point, feerate)) in zip(range(10), points, feerate_points):
             expected_feerate = interpolate_value(feerates, point)
             assert expected_feerate is not None
-            expected_feerate *= 1000
             self.log.info(f"{expected_point} {expected_feerate} {point} {feerate}")
             assert_equal(expected_point, point)
             assert_equal(expected_feerate, feerate['amount_per_kb']['val'])

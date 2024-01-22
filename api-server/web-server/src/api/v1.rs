@@ -350,19 +350,10 @@ pub async fn feerate<T: ApiServerStorage>(
             let mut guard = feerate_points.write().expect("should not fail normally");
             guard.0 = current_time;
             guard.1 = new_feerate_points;
-            guard
-                .1
-                .iter()
-                .map(|(size, feerate)| (*size, Amount::from_atoms(feerate.atoms_per_kb())))
-                .collect()
+            guard.1.iter().map(|(size, feerate)| (*size, *feerate)).collect()
         } else {
-            feerate_points
-                .read()
-                .expect("should not fail normally")
-                .1
-                .iter()
-                .map(|(size, feerate)| (*size, Amount::from_atoms(feerate.atoms_per_kb())))
-                .collect()
+            let guard = feerate_points.read().expect("should not fail normally");
+            guard.1.iter().map(|(size, feerate)| (*size, *feerate)).collect()
         }
     };
 
@@ -382,7 +373,7 @@ pub async fn feerate<T: ApiServerStorage>(
     };
 
     Ok(Json(
-        serde_json::to_value(feerate.into_atoms().to_string()).expect("should not fail"),
+        serde_json::to_value(feerate.atoms_per_kb().to_string()).expect("should not fail"),
     ))
 }
 

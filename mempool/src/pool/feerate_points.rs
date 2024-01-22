@@ -22,7 +22,7 @@ use num_traits::ops::checked::{CheckedAdd, CheckedMul};
 
 use common::primitives::Amount;
 
-use super::fee::Fee;
+use crate::FeeRate;
 
 pub fn linear_interpolation<X, Y>(p0: (X, Y), p1: (X, Y), x: X) -> Option<Y>
 where
@@ -47,7 +47,7 @@ where
     }
 }
 
-pub fn find_interpolated_value<T: From<Fee> + Into<Fee> + Copy>(
+pub fn find_interpolated_value<T: From<FeeRate> + Into<FeeRate> + Copy>(
     map: &BTreeMap<usize, T>,
     key: usize,
 ) -> Option<T> {
@@ -56,16 +56,16 @@ pub fn find_interpolated_value<T: From<Fee> + Into<Fee> + Copy>(
         None => {
             let (k1, left_value) = map.range(..key).next_back()?;
             let (k2, right_value) = map.range(key..).next()?;
-            let left_value: Fee = (*left_value).into();
-            let right_value: Fee = (*right_value).into();
+            let left_value: FeeRate = (*left_value).into();
+            let right_value: FeeRate = (*right_value).into();
 
             let interpolated_value = linear_interpolation(
-                (*k1 as u64, left_value.into_atoms()),
-                (*k2 as u64, right_value.into_atoms()),
+                (*k1 as u64, left_value.atoms_per_kb()),
+                (*k2 as u64, right_value.atoms_per_kb()),
                 key as u64,
             )?;
 
-            Some(Fee::new(Amount::from_atoms(interpolated_value)).into())
+            Some(FeeRate::from_amount_per_kb(Amount::from_atoms(interpolated_value)).into())
         }
     }
 }
@@ -160,7 +160,7 @@ mod tests {
         for _ in 0..rng.gen_range(1..10) {
             map.insert(
                 rng.gen::<usize>(),
-                DescendantScore::new(Fee::new(Amount::from_atoms(rng.gen_range(0..1000)))),
+                DescendantScore::new(FeeRate::from_atoms_per_kb(rng.gen_range(0..1_000_000))),
             );
         }
 
@@ -181,17 +181,17 @@ mod tests {
     fn test_find_interpolated_value_interpolation(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut map = BTreeMap::new();
-        let min = rng.gen_range(0..1000);
-        let max = rng.gen_range(min..2000);
+        let min = rng.gen_range(0..1_000_000);
+        let max = rng.gen_range(min..2_000_000);
 
-        map.insert(0, DescendantScore::new(Fee::new(Amount::from_atoms(min))));
-        map.insert(10, DescendantScore::new(Fee::new(Amount::from_atoms(max))));
+        map.insert(0, DescendantScore::new(FeeRate::from_atoms_per_kb(min)));
+        map.insert(10, DescendantScore::new(FeeRate::from_atoms_per_kb(max)));
 
         assert_eq!(
             find_interpolated_value(&map, 5),
-            Some(DescendantScore::new(Fee::new(Amount::from_atoms(
+            Some(DescendantScore::new(FeeRate::from_atoms_per_kb(
                 linear_interpolation((0_u64, min), (10, max), 5).unwrap()
-            ))))
+            )))
         );
     }
 }

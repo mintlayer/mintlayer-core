@@ -267,7 +267,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
             "Stats: count {}, memory {}, encoded size {}",
             mempool.store.txs_by_id.len(),
             mempool.memory_usage(),
-            mempool.store.txs_by_id.values().map(|e| e.size()).sum::<usize>(),
+            mempool.store.txs_by_id.values().map(|e| e.size().get()).sum::<usize>(),
         );
 
         // Check the final state of each transaction in the original sequence

@@ -206,8 +206,8 @@ impl MempoolInterface for MempoolImpl {
         self.mempool.set_max_size(max_size)
     }
 
-    fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
-        Ok(self.mempool.get_fee_rate(in_top_x_mb)?)
+    fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
+        self.mempool.get_fee_rate(in_top_x_mb)
     }
 
     fn get_fee_rate_points(
