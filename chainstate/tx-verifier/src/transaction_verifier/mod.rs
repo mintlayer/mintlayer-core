@@ -22,12 +22,14 @@ mod token_issuance_cache;
 mod tokens_accounting_undo_cache;
 mod utxos_undo_cache;
 
+pub mod check_transaction;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
 pub mod signature_destination_getter;
 pub mod storage;
 pub mod timelock_check;
+pub mod tokens_check;
 
 mod tx_source;
 use constraints_value_accumulator::AccumulatedFee;
@@ -770,6 +772,8 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
+        check_transaction::check_transaction(self.chain_config.as_ref(), tx)?;
+
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         // Register tokens if tx has issuance data

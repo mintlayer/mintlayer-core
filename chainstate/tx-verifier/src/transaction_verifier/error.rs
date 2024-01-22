@@ -26,7 +26,7 @@ use common::{
 };
 use thiserror::Error;
 
-use crate::timelock_check;
+use crate::{timelock_check, CheckTransactionError};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
@@ -152,6 +152,8 @@ pub enum ConnectTransactionError {
     AttemptToSpendFrozenToken(TokenId),
     #[error("Reward distribution error: {0}")]
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
+    #[error("Check transaction error: {0}")]
+    CheckTransactionError(#[from] CheckTransactionError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -196,10 +198,10 @@ pub enum TokenIssuanceError {
 pub enum TokensError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Issuance error {0} in transaction {1} in block {2}")]
-    IssueError(TokenIssuanceError, Id<Transaction>, Id<Block>),
-    #[error("Too many tokens issuance in transaction {0} in block {1}")]
-    MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
+    #[error("Issuance error {0} in transaction {1}")]
+    IssueError(TokenIssuanceError, Id<Transaction>),
+    #[error("Too many tokens issuance in transaction {0}")]
+    MultipleTokenIssuanceInTransaction(Id<Transaction>),
     #[error("Coin or token overflow {0:?}")]
     CoinOrTokenOverflow(CoinOrTokenId),
     #[error("Insufficient token issuance fee in transaction {0}")]

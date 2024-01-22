@@ -419,7 +419,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         // use regtest with pos for new tx
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        let chain_config = common::chain::config::Builder::new(ChainType::Regtest)
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
@@ -505,7 +505,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
             .unwrap();
 
         // use regtest with pos for new tx
-        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        let chain_config = common::chain::config::Builder::new(ChainType::Regtest)
             .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =

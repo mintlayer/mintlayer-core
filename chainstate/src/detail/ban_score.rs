@@ -23,6 +23,7 @@ use tx_verifier::{
         signature_destination_getter::SignatureDestinationGetterError, IOPolicyError,
         RewardDistributionError,
     },
+    CheckTransactionError,
 };
 
 use super::{
@@ -149,6 +150,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
             ConnectTransactionError::PoolBalanceNotFound(_) => 100,
             ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
+            ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
         }
     }
 }
@@ -244,8 +246,8 @@ impl BanScore for TokensError {
     fn ban_score(&self) -> u32 {
         match self {
             TokensError::StorageError(_) => 0,
-            TokensError::IssueError(_, _, _) => 100,
-            TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
+            TokensError::IssueError(_, _) => 100,
+            TokensError::MultipleTokenIssuanceInTransaction(_) => 100,
             TokensError::CoinOrTokenOverflow(_) => 100,
             TokensError::InsufficientTokenFees(_) => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
@@ -261,15 +263,23 @@ impl BanScore for TokensError {
 impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
-            CheckBlockTransactionsError::PropertyQueryError(_) => 0,
-            CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
+            CheckBlockTransactionsError::CheckTransactionError(err) => err.ban_score(),
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
-            CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(_, _) => 100,
-            CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
-            CheckBlockTransactionsError::InvalidWitnessCount => 100,
-            CheckBlockTransactionsError::NoSignatureDataNotAllowed(_, _) => 100,
-            CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
-            CheckBlockTransactionsError::DataDepositMaxSizeExceeded(_, _, _, _) => 100,
+        }
+    }
+}
+
+impl BanScore for CheckTransactionError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            CheckTransactionError::PropertyQueryError(_) => 0,
+            CheckTransactionError::DuplicateInputInTransaction(_) => 100,
+            CheckTransactionError::EmptyInputsInTransaction(_) => 100,
+            CheckTransactionError::TokensError(err) => err.ban_score(),
+            CheckTransactionError::InvalidWitnessCount(_) => 100,
+            CheckTransactionError::NoSignatureDataNotAllowed(_) => 100,
+            CheckTransactionError::NoSignatureDataSizeTooLarge(_, _, _) => 100,
+            CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
         }
     }
 }

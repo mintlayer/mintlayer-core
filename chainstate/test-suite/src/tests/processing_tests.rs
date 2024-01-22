@@ -1109,14 +1109,12 @@ fn empty_inputs_in_tx(#[case] seed: Seed) {
         let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
-        let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::EmptyInputsInTransactionInBlock(
-                        first_tx_id,
-                        block_id
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        tx_verifier::CheckTransactionError::EmptyInputsInTransaction(first_tx_id,)
                     )
                 )
             ))

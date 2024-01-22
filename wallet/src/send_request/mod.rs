@@ -73,8 +73,7 @@ pub fn make_issue_token_outputs(
     token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
-
+    tx_verifier::check_tokens_issuance(chain_config, &token_issuance)?;
     let issuance_output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
 
     Ok(vec![issuance_output])

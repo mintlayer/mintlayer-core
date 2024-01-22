@@ -29,6 +29,7 @@ use common::{
     primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
 use crypto::random::SliceRandom;
+use tx_verifier::CheckTransactionError;
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -324,14 +325,12 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
         let second_tx_id = second_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
-        let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DuplicateInputInTransaction(
-                        second_tx_id,
-                        block_id
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::DuplicateInputInTransaction(second_tx_id,)
                     )
                 )
             ))
@@ -379,14 +378,12 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
         let second_tx_id = second_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
-        let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DuplicateInputInTransaction(
-                        second_tx_id,
-                        block_id
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::DuplicateInputInTransaction(second_tx_id,)
                     )
                 )
             ))

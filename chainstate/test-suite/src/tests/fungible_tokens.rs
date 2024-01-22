@@ -42,6 +42,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
+use tx_verifier::CheckTransactionError;
 
 fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
     TestFramework::builder(rng)
@@ -223,8 +224,10 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::MultipleTokenIssuanceInTransaction(_, _)
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(
+                            TokensError::MultipleTokenIssuanceInTransaction(_)
+                        )
                     )
                 ))
             ))

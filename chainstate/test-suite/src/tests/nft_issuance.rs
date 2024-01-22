@@ -14,17 +14,19 @@
 // limitations under the License.
 
 use chainstate::{
-    is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, ConnectTransactionError, TokensError,
+    BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::output_value::OutputValue;
-use common::chain::Block;
-use common::chain::OutPointSourceId;
 use common::chain::{
+    output_value::OutputValue,
     signature::inputsig::InputWitness,
-    tokens::{make_token_id, Metadata, NftIssuance, NftIssuanceV0, TokenIssuanceVersion},
-    ChainstateUpgrade, Destination, RewardDistributionVersion, TxInput, TxOutput,
+    tokens::{
+        is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0,
+        TokenIssuanceVersion,
+    },
+    Block, ChainstateUpgrade, Destination, OutPointSourceId, RewardDistributionVersion, TxInput,
+    TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::{CryptoRng, Rng};
@@ -36,7 +38,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_ascii_alphanumeric_string,
 };
-use tx_verifier::error::TokenIssuanceError;
+use tx_verifier::{error::TokenIssuanceError, CheckTransactionError};
 
 #[rstest]
 #[trace]
@@ -98,11 +100,12 @@ fn nft_name_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidNameLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidNameLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -164,11 +167,12 @@ fn nft_empty_name(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidNameLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidNameLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -241,11 +245,12 @@ fn nft_invalid_name(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorNameHasNoneAlphaNumericChar,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorNameHasNoneAlphaNumericChar,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -314,11 +319,12 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidTickerLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidTickerLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -381,11 +387,12 @@ fn nft_empty_ticker(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidTickerLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidTickerLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -458,11 +465,12 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -531,11 +539,12 @@ fn nft_description_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidDescriptionLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidDescriptionLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -598,11 +607,12 @@ fn nft_empty_description(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorInvalidDescriptionLength,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorInvalidDescriptionLength,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -675,11 +685,12 @@ fn nft_invalid_description(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -754,11 +765,12 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorIncorrectIconURI,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorIncorrectIconURI,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -906,11 +918,12 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorIncorrectIconURI,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorIncorrectIconURI,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -986,11 +999,12 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorIncorrectMetadataURI,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -1137,11 +1151,12 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorIncorrectMetadataURI,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -1217,11 +1232,12 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorIncorrectMediaURI,
-                        _,
-                        _
-                    ))
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorIncorrectMediaURI,
+                            _,
+                        ))
+                    )
                 ))
             ))
         ));
@@ -1370,11 +1386,12 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::IssueErrorIncorrectMediaURI,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorIncorrectMediaURI,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -1450,11 +1467,12 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::MediaHashTooShort,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::MediaHashTooShort,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -1484,11 +1502,12 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
-                            TokenIssuanceError::MediaHashTooLong,
-                            _,
-                            _
-                        ))
+                        CheckBlockTransactionsError::CheckTransactionError(
+                            CheckTransactionError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::MediaHashTooLong,
+                                _,
+                            ))
+                        )
                     ))
                 ))
             ));
@@ -1732,19 +1751,19 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
         let block = tf.make_block_builder().add_transaction(tx).build();
-        let block_id = block.get_id();
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorNameHasNoneAlphaNumericChar,
-                        tx_id,
-                        block_id
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorNameHasNoneAlphaNumericChar,
+                            tx_id,
+                        ))
                     )
-                ))
+                )
             ))
         );
 
@@ -1779,19 +1798,19 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
         let block = tf.make_block_builder().add_transaction(tx).build();
-        let block_id = block.get_id();
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
-                        tx_id,
-                        block_id
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar,
+                            tx_id,
+                        ))
                     )
-                ))
+                )
             ))
         );
 
@@ -1827,19 +1846,19 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
         let block = tf.make_block_builder().add_transaction(tx).build();
-        let block_id = block.get_id();
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueError(
-                        TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
-                        tx_id,
-                        block_id
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                            tx_id,
+                        ))
                     )
-                ))
+                )
             ))
         );
 

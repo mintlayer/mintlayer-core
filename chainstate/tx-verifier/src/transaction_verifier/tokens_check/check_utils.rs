@@ -13,17 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::ChainConfig;
-use tx_verifier::error::TokenIssuanceError;
+use crate::error::TokenIssuanceError;
+
+use common::chain::{tokens::is_rfc3986_valid_symbol, ChainConfig};
 use utils::ensure;
 
 fn check_is_text_ascii_alphanumeric(str: &[u8]) -> bool {
     str.iter().all(|c| c.is_ascii_alphanumeric())
-}
-
-pub fn is_rfc3986_valid_symbol(ch: char) -> bool {
-    // RFC 3986 alphabet taken from https://www.rfc-editor.org/rfc/rfc3986#section-2.1
-    "%:/?#[]@!$&\'()*+,;=-._~".chars().any(|rfc1738_ch| ch == rfc1738_ch)
 }
 
 pub fn is_uri_valid(uri: &[u8]) -> bool {

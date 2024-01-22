@@ -29,6 +29,11 @@ pub use rpc::*;
 pub use token_id::TokenId;
 pub use tokens_utils::*;
 
+pub fn is_rfc3986_valid_symbol(ch: char) -> bool {
+    // RFC 3986 alphabet taken from https://www.rfc-editor.org/rfc/rfc3986#section-2.1
+    "%:/?#[]@!$&\'()*+,;=-._~".chars().any(|rfc1738_ch| ch == rfc1738_ch)
+}
+
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct TokenAuxiliaryData {

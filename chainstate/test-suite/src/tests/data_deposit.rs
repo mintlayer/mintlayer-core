@@ -26,6 +26,7 @@ use common::primitives::{Amount, CoinOrTokenId, Idable};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::CheckTransactionError;
 
 #[rstest]
 #[trace]
@@ -66,11 +67,12 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
 
             let expected_err = Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DataDepositMaxSizeExceeded(
-                        deposited_data_len,
-                        tf.chain_config().data_deposit_max_size(),
-                        tx.transaction().get_id(),
-                        block.get_id(),
+                    CheckBlockTransactionsError::CheckTransactionError(
+                        CheckTransactionError::DataDepositMaxSizeExceeded(
+                            deposited_data_len,
+                            tf.chain_config().data_deposit_max_size(),
+                            tx.transaction().get_id(),
+                        ),
                     ),
                 )),
             ));
