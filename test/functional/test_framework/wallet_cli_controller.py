@@ -205,7 +205,9 @@ class WalletCliController:
                               is_freezable: str = 'freezable') -> Tuple[Optional[str], Optional[str]]:
         output = await self._write_command(f'token-issue-new "{token_ticker}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply} {is_freezable}\n')
         if output.startswith("A new token has been issued with ID"):
-            return output[output.find(':')+2:], None
+            begin = output.find(':') + 2
+            end = output.find(' ', begin)
+            return output[begin:end], None
 
         return None, output
 
@@ -239,7 +241,9 @@ class WalletCliController:
                             additional_metadata_uri: Optional[str] = ''):
         output = await self._write_command(f'token-nft-issue-new {destination_address} "{media_hash}" "{name}" "{description}" "{ticker}" {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n')
         if output.startswith("A new NFT has been issued with ID"):
-            return output[output.find(':')+2:], None
+            begin = output.find(':') + 2
+            end = output.find(' ', begin)
+            return output[begin:end], None
 
         self.log.error(f"err: {output}")
         return None, output

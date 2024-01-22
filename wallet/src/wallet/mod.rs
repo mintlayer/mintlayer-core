@@ -52,6 +52,7 @@ use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
 use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
+use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
@@ -134,6 +135,8 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Token issuance error: {0}")]
     TokenIssuance(#[from] TokenIssuanceError),
+    #[error("{0}")]
+    InvalidTransaction(#[from] CheckTransactionError),
     #[error("No UTXOs")]
     NoUtxos,
     #[error("Coin selection error: {0}")]
@@ -766,11 +769,11 @@ impl<B: storage::Backend> Wallet<B> {
     fn for_account_rw_unlocked<T>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<T>,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>, &ChainConfig) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        match f(account, &mut db_tx) {
+        match f(account, &mut db_tx, &self.chain_config) {
             Ok(value) => {
                 // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
                 db_tx.commit().expect("RW transaction commit failed unexpectedly");
@@ -785,6 +788,19 @@ impl<B: storage::Backend> Wallet<B> {
                 Err(err)
             }
         }
+    }
+
+    fn for_account_rw_unlocked_and_check_tx(
+        &mut self,
+        account_index: U31,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SignedTransaction>,
+    ) -> WalletResult<SignedTransaction> {
+        let (_, block_height) = self.get_best_block_for_account(account_index)?;
+        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+            let tx = f(account, db_tx)?;
+            check_transaction(chain_config, block_height.next_height(), &tx)?;
+            Ok(tx)
+        })
     }
 
     fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
@@ -982,7 +998,7 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.process_send_request(
                 db_tx,
                 request,
@@ -1005,7 +1021,7 @@ impl<B: storage::Backend> Wallet<B> {
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.spend_from_delegation(
                 db_tx,
                 address,
@@ -1027,7 +1043,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.mint_tokens(
                 db_tx,
                 token_info,
@@ -1051,7 +1067,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.unmint_tokens(
                 db_tx,
                 token_info,
@@ -1073,7 +1089,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.lock_token_supply(
                 db_tx,
                 token_info,
@@ -1095,7 +1111,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.freeze_token(
                 db_tx,
                 token_info,
@@ -1117,7 +1133,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.unfreeze_token(
                 db_tx,
                 token_info,
@@ -1139,7 +1155,7 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.change_token_authority(
                 db_tx,
                 token_info,
@@ -1232,7 +1248,7 @@ impl<B: storage::Backend> Wallet<B> {
         let latest_median_time = self.latest_median_time;
 
         let signed_transaction =
-            self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
                 account.create_issue_nft_tx(
                     db_tx,
                     IssueNftArguments {
@@ -1260,7 +1276,7 @@ impl<B: storage::Backend> Wallet<B> {
         stake_pool_arguments: StakePoolDataArguments,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.create_stake_pool_tx(
                 db_tx,
                 stake_pool_arguments,
@@ -1280,7 +1296,7 @@ impl<B: storage::Backend> Wallet<B> {
         pool_balance: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)
         })
     }
@@ -1292,7 +1308,7 @@ impl<B: storage::Backend> Wallet<B> {
         pool_balance: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
             account.decommission_stake_pool_request(db_tx, pool_id, pool_balance, current_fee_rate)
         })
     }
@@ -1302,7 +1318,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         tx: PartiallySignedTransaction,
     ) -> WalletResult<PartiallySignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
             account.sign_raw_transaction(tx, db_tx)
         })
     }

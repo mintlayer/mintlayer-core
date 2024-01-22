@@ -34,7 +34,9 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
 use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
 use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
-use wallet_rpc_lib::{CreatedWallet, WalletRpc, WalletService, WalletServiceConfig};
+use wallet_rpc_lib::{
+    types::NewTransaction, CreatedWallet, WalletRpc, WalletService, WalletServiceConfig,
+};
 
 use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
 
@@ -702,6 +704,14 @@ impl CommandHandler {
         ConsoleCommand::Print(status_text.to_owned())
     }
 
+    pub fn new_tx_submitted_command(new_tx: NewTransaction) -> ConsoleCommand {
+        let status_text = format!(
+            "The transaction was submitted successfully with ID:\n{}",
+            id_to_hex_string(*new_tx.tx_id.as_hash())
+        );
+        ConsoleCommand::Print(status_text)
+    }
+
     pub async fn handle_wallet_command(
         &mut self,
         chain_config: &Arc<ChainConfig>,
@@ -1009,7 +1019,7 @@ impl CommandHandler {
                 let token_supply = parse_token_supply(&token_supply, number_of_decimals)?;
 
                 let account_index = self.get_selected_acc()?;
-                let token_id = self
+                let new_token = self
                     .wallet_rpc
                     .issue_new_token(
                         account_index,
@@ -1024,8 +1034,9 @@ impl CommandHandler {
                     .await?;
 
                 Ok(ConsoleCommand::Print(format!(
-                    "A new token has been issued with ID: {}",
-                    token_id
+                    "A new token has been issued with ID: {} in tx: {}",
+                    new_token.token_id,
+                    id_to_hex_string(*new_token.tx_id.as_hash())
                 )))
             }
 
@@ -1054,14 +1065,15 @@ impl CommandHandler {
                 };
 
                 let selected_account = self.get_selected_acc()?;
-                let token_id = self
+                let new_token = self
                     .wallet_rpc
                     .issue_new_nft(selected_account, destination_address, metadata, self.config)
                     .await?;
 
                 Ok(ConsoleCommand::Print(format!(
-                    "A new NFT has been issued with ID: {}",
-                    token_id
+                    "A new NFT has been issued with ID: {} in tx: {}",
+                    new_token.token_id,
+                    id_to_hex_string(*new_token.tx_id.as_hash())
                 )))
             }
 
@@ -1071,29 +1083,32 @@ impl CommandHandler {
                 amount,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .mint_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::UnmintTokens { token_id, amount } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .unmint_tokens(selected_account, token_id, amount, self.config)
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::LockTokenSupply { token_id } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .lock_token_supply(selected_account, token_id, self.config)
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::FreezeToken {
@@ -1101,7 +1116,8 @@ impl CommandHandler {
                 is_unfreezable,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .freeze_token(
                         selected_account,
                         token_id,
@@ -1110,23 +1126,25 @@ impl CommandHandler {
                     )
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::UnfreezeToken { token_id } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc.unfreeze_token(selected_account, token_id, self.config).await?;
+                let new_tx =
+                    self.wallet_rpc.unfreeze_token(selected_account, token_id, self.config).await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::ChangeTokenAuthority { token_id, address } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .change_token_authority(selected_account, token_id, address, self.config)
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::Rescan => {
@@ -1278,10 +1296,11 @@ impl CommandHandler {
                     .map(parse_utxo_outpoint)
                     .collect::<Result<Vec<_>, WalletCliError>>()?;
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .send_coins(selected_account, address, amount, input_utxos, self.config)
                     .await?;
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::SendTokensToAddress {
@@ -1290,11 +1309,12 @@ impl CommandHandler {
                 amount,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .send_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::CreateDelegation { owner, pool_id } => {
@@ -1353,7 +1373,8 @@ impl CommandHandler {
                 decommission_address,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .create_stake_pool(
                         selected_account,
                         amount,
@@ -1364,15 +1385,16 @@ impl CommandHandler {
                     )
                     .await?;
 
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::DecommissionStakePool { pool_id } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .decommission_stake_pool(selected_account, pool_id, self.config)
                     .await?;
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::DecommissionStakePoolRequest { pool_id } => {
@@ -1400,8 +1422,9 @@ impl CommandHandler {
                     WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
                 })?;
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc.deposit_data(selected_account, data, self.config).await?;
-                Ok(Self::tx_submitted_command())
+                let new_tx =
+                    self.wallet_rpc.deposit_data(selected_account, data, self.config).await?;
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::ShowSeedPhrase => {
@@ -1472,8 +1495,7 @@ impl CommandHandler {
                 let result = block_ids
                     .into_iter()
                     .map(|(h, id)| {
-                        let hex_string = format!("{:?}", id);
-                        let id = hex_string.strip_prefix("0x").unwrap_or(&hex_string);
+                        let id = id_to_hex_string(id);
                         format!("({h}, {id})")
                     })
                     .fold("".to_string(), |curr, v| curr + &v + "\n");
@@ -1560,4 +1582,9 @@ impl CommandHandler {
             WalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
         }
     }
+}
+
+fn id_to_hex_string(id: H256) -> String {
+    let hex_string = format!("{:?}", id);
+    hex_string.strip_prefix("0x").unwrap_or(&hex_string).to_string()
 }
