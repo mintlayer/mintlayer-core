@@ -17,10 +17,11 @@ pub mod transactional;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
-    TransactionInfo, Utxo,
+    PoolBlockStats, TransactionInfo, Utxo,
 };
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
         UtxoOutPoint,
@@ -167,6 +168,34 @@ impl ApiServerInMemoryStorage {
         Ok(Some(block_aux_data.clone()))
     }
 
+    fn get_block_range_from_time_range(
+        &self,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError> {
+        let from_height = self
+            .main_chain_blocks_table
+            .iter()
+            .find_map(|(k, v)| {
+                (self.block_aux_data_table.get(v).expect("must exist").block_timestamp()
+                    >= time_range.0)
+                    .then_some(*k)
+            })
+            .unwrap_or(BlockHeight::new(0));
+
+        let to_height = self
+            .main_chain_blocks_table
+            .iter()
+            .rev()
+            .find_map(|(k, v)| {
+                (self.block_aux_data_table.get(v).expect("must exist").block_timestamp()
+                    <= time_range.1)
+                    .then_some(*k)
+            })
+            .unwrap_or(BlockHeight::new(0));
+
+        Ok((from_height, to_height))
+    }
+
     fn get_delegation(
         &self,
         delegation_id: DelegationId,
@@ -179,8 +208,29 @@ impl ApiServerInMemoryStorage {
         Ok(delegation.last_key_value().map(|(_, v)| v.clone()))
     }
 
-    fn get_pool_block_stats(&self, pool_id: PoolId) -> Result<Option<u64>, ApiServerStorageError> {
-        Ok(self.pool_data_table.get(&pool_id).map(|by_height| (by_height.len() - 1) as u64))
+    fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+        block_range: (BlockHeight, BlockHeight),
+    ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
+        Ok(self.pool_data_table.get(&pool_id).map(|by_height| {
+            // skip the first one as that is the pool creation
+            let from = std::cmp::max(
+                block_range.0,
+                by_height.keys().next().expect("not empty").next_height(),
+            );
+            // skip the last if it is decommissioned
+            let last = by_height.values().last().expect("not empty");
+            let to = if last.is_decommissioned() {
+                *by_height.keys().last().expect("not empty")
+            } else {
+                block_range.1
+            };
+
+            PoolBlockStats {
+                block_count: by_height.range(from..to).count() as u64,
+            }
+        }))
     }
 
     fn get_pool_delegations(

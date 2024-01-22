@@ -15,6 +15,7 @@
 
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
         DelegationId, Destination, GenBlock, PoolId, TxOutput,
     },
@@ -25,7 +26,7 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-        FungibleTokenData, TransactionInfo, Utxo,
+        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -102,6 +103,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_block_range_from_time_range(
+        &self,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_block_range_from_time_range(time_range).await?;
+
+        Ok(res)
+    }
+
     async fn get_delegation(
         &self,
         delegation_id: DelegationId,
@@ -115,9 +126,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<u64>, ApiServerStorageError> {
+        block_range: (BlockHeight, BlockHeight),
+    ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        let res = conn.get_pool_block_stats(pool_id, &self.chain_config).await?;
+        let res = conn.get_pool_block_stats(pool_id, block_range, &self.chain_config).await?;
 
         Ok(res)
     }

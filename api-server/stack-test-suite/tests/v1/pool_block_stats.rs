@@ -23,7 +23,8 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_pool_id() {
-    let (task, response) = spawn_webserver("/api/v1/pool/invalid-transaction-id/block-stats").await;
+    let (task, response) =
+        spawn_webserver("/api/v1/pool/invalid-transaction-id/block-stats?from=0&to=0").await;
 
     assert_eq!(response.status(), 400);
 
@@ -36,11 +37,30 @@ async fn invalid_pool_id() {
 }
 
 #[tokio::test]
-async fn pool_id_not_fund() {
+async fn from_to_not_specified() {
     let pool_id = PoolId::new(H256::zero());
     let chain_config = create_unit_test_config();
     let pool_id = Address::new(&chain_config, &pool_id).unwrap();
     let (task, response) = spawn_webserver(&format! {"/api/v1/pool/{pool_id}/block-stats"}).await;
+
+    assert_eq!(response.status(), 400);
+
+    let body = response.text().await.unwrap();
+    assert_eq!(
+        body,
+        "Failed to deserialize query string: missing field `from`"
+    );
+
+    task.abort();
+}
+
+#[tokio::test]
+async fn pool_id_not_fund() {
+    let pool_id = PoolId::new(H256::zero());
+    let chain_config = create_unit_test_config();
+    let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+    let (task, response) =
+        spawn_webserver(&format! {"/api/v1/pool/{pool_id}/block-stats?from=0&to=0"}).await;
 
     assert_eq!(response.status(), 404);
 
@@ -114,7 +134,13 @@ async fn ok(#[case] seed: Seed) {
                     },
                 );
 
-                _ = tx.send((pool_id, blocks.len()));
+                let num_blocks = rng.gen_range(0..blocks.len());
+                let time_range = (
+                    blocks.first().unwrap().timestamp(),
+                    blocks[num_blocks].timestamp(),
+                );
+
+                _ = tx.send((pool_id, num_blocks, time_range));
 
                 blocks
             };
@@ -149,9 +175,9 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let chain_config = create_regtest();
-    let (pool_id, num_blocks) = rx.await.unwrap();
+    let (pool_id, num_blocks, (from, to)) = rx.await.unwrap();
     let pool_id = Address::new(&chain_config, &pool_id).unwrap();
-    let url = format!("/api/v1/pool/{pool_id}/block-stats");
+    let url = format!("/api/v1/pool/{pool_id}/block-stats?from={from}&to={to}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener

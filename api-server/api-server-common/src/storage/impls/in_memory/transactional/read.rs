@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -26,7 +27,7 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-    FungibleTokenData, TransactionInfo, Utxo,
+    FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -56,6 +57,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_block(block_id)
     }
 
+    async fn get_block_range_from_time_range(
+        &self,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError> {
+        self.transaction.get_block_range_from_time_range(time_range)
+    }
+
     async fn get_transaction_with_block(
         &self,
         transaction_id: Id<Transaction>,
@@ -73,8 +81,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<u64>, ApiServerStorageError> {
-        self.transaction.get_pool_block_stats(pool_id)
+        block_range: (BlockHeight, BlockHeight),
+    ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
+        self.transaction.get_pool_block_stats(pool_id, block_range)
     }
 
     async fn get_pool_delegations(

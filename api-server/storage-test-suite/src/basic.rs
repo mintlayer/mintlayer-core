@@ -504,8 +504,19 @@ where
 
             let pool_data = db_tx.get_pool_data(random_pool_id).await.unwrap().unwrap();
             assert_eq!(pool_data, random_pool_data_new);
-            let block_count = db_tx.get_pool_block_stats(random_pool_id).await.unwrap().unwrap();
-            assert_eq!(block_count, 1);
+
+            let block_count = db_tx
+                .get_pool_block_stats(
+                    random_pool_id,
+                    (
+                        random_block_height,
+                        random_block_height.next_height().next_height(),
+                    ),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(block_count.block_count, 1);
 
             // delete the new data
             db_tx.del_pools_above_height(random_block_height).await.unwrap();

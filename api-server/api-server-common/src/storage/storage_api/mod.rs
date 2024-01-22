@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
             TokenTotalSupply,
@@ -58,6 +59,8 @@ pub enum ApiServerStorageError {
     InvalidBlock(String),
     #[error("Addressable error")]
     AddressableError,
+    #[error("Block timestamp to high {0}")]
+    TimestampToHigh(BlockTimestamp),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -192,6 +195,10 @@ pub struct TransactionInfo {
     pub fee: Amount,
 }
 
+pub struct PoolBlockStats {
+    pub block_count: u64,
+}
+
 #[async_trait::async_trait]
 pub trait ApiServerStorageRead: Sync {
     async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
@@ -218,6 +225,11 @@ pub trait ApiServerStorageRead: Sync {
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
+    async fn get_block_range_from_time_range(
+        &self,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError>;
+
     async fn get_delegation(
         &self,
         delegation_id: DelegationId,
@@ -241,7 +253,8 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_pool_block_stats(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<u64>, ApiServerStorageError>;
+        block_range: (BlockHeight, BlockHeight),
+    ) -> Result<Option<PoolBlockStats>, ApiServerStorageError>;
 
     async fn get_latest_pool_data(
         &self,
