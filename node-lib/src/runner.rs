@@ -228,36 +228,39 @@ async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(options: Options) -> Result<NodeSetupResult> {
+pub async fn setup(options: Options, gui_mode: bool) -> Result<NodeSetupResult> {
     let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
     match command {
-        Command::Mainnet(ref run_options) => {
+        Command::Mainnet(run_options) => {
             let chain_config = common::chain::config::create_mainnet();
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
                 run_options,
                 chain_config,
+                gui_mode,
             )
             .await
         }
-        Command::Testnet(ref run_options) => {
+        Command::Testnet(run_options) => {
             let chain_config = ChainConfigBuilder::new(ChainType::Testnet).build();
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
                 run_options,
                 chain_config,
+                gui_mode,
             )
             .await
         }
-        Command::Regtest(ref regtest_options) => {
+        Command::Regtest(regtest_options) => {
             let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
-                &regtest_options.run_options,
+                regtest_options.run_options,
                 chain_config,
+                gui_mode,
             )
             .await
         }
@@ -293,17 +296,30 @@ fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
     Ok(())
 }
 
+/// For the GUI, we configure different defaults, such as disabling RPC server binding
+fn set_defaults_for_gui_mode(mut opts: RunOptions) -> RunOptions {
+    opts.http_rpc_enabled = Some(opts.http_rpc_enabled.unwrap_or(false));
+    opts
+}
+
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<PathBuf>,
-    run_options: &RunOptions,
+    run_options: RunOptions,
     chain_config: ChainConfig,
+    gui_mode: bool,
 ) -> Result<NodeSetupResult> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
 
-    let node_config = NodeConfigFile::read(&chain_config, config_path, run_options)
+    let run_options = if gui_mode {
+        set_defaults_for_gui_mode(run_options)
+    } else {
+        run_options
+    };
+
+    let node_config = NodeConfigFile::read(&chain_config, config_path, &run_options)
         .context("Failed to initialize config")?;
 
     let data_dir = prepare_data_dir(
