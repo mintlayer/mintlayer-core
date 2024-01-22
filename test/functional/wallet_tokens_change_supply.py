@@ -115,7 +115,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            token_id, err = await wallet.issue_new_token("asdddd", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("aaabbbcccddde", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
