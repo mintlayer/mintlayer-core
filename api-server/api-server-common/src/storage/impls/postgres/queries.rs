@@ -23,8 +23,8 @@ use common::{
     address::Address,
     chain::{
         tokens::{NftIssuance, TokenId},
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -33,7 +33,8 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
+        TransactionInfo, Utxo,
     },
 };
 
@@ -1038,7 +1039,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
         let row = self
             .tx
             .query_opt(
@@ -1071,7 +1072,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let transaction =
-            SignedTransaction::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
+            TransactionInfo::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
                 ApiServerStorageError::DeserializationError(format!(
                     "Transaction {} deserialization failed: {}",
                     transaction_id, e
@@ -1085,7 +1086,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_transaction_with_block(
         &mut self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<BlockAuxData>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         let row = self
             .tx
             .query_opt(
@@ -1125,7 +1126,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let transaction =
-            SignedTransaction::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
+            TransactionInfo::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
                 ApiServerStorageError::DeserializationError(format!(
                     "Transaction {} deserialization failed: {}",
                     transaction_id, e
@@ -1139,7 +1140,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
-        transaction: &SignedTransaction,
+        transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!(
             "Inserting transaction with id {}, owned by block {:?}",

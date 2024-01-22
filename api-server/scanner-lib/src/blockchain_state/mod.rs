@@ -16,7 +16,8 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
+    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, TransactionInfo,
+    Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
@@ -120,11 +121,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
 
             for tx in block.transactions() {
-                db_tx
-                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
-                    .await
-                    .expect("Unable to set transaction");
-
                 update_tables_from_transaction(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
@@ -402,7 +398,17 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
     let mut total_fees = AccumulatedFee::new();
     for tx in block.transactions().iter() {
         let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
-        total_fees = total_fees.combine(fee).expect("no overflow");
+        total_fees = total_fees.combine(fee.clone()).expect("no overflow");
+
+        let tx_info = TransactionInfo {
+            tx: tx.clone(),
+            fee: fee.map_into_block_fees(chain_config, block_height).expect("no overflow").0,
+        };
+
+        db_tx
+            .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
+            .await
+            .expect("Unable to set transaction");
     }
 
     Ok(total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow"))

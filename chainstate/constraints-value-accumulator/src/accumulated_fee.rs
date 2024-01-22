@@ -22,7 +22,7 @@ use common::{
 
 use super::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AccumulatedFee {
     unconstrained_value: BTreeMap<CoinOrTokenId, Amount>,
     timelock_constrained: BTreeMap<NonZeroU64, Amount>,

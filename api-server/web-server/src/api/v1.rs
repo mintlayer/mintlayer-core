@@ -22,7 +22,7 @@ use crate::{
     TxSubmitClient,
 };
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -289,7 +289,7 @@ async fn best_block<T: ApiServerStorage>(
 async fn get_transaction(
     transaction_id: &str,
     state: &ApiServerWebServerState<Arc<impl ApiServerStorage>, Arc<impl TxSubmitClient>>,
-) -> Result<(Option<BlockAuxData>, SignedTransaction), ApiServerWebServerError> {
+) -> Result<(Option<BlockAuxData>, TransactionInfo), ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(transaction_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(
@@ -404,7 +404,7 @@ pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (block, transaction) = get_transaction(&transaction_id, &state).await?;
+    let (block, TransactionInfo { tx, fee }) = get_transaction(&transaction_id, &state).await?;
 
     let confirmations = if let Some(block) = &block {
         let (tip_height, _) = best_block(&state).await?;
@@ -417,13 +417,12 @@ pub async fn transaction<T: ApiServerStorage>(
     "block_id": block.as_ref().map_or("".to_string(), |b| b.block_id().to_hash().encode_hex::<String>()),
     "timestamp": block.as_ref().map_or("".to_string(), |b| b.block_timestamp().to_string()),
     "confirmations": confirmations.map_or("".to_string(), |c| c.to_string()),
-    "version_byte": transaction.version_byte(),
-    "is_replaceable": transaction.is_replaceable(),
-    "flags": transaction.flags(),
-    // TODO: add fee
-    "fee": amount_to_json(Amount::ZERO),
-    "inputs": transaction.inputs(),
-    "outputs": transaction.outputs()
+    "version_byte": tx.version_byte(),
+    "is_replaceable": tx.is_replaceable(),
+    "flags": tx.flags(),
+    "fee": amount_to_json(fee),
+    "inputs": tx.inputs(),
+    "outputs": tx.outputs()
             .iter()
             .map(|out| txoutput_to_json(out, &state.chain_config))
             .collect::<Vec<_>>()
@@ -435,13 +434,13 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
-        (Some(block_data), transaction) => {
+        (Some(block_data), tx_info) => {
             let block = get_block(
                 &block_data.block_id().to_hash().encode_hex::<String>(),
                 &state,
             )
             .await?;
-            (block, transaction.transaction().clone())
+            (block, tx_info.tx.transaction().clone())
         }
         (None, _) => {
             return Err(ApiServerWebServerError::NotFound(

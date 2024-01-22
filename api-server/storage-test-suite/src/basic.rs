@@ -24,7 +24,8 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, Utxo,
+        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData,
+        TransactionInfo, Utxo,
     },
 };
 use crypto::{
@@ -198,20 +199,28 @@ where
 
         // Set without owning block
         {
-            db_tx.set_transaction(tx1.transaction().get_id(), None, &tx1).await.unwrap();
+            let tx_info = TransactionInfo {
+                tx: tx1.clone(),
+                fee: Amount::from_atoms(rng.gen_range(0..100)),
+            };
+            db_tx.set_transaction(tx1.transaction().get_id(), None, &tx_info).await.unwrap();
 
             let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
             assert!(tx_and_block_id.is_some());
 
             let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
             assert!(owning_block.is_none());
-            assert_eq!(tx_retrieved, tx1);
+            assert_eq!(tx_retrieved, tx_info);
         }
 
         // Set with owning block
         {
+            let tx_info = TransactionInfo {
+                tx: tx1.clone(),
+                fee: Amount::from_atoms(rng.gen_range(0..100)),
+            };
             db_tx
-                .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx1)
+                .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx_info)
                 .await
                 .unwrap();
 
@@ -220,7 +229,7 @@ where
 
             let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
             assert_eq!(owning_block, Some(owning_block1));
-            assert_eq!(tx_retrieved, tx1);
+            assert_eq!(tx_retrieved, tx_info);
         }
 
         db_tx.commit().await.unwrap();
