@@ -14,10 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, GenBlock, OutPointSourceId, SignedTransaction,
-        Transaction,
-    },
+    chain::{block::timestamp::BlockTimestamp, GenBlock, OutPointSourceId, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -30,11 +27,13 @@ use wallet_types::{
 /// Events that can be emitted.
 #[derive(Eq, PartialEq, serde::Serialize, Debug, Clone)]
 pub enum Event {
+    /// New block has been processed
+    NewBlock {},
+
     /// Wallet transaction state has been updated
     TxUpdated {
         account_id: AccountId,
         tx_id: Id<Transaction>,
-        tx: SignedTransaction,
         state: TxState,
     },
 
@@ -117,7 +116,7 @@ impl WalletServiceEvents {
 
 impl wallet::wallet_events::WalletEvents for WalletServiceEvents {
     fn new_block(&self) {
-        // Do nothing for now
+        self.emit(Event::NewBlock {})
     }
 
     fn set_transaction(&self, id: &wallet_types::AccountWalletTxId, tx: &wallet_types::WalletTx) {
@@ -129,7 +128,6 @@ impl wallet::wallet_events::WalletEvents for WalletServiceEvents {
                 Event::TxUpdated {
                     account_id,
                     tx_id,
-                    tx: tx_data.get_signed_transaction().clone(),
                     state: (*tx_data.state()).into(),
                 }
             }

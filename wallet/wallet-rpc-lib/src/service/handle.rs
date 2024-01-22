@@ -96,7 +96,7 @@ impl WalletHandle {
         self.send_raw(WalletCommand::Stop)
     }
 
-    /// Check if the wallet service is surrently running
+    /// Check if the wallet service is currently running
     pub fn is_running(&self) -> bool {
         !self.0.is_closed()
     }
