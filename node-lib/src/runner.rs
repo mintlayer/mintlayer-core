@@ -309,15 +309,15 @@ async fn start(
     chain_config: ChainConfig,
     gui_mode: bool,
 ) -> Result<NodeSetupResult> {
-    if let Some(mock_time) = run_options.mock_time {
-        set_mock_time(*chain_config.chain_type(), mock_time)?;
-    }
-
     let run_options = if gui_mode {
         set_defaults_for_gui_mode(run_options)
     } else {
         run_options
     };
+
+    if let Some(mock_time) = run_options.mock_time {
+        set_mock_time(*chain_config.chain_type(), mock_time)?;
+    }
 
     let node_config = NodeConfigFile::read(&chain_config, config_path, &run_options)
         .context("Failed to initialize config")?;
