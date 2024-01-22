@@ -185,6 +185,8 @@ async fn peer_discovery_on_stale_tip_impl(
     let full_relay_conn_cnt_after_wait =
         node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
 
+    // Note that the "extra" connections may be dropped and re-established at any time, so we have
+    // to "ignore" them by clamping the connection counts to outbound_full_relay_conn_count.
     let full_relay_conn_cnt_before_wait: Vec<_> = full_relay_conn_cnt_before_wait
         .iter()
         .map(|cnt| num::clamp(*cnt, 0, outbound_full_relay_conn_count))

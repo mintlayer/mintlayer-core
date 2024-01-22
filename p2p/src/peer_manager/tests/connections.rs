@@ -52,7 +52,8 @@ use crate::{
             utils::{
                 expect_cmd_connect_to, expect_connect_cmd,
                 inbound_block_relay_peer_accepted_by_backend, make_full_relay_peer_info,
-                mutate_peer_manager, recv_command_advance_time,
+                mutate_peer_manager, outbound_full_relay_peer_accepted_by_backend,
+                recv_command_advance_time, start_manually_connecting,
             },
         },
         MaxInboundConnections, PeerManager, PeerManagerConfig,
@@ -60,8 +61,8 @@ use crate::{
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         make_transport_with_local_addr_in_group, peerdb_inmemory_store, test_p2p_config,
-        test_p2p_config_with_peer_mgr_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -1078,8 +1079,6 @@ where
             counts
         };
 
-        log::debug!("counts = {counts:?}");
-
         // There should be:
         // - 1 outbound and 2 inbound connections to/from reserved peer.
         // - 1 outbound and 1 inbound connections from one of the peers to reserved.
@@ -1283,8 +1282,6 @@ async fn discovered_node_2_groups() {
         );
         let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
 
-        log::debug!("counts = {counts:?}");
-
         // There should be:
         // - 2 outbound and 2 inbound connections to/from reserved peers.
         // - 1 outbound and 2 inbound connections for one of the non-reserved peers.
@@ -1454,8 +1451,6 @@ async fn discovered_node_separate_groups() {
             get_connected_peers(&peer_mgr_event_sender3)
         );
         let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
-
-        log::debug!("counts = {counts:?}");
 
         // Each peer has 2 outbound and 2 inbound connections with 2 other peers
         if counts == [4, 4, 4] {
@@ -1769,36 +1764,68 @@ mod feeler_connections_test_utils {
     }
 }
 
+// Check that an automatic outbound connection won't be attempted if an inbound connection to
+// the same ip address already exists.
+// Test scenario:
+// 1) Make the peer manager accept an inbound connection.
+// 2) Make it "discover" a peer address with the same ip address as the inbound connection,
+// but with a different port number; no connection attempt should be made;
+// 3) (sanity check) Make it "discover" a peer address with a different ip address;
+// a connection attempt should be made.
+// 4) Make a manual connection to the address from "2)"; the connection should be made successfully.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn foo(#[case] seed: Seed) {
+async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let p2p_config = Arc::new(test_p2p_config_with_peer_mgr_config(PeerManagerConfig {
-        outbound_full_relay_count: 2.into(),
-        outbound_full_relay_extra_count: 0.into(),
-        outbound_block_relay_count: 0.into(),
-        outbound_block_relay_extra_count: 0.into(),
+    let p2p_config = Arc::new(P2pConfig {
+        peer_manager_config: PeerManagerConfig {
+            outbound_full_relay_count: 2.into(),
+            outbound_full_relay_extra_count: 0.into(),
+            outbound_block_relay_count: 0.into(),
+            outbound_block_relay_extra_count: 0.into(),
 
-        max_inbound_connections: Default::default(),
-        preserved_inbound_count_address_group: Default::default(),
-        preserved_inbound_count_ping: Default::default(),
-        preserved_inbound_count_new_blocks: Default::default(),
-        preserved_inbound_count_new_transactions: Default::default(),
-        outbound_block_relay_connection_min_age: Default::default(),
-        outbound_full_relay_connection_min_age: Default::default(),
-        stale_tip_time_diff: Default::default(),
-        main_loop_tick_interval: Default::default(),
-        enable_feeler_connections: Default::default(),
-        feeler_connections_interval: Default::default(),
-        force_dns_query_if_no_global_addresses_known: Default::default(),
-        allow_same_ip_connections: Default::default(),
-        peerdb_config: Default::default(),
-    }));
+            max_inbound_connections: Default::default(),
+            preserved_inbound_count_address_group: Default::default(),
+            preserved_inbound_count_ping: Default::default(),
+            preserved_inbound_count_new_blocks: Default::default(),
+            preserved_inbound_count_new_transactions: Default::default(),
+            outbound_block_relay_connection_min_age: Default::default(),
+            outbound_full_relay_connection_min_age: Default::default(),
+            stale_tip_time_diff: Default::default(),
+            main_loop_tick_interval: Default::default(),
+            enable_feeler_connections: Default::default(),
+            feeler_connections_interval: Default::default(),
+            force_dns_query_if_no_global_addresses_known: Default::default(),
+            allow_same_ip_connections: Default::default(),
+            peerdb_config: Default::default(),
+        },
+
+        // Disable pings so that they don't interfere with the testing logic.
+        ping_check_period: Duration::ZERO.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        protocol_config: Default::default(),
+    });
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
@@ -1822,7 +1849,6 @@ async fn foo(#[case] seed: Seed) {
         &mut rng,
     );
     let [peer1_addr, peer2_addr]: [_; 2] = peer_addrs.try_into().unwrap();
-    log::debug!("peer1_addr = {peer1_addr:?}, {peer2_addr:?}");
 
     let outbound_peer1_addr = peer1_addr;
     let inbound_peer1_addr = {
@@ -1837,16 +1863,17 @@ async fn foo(#[case] seed: Seed) {
         peer_mgr
     });
 
+    // Accept an inbound connection.
     let peer1_id = inbound_block_relay_peer_accepted_by_backend(
         &conn_event_sender,
         inbound_peer1_addr,
         bind_addr,
         &chain_config,
     );
-
     let cmd = expect_recv!(cmd_receiver);
     assert_eq!(cmd, Command::Accept { peer_id: peer1_id });
 
+    // "Discover" outbound_peer1_addr; no connection attempt should be made.
     mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
         peer_mgr.peerdb_mut().peer_discovered(outbound_peer1_addr);
     })
@@ -1854,13 +1881,55 @@ async fn foo(#[case] seed: Seed) {
     time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
     expect_no_recv!(cmd_receiver);
 
+    // "Discover" peer2_addr; a connection attempt should be made and
+    // the connection should be accepted.
     mutate_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
         peer_mgr.peerdb_mut().peer_discovered(peer2_addr)
     })
     .await;
     time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
+
     let cmd = expect_recv!(cmd_receiver);
     expect_cmd_connect_to(&cmd, &peer2_addr);
+
+    let peer2_id = outbound_full_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        peer2_addr,
+        bind_addr,
+        &chain_config,
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(cmd, Command::Accept { peer_id: peer2_id });
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::SendMessage {
+            peer_id: peer2_id,
+            message: Message::AddrListRequest(AddrListRequest {})
+        }
+    );
+
+    // Try manually connecting to outbound_peer1_addr; the connection should be accepted.
+    let manual_conn_result_recv =
+        start_manually_connecting(&peer_mgr_event_sender, outbound_peer1_addr);
+
+    let cmd = expect_recv!(cmd_receiver);
+    expect_cmd_connect_to(&cmd, &outbound_peer1_addr);
+    let peer1_id_as_outbound = outbound_full_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        outbound_peer1_addr,
+        bind_addr,
+        &chain_config,
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::Accept {
+            peer_id: peer1_id_as_outbound
+        }
+    );
+
+    manual_conn_result_recv.await.unwrap().unwrap();
 
     drop(conn_event_sender);
     drop(peer_mgr_event_sender);

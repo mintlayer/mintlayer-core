@@ -1055,7 +1055,7 @@ where
     ) {
         let peer_id = info.peer_id;
 
-        let (peer_role, response) = match role {
+        let (peer_role, response_sender) = match role {
             Role::Inbound => (PeerRole::Inbound, None),
             Role::Outbound => {
                 let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
@@ -1106,8 +1106,8 @@ where
             }
         }
 
-        if let Some(response) = response {
-            response.send(accept_res);
+        if let Some(response_sender) = response_sender {
+            response_sender.send(accept_res);
         }
 
         if peer_role == PeerRole::Feeler {
@@ -1353,16 +1353,14 @@ where
 
         let cur_pending_outbound_conn_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
-        let new_reserved_conn_addresses = self.peerdb.select_reserved_outbound_addresses(
-            &cur_pending_outbound_conn_addresses,
-            &|addr| {
-                self.allow_new_outbound_connection(
+        let new_reserved_conn_addresses = self.peerdb.select_reserved_outbound_addresses(&|addr| {
+            !cur_pending_outbound_conn_addresses.contains(addr)
+                && self.allow_new_outbound_connection(
                     &cur_conn_ip_port_to_role_map,
                     addr,
                     PeerRole::OutboundReserved,
                 )
-            },
-        );
+        });
 
         for address in &new_reserved_conn_addresses {
             self.connect(*address, OutboundConnectType::Reserved);
@@ -1753,10 +1751,12 @@ where
     /// is used when selecting addresses for new automatic outbound connections; it will be
     /// called for every address in peerdb, so we want to avoid the linear complexity of
     /// `should_reject_because_already_connected`.
-    /// Note that this function mainly serves as an optimization - we don't want to select
-    /// addresses that will be rejected anyway when trying to connect to them.
+    /// Note that calling this function mainly serves as an optimization - we don't want to select
+    /// addresses that will be rejected anyway when we'll try to connect to them.
     fn allow_new_outbound_connection(
         &self,
+        // Note: we use the (ip_addr, port) pair as a key instead of SocketAddress to ensure
+        // that the keys are always sorted first by the ip and then by port.
         existing_connections: &BTreeMap<(IpAddr, /*port:*/ u16), PeerRole>,
         new_peer_addr: &SocketAddress,
         new_peer_role: PeerRole,
@@ -1778,7 +1778,7 @@ where
     }
 
     /// This function is supposed to be called for every existing peer whose ip address
-    /// equals the ip address of some "new peer"; it returns true if connection to the new peer
+    /// equals the ip address of some "new peer"; it returns true if a connection to the new peer
     /// *may* be allowed. If it returns true for all such existing peers, then the connection
     /// will be allowed.
     fn may_allow_outbound_connection_to_existing_ip(
@@ -1806,10 +1806,10 @@ where
         }
 
         // The existing connection is inbound, the new one is outbound and the ip addresses
-        // are the same. We assume that the connections are to the same node (and therefore
-        // reject the new connection) unless the new connection is a manual one
-        // (because the user should know better; also, functional tests use manual
-        // connections for test nodes and those nodes do share the same ip address).
+        // are the same. We assume that the connections are to different nodes (and therefore
+        // allow the new connection) if the new connection is a manual one (because the user
+        // should know better; also, functional tests use manual connections for test nodes
+        // and those nodes do share the same ip address).
         new_peer_role.is_outbound_manual()
     }
 
