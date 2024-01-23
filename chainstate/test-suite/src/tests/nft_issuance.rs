@@ -21,12 +21,9 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue,
     signature::inputsig::InputWitness,
-    tokens::{
-        is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0,
-        TokenIssuanceVersion,
-    },
-    Block, ChainstateUpgrade, Destination, OutPointSourceId, RewardDistributionVersion, TxInput,
-    TxOutput,
+    tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
+    Block, ChainstateUpgrade, Destination, OutPointSourceId, RewardDistributionVersion,
+    TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::{CryptoRng, Rng};
@@ -52,7 +49,8 @@ fn nft_name_too_long(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -123,7 +121,8 @@ fn nft_empty_name(#[case] seed: Seed) {
         let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -191,7 +190,8 @@ fn nft_invalid_name(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         // try all possible chars for name and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
@@ -270,7 +270,8 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         let result = tf
             .make_block_builder()
@@ -411,7 +412,8 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         // try all possible chars for ticker and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
@@ -490,7 +492,8 @@ fn nft_description_too_long(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         let result = tf
             .make_block_builder()
@@ -562,7 +565,8 @@ fn nft_empty_description(#[case] seed: Seed) {
         let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
 
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         let result = tf
             .make_block_builder()
@@ -631,7 +635,8 @@ fn nft_invalid_description(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         // try all possible chars for description and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
@@ -711,7 +716,8 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -789,9 +795,11 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         let metadata = Metadata {
             creator: Some(random_creator(&mut rng)),
@@ -858,7 +866,8 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
         // try all possible chars for icon_uri and ensure everything fails except for alphanumeric chars
@@ -945,7 +954,8 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1019,13 +1029,15 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
         let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
 
         // Metadata URI is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let metadata = Metadata {
             creator: Some(random_creator(&mut rng)),
             name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -1091,7 +1103,8 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
         // try all possible chars for additional_metadata_uri and ensure everything fails except for alphanumeric chars
@@ -1178,7 +1191,8 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1254,12 +1268,14 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let token_id = make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         // Media URI is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let metadata = Metadata {
             creator: Some(random_creator(&mut rng)),
             name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -1326,7 +1342,8 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
         // try all possible chars for media_uri and ensure everything fails except for alphanumeric chars
@@ -1407,12 +1424,13 @@ fn new_block_with_media_hash(
 ) -> Block {
     let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
     let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-    let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+    let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
     let name = random_ascii_alphanumeric_string(rng, 1..max_name_len).into_bytes();
     let description = random_ascii_alphanumeric_string(rng, 1..max_desc_len).into_bytes();
     let ticker = random_ascii_alphanumeric_string(rng, 1..max_ticker_len).into_bytes();
     let genesis_id = tf.genesis().get_id();
-    let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+    let token_min_issuance_fee =
+        tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
     let token_id = make_token_id(&[TxInput::from_utxo(genesis_id.into(), 0)]).unwrap();
 
     tf.make_block_builder()
@@ -1574,10 +1592,12 @@ fn nft_valid_case(#[case] seed: Seed) {
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
         let valid_rfc3986_uri =
             b"https://something.com/?a:b.c_d-e~f!g/h?I#J[K]L@M$N&O/P'Q(R)S*T+U,V;W=Xyz".to_vec();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         let metadata = Metadata {
             creator: Some(random_creator(&mut rng)),
@@ -1648,6 +1668,8 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersion::V1,
+                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1657,7 +1679,8 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1704,6 +1727,8 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersion::V1,
+                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1714,10 +1739,12 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .build();
         let genesis_block_id = tf.best_block_id();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_ticker_len =
+            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
 
         // Try not ascii alphanumeric name
         let c = test_utils::get_random_non_ascii_alphanumeric_byte(&mut rng);

@@ -16,10 +16,9 @@
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, TokensError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
-    output_value::OutputValue,
-    signature::inputsig::InputWitness,
-    tokens::{make_token_id, TokenIssuanceVersion},
-    ChainstateUpgrade, Destination, RewardDistributionVersion, TxInput, TxOutput,
+    output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
+    ChainstateUpgrade, Destination, RewardDistributionVersion, TokenIssuanceVersion,
+    TokensFeeVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
@@ -42,7 +41,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
 
         let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_issuance_fee();
+        let token_min_issuance_fee = chain_config.nft_issuance_fee(BlockHeight::zero());
 
         // Issuance
         let tx = TransactionBuilder::new()
@@ -123,7 +122,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
 
         let chain_config = tf.chainstate.get_chain_config();
-        let token_min_issuance_fee = chain_config.nft_issuance_fee();
+        let token_min_issuance_fee = chain_config.nft_issuance_fee(BlockHeight::zero());
 
         // Issuance
         let tx = TransactionBuilder::new()
@@ -215,6 +214,8 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                             ChainstateUpgrade::new(
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
+                                TokensFeeVersion::V1,
+                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -224,7 +225,8 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             )
             .build();
 
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         let tx = TransactionBuilder::new()
             .add_input(

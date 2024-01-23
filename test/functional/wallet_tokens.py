@@ -116,7 +116,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(6, 10)))
+            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(13, 20)))
             token_id, err = await wallet.issue_new_token(invalid_ticker, 2, "http://uri", address)
             assert token_id is None
             assert err is not None

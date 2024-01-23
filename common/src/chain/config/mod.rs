@@ -44,10 +44,10 @@ use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
-use super::tokens::TokenIssuanceVersion;
-use super::RewardDistributionVersion;
+use super::TokensTickerMaxLengthVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
+use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -226,14 +226,8 @@ pub struct ChainConfig {
     initial_randomness: H256,
     data_deposit_max_size: usize,
     data_deposit_fee: Amount,
-    fungible_token_issuance_fee: Amount,
-    nft_issuance_fee: Amount,
-    token_supply_change_fee: Amount,
-    token_freeze_fee: Amount,
-    token_change_authority_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
-    token_max_ticker_len: usize,
     token_max_name_len: usize,
     token_max_description_len: usize,
     token_min_hash_len: usize,
@@ -507,27 +501,43 @@ impl ChainConfig {
 
     /// The fee for issuing a fungible token
     pub fn fungible_token_issuance_fee(&self) -> Amount {
-        self.fungible_token_issuance_fee
+        FUNGIBLE_TOKEN_ISSUANCE_FEE
     }
 
     /// The fee for issuing a NFT
-    pub fn nft_issuance_fee(&self) -> Amount {
-        self.nft_issuance_fee
+    pub fn nft_issuance_fee(&self, height: BlockHeight) -> Amount {
+        let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
+        match fee_version {
+            TokensFeeVersion::V0 => NFT_ISSUANCE_FEE_V0,
+            TokensFeeVersion::V1 => NFT_ISSUANCE_FEE_V1,
+        }
     }
 
     /// The fee for changing supply of a token
-    pub fn token_supply_change_fee(&self) -> Amount {
-        self.token_supply_change_fee
+    pub fn token_supply_change_fee(&self, height: BlockHeight) -> Amount {
+        let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
+        match fee_version {
+            TokensFeeVersion::V0 => TOKEN_SUPPLY_CHANGE_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_SUPPLY_CHANGE_FEE_V1,
+        }
     }
 
     /// The fee for freezing/unfreezing a token
-    pub fn token_freeze_fee(&self) -> Amount {
-        self.token_freeze_fee
+    pub fn token_freeze_fee(&self, height: BlockHeight) -> Amount {
+        let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
+        match fee_version {
+            TokensFeeVersion::V0 => TOKEN_FREEZE_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_FREEZE_FEE_V1,
+        }
     }
 
     /// The fee for changing authority of a token
-    pub fn token_change_authority_fee(&self) -> Amount {
-        self.token_change_authority_fee
+    pub fn token_change_authority_fee(&self, height: BlockHeight) -> Amount {
+        let fee_version = self.chainstate_upgrades.version_at_height(height).1.tokens_fee_version();
+        match fee_version {
+            TokensFeeVersion::V0 => TOKEN_CHANGE_AUTHORITY_FEE_V0,
+            TokensFeeVersion::V1 => TOKEN_CHANGE_AUTHORITY_FEE_V1,
+        }
     }
 
     /// The maximum length of a URI contained in a token
@@ -544,8 +554,16 @@ impl ChainConfig {
 
     /// The maximum length of a ticker of a token
     #[must_use]
-    pub fn token_max_ticker_len(&self) -> usize {
-        self.token_max_ticker_len
+    pub fn token_max_ticker_len(&self, height: BlockHeight) -> usize {
+        let ticker_version = self
+            .chainstate_upgrades
+            .version_at_height(height)
+            .1
+            .tokens_ticker_length_version();
+        match ticker_version {
+            TokensTickerMaxLengthVersion::V0 => TOKEN_MAX_TICKER_LEN_V0,
+            TokensTickerMaxLengthVersion::V1 => TOKEN_MAX_TICKER_LEN_V1,
+        }
     }
 
     /// The maximum length of a description of a token
@@ -628,19 +646,27 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE: usize = 128;
+
 const FUNGIBLE_TOKEN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TESTNET_NFT_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TESTNET_TOKEN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TESTNET_TOKEN_FREEZE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const TESTNET_TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const MAINNET_NFT_ISSUANCE_FEE: Amount = CoinUnit::from_coins(5).to_amount_atoms();
-const MAINNET_TOKEN_SUPPLY_CHANGE_FEE: Amount = CoinUnit::from_coins(50).to_amount_atoms();
-const MAINNET_TOKEN_FREEZE_FEE: Amount = CoinUnit::from_coins(50).to_amount_atoms();
-const MAINNET_TOKEN_CHANGE_AUTHORITY_FEE: Amount = CoinUnit::from_coins(20).to_amount_atoms();
+
+const NFT_ISSUANCE_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const NFT_ISSUANCE_FEE_V1: Amount = CoinUnit::from_coins(5).to_amount_atoms();
+
+const TOKEN_SUPPLY_CHANGE_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TOKEN_SUPPLY_CHANGE_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms();
+
+const TOKEN_FREEZE_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TOKEN_FREEZE_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms();
+
+const TOKEN_CHANGE_AUTHORITY_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TOKEN_CHANGE_AUTHORITY_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
+
 const DATA_DEPOSIT_MAX_SIZE: usize = 128;
 const DATA_DEPOSIT_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
-const TOKEN_MAX_TICKER_LEN: usize = 5;
+const TOKEN_MAX_TICKER_LEN_V0: usize = 5;
+const TOKEN_MAX_TICKER_LEN_V1: usize = 12;
 const TOKEN_MIN_HASH_LEN: usize = 4;
 const TOKEN_MAX_HASH_LEN: usize = 32;
 const TOKEN_MAX_NAME_LEN: usize = 10;
@@ -781,7 +807,12 @@ pub fn create_unit_test_config_builder() -> Builder {
         .chainstate_upgrades(
             NetUpgrades::initialize(vec![(
                 BlockHeight::zero(),
-                ChainstateUpgrade::new(TokenIssuanceVersion::V1, RewardDistributionVersion::V1),
+                ChainstateUpgrade::new(
+                    TokenIssuanceVersion::V1,
+                    RewardDistributionVersion::V1,
+                    TokensFeeVersion::V1,
+                    TokensTickerMaxLengthVersion::V1,
+                ),
             )])
             .expect("cannot fail"),
         )

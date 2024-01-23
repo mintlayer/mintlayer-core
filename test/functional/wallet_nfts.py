@@ -116,7 +116,7 @@ class WalletNfts(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(6, 10)))
+            invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(13, 20)))
             nft_id, err = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", invalid_ticker)
             assert nft_id is None
             assert err is not None

@@ -1801,7 +1801,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let issuance_fee = if issue_fungible_token {
         chain_config.fungible_token_issuance_fee()
     } else {
-        chain_config.nft_issuance_fee()
+        chain_config.nft_issuance_fee(BlockHeight::zero())
     };
 
     // Generate a new block which sends reward to the wallet
@@ -1810,7 +1810,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             .unwrap();
 
     if issue_fungible_token {
-        block1_amount = (block1_amount + chain_config.token_supply_change_fee()).unwrap();
+        block1_amount =
+            (block1_amount + chain_config.token_supply_change_fee(BlockHeight::zero())).unwrap();
     }
 
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
@@ -1910,7 +1911,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut expected_amount = ((block1_amount * 2).unwrap() - issuance_fee).unwrap();
 
     if issue_fungible_token {
-        expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
+        expected_amount =
+            (expected_amount - chain_config.token_supply_change_fee(BlockHeight::zero())).unwrap();
     }
 
     assert_eq!(coin_balance, expected_amount);
@@ -1952,7 +1954,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     let mut expected_amount = ((block1_amount * 3).unwrap() - issuance_fee).unwrap();
     if issue_fungible_token {
-        expected_amount = (expected_amount - chain_config.token_supply_change_fee()).unwrap();
+        expected_amount =
+            (expected_amount - chain_config.token_supply_change_fee(BlockHeight::zero())).unwrap();
     }
     assert_eq!(coin_balance, expected_amount,);
     assert!(token_balances.len() <= 1);
@@ -2046,7 +2049,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2102,7 +2105,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2384,7 +2387,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -2630,7 +2633,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
 
     let _ = create_block(
         &chain_config,
@@ -2818,7 +2821,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let block2_amount = chain_config.token_supply_change_fee();
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
 
     let _ = create_block(
         &chain_config,

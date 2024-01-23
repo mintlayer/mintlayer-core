@@ -95,8 +95,11 @@ impl ConstrainedValueAccumulator {
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
-                    let fee_to_deduct =
-                        accumulator.process_input_account_command(chain_config, command)?;
+                    let fee_to_deduct = accumulator.process_input_account_command(
+                        chain_config,
+                        block_height,
+                        command,
+                    )?;
 
                     total_fee_deducted = (total_fee_deducted + fee_to_deduct)
                         .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
@@ -234,6 +237,7 @@ impl ConstrainedValueAccumulator {
     fn process_input_account_command(
         &mut self,
         chain_config: &ChainConfig,
+        block_height: BlockHeight,
         command: &AccountCommand,
     ) -> Result<Amount, Error> {
         match command {
@@ -243,21 +247,25 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::TokenId(*token_id),
                     *amount,
                 )?;
-                Ok(chain_config.token_supply_change_fee())
+                Ok(chain_config.token_supply_change_fee(block_height))
             }
             AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
-                Ok(chain_config.token_supply_change_fee())
+                Ok(chain_config.token_supply_change_fee(block_height))
             }
             AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                Ok(chain_config.token_freeze_fee())
+                Ok(chain_config.token_freeze_fee(block_height))
             }
             AccountCommand::ChangeTokenAuthority(_, _) => {
-                Ok(chain_config.token_change_authority_fee())
+                Ok(chain_config.token_change_authority_fee(block_height))
             }
         }
     }
 
-    pub fn from_outputs(chain_config: &ChainConfig, outputs: &[TxOutput]) -> Result<Self, Error> {
+    pub fn from_outputs(
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
+        outputs: &[TxOutput],
+    ) -> Result<Self, Error> {
         let mut accumulator = Self::new();
 
         for output in outputs {
@@ -312,7 +320,7 @@ impl ConstrainedValueAccumulator {
                 TxOutput::IssueNft(_, _, _) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    chain_config.nft_issuance_fee(),
+                    chain_config.nft_issuance_fee(block_height),
                 )?,
             };
         }

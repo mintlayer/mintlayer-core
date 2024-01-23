@@ -154,7 +154,9 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
             ))))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_supply_change_fee()),
+                OutputValue::Coin(
+                    tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero()),
+                ),
                 Destination::AnyoneCanSpend,
             ))
             .build();

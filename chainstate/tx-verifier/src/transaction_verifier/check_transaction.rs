@@ -22,7 +22,7 @@ use common::{
         tokens::{get_tokens_issuance_count, NftIssuance},
         ChainConfig, SignedTransaction, Transaction, TxOutput,
     },
-    primitives::{Id, Idable},
+    primitives::{BlockHeight, Id, Idable},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -54,11 +54,12 @@ pub enum CheckTransactionError {
 
 pub fn check_transaction(
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     check_duplicate_inputs(tx)?;
     check_witness_count(tx)?;
-    check_tokens_tx(chain_config, tx)?;
+    check_tokens_tx(chain_config, block_height, tx)?;
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
     Ok(())
@@ -93,6 +94,7 @@ fn check_witness_count(tx: &SignedTransaction) -> Result<(), CheckTransactionErr
 
 fn check_tokens_tx(
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     // We can't issue multiple tokens in a single tx
@@ -108,10 +110,12 @@ fn check_tokens_tx(
     tx.outputs()
         .iter()
         .try_for_each(|output| match output {
-            TxOutput::IssueFungibleToken(issuance) => check_tokens_issuance(chain_config, issuance)
-                .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id())),
+            TxOutput::IssueFungibleToken(issuance) => {
+                check_tokens_issuance(chain_config, block_height, issuance)
+                    .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id()))
+            }
             TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                NftIssuance::V0(data) => check_nft_issuance_data(chain_config, data)
+                NftIssuance::V0(data) => check_nft_issuance_data(chain_config, block_height, data)
                     .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id())),
             },
             TxOutput::Transfer(_, _)

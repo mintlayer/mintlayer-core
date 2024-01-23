@@ -22,7 +22,7 @@ use common::{
         tokens::{make_token_id, NftIssuance},
         Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable},
+    primitives::{Amount, BlockHeight, Idable},
 };
 use rstest::rstest;
 use test_utils::{
@@ -49,7 +49,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().nft_issuance_fee();
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
 
         // Issue a new NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());

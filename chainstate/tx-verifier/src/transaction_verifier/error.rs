@@ -18,9 +18,9 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
-        tokens::{TokenId, TokenIssuanceVersion},
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
-        UtxoOutPoint,
+        tokens::TokenId,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, TokenIssuanceVersion,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
