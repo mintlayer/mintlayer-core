@@ -415,6 +415,17 @@ impl MainWindow {
                         .staking_balance = staking_balance;
                     Command::none()
                 }
+                BackendEvent::DelegationsBalance(wallet_id, account_id, delegations_balance) => {
+                    self.node_state
+                        .wallets
+                        .get_mut(&wallet_id)
+                        .expect("wallet must be known (staking balance)")
+                        .accounts
+                        .get_mut(&account_id)
+                        .expect("account must be known (staking balance)")
+                        .delegations_balance = delegations_balance;
+                    Command::none()
+                }
                 BackendEvent::NewAddress(Ok(address_info)) => {
                     self.node_state
                         .wallets

@@ -22,7 +22,7 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{Destination, GenBlock, PoolId},
+    chain::{DelegationId, Destination, GenBlock, PoolId},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -71,6 +71,7 @@ pub struct AccountInfo {
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
     pub staking_balance: BTreeMap<PoolId, Amount>,
+    pub delegations_balance: BTreeMap<DelegationId, Amount>,
     pub transaction_list: TransactionList,
 }
 
@@ -176,6 +177,7 @@ pub enum BackendEvent {
     WalletBestBlock(WalletId, (Id<GenBlock>, BlockHeight)),
     Balance(WalletId, AccountId, BTreeMap<Currency, Amount>),
     StakingBalance(WalletId, AccountId, BTreeMap<PoolId, Amount>),
+    DelegationsBalance(WalletId, AccountId, BTreeMap<DelegationId, Amount>),
     NewAddress(Result<AddressInfo, BackendError>),
     ToggleStaking(Result<(WalletId, AccountId, bool), BackendError>),
     SendAmount(Result<TransactionInfo, BackendError>),
