@@ -25,6 +25,7 @@ use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
+    error::ProtocolError,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -121,8 +122,18 @@ pub struct PeerInfo {
 
 impl PeerInfo {
     pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
-        // Check node version here if necessary
-        self.network == *chain_config.magic_bytes()
+        self.check_compatibility(chain_config).is_ok()
+    }
+
+    pub fn check_compatibility(&self, chain_config: &ChainConfig) -> crate::Result<()> {
+        if self.network != *chain_config.magic_bytes() {
+            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                *chain_config.magic_bytes(),
+                self.network,
+            )))
+        } else {
+            Ok(())
+        }
     }
 }
 

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::services::Services;
+use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
@@ -24,7 +24,7 @@ use common::{
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 use utils::try_as::TryAsRef;
 
-use crate::{peer_manager::peerdb, protocol::ProtocolVersion};
+use crate::{net::types::PeerRole, peer_manager::peerdb, protocol::ProtocolVersion};
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
@@ -74,8 +74,18 @@ pub enum ProtocolError {
 pub enum PeerError {
     #[error("Peer doesn't exist")]
     PeerDoesntExist,
-    #[error("Peer already exists")]
-    PeerAlreadyExists,
+    #[error("Peer {0} already exists")]
+    PeerAlreadyExists(PeerId),
+    #[error(
+        "Rejecting {new_peer_role:?} connection to {new_peer_addr:?} \
+             because we already have {existing_peer_role:?} connection to {existing_peer_addr:?}"
+    )]
+    AlreadyConnected {
+        existing_peer_addr: SocketAddress,
+        existing_peer_role: PeerRole,
+        new_peer_addr: SocketAddress,
+        new_peer_role: PeerRole,
+    },
     #[error("Address {0} is banned")]
     BannedAddress(String),
     #[error("PeerManager has too many peers")]

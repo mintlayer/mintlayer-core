@@ -322,11 +322,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now) && additional_filter(addr) {
-                    Some(*addr)
-                } else {
-                    None
-                }
+                (address_data.connect_now(now) && additional_filter(addr)).then_some(*addr)
             })
             .collect()
     }

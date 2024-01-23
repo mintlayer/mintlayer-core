@@ -657,10 +657,9 @@ where
             !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
-        ensure!(
-            !self.should_reject_because_already_connected(&address, peer_role),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
+
+        self.maybe_reject_because_already_connected(&address, peer_role)?;
+
         let bannable_address = address.as_bannable();
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address)
@@ -683,12 +682,10 @@ where
             None
         };
 
-        log::debug!("try a new outbound connection, address: {address:?}, local_services_override: {local_services_override:?}, block_relay_only: {block_relay_only:?}");
-        let res = self.try_connect(
-            address,
-            local_services_override,
-            (&outbound_connect_type).into(),
-        );
+        let peer_role: PeerRole = (&outbound_connect_type).into();
+        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
+            address, local_services_override, peer_role);
+        let res = self.try_connect(address, local_services_override, peer_role);
 
         match res {
             Ok(()) => {
@@ -778,29 +775,20 @@ where
         peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
-        ensure!(
-            info.is_compatible(&self.chain_config),
-            P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                *self.chain_config.magic_bytes(),
-                info.network,
-            ))
-        );
+        info.check_compatibility(&self.chain_config)?;
 
         let is_peer_connected = self.is_peer_connected(info.peer_id);
         // This is a rather strange situation that should never happen.
         debug_assert!(!is_peer_connected);
         ensure!(
             !is_peer_connected,
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
+            P2pError::PeerError(PeerError::PeerAlreadyExists(info.peer_id)),
         );
 
-        // Note: for inbound connections, should_reject_because_already_connected always returns
-        // false and for outbound ones we've already called it in try_connect. But new connections
+        // Note: for inbound connections, maybe_reject_because_already_connected always returns
+        // Ok and for outbound ones we've already called it in try_connect. But new connections
         // might have appeared since try_connect was called, so the call below is not redundant.
-        ensure!(
-            !self.should_reject_because_already_connected(address, peer_role),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
+        self.maybe_reject_because_already_connected(address, peer_role)?;
 
         ensure!(
             !self.peerdb.is_address_banned(&address.as_bannable()),
@@ -1713,22 +1701,30 @@ where
         self.peers.get(&peer_id).is_some()
     }
 
-    // Return true if a connection to the specified address already exists and it prevents us
+    // Return an error if a connection to the specified address already exists and it prevents us
     // from establishing another connection to the same address with the connection type determined
     // by `new_peer_role`.
-    fn should_reject_because_already_connected(
+    fn maybe_reject_because_already_connected(
         &self,
         new_peer_addr: &SocketAddress,
         new_peer_role: PeerRole,
-    ) -> bool {
-        if !new_peer_role.is_outbound() {
+    ) -> crate::Result<()> {
+        match new_peer_role {
             // Don't reject inbound connections. The address will have a random port number anyway,
             // so we won't be able to tell whether the connections come from the same node or not.
-            return false;
+            PeerRole::Inbound
+            // Don't reject feeler connections either.
+            | PeerRole::Feeler => {
+                return Ok(());
+            }
+            PeerRole::OutboundFullRelay
+            | PeerRole::OutboundBlockRelay
+            | PeerRole::OutboundReserved
+            | PeerRole::OutboundManual => {}
         }
 
-        let should_reject =
-            self.peer_addresses_iter().any(|(existing_peer_addr, existing_peer_role)| {
+        let conflicting_connection =
+            self.peer_addresses_iter().find(|(existing_peer_addr, existing_peer_role)| {
                 // If the ip addresses are different, allow the connection.
                 if existing_peer_addr.ip_addr() != new_peer_addr.ip_addr() {
                     return false;
@@ -1736,21 +1732,30 @@ where
 
                 !self.may_allow_outbound_connection_to_existing_ip(
                     existing_peer_addr.socket_addr().port(),
-                    existing_peer_role,
+                    *existing_peer_role,
                     new_peer_addr.socket_addr().port(),
                     new_peer_role,
                 )
             });
 
-        should_reject
+        if let Some((existing_peer_addr, existing_peer_role)) = conflicting_connection {
+            Err(P2pError::PeerError(PeerError::AlreadyConnected {
+                existing_peer_addr,
+                existing_peer_role,
+                new_peer_addr: *new_peer_addr,
+                new_peer_role,
+            }))
+        } else {
+            Ok(())
+        }
     }
 
     /// Return true if the specified `new_peer_addr` can be used for a new outbound connection.
     ///
-    /// This is basically a replacement for `should_reject_because_already_connected` that
+    /// This is basically a replacement for `maybe_reject_because_already_connected` that
     /// is used when selecting addresses for new automatic outbound connections; it will be
     /// called for every address in peerdb, so we want to avoid the linear complexity of
-    /// `should_reject_because_already_connected`.
+    /// `maybe_reject_because_already_connected`.
     /// Note that calling this function mainly serves as an optimization - we don't want to select
     /// addresses that will be rejected anyway when we'll try to connect to them.
     fn allow_new_outbound_connection(
