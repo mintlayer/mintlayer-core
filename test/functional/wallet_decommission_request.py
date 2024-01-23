@@ -320,11 +320,13 @@ class WalletDecommissionRequest(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
 
-if __name__ == '__main__':
-    tf1 = WalletDecommissionRequest()
-    tf1.use_wallet_to_produce_block = False
-    tf1.main(exit_on_success=False)
+# `use_wallet_to_produce_block` indicates whether a test should use a pool created by a wallet to produce block
+# `exit_on_success` indicates if the process should exit or continue and run next test case
+def wallet_decommission_request_test_case(use_wallet_to_produce_block, exit_on_success):
+    tf = WalletDecommissionRequest()
+    tf.use_wallet_to_produce_block = use_wallet_to_produce_block
+    tf.main(exit_on_success)
 
-    tf2 = WalletDecommissionRequest()
-    tf2.use_wallet_to_produce_block = True
-    tf2.main()
+if __name__ == '__main__':
+    wallet_decommission_request_test_case(False, False)
+    wallet_decommission_request_test_case(True, True)
