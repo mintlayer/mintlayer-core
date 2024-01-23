@@ -20,7 +20,9 @@ mod rpc;
 mod service;
 
 pub use rpc::{types, RpcAuthData, RpcCreds, RpcError, WalletRpc, WalletRpcServer};
-pub use service::{CreatedWallet, WalletHandle, WalletResult, WalletService};
+pub use service::{
+    CreatedWallet, Event, EventStream, TxState, WalletHandle, WalletResult, WalletService,
+};
 
 use std::time::Duration;
 

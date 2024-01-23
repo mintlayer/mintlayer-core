@@ -397,4 +397,7 @@ trait WalletRpc {
         account_index: AccountIndexArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
+
+    #[subscription(name = "subscribe_wallet_events", item = Event)]
+    async fn subscribe_wallet_events(&self, options: EmptyArgs) -> rpc::subscription::Reply;
 }

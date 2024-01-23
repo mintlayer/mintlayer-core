@@ -37,6 +37,12 @@ impl AccountId {
     }
 }
 
+impl serde::Serialize for AccountId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.to_string().serialize(serializer)
+    }
+}
+
 /// This is a composite id that combines a prefix account id and a generic item id suffix.
 /// It is useful for storing key/values that belong to different accounts and are stored in the
 /// same map.
@@ -62,6 +68,10 @@ impl<Id: Encode> AccountPrefixedId<Id> {
 
     pub fn item_id(&self) -> &Id {
         &self.item_id
+    }
+
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
     }
 }
 

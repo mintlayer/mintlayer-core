@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod events;
 mod handle;
 mod worker;
 
@@ -20,11 +21,14 @@ use std::sync::Arc;
 
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
+
 pub use wallet_controller::NodeRpcClient;
 
+pub use events::{Event, TxState};
+pub use handle::{EventStream, SubmitError, WalletHandle};
 pub use worker::{CreatedWallet, WalletController, WalletControllerError};
 
-pub use handle::{SubmitError, WalletHandle};
+use events::WalletServiceEvents;
 
 pub type WalletResult<T> = Result<T, WalletControllerError>;
 
@@ -50,6 +54,9 @@ impl WalletService {
     pub async fn start(config: crate::WalletServiceConfig) -> Result<Self, InitError> {
         let chain_config = config.chain_config;
 
+        let (wallet_events, events_rx) = WalletServiceEvents::new();
+        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+
         let node_rpc = {
             let rpc_address = {
                 let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
@@ -70,26 +77,26 @@ impl WalletService {
                 )?
             };
 
-            Some(
-                WalletController::new(
-                    chain_config.shallow_clone(),
-                    node_rpc.clone(),
-                    wallet,
-                    wallet::wallet_events::WalletEventsNoOp,
-                )
-                .await?,
+            let controller = WalletController::new(
+                chain_config.shallow_clone(),
+                node_rpc.clone(),
+                wallet,
+                wallet_events.clone(),
             )
+            .await?;
+
+            Some(controller)
         } else {
             None
         };
 
-        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
-
         let task = worker::WalletWorker::spawn(
             controller,
-            command_rx,
             chain_config.clone(),
             node_rpc.clone(),
+            command_rx,
+            events_rx,
+            wallet_events,
         );
 
         Ok(WalletService {
@@ -110,7 +117,7 @@ impl WalletService {
 
     /// Get wallet service handle
     pub fn handle(&self) -> WalletHandle {
-        WalletHandle::new(worker::CommandSender::clone(&self.command_tx))
+        handle::create(worker::CommandSender::clone(&self.command_tx))
     }
 
     /// Wait for the service to shut down

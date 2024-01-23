@@ -34,6 +34,8 @@ tokio.workspace = true
 
 [dev-dependencies]
 
+consensus = { path = "../../consensus" }
+mempool = { path = "../../mempool" }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }
