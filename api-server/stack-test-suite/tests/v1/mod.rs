@@ -26,6 +26,7 @@ mod feerate;
 mod helpers;
 mod nft;
 mod pool;
+mod pool_block_stats;
 mod pools;
 mod token;
 mod transaction;

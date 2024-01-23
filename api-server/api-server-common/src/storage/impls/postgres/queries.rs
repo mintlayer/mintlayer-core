@@ -22,6 +22,7 @@ use serialization::{DecodeAll, Encode};
 use common::{
     address::Address,
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction,
         TxOutput, UtxoOutPoint,
@@ -34,7 +35,7 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
-        TransactionInfo, Utxo,
+        PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 
@@ -66,6 +67,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .into_int()
             .try_into()
             .unwrap_or_else(|e| panic!("Invalid block height: {e}"))
+    }
+
+    fn block_time_to_postgres_friendly(
+        block_timestamp: BlockTimestamp,
+    ) -> Result<i64, ApiServerStorageError> {
+        // Postgres doesn't like u64, so we have to convert it to i64, and given BlockDistance limitations, it's OK.
+        block_timestamp
+            .as_int_seconds()
+            .try_into()
+            .map_err(|_| ApiServerStorageError::TimestampToHigh(block_timestamp))
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
@@ -359,6 +370,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_blocks (
                 block_id bytea PRIMARY KEY,
                 block_height bigint,
+                block_timestamp bigint NOT NULL,
                 block_data bytea NOT NULL
             );",
         )
@@ -607,6 +619,34 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(Some(block))
     }
 
+    pub async fn get_block_range_from_time_range(
+        &mut self,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<(BlockHeight, BlockHeight), ApiServerStorageError> {
+        let from = Self::block_time_to_postgres_friendly(time_range.0)?;
+        let to = Self::block_time_to_postgres_friendly(time_range.1)?;
+        let row = self
+            .tx
+            .query_one(
+                r"
+                SELECT COALESCE(MIN(block_height), 0), COALESCE(MAX(block_height), 0)
+                FROM ml_blocks
+                WHERE block_timestamp BETWEEN $1 AND $2 AND block_height != NULL
+                ;",
+                &[&from, &to],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let from_height: i64 = row.get(0);
+        let to_height: i64 = row.get(1);
+
+        Ok((
+            BlockHeight::new(from_height as u64),
+            BlockHeight::new(to_height as u64),
+        ))
+    }
+
     pub async fn set_mainchain_block(
         &mut self,
         block_id: Id<Block>,
@@ -615,13 +655,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let timestamp = Self::block_time_to_postgres_friendly(block.timestamp())?;
 
         self.tx
             .execute(
-                "INSERT INTO ml_blocks (block_id, block_height, block_data) VALUES ($1, $2, $3)
+                "INSERT INTO ml_blocks (block_id, block_height, block_timestamp, block_data) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (block_id) DO UPDATE
-                    SET block_data = $3, block_height = $2;",
-                &[&block_id.encode(), &height, &block.encode()],
+                    SET block_data = $4, block_height = $2;",
+                &[&block_id.encode(), &height, &timestamp, &block.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -819,6 +860,36 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
+    }
+
+    pub async fn get_pool_block_stats(
+        &self,
+        pool_id: PoolId,
+        block_range: (BlockHeight, BlockHeight),
+        chain_config: &ChainConfig,
+    ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
+        let from_height = Self::block_height_to_postgres_friendly(block_range.0);
+        let to_height = Self::block_height_to_postgres_friendly(block_range.1);
+        let pool_id_str = Address::new(chain_config, &pool_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self
+            .tx
+            .query_one(
+                r#"SELECT COUNT(*)
+                    FROM ml_pool_data
+                    WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
+                    AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml_pool_data WHERE pool_id = $1)
+                    AND staker_balance::NUMERIC != 0
+                "#,
+                &[&pool_id_str.get(), &from_height, &to_height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let count: i64 = row.get(0);
+
+        Ok(Some(PoolBlockStats {
+            block_count: count as u64,
+        }))
     }
 
     pub async fn get_pool_delegation_shares(

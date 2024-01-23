@@ -32,10 +32,14 @@ use axum::{
 };
 use common::{
     address::Address,
-    chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
+    chain::{
+        block::timestamp::BlockTimestamp, tokens::NftIssuance, Block, Destination,
+        SignedTransaction, Transaction,
+    },
     primitives::{BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
+use serde::Deserialize;
 use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc, time::Duration};
@@ -90,6 +94,7 @@ pub fn routes<
     let router = router
         .route("/pool", get(pools))
         .route("/pool/:id", get(pool))
+        .route("/pool/:id/block-stats", get(pool_block_stats))
         .route("/pool/:id/delegations", get(pool_delegations));
 
     let router = router.route("/delegation/:id", get(delegation));
@@ -766,6 +771,55 @@ pub async fn pool<T: ApiServerStorage>(
         "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
         "cost_per_block": pool_data.cost_per_block(),
         "vrf_public_key": pool_data.vrf_public_key(),
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TimeFilter {
+    from: u64,
+    to: u64,
+}
+
+pub async fn pool_block_stats<T: ApiServerStorage>(
+    Path(pool_id): Path<String>,
+    Query(params): Query<TimeFilter>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+        .and_then(|address| address.decode_object(&state.chain_config))
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
+        })?;
+
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let block_range = tx
+        .get_block_range_from_time_range((
+            BlockTimestamp::from_int_seconds(params.from),
+            BlockTimestamp::from_int_seconds(params.to),
+        ))
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let pool_block_stats = tx
+        .get_pool_block_stats(pool_id, block_range)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::PoolNotFound,
+        ))?;
+
+    Ok(Json(json!({
+        "block_count": pool_block_stats.block_count,
     })))
 }
 
