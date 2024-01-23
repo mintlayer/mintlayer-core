@@ -1295,7 +1295,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1340,7 +1340,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         pool_amount
     );
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let (pool_id, pool_data) = pool_ids.first().unwrap();
@@ -1380,7 +1380,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3.clone()]);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let (_pool_id, pool_data) = pool_ids.first().unwrap();
     assert_eq!(
@@ -1390,7 +1390,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     // do a reorg back to block 2
     scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2.clone()]);
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
     let (pool_id, pool_data) = pool_ids.first().unwrap();
     assert_eq!(
@@ -1414,7 +1414,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         Amount::ZERO,
         2,
     );
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let currency_balances = wallet
@@ -1571,7 +1571,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -1614,7 +1614,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         block1_amount,
     );
 
-    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -3652,7 +3652,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -3686,7 +3686,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Try to decommission the pool with default account
@@ -3753,7 +3753,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -3787,7 +3787,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     // Try to create decommission request from account that holds the key
@@ -3837,7 +3837,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&wallet);
@@ -3871,7 +3871,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = wallet.get_pool_ids(acc_0_index).unwrap();
+    let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -3936,7 +3936,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
     let _ = create_block(&chain_config, &mut hot_wallet, vec![], block1_amount, 0);
 
-    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
     let coin_balance = get_coin_balance(&hot_wallet);
@@ -3968,7 +3968,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         1,
     );
 
-    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pool_ids = hot_wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
     let pool_id = pool_ids.first().unwrap().0;
@@ -4008,4 +4008,90 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         pool_amount,
     );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn filter_pools(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet1 = create_wallet(chain_config.clone());
+
+    // create another wallet to store decommission key
+    let another_mnemonic =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
+    let decommission_key = wallet2.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    let _ = create_block(&chain_config, &mut wallet2, vec![], block1_amount, 0);
+
+    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let pool_amount = block1_amount;
+
+    let stake_pool_transaction = wallet1
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+                decommission_key: Destination::PublicKey(decommission_key),
+            },
+        )
+        .unwrap();
+    // sync for wallet1
+    let _ = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![stake_pool_transaction.clone()],
+        Amount::ZERO,
+        1,
+    );
+    // sync for wallet2
+    let _ = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![stake_pool_transaction],
+        Amount::ZERO,
+        1,
+    );
+
+    // check wallet1 filter
+    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_ids = wallet1
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert_eq!(pool_ids.len(), 0);
+
+    let pool_ids = wallet1.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    // check wallet2 filter
+    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_ids = wallet2
+        .get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Decommission)
+        .unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_ids = wallet2.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::Stake).unwrap();
+    assert_eq!(pool_ids.len(), 0);
 }

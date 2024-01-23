@@ -40,6 +40,7 @@ use crate::send_request::{
     make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
     make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
+use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
@@ -668,8 +669,26 @@ impl Account {
         Ok(self.key_chain.issue_vrf_key(db_tx)?.into_public_key())
     }
 
-    pub fn get_pool_ids(&self) -> Vec<(PoolId, PoolData)> {
-        self.output_cache.pool_ids()
+    pub fn get_pool_ids(
+        &self,
+        filter: WalletPoolsFilter,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> Vec<(PoolId, PoolData)> {
+        self.output_cache
+            .pool_ids()
+            .into_iter()
+            .filter(|(_, pool_data)| match filter {
+                WalletPoolsFilter::All => true,
+                WalletPoolsFilter::Decommission => self
+                    .key_chain
+                    .get_private_key_for_destination(&pool_data.decommission_key, db_tx)
+                    .map_or(false, |res| res.is_some()),
+                WalletPoolsFilter::Stake => self
+                    .key_chain
+                    .get_private_key_for_destination(&pool_data.stake_destination, db_tx)
+                    .map_or(false, |res| res.is_some()),
+            })
+            .collect()
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {

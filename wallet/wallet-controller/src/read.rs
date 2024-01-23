@@ -31,6 +31,7 @@ use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
 use wallet::{
     account::{transaction_list::TransactionList, Currency, DelegationData, PoolData},
+    wallet::WalletPoolsFilter,
     DefaultWallet,
 };
 use wallet_types::{
@@ -218,7 +219,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<Vec<(PoolId, PoolData, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
-            .get_pool_ids(self.account_index)
+            .get_pool_ids(self.account_index, WalletPoolsFilter::All)
             .map_err(ControllerError::WalletError)?;
 
         let tasks: FuturesUnordered<_> = pools

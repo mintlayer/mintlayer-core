@@ -60,7 +60,10 @@ pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletError, WalletResult};
+use wallet::{
+    wallet::WalletPoolsFilter, wallet_events::WalletEvents, DefaultWallet, WalletError,
+    WalletResult,
+};
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
@@ -429,8 +432,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
-        let pools =
-            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+        let pools = self
+            .wallet
+            .get_pool_ids(account_index, WalletPoolsFilter::Stake)
+            .map_err(ControllerError::WalletError)?;
 
         let mut last_error = ControllerError::NoStakingPool;
         for (pool_id, _) in pools {
