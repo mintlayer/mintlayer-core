@@ -278,11 +278,13 @@ class WalletDecommissionRequest(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 1)
             assert_equal(pools[0].balance, '40000')
+            tip_id_with_genesis_pool = node.chainstate_best_block_id()
 
             if self.use_wallet_to_produce_block:
                 # produce block with the wallet so that utxo of a pool changes from CreateStakePool to ProduceBlockWithStakePool
-                # TODO: this is very slow but otherwise there is no way to sign block with wallet keys
-                await wallet.generate_block([])
+                assert_in("Staking started successfully", await wallet.start_staking())
+                self.wait_until(lambda: node.chainstate_best_block_id() != tip_id_with_genesis_pool, timeout = 15)
+                assert_in("Success", await wallet.stop_staking())
 
             # try decommission from hot wallet
             assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
@@ -314,7 +316,9 @@ class WalletDecommissionRequest(BitcoinTestFramework):
 
             transactions = node.mempool_transactions()
             assert_in(decommission_signed_tx, transactions)
-            self.gen_pos_block(transactions, 3)
+
+            tip_height = await wallet.get_best_block_height()
+            self.gen_pos_block(transactions, int(tip_height) + 1, self.hex_to_dec_array(tip_id_with_genesis_pool))
             assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()
