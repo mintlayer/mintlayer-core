@@ -171,8 +171,8 @@ async fn peer_discovery_on_stale_tip_impl(
 
     time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
-    // Wait until the maximum number of connections is established.
-    wait_for_max_cross_connections(&node_group).await;
+    // Wait until nodes connect to each other.
+    wait_for_interconnection(&node_group).await;
     let full_relay_conn_cnt_before_wait =
         node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
 
@@ -185,19 +185,24 @@ async fn peer_discovery_on_stale_tip_impl(
     let full_relay_conn_cnt_after_wait =
         node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
 
-    // Note that the "extra" connections may be dropped and re-established at any time, so we have
-    // to "ignore" them by clamping the connection counts to outbound_full_relay_conn_count.
-    let full_relay_conn_cnt_before_wait: Vec<_> = full_relay_conn_cnt_before_wait
-        .iter()
-        .map(|cnt| num::clamp(*cnt, 0, outbound_full_relay_conn_count))
-        .collect();
-    let full_relay_conn_cnt_after_wait: Vec<_> = full_relay_conn_cnt_after_wait
-        .iter()
-        .map(|cnt| num::clamp(*cnt, 0, outbound_full_relay_conn_count))
-        .collect();
     assert_eq!(
-        full_relay_conn_cnt_after_wait,
-        full_relay_conn_cnt_before_wait
+        full_relay_conn_cnt_before_wait.len(),
+        full_relay_conn_cnt_after_wait.len()
+    );
+    let has_same_or_more_full_relay_conns = full_relay_conn_cnt_before_wait
+        .iter()
+        .zip(full_relay_conn_cnt_after_wait.iter())
+        .all(|(before, after)| {
+            // Note that the "extra" connections may be dropped and re-established at any time, so we have
+            // to "ignore" them by clamping the connection counts to outbound_full_relay_conn_count.
+            let before = num::clamp(*before, 0, outbound_full_relay_conn_count);
+            let after = num::clamp(*after, 0, outbound_full_relay_conn_count);
+            after >= before
+        });
+    assert!(
+        has_same_or_more_full_relay_conns,
+        "Unexpected connection counts, before: {:?}, after: {:?}",
+        full_relay_conn_cnt_before_wait, full_relay_conn_cnt_after_wait
     );
 
     // Start a new node that would produce a block.
@@ -528,7 +533,8 @@ async fn start_node(
     node
 }
 
-async fn wait_for_max_cross_connections(node_group: &TestNodeGroup<Transport>) {
+/// Wait until each node has at least n-1 connections, where n is the total number of nodes.
+async fn wait_for_interconnection(node_group: &TestNodeGroup<Transport>) {
     for node in node_group.nodes().iter() {
         let mut peers_count = node.get_peers_info().await.info.len();
 
