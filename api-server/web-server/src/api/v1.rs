@@ -33,7 +33,7 @@ use axum::{
 use common::{
     address::Address,
     chain::{tokens::NftIssuance, Block, Destination, SignedTransaction, Transaction},
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde_json::json;
