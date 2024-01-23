@@ -25,7 +25,7 @@ use common::{
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id},
+    primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
 use crypto::key::{
     hdkd::{child_number::ChildNumber, u31::U31},
@@ -156,7 +156,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         metadata_uri: Vec<u8>,
         token_total_supply: TokenTotalSupply,
         is_freezable: IsTokenFreezable,
-    ) -> Result<TokenId, ControllerError<T>> {
+    ) -> Result<(Id<Transaction>, TokenId), ControllerError<T>> {
         let destination = address.decode_object(self.chain_config.as_ref())?;
 
         self.create_and_send_tx_with_id(
@@ -186,7 +186,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         address: Address<Destination>,
         metadata: Metadata,
-    ) -> Result<TokenId, ControllerError<T>> {
+    ) -> Result<(Id<Transaction>, TokenId), ControllerError<T>> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -209,7 +209,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         token_info: RPCTokenInfo,
         amount: Amount,
         address: Address<Destination>,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -234,7 +234,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         token_info: RPCTokenInfo,
         amount: Amount,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -258,7 +258,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn lock_token_supply(
         &mut self,
         token_info: RPCTokenInfo,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -284,7 +284,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         token_info: RPCTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -308,7 +308,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn unfreeze_token(
         &mut self,
         token_info: RPCTokenInfo,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -333,7 +333,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         token_info: RPCTokenInfo,
         address: Address<Destination>,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,
@@ -353,7 +353,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
-    pub async fn deposit_data(&mut self, data: Vec<u8>) -> Result<(), ControllerError<T>> {
+    pub async fn deposit_data(
+        &mut self,
+        data: Vec<u8>,
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let outputs = make_data_deposit_output(self.chain_config, data)
             .map_err(ControllerError::WalletError)?;
 
@@ -379,7 +382,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         amount: Amount,
         selected_utxos: Vec<UtxoOutPoint>,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.check_tokens_in_selected_utxo(&selected_utxos).await?;
 
         let output = make_address_output(self.chain_config, address, amount)
@@ -405,7 +408,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         address: Address<Destination>,
         pool_id: PoolId,
-    ) -> Result<DelegationId, ControllerError<T>> {
+    ) -> Result<(Id<Transaction>, DelegationId), ControllerError<T>> {
         let output = make_create_delegation_output(self.chain_config, address, pool_id)
             .map_err(ControllerError::WalletError)?;
         self.create_and_send_tx_with_id(
@@ -428,7 +431,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let output = TxOutput::DelegateStaking(amount, delegation_id);
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
@@ -452,7 +455,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let pool_id = self
             .wallet
             .get_delegation(self.account_index, delegation_id)
@@ -491,7 +494,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         token_info: RPCTokenInfo,
         address: Address<Destination>,
         amount: Amount,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let output =
             make_address_output_token(self.chain_config, address, amount, token_info.token_id())
                 .map_err(ControllerError::WalletError)?;
@@ -521,7 +524,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         decommission_key: Destination,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -546,7 +549,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn decommission_stake_pool(
         &mut self,
         pool_id: PoolId,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let staker_balance = self
             .rpc_client
             .get_staker_balance(pool_id)
@@ -636,7 +639,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     async fn broadcast_to_mempool(
         &mut self,
         tx: SignedTransaction,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
+        let tx_id = tx.transaction().get_id();
         self.rpc_client
             .submit_transaction(tx.clone(), Default::default())
             .await
@@ -646,7 +650,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .add_unconfirmed_tx(tx, self.wallet_events)
             .map_err(ControllerError::WalletError)?;
 
-        Ok(())
+        Ok(tx_id)
     }
 
     /// Create a transaction and broadcast it
@@ -655,7 +659,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     >(
         &mut self,
         tx_maker: F,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
@@ -684,7 +688,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         token_info: &RPCTokenInfo,
         tx_maker: F,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<Id<Transaction>, ControllerError<T>> {
         // make sure we can use the token before create an tx using it
         let token_freezable_info = match token_info {
             RPCTokenInfo::FungibleToken(token_info) => self
@@ -719,7 +723,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     >(
         &mut self,
         tx_maker: F,
-    ) -> Result<ID, ControllerError<T>> {
+    ) -> Result<(Id<Transaction>, ID), ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
@@ -731,7 +735,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await?;
-        Ok(id)
+        let tx_id = self.broadcast_to_mempool(tx).await?;
+        Ok((tx_id, id))
     }
 }

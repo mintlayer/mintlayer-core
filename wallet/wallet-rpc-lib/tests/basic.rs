@@ -27,7 +27,10 @@ use utils::{
     make_seedable_rng, ClientT, JsonValue, Seed, SubscriptionClientT, ACCOUNT0_ARG, ACCOUNT1_ARG,
 };
 use wallet_rpc_lib::{
-    types::{AddressInfo, Balances, BlockInfo, EmptyArgs, NewAccountInfo, TransactionOptions},
+    types::{
+        AddressInfo, Balances, BlockInfo, EmptyArgs, NewAccountInfo, NewTransaction,
+        TransactionOptions,
+    },
     TxState,
 };
 
@@ -155,7 +158,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     assert_eq!(utxo_amount, coins_before.into_atoms());
 
     let to_send_amount = Amount::from_atoms(utxo_amount / 2);
-    let _: () = {
+    let _: NewTransaction = {
         let to_send_amount_str =
             to_send_amount.into_fixedpoint_str(tf.chain_config().coin_decimals());
         let send_to_addr = acct1_addr.address;

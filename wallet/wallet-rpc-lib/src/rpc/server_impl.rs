@@ -32,7 +32,7 @@ use crate::{
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
         StakePoolBalance, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
@@ -192,7 +192,7 @@ impl WalletRpcServer for WalletRpc {
         address: String,
         amount_str: DecimalAmount,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -210,7 +210,7 @@ impl WalletRpcServer for WalletRpc {
         margin_ratio_per_thousand: String,
         decommission_address: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -232,7 +232,7 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         pool_id: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -262,7 +262,7 @@ impl WalletRpcServer for WalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -279,7 +279,7 @@ impl WalletRpcServer for WalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -339,8 +339,7 @@ impl WalletRpcServer for WalletRpc {
                 metadata.into_metadata(),
                 config,
             )
-            .await
-            .map(|token_id| RpcTokenId { token_id }),
+            .await,
         )
     }
 
@@ -368,8 +367,7 @@ impl WalletRpcServer for WalletRpc {
                 is_freezable,
                 config,
             )
-            .await
-            .map(|token_id| RpcTokenId { token_id }),
+            .await,
         )
     }
 
@@ -379,7 +377,7 @@ impl WalletRpcServer for WalletRpc {
         token_id: String,
         address: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -397,7 +395,7 @@ impl WalletRpcServer for WalletRpc {
         address: String,
         amount: DecimalAmount,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -414,7 +412,7 @@ impl WalletRpcServer for WalletRpc {
         token_id: String,
         amount: DecimalAmount,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -429,7 +427,7 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         token_id: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -443,7 +441,7 @@ impl WalletRpcServer for WalletRpc {
         token_id: String,
         is_unfreezable: bool,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -465,7 +463,7 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         token_id: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -480,7 +478,7 @@ impl WalletRpcServer for WalletRpc {
         address: String,
         amount: DecimalAmount,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
@@ -496,7 +494,7 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
         data: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };

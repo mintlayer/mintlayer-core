@@ -20,9 +20,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
-        ChainConfig, DelegationId, Destination, PoolId, TxOutput, UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, Id},
 };
 use crypto::{
     key::{
@@ -242,6 +242,7 @@ impl PoolInfo {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NewDelegation {
+    pub tx_id: Id<Transaction>,
     pub delegation_id: String,
 }
 
@@ -358,6 +359,18 @@ pub struct StakePoolBalance {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RpcTokenId {
     pub token_id: String,
+    pub tx_id: Id<Transaction>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NewTransaction {
+    pub tx_id: Id<Transaction>,
+}
+
+impl NewTransaction {
+    pub fn new(tx_id: Id<Transaction>) -> Self {
+        Self { tx_id }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
