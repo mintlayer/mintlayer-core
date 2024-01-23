@@ -151,11 +151,27 @@ impl ChainType {
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
             ChainType::Mainnet => {
-                let upgrades = vec![(BlockHeight::new(0), ChainstateUpgrade::latest())];
+                let upgrades = vec![(
+                    BlockHeight::new(0),
+                    ChainstateUpgrade::new(
+                        TokenIssuanceVersion::V1,
+                        RewardDistributionVersion::V1,
+                        TokensFeeVersion::V1,
+                        TokensTickerMaxLengthVersion::V1,
+                    ),
+                )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Regtest | ChainType::Signet => {
-                let upgrades = vec![(BlockHeight::new(0), ChainstateUpgrade::latest())];
+                let upgrades = vec![(
+                    BlockHeight::new(0),
+                    ChainstateUpgrade::new(
+                        TokenIssuanceVersion::V1,
+                        RewardDistributionVersion::V1,
+                        TokensFeeVersion::V1,
+                        TokensTickerMaxLengthVersion::V1,
+                    ),
+                )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {

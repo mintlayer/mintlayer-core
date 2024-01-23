@@ -70,15 +70,6 @@ impl ChainstateUpgrade {
         }
     }
 
-    pub fn latest() -> Self {
-        ChainstateUpgrade::new(
-            TokenIssuanceVersion::V1,
-            RewardDistributionVersion::V1,
-            TokensFeeVersion::V1,
-            TokensTickerMaxLengthVersion::V1,
-        )
-    }
-
     pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
         self.token_issuance_version
     }

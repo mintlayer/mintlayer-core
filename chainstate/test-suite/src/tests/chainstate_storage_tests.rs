@@ -378,7 +378,12 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                     .chainstate_upgrades(
                         NetUpgrades::initialize(vec![(
                             BlockHeight::zero(),
-                            ChainstateUpgrade::latest(),
+                            ChainstateUpgrade::new(
+                                TokenIssuanceVersion::V1,
+                                RewardDistributionVersion::V1,
+                                TokensFeeVersion::V1,
+                                TokensTickerMaxLengthVersion::V1,
+                            ),
                         )])
                         .unwrap(),
                     )
