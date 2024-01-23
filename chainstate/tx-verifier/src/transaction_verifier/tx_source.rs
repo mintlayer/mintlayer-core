@@ -40,14 +40,19 @@ impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
     }
 }
 
+/// A struct that represents the block height where that transaction is located.
+/// When connecting a block, it's determined an unambiguous. For the mempool,
+/// it's more complicated because it may either be for the possible next block,
+/// or it might have some required tolerance for calculating the height, due
+/// to timelocks depending on timestamps of blocks that haven't yet been created.
 pub enum TransactionSourceForConnect<'a> {
     Chain {
         new_block_index: &'a BlockIndex,
     },
     Mempool {
-        // Blockchain tip according to mempool
+        /// Blockchain tip according to mempool
         current_best: &'a GenBlockIndex,
-        // Effective block height used for mempool transaction validation (e.g. timelocks)
+        /// Effective block height used for mempool transaction validation (e.g. timelocks)
         effective_height: BlockHeight,
     },
 }
@@ -57,6 +62,8 @@ impl<'a> TransactionSourceForConnect<'a> {
         Self::Chain { new_block_index }
     }
 
+    /// Used for the transaction accumulator for block production,
+    /// where the height of the new block is the current best + 1
     pub fn for_mempool(current_best: &'a GenBlockIndex) -> Self {
         let effective_height = current_best.block_height().next_height();
         Self::for_mempool_with_height(current_best, effective_height)
@@ -64,7 +71,10 @@ impl<'a> TransactionSourceForConnect<'a> {
 
     /// Source is mempool with given declared block height
     ///
-    /// The height has to be strictly greater than the height of chain tip
+    /// The height has to be strictly greater than the height of chain tip.
+    /// This is used to specify the effective height freely when checking timelocks.
+    /// This is needed when accepting new transactions to the mempool, where a certain
+    /// tolerance to timelocks is needed due to fluctuations of block timestamps.
     pub fn for_mempool_with_height(
         current_best: &'a GenBlockIndex,
         effective_height: BlockHeight,
