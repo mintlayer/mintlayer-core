@@ -42,8 +42,8 @@ use super::{
     error::BackendError,
     messages::{
         AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
-        EncryptionAction, EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId,
-        WalletInfo,
+        DelegateStakingRequest, EncryptionAction, EncryptionState, SendRequest, StakeRequest,
+        TransactionInfo, WalletId, WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -461,6 +461,29 @@ impl Backend {
         Ok(TransactionInfo { wallet_id })
     }
 
+    async fn delegate_staking(
+        &mut self,
+        request: DelegateStakingRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let DelegateStakingRequest {
+            wallet_id,
+            account_id,
+            delegation_id,
+            delegation_amount,
+        } = request;
+
+        let delegation_amount = parse_coin_amount(&self.chain_config, &delegation_amount)
+            .ok_or(BackendError::InvalidAmount(delegation_amount))?;
+
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .delegate_staking(delegation_amount, delegation_id)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id })
+    }
+
     fn get_account_balance(
         controller: &ReadOnlyController<WalletHandlesClient>,
     ) -> BTreeMap<Currency, Amount> {
@@ -537,9 +560,14 @@ impl Backend {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
             }
-            BackendRequest::CreateDelegation(delegation_request) => {
-                let result = self.create_delegation(delegation_request).await;
+            BackendRequest::CreateDelegation(request) => {
+                let result = self.create_delegation(request).await;
                 Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
+            }
+            BackendRequest::DelegateStaking(request) => {
+                let delegation_id = request.delegation_id;
+                let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
+                Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
             }
             BackendRequest::TransactionList {
                 wallet_id,

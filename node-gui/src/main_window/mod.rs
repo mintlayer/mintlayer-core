@@ -517,6 +517,26 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
+                BackendEvent::DelegateStaking(Ok((transaction_info, delegation_id))) => {
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::DelegateStakingSucceed(delegation_id),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
+                }
+                BackendEvent::DelegateStaking(Err(error)) => {
+                    self.show_error(error.to_string());
+                    Command::none()
+                }
                 BackendEvent::Broadcast(Ok(())) => {
                     self.show_info("Success".to_owned());
                     Command::none()

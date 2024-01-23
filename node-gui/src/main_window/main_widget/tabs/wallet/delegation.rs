@@ -13,10 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{address::Address, chain::ChainConfig};
+use std::collections::BTreeMap;
+
+use common::{
+    address::Address,
+    chain::{ChainConfig, DelegationId},
+};
 use iced::{
-    widget::{column, container, row, text_input, tooltip, tooltip::Position, Text},
-    Element,
+    widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
+    Element, Length,
 };
 use iced_aw::Grid;
 
@@ -34,6 +39,7 @@ pub fn view_delegation(
     account: &AccountInfo,
     pool_id: &str,
     delegation_address: &str,
+    delegate_staking_amounts: &BTreeMap<DelegationId, String>,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
@@ -42,20 +48,50 @@ pub fn view_delegation(
         // We print the table only if there are delegations
         if account.delegations_balance.is_empty() {
             Grid::with_columns(2)
-                .push(field("No staking pools found".to_owned()))
+                .push(field("No delegations found".to_owned()))
                 .push(field(String::new()))
         } else {
-            let mut delegation_balance_grid = Grid::with_columns(2)
+            let mut delegation_balance_grid = Grid::with_columns(5)
                 .push(field("Delegation Id".to_owned()))
-                .push(field("Delegation balance".to_owned()));
-            for (delegation_id, balance) in account.delegations_balance.iter() {
+                .push(field("".to_owned()))
+                .push(field("Delegation balance".to_owned()))
+                .push(field("".to_owned()))
+                .push(field("".to_owned()));
+            for (delegation_id, balance) in
+                account.delegations_balance.iter().map(|(id, b)| (*id, *b))
+            {
+                let delegation_id_str = Address::new(chain_config, &delegation_id)
+                    .expect("Encoding pool id to address can't fail (GUI)")
+                    .to_string();
+                let delegate_staking_amount =
+                    delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
                 delegation_balance_grid = delegation_balance_grid
-                    .push(field(
-                        Address::new(chain_config, delegation_id)
-                            .expect("Encoding delegation id to address can't fail (GUI)")
-                            .to_string(),
-                    ))
-                    .push(field(print_coin_amount(chain_config, *balance)));
+                    .push(field(delegation_id_str.clone()))
+                    .push(
+                        button(
+                            Text::new(iced_aw::Icon::ClipboardCheck.to_string())
+                                .font(iced_aw::ICON_FONT),
+                        )
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Shrink)
+                        .on_press(WalletMessage::CopyToClipboard(delegation_id_str)),
+                    )
+                    .push(field(print_coin_amount(chain_config, balance)))
+                    .push(
+                        text_input("Amount:", &delegate_staking_amount)
+                            .on_input(move |value| {
+                                WalletMessage::DelegationAmountEdit((delegation_id, value))
+                            })
+                            .padding(5)
+                            .width(Length::Fixed(100.)),
+                    )
+                    .push(
+                        button(Text::new("Delegate")).on_press(
+                            still_syncing
+                                .clone()
+                                .unwrap_or(WalletMessage::DelegateStaking(delegation_id)),
+                        ),
+                    );
             }
             delegation_balance_grid
         }
