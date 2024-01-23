@@ -203,6 +203,14 @@ pub enum WalletError {
 /// Result type used for the wallet
 pub type WalletResult<T> = Result<T, WalletError>;
 
+/// Wallet tracks all pools that can be decommissioned or used for staking by the wallet.
+/// Filter allows to query for a specific set of pools.
+pub enum WalletPoolsFilter {
+    All,
+    Decommission,
+    Stake,
+}
+
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
@@ -857,8 +865,13 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, PoolData)>> {
-        let pool_ids = self.get_account(account_index)?.get_pool_ids();
+    pub fn get_pool_ids(
+        &self,
+        account_index: U31,
+        filter: WalletPoolsFilter,
+    ) -> WalletResult<Vec<(PoolId, PoolData)>> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
+        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter, &db_tx);
         Ok(pool_ids)
     }
 

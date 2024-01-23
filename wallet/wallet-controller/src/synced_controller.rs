@@ -41,6 +41,7 @@ use wallet::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, StakePoolDataArguments,
     },
+    wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
 };
@@ -601,7 +602,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         // Make sure that account_index is valid and that pools exist
         let pool_ids = self
             .wallet
-            .get_pool_ids(self.account_index)
+            .get_pool_ids(self.account_index, WalletPoolsFilter::Stake)
             .map_err(ControllerError::WalletError)?;
         utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", self.account_index);

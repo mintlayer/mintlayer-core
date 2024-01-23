@@ -118,15 +118,15 @@ class WalletCliController:
 
     async def create_wallet(self, name: str = "wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase\n")
+        return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase\n")
 
     async def open_wallet(self, name: str) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-open {wallet_file}\n")
+        return await self._write_command(f"wallet-open \"{wallet_file}\"\n")
 
     async def recover_wallet(self, mnemonic: str, name: str = "recovered_wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-create {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
+        return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase \"{mnemonic}\"\n")
 
     async def close_wallet(self) -> str:
         return await self._write_command("wallet-close\n")
@@ -309,6 +309,9 @@ class WalletCliController:
 
     async def stop_staking(self) -> str:
         return await self._write_command(f"staking-stop\n")
+
+    async def generate_block(self, transactions: [str]) -> str:
+        return await self._write_command(f"generate-block {transactions}\n")
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")

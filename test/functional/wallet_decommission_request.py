@@ -53,7 +53,7 @@ GENESIS_VRF_PRIVATE_KEY = (
 
 GENESIS_POOL_ID_ADDR = "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v"
 
-class WalletSubmitTransaction(BitcoinTestFramework):
+class WalletDecommissionRequest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -67,17 +67,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         self.setup_nodes()
         self.sync_all(self.nodes[0:1])
 
-    def assert_chain(self, block, previous_tip):
-        assert_equal(block["header"]["header"]["prev_block_id"][2:], previous_tip)
-
     def assert_height(self, expected_height, expected_block):
         block_id = self.nodes[0].chainstate_block_id_at_height(expected_height)
         block = self.nodes[0].chainstate_get_block(block_id)
         assert_equal(block, expected_block)
-
-    def assert_pos_consensus(self, block):
-        if block["header"]["header"]["consensus_data"].get("PoS") is None:
-            raise AssertionError("Block {} was not PoS".format(block))
 
     def assert_tip(self, expected_block):
         tip = self.nodes[0].chainstate_best_block_id()
@@ -89,8 +82,6 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         return self.nodes[n].chainstate_block_height_in_main_chain(tip)
 
     def generate_block(self, expected_height, block_input_data, transactions):
-        previous_block_id = self.nodes[0].chainstate_best_block_id()
-
         fill_mode = 'LeaveEmptySpace'
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
@@ -101,15 +92,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], fill_mode)
                 time.sleep(1)
 
-        block_hex_array = bytearray.fromhex(block_hex)
-        # block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(block_hex_array)).decode()
-
         self.nodes[0].chainstate_submit_block(block_hex)
 
         self.assert_tip(block_hex)
         self.assert_height(expected_height, block_hex)
-        # self.assert_pos_consensus(block)
-        # self.assert_chain(block, previous_block_id)
 
     def genesis_pool_id(self):
         return self.hex_to_dec_array(GENESIS_POOL_ID)
@@ -292,6 +278,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 1)
             assert_equal(pools[0].balance, '40000')
+            tip_id_with_genesis_pool = node.chainstate_best_block_id()
+
+            if self.use_wallet_to_produce_block:
+                # produce block with the wallet so that utxo of a pool changes from CreateStakePool to ProduceBlockWithStakePool
+                assert_in("Staking started successfully", await wallet.start_staking())
+                self.wait_until(lambda: node.chainstate_best_block_id() != tip_id_with_genesis_pool, timeout = 15)
+                assert_in("Success", await wallet.stop_staking())
 
             # try decommission from hot wallet
             assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
@@ -323,12 +316,21 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             transactions = node.mempool_transactions()
             assert_in(decommission_signed_tx, transactions)
-            self.gen_pos_block(transactions, 3)
+
+            tip_height = await wallet.get_best_block_height()
+            self.gen_pos_block(transactions, int(tip_height) + 1, self.hex_to_dec_array(tip_id_with_genesis_pool))
             assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
 
+# `use_wallet_to_produce_block` indicates whether a test should use a pool created by a wallet to produce block
+# `exit_on_success` indicates if the process should exit or continue and run next test case
+def wallet_decommission_request_test_case(use_wallet_to_produce_block, exit_on_success):
+    tf = WalletDecommissionRequest()
+    tf.use_wallet_to_produce_block = use_wallet_to_produce_block
+    tf.main(exit_on_success)
 
 if __name__ == '__main__':
-    WalletSubmitTransaction().main()
+    wallet_decommission_request_test_case(False, False)
+    wallet_decommission_request_test_case(True, True)

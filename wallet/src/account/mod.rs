@@ -36,12 +36,13 @@ use wallet_types::with_locked::WithLocked;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{AccountKeyChain, KeyChainError};
 use crate::send_request::{
-    get_reward_output_destination, make_address_output, make_address_output_from_delegation,
-    make_address_output_token, make_decommission_stake_pool_output, make_mint_token_outputs,
-    make_stake_output, make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
+    make_address_output, make_address_output_from_delegation, make_address_output_token,
+    make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
+    make_unmint_token_outputs, IssueNftArguments, StakePoolDataArguments,
 };
+use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
+use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -93,11 +94,60 @@ pub struct CurrentFeeRate {
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
+
+    input_utxos: Vec<Option<TxOutput>>,
+    destinations: Vec<Option<Destination>>,
 }
 
 impl PartiallySignedTransaction {
-    pub fn new(tx: Transaction, witnesses: Vec<Option<InputWitness>>) -> Self {
-        Self { tx, witnesses }
+    pub fn new(
+        tx: Transaction,
+        witnesses: Vec<Option<InputWitness>>,
+        input_utxos: Vec<Option<TxOutput>>,
+        destinations: Vec<Option<Destination>>,
+    ) -> WalletResult<Self> {
+        ensure!(
+            tx.inputs().len() == witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        ensure!(
+            input_utxos.len() == witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        ensure!(
+            input_utxos.len() == destinations.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        Ok(Self {
+            tx,
+            witnesses,
+            input_utxos,
+            destinations,
+        })
+    }
+
+    pub fn new_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
+        self.witnesses = witnesses;
+        self
+    }
+
+    pub fn tx(&self) -> &Transaction {
+        &self.tx
+    }
+
+    pub fn input_utxos(&self) -> &[Option<TxOutput>] {
+        self.input_utxos.as_ref()
+    }
+
+    pub fn destinations(&self) -> &[Option<Destination>] {
+        self.destinations.as_ref()
+    }
+
+    pub fn witnesses(&self) -> &[Option<InputWitness>] {
+        self.witnesses.as_ref()
     }
 
     pub fn count_inputs(&self) -> usize {
@@ -119,10 +169,6 @@ impl PartiallySignedTransaction {
         } else {
             Err(WalletError::FailedToConvertPartiallySignedTx(self))
         }
-    }
-
-    pub fn take(self) -> (Transaction, Vec<Option<InputWitness>>) {
-        (self.tx, self.witnesses)
     }
 }
 
@@ -396,7 +442,8 @@ impl Account {
 
         let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
 
-        request.with_inputs(selected_inputs)
+        let pool_data_getter = |pool_id: &PoolId| self.output_cache.pool_data(*pool_id).ok();
+        request.with_inputs(selected_inputs, &pool_data_getter)
     }
 
     fn utxo_output_groups_by_currency(
@@ -627,8 +674,26 @@ impl Account {
         Ok(self.key_chain.issue_vrf_key(db_tx)?.into_public_key())
     }
 
-    pub fn get_pool_ids(&self) -> Vec<(PoolId, PoolData)> {
-        self.output_cache.pool_ids()
+    pub fn get_pool_ids(
+        &self,
+        filter: WalletPoolsFilter,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> Vec<(PoolId, PoolData)> {
+        self.output_cache
+            .pool_ids()
+            .into_iter()
+            .filter(|(_, pool_data)| match filter {
+                WalletPoolsFilter::All => true,
+                WalletPoolsFilter::Decommission => self
+                    .key_chain
+                    .get_private_key_for_destination(&pool_data.decommission_key, db_tx)
+                    .map_or(false, |res| res.is_some()),
+                WalletPoolsFilter::Stake => self
+                    .key_chain
+                    .get_private_key_for_destination(&pool_data.stake_destination, db_tx)
+                    .map_or(false, |res| res.is_some()),
+            })
+            .collect()
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
@@ -1064,8 +1129,10 @@ impl Account {
             .enumerate()
             .map(|(i, destination)| self.sign_input(&tx, destination, i, input_utxos, db_tx))
             .collect::<Result<Vec<Option<InputWitness>>, _>>()?;
+        let input_utxos: Vec<_> = input_utxos.iter().map(|u| u.cloned()).collect();
+        let destinations: Vec<_> = destinations.iter().map(|d| Some((*d).clone())).collect();
 
-        Ok(PartiallySignedTransaction::new(tx, witnesses))
+        PartiallySignedTransaction::new(tx, witnesses, input_utxos, destinations)
     }
 
     pub fn sign_raw_transaction(
@@ -1073,44 +1140,27 @@ impl Account {
         tx: PartiallySignedTransaction,
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<PartiallySignedTransaction> {
-        let (tx, witnesses) = tx.take();
+        let inputs_utxo_refs: Vec<_> = tx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
-        let input_utxos = tx
-            .inputs()
+        let witnesses = tx
+            .witnesses()
             .iter()
-            .map(|input| match input {
-                TxInput::Utxo(outpoint) => Ok(Some(
-                    self.output_cache.get_txo(outpoint).ok_or(WalletError::NoUtxos)?,
-                )),
-                TxInput::Account(_) | TxInput::AccountCommand(_, _) => {
-                    Err(WalletError::InputCannotBeSigned)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        ensure!(
-            input_utxos.len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        let witnesses = witnesses
-            .into_iter()
             .enumerate()
             .map(|(i, witness)| match witness {
-                Some(w) => Ok(Some(w)),
-                None => match get_tx_output_destination(input_utxos[i].expect("cannot be none")) {
+                Some(w) => Ok(Some(w.clone())),
+                None => match tx.destinations().get(i).expect("cannot fail") {
                     Some(destination) => {
                         let s = self
-                            .sign_input(&tx, destination, i, &input_utxos, db_tx)?
+                            .sign_input(tx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
                             .ok_or(WalletError::InputCannotBeSigned)?;
-                        Ok(Some(s))
+                        Ok(Some(s.clone()))
                     }
                     None => Ok(None),
                 },
             })
             .collect::<Result<Vec<_>, WalletError>>()?;
 
-        Ok(PartiallySignedTransaction::new(tx, witnesses))
+        Ok(tx.new_witnesses(witnesses))
     }
 
     pub fn account_index(&self) -> U31 {
@@ -1165,12 +1215,35 @@ impl Account {
         self.key_chain.get_addresses_usage_state()
     }
 
-    /// Return true if this transaction output is can be spent by this account or if it is being
+    fn collect_output_destinations(&self, txo: &TxOutput) -> Vec<Destination> {
+        match txo {
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::CreateDelegationId(d, _)
+            | TxOutput::IssueNft(_, _, d) => vec![d.clone()],
+            | TxOutput::ProduceBlockFromStake(d, pool_id) => {
+                let mut destinations = vec![d.clone()];
+                if let Ok(pool_data) = self.output_cache.pool_data(*pool_id) {
+                    destinations.push(pool_data.decommission_key.clone());
+                }
+                destinations
+            }
+            TxOutput::CreateStakePool(_, data) => {
+                vec![data.decommission_key().clone(), data.staker().clone()]
+            }
+            TxOutput::IssueFungibleToken(_)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::DataDeposit(_) => Vec::new(),
+        }
+    }
+
+    /// Return true if this transaction output can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        get_tx_output_destination(txo).map_or(false, |d| self.is_mine_or_watched_destination(d))
-            || get_reward_output_destination(txo)
-                .map_or(false, |d| self.is_mine_or_watched_destination(d))
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|d| self.is_mine_or_watched_destination(d))
     }
 
     /// Return true if this destination can be spent by this account or if it is being watched.
@@ -1203,16 +1276,16 @@ impl Account {
     ) -> WalletResult<bool> {
         self.mark_created_stake_pool_as_seen(output, db_tx)?;
 
-        if let Some(d) = get_tx_output_destination(output) {
-            match d {
+        for destination in self.collect_output_destinations(output) {
+            match destination {
                 Destination::Address(pkh) => {
-                    let found = self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                    let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
                     if found {
                         return Ok(true);
                     }
                 }
                 Destination::PublicKey(pk) => {
-                    let found = self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                    let found = self.key_chain.mark_public_key_as_used(db_tx, &pk)?;
                     if found {
                         return Ok(true);
                     }
@@ -1221,6 +1294,7 @@ impl Account {
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             }
         }
+
         Ok(false)
     }
 
