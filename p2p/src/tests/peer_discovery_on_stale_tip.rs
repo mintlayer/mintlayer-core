@@ -21,7 +21,7 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
+use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 
@@ -120,6 +120,7 @@ async fn peer_discovery_on_stale_tip_impl(
         enable_feeler_connections: Default::default(),
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
 
         peerdb_config: Default::default(),
     };
@@ -170,15 +171,39 @@ async fn peer_discovery_on_stale_tip_impl(
 
     time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
-    // Wait until the maximum number of outbound connections is established.
-    wait_for_max_outbound_connections(&node_group).await;
+    // Wait until nodes connect to each other.
+    wait_for_interconnection(&node_group).await;
+    let full_relay_conn_cnt_before_wait =
+        node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
 
     // Advance the time by 1 hour
     log::debug!("Advancing time by 1 hour");
     time_getter.advance_time(Duration::from_secs(60 * 60));
+    tokio::time::sleep(SHORT_TIMEOUT).await;
 
-    // All the connections must still be in place
-    node_group.assert_outbound_conn_count_maximums_reached().await;
+    // Non-extra full relay connections must still be in place.
+    let full_relay_conn_cnt_after_wait =
+        node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
+
+    assert_eq!(
+        full_relay_conn_cnt_before_wait.len(),
+        full_relay_conn_cnt_after_wait.len()
+    );
+    let has_same_or_more_full_relay_conns = full_relay_conn_cnt_before_wait
+        .iter()
+        .zip(full_relay_conn_cnt_after_wait.iter())
+        .all(|(before, after)| {
+            // Note that the "extra" connections may be dropped and re-established at any time, so we have
+            // to "ignore" them by clamping the connection counts to outbound_full_relay_conn_count.
+            let before = num::clamp(*before, 0, outbound_full_relay_conn_count);
+            let after = num::clamp(*after, 0, outbound_full_relay_conn_count);
+            after >= before
+        });
+    assert!(
+        has_same_or_more_full_relay_conns,
+        "Unexpected connection counts, before: {:?}, after: {:?}",
+        full_relay_conn_cnt_before_wait, full_relay_conn_cnt_after_wait
+    );
 
     // Start a new node that would produce a block.
     let new_node_idx = node_group.nodes().len() + 1;
@@ -282,6 +307,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_block_relay_connection_min_age: Default::default(),
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
     };
     let main_node_p2p_config = Arc::new(make_p2p_config(main_node_peer_mgr_config));
@@ -308,6 +334,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
         outbound_full_relay_connection_min_age: Default::default(),
         feeler_connections_interval: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
         peerdb_config: Default::default(),
     };
     let extra_nodes_p2p_config = Arc::new(make_p2p_config(extra_nodes_peer_mgr_config));
@@ -506,27 +533,17 @@ async fn start_node(
     node
 }
 
-async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>) {
-    for node in node_group.nodes() {
-        let mut outbound_full_relay_peers_count = 0;
-        let mut outbound_block_relay_peers_count = 0;
-        while outbound_full_relay_peers_count
-            < *node_group.p2p_config().peer_manager_config.outbound_full_relay_count
-            || outbound_block_relay_peers_count
-                < *node_group.p2p_config().peer_manager_config.outbound_block_relay_count
-        {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let peers_info = node.get_peers_info().await;
-            outbound_full_relay_peers_count =
-                peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
-            outbound_block_relay_peers_count =
-                peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
+/// Wait until each node has at least n-1 connections, where n is the total number of nodes.
+async fn wait_for_interconnection(node_group: &TestNodeGroup<Transport>) {
+    for node in node_group.nodes().iter() {
+        let mut peers_count = node.get_peers_info().await.info.len();
 
+        while peers_count < node_group.nodes().len() - 1 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
             node_group.time_getter().advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
+            peers_count = node.get_peers_info().await.info.len();
         }
     }
-
-    node_group.assert_outbound_conn_count_maximums_reached().await;
 }
 
 async fn wait_for_connections_to_impl(

@@ -20,7 +20,10 @@ use logging::log;
 use tokio::sync::mpsc;
 
 use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
-use p2p_types::{services::Service, socket_address::SocketAddress, PeerId};
+use p2p_types::{
+    ip_or_socket_address::IpOrSocketAddress, services::Service, socket_address::SocketAddress,
+    PeerId,
+};
 use test_utils::assert_matches_return_val;
 
 use crate::{
@@ -28,10 +31,13 @@ use crate::{
     message::PeerManagerMessage,
     net::{
         default_backend::types::{CategorizedMessage, Command},
-        types::PeerInfo,
+        types::{ConnectivityEvent, PeerInfo},
     },
+    peer_manager::PeerManagerInterface,
     testing_utils::TEST_PROTOCOL_VERSION,
     tests::helpers::PeerManagerNotification,
+    utils::oneshot_nofail,
+    PeerManagerEvent,
 };
 
 pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {
@@ -117,6 +123,46 @@ pub fn expect_cmd_connect_to(cmd: &Command, expected_address: &SocketAddress) {
     }
 }
 
+/// Send a ConnectivityEvent simulating a connection being accepted by the backend.
+pub fn inbound_block_relay_peer_accepted_by_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_address: SocketAddress,
+    bind_address: SocketAddress,
+    chain_config: &ChainConfig,
+) -> PeerId {
+    let peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::InboundAccepted {
+            peer_address,
+            bind_address,
+            peer_info: make_block_relay_peer_info(peer_id, chain_config),
+            node_address_as_seen_by_peer: None,
+        })
+        .unwrap();
+
+    peer_id
+}
+
+/// Send a ConnectivityEvent simulating a connection being accepted by the backend.
+pub fn outbound_full_relay_peer_accepted_by_backend(
+    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
+    peer_address: SocketAddress,
+    bind_address: SocketAddress,
+    chain_config: &ChainConfig,
+) -> PeerId {
+    let peer_id = PeerId::new();
+    conn_event_sender
+        .send(ConnectivityEvent::OutboundAccepted {
+            peer_address,
+            bind_address,
+            peer_info: make_full_relay_peer_info(peer_id, chain_config),
+            node_address_as_seen_by_peer: None,
+        })
+        .unwrap();
+
+    peer_id
+}
+
 pub async fn wait_for_heartbeat(
     peer_mgr_notification_receiver: &mut mpsc::UnboundedReceiver<PeerManagerNotification>,
 ) {
@@ -125,4 +171,62 @@ pub async fn wait_for_heartbeat(
         &PeerManagerNotification::Heartbeat,
     )
     .await;
+}
+
+pub async fn query_peer_manager<F, R>(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    query_func: F,
+) -> R
+where
+    F: FnOnce(&dyn PeerManagerInterface) -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::GenericQuery(Box::new(
+            move |peer_mgr: &dyn PeerManagerInterface| {
+                let res = query_func(peer_mgr);
+                response_sender.send(res).unwrap();
+            },
+        )))
+        .unwrap();
+
+    response_receiver.recv().await.unwrap()
+}
+
+pub async fn mutate_peer_manager<F, R>(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    mut_func: F,
+) -> R
+where
+    F: FnOnce(&mut dyn PeerManagerInterface) -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
+
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::GenericMut(Box::new(
+            move |peer_mgr: &mut dyn PeerManagerInterface| {
+                let res = mut_func(peer_mgr);
+                response_sender.send(res).unwrap();
+            },
+        )))
+        .unwrap();
+
+    response_receiver.recv().await.unwrap()
+}
+
+pub fn start_manually_connecting(
+    peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
+    addr: SocketAddress,
+) -> oneshot_nofail::Receiver<crate::Result<()>> {
+    let (result_sender, result_receiver) = oneshot_nofail::channel();
+
+    let addr = IpOrSocketAddress::new_socket_address(addr.socket_addr());
+    peer_mgr_event_sender
+        .send(PeerManagerEvent::Connect(addr, result_sender))
+        .unwrap();
+
+    result_receiver
 }

@@ -20,7 +20,7 @@ mod connections;
 mod eviction;
 mod peer_types;
 mod ping;
-mod utils;
+pub mod utils;
 mod whitelist;
 
 use std::{sync::Arc, time::Duration};
@@ -29,7 +29,7 @@ use p2p_test_utils::expect_recv;
 use tokio::sync::{mpsc, oneshot};
 
 use ::utils::atomics::SeqCstAtomicBool;
-use common::time_getter::TimeGetter;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::Rng;
 use p2p_types::socket_address::SocketAddress;
 use test_utils::assert_matches_return_val;
@@ -42,11 +42,16 @@ use crate::{
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::types::Command, types::ConnectivityEvent, ConnectivityService,
-        NetworkingService,
+        default_backend::{
+            transport::TcpTransportSocket, types::Command, ConnectivityHandle,
+            DefaultNetworkingService,
+        },
+        types::ConnectivityEvent,
+        ConnectivityService, NetworkingService,
     },
     peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, test_p2p_config},
+    tests::helpers::{PeerManagerNotification, PeerManagerObserver},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2pConfig, P2pEventHandler, PeerManagerEvent,
@@ -54,7 +59,7 @@ use crate::{
 
 use self::utils::cmd_to_peer_man_msg;
 
-use super::peerdb::storage::PeerDbStorage;
+use super::{dns_seed::DefaultDnsSeed, peerdb::storage::PeerDbStorage};
 
 async fn make_peer_manager_custom<T>(
     transport: T::Transport,
@@ -131,6 +136,56 @@ where
         )
         .await;
     (peer_manager, shutdown_sender, subscribers_sender)
+}
+
+type TcpNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+/// Create a peer manager without a backend.
+#[allow(clippy::type_complexity)]
+pub fn make_standalone_peer_manager(
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    bind_addresses: Vec<SocketAddress>,
+    time_getter: TimeGetter,
+) -> (
+    PeerManager<TcpNetworkingService, impl PeerDbStorage>,
+    mpsc::UnboundedSender<ConnectivityEvent>,
+    mpsc::UnboundedSender<PeerManagerEvent>,
+    mpsc::UnboundedReceiver<Command>,
+    mpsc::UnboundedReceiver<PeerManagerNotification>,
+) {
+    let (cmd_sender, cmd_receiver) = mpsc::unbounded_channel();
+    let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
+    let (peer_mgr_event_sender, peer_mgr_event_receiver) =
+        mpsc::unbounded_channel::<PeerManagerEvent>();
+    let connectivity_handle = ConnectivityHandle::<TcpNetworkingService>::new(
+        bind_addresses,
+        cmd_sender,
+        conn_event_receiver,
+    );
+    let (peer_mgr_notification_sender, peer_mgr_notification_receiver) = mpsc::unbounded_channel();
+    let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_sender));
+    let dns_seed = DefaultDnsSeed::new(Arc::clone(&chain_config), Arc::clone(&p2p_config));
+
+    let peer_mgr = PeerManager::<TcpNetworkingService, _>::new_generic(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_mgr_event_receiver,
+        time_getter,
+        peerdb_inmemory_store(),
+        Some(peer_mgr_observer),
+        Box::new(dns_seed),
+    )
+    .unwrap();
+
+    (
+        peer_mgr,
+        conn_event_sender,
+        peer_mgr_event_sender,
+        cmd_receiver,
+        peer_mgr_notification_receiver,
+    )
 }
 
 async fn run_peer_manager<T>(

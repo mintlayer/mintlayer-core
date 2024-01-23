@@ -23,7 +23,7 @@ use p2p_types::{
 };
 
 use crate::{
-    interface::types::ConnectedPeer, peer_manager::PeerManagerQueryInterface,
+    interface::types::ConnectedPeer, peer_manager::PeerManagerInterface,
     sync::sync_status::PeerBlockSyncStatus, types::peer_id::PeerId, utils::oneshot_nofail,
 };
 
@@ -104,14 +104,26 @@ pub enum PeerManagerEvent {
     Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     GenericQuery(Box<dyn PeerManagerQueryFunc>),
+    #[cfg(test)]
+    GenericMut(Box<dyn PeerManagerMutFunc>),
 }
 
-pub trait PeerManagerQueryFunc: FnOnce(&dyn PeerManagerQueryInterface) + Send {}
+pub trait PeerManagerQueryFunc: FnOnce(&dyn PeerManagerInterface) + Send {}
 
-impl<F> PeerManagerQueryFunc for F where F: FnOnce(&dyn PeerManagerQueryInterface) + Send {}
+impl<F> PeerManagerQueryFunc for F where F: FnOnce(&dyn PeerManagerInterface) + Send {}
 
 impl std::fmt::Debug for dyn PeerManagerQueryFunc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DisplayFunction")
+        write!(f, "PeerManagerQueryFunc")
+    }
+}
+
+pub trait PeerManagerMutFunc: FnOnce(&mut dyn PeerManagerInterface) + Send {}
+
+impl<F> PeerManagerMutFunc for F where F: FnOnce(&mut dyn PeerManagerInterface) + Send {}
+
+impl std::fmt::Debug for dyn PeerManagerMutFunc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PeerManagerMutFunc")
     }
 }

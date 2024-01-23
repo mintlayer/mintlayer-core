@@ -62,6 +62,7 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 
 criterion.workspace = true
 ctor.workspace = true
+num.workspace = true
 portpicker.workspace = true
 rstest.workspace = true
 

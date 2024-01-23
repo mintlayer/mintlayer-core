@@ -208,10 +208,12 @@ impl<S: PeerDbStorage> PeerDb<S> {
     pub fn select_non_reserved_outbound_addresses(
         &self,
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
+        additional_filter: &impl Fn(&SocketAddress) -> bool,
         count: usize,
     ) -> Vec<SocketAddress> {
         self.select_non_reserved_outbound_addresses_with_rng(
             cur_outbound_conn_addr_groups,
+            additional_filter,
             count,
             &mut make_pseudo_rng(),
         )
@@ -220,6 +222,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     fn select_non_reserved_outbound_addresses_with_rng(
         &self,
         cur_outbound_conn_addr_groups: &BTreeSet<AddressGroup>,
+        additional_filter: &impl Fn(&SocketAddress) -> bool,
         count: usize,
         rng: &mut impl Rng,
     ) -> Vec<SocketAddress> {
@@ -232,10 +235,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
         let filter = |addr: &&SocketAddress| match self.addresses.get(addr) {
             Some(addr_data) => {
                 addr_data.connect_now(now)
+                    && !addr_data.reserved()
                     && !cur_outbound_conn_addr_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
-                    && !addr_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
+                    && additional_filter(addr)
             }
             None => {
                 debug_assert!(false, "Address {addr} not found in self.addresses");
@@ -308,7 +312,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(
         &self,
-        cur_pending_outbound_conn_addresses: &BTreeSet<SocketAddress>,
+        additional_filter: &impl Fn(&SocketAddress) -> bool,
     ) -> Vec<SocketAddress> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
@@ -318,13 +322,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now)
-                    && !cur_pending_outbound_conn_addresses.contains(addr)
-                {
-                    Some(*addr)
-                } else {
-                    None
-                }
+                (address_data.connect_now(now) && additional_filter(addr)).then_some(*addr)
             })
             .collect()
     }
@@ -594,6 +592,16 @@ impl<S: PeerDbStorage> PeerDb<S> {
     #[cfg(test)]
     pub fn address_tables_mut(&mut self) -> &mut AddressTables {
         &mut self.address_tables
+    }
+}
+
+pub trait PeerDbInterface {
+    fn peer_discovered(&mut self, address: SocketAddress);
+}
+
+impl<S: PeerDbStorage> PeerDbInterface for PeerDb<S> {
+    fn peer_discovered(&mut self, address: SocketAddress) {
+        self.peer_discovered(address)
     }
 }
 

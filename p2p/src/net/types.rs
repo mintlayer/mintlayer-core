@@ -25,6 +25,7 @@ use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
+    error::ProtocolError,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -44,21 +45,25 @@ pub enum Role {
 }
 
 // TODO: Rename to ConnectionType
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum PeerRole {
     Inbound,
     OutboundFullRelay,
     OutboundBlockRelay,
+    OutboundReserved,
     OutboundManual,
     Feeler,
 }
 
 // TODO: Use something like enum_iterator
 impl PeerRole {
-    pub const ALL: [PeerRole; 4] = [
+    pub const ALL: [PeerRole; 5] = [
         PeerRole::Inbound,
         PeerRole::OutboundFullRelay,
         PeerRole::OutboundBlockRelay,
+        PeerRole::OutboundReserved,
         PeerRole::OutboundManual,
     ];
 
@@ -67,7 +72,18 @@ impl PeerRole {
 
         match self {
             Inbound => false,
-            OutboundFullRelay | OutboundBlockRelay | OutboundManual | Feeler => true,
+            OutboundFullRelay | OutboundBlockRelay | OutboundReserved | OutboundManual | Feeler => {
+                true
+            }
+        }
+    }
+
+    pub fn is_outbound_manual(&self) -> bool {
+        use PeerRole::*;
+
+        match self {
+            OutboundManual => true,
+            Inbound | OutboundFullRelay | OutboundBlockRelay | OutboundReserved | Feeler => false,
         }
     }
 }
@@ -106,8 +122,18 @@ pub struct PeerInfo {
 
 impl PeerInfo {
     pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
-        // Check node version here if necessary
-        self.network == *chain_config.magic_bytes()
+        self.check_compatibility(chain_config).is_ok()
+    }
+
+    pub fn check_compatibility(&self, chain_config: &ChainConfig) -> crate::Result<()> {
+        if self.network != *chain_config.magic_bytes() {
+            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                *chain_config.magic_bytes(),
+                self.network,
+            )))
+        } else {
+            Ok(())
+        }
     }
 }
 

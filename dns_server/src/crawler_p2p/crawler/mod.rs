@@ -390,30 +390,38 @@ impl Crawler {
         let old_peer = self.outbound_peers.insert(peer_id, peer);
         assert!(old_peer.is_none());
 
-        let is_compatible = peer_info.is_compatible(&self.chain_config);
+        let peer_compatibility_check_result = peer_info.check_compatibility(&self.chain_config);
 
-        log::info!(
-            "new outbound peer created, address: {}, peer_id: {}, compatible: {}",
-            address.to_string(),
-            peer_id,
-            is_compatible
-        );
+        match peer_compatibility_check_result {
+            Ok(()) => {
+                log::info!(
+                    "New outbound peer created, address: {}, peer_id: {}",
+                    address.to_string(),
+                    peer_id,
+                );
 
-        if is_compatible {
-            let address_data = self
-                .addresses
-                .get_mut(&address)
-                .expect("address must be known (create_outbound_peer)");
+                let address_data = self
+                    .addresses
+                    .get_mut(&address)
+                    .expect("address must be known (create_outbound_peer)");
 
-            Self::change_address_state(
-                self.now,
-                &address,
-                address_data,
-                AddressStateTransitionTo::Connected,
-                callback,
-            );
-        } else {
-            self.disconnect_peer(peer_id, &address, callback);
+                Self::change_address_state(
+                    self.now,
+                    &address,
+                    address_data,
+                    AddressStateTransitionTo::Connected,
+                    callback,
+                );
+            }
+            Err(err) => {
+                log::info!(
+                    "Rejecting incompatible peer {peer_id} with address {}: {}",
+                    address.to_string(),
+                    err.to_string(),
+                );
+
+                self.disconnect_peer(peer_id, &address, callback);
+            }
         }
     }
 

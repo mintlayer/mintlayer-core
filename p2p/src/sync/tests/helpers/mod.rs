@@ -356,7 +356,8 @@ impl TestNode {
                     | PeerManagerEvent::ListBanned(_)
                     | PeerManagerEvent::Ban(_, _)
                     | PeerManagerEvent::Unban(_, _)
-                    | PeerManagerEvent::GenericQuery(_) => {
+                    | PeerManagerEvent::GenericQuery(_)
+                    | PeerManagerEvent::GenericMut(_) => {
                         panic!("Unexpected peer manager event: {peer_event:?}");
                     }
                     PeerManagerEvent::NewTipReceived { .. }
@@ -626,6 +627,7 @@ pub enum PeerManagerEventDesc {
     Ban(BannableAddress),
     Unban(BannableAddress),
     GenericQuery,
+    GenericMut,
 }
 
 impl From<&PeerManagerEvent> for PeerManagerEventDesc {
@@ -673,6 +675,7 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::Ban(addr, _) => PeerManagerEventDesc::Ban(*addr),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
             PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
+            PeerManagerEvent::GenericMut(_) => PeerManagerEventDesc::GenericMut,
         }
     }
 }

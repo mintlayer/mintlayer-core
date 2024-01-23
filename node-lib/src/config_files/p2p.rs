@@ -162,6 +162,8 @@ impl From<P2pConfigFile> for P2pConfig {
                 force_dns_query_if_no_global_addresses_known:
                     force_dns_query_if_no_global_addresses_known.into(),
 
+                allow_same_ip_connections: Default::default(),
+
                 peerdb_config: Default::default(),
             },
             protocol_config: Default::default(),

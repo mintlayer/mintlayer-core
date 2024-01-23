@@ -25,7 +25,7 @@ use crate::{
         transport::{BufferedTranscoder, TransportSocket},
         types::{HandshakeMessage, Message, P2pTimestamp},
     },
-    peer_manager::PeerManagerQueryInterface,
+    peer_manager::PeerManagerInterface,
     testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,

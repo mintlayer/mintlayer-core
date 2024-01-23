@@ -46,7 +46,9 @@ pub fn peer_db(c: &mut Criterion) {
         .collect::<BTreeSet<_>>();
 
     c.bench_function("PeerDb", |b| {
-        b.iter(|| peerdb.select_non_reserved_outbound_addresses(&outbound_addr_groups, 11))
+        b.iter(|| {
+            peerdb.select_non_reserved_outbound_addresses(&outbound_addr_groups, &|_| true, 11)
+        })
     });
 }
 

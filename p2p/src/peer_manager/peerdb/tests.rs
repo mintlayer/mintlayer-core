@@ -555,6 +555,7 @@ fn new_tried_addr_selection_frequency() {
                 let count_to_select = rng.gen_range(count_to_select_range.clone());
                 let selected_addrs = peerdb.select_non_reserved_outbound_addresses_with_rng(
                     &empty_addr_groups_set,
+                    &|_| true,
                     count_to_select,
                     &mut rng,
                 );

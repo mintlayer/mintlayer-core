@@ -20,7 +20,10 @@ use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use tokio::time;
 
-use crate::{config::P2pConfig, net::default_backend::transport::TransportSocket};
+use crate::{
+    config::P2pConfig,
+    net::{default_backend::transport::TransportSocket, types::PeerRole},
+};
 
 use super::test_node::TestNode;
 
@@ -53,6 +56,7 @@ where
         self.nodes[0].time_getter()
     }
 
+    #[allow(unused)]
     pub fn p2p_config(&self) -> &P2pConfig {
         self.nodes[0].p2p_config()
     }
@@ -61,6 +65,21 @@ where
         self.nodes.iter().map(|node| *node.local_address()).collect()
     }
 
+    pub async fn count_connections_by_role(&self, peer_role: PeerRole) -> Vec<usize> {
+        let mut result = Vec::with_capacity(self.nodes.len());
+
+        for node in &self.nodes {
+            let peers_info = node.get_peers_info().await.info;
+            let count =
+                peers_info.iter().filter(|(_, peer_info)| peer_info.role == peer_role).count();
+
+            result.push(count);
+        }
+
+        result
+    }
+
+    #[allow(unused)]
     pub async fn assert_outbound_conn_count_maximums_reached(&self) {
         for node in &self.nodes {
             node.assert_outbound_conn_count_maximums_reached().await;

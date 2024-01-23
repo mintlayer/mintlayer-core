@@ -25,6 +25,7 @@ pub mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    net::IpAddr,
     sync::Arc,
     time::Duration,
 };
@@ -88,7 +89,7 @@ use self::{
     },
 };
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct PeerManagerConfig {
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: MaxInboundConnections,
@@ -152,6 +153,16 @@ pub struct PeerManagerConfig {
     /// to perform an early dns query in such a situation.
     pub force_dns_query_if_no_global_addresses_known: ForceDnsQueryIfNoGlobalAddressesKnown,
 
+    /// If true, multiple connections to the same ip address (but using a different port) will
+    /// always be allowed.
+    ///
+    /// Normally, the peer manager won't always allow connecting to the same ip using a different
+    /// port; e.g. if an inbound connection exists, a new outbound connection to the same ip
+    /// will only be allowed if it's manual. This may be inconvenient for some (legacy) unit tests,
+    /// so they can set this option to true to override this behavior.
+    /// TODO: consider rewriting tests that need this option and remove it.
+    pub allow_same_ip_connections: AllowSameIpConnections,
+
     /// Peer db configuration.
     pub peerdb_config: PeerDbConfig,
 }
@@ -184,6 +195,7 @@ make_config_setting!(
 );
 make_config_setting!(EnableFeelerConnections, bool, true);
 make_config_setting!(ForceDnsQueryIfNoGlobalAddressesKnown, bool, false);
+make_config_setting!(AllowSameIpConnections, bool, false);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -229,6 +241,23 @@ impl OutboundConnectType {
             OutboundConnectType::Reserved
             | OutboundConnectType::Manual { response_sender: _ }
             | OutboundConnectType::Feeler => false,
+        }
+    }
+}
+
+impl From<&OutboundConnectType> for PeerRole {
+    fn from(value: &OutboundConnectType) -> Self {
+        match value {
+            OutboundConnectType::Automatic { block_relay_only } => {
+                if *block_relay_only {
+                    PeerRole::OutboundBlockRelay
+                } else {
+                    PeerRole::OutboundFullRelay
+                }
+            }
+            OutboundConnectType::Reserved => PeerRole::OutboundReserved,
+            OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
+            OutboundConnectType::Feeler => PeerRole::Feeler,
         }
     }
 }
@@ -411,7 +440,7 @@ where
     ) -> Option<SocketAddress> {
         let discover = match peer_role {
             PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
-            PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
+            PeerRole::OutboundFullRelay | PeerRole::OutboundReserved | PeerRole::OutboundManual => {
                 common_services.has_service(Service::PeerAddresses)
             }
         };
@@ -509,7 +538,7 @@ where
             | PeerRole::Feeler => {
                 self.p2p_config.whitelisted_addresses.contains(&address.ip_addr())
             }
-            PeerRole::OutboundManual => true,
+            PeerRole::OutboundReserved | PeerRole::OutboundManual => true,
         }
     }
 
@@ -566,7 +595,7 @@ where
                 .get(&peer_address)
                 .map_or(false, |pending_connect| {
                     self.is_whitelisted_node(
-                        Self::determine_outbound_peer_role(pending_connect),
+                        (&pending_connect.outbound_connect_type).into(),
                         &peer_address,
                     )
                 });
@@ -622,15 +651,14 @@ where
         &mut self,
         address: SocketAddress,
         local_services_override: Option<Services>,
+        peer_role: PeerRole,
     ) -> crate::Result<()> {
         ensure!(
             !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
-        ensure!(
-            !self.is_address_connected(&address),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
+
+        self.maybe_reject_because_already_connected(&address, peer_role)?;
 
         let bannable_address = address.as_bannable();
         ensure!(
@@ -654,8 +682,10 @@ where
             None
         };
 
-        log::debug!("try a new outbound connection, address: {address:?}, local_services_override: {local_services_override:?}, block_relay_only: {block_relay_only:?}");
-        let res = self.try_connect(address, local_services_override);
+        let peer_role: PeerRole = (&outbound_connect_type).into();
+        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
+            address, local_services_override, peer_role);
+        let res = self.try_connect(address, local_services_override, peer_role);
 
         match res {
             Ok(()) => {
@@ -745,25 +775,26 @@ where
         peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
+        info.check_compatibility(&self.chain_config)?;
+
+        let is_peer_connected = self.is_peer_connected(info.peer_id);
+        // This is a rather strange situation that should never happen.
+        debug_assert!(!is_peer_connected);
         ensure!(
-            info.is_compatible(&self.chain_config),
-            P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                *self.chain_config.magic_bytes(),
-                info.network,
-            ))
+            !is_peer_connected,
+            P2pError::PeerError(PeerError::PeerAlreadyExists(info.peer_id)),
         );
-        ensure!(
-            !self.is_peer_connected(info.peer_id),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
-        ensure!(
-            !self.is_address_connected(address),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
+
+        // Note: for inbound connections, maybe_reject_because_already_connected always returns
+        // Ok and for outbound ones we've already called it in try_connect. But new connections
+        // might have appeared since try_connect was called, so the call below is not redundant.
+        self.maybe_reject_because_already_connected(address, peer_role)?;
+
         ensure!(
             !self.peerdb.is_address_banned(&address.as_bannable()),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
+
         ensure!(
             !info.common_services.is_empty(),
             P2pError::PeerError(PeerError::EmptyServices),
@@ -785,7 +816,7 @@ where
                 }
             }
 
-            PeerRole::OutboundManual | PeerRole::Feeler => {}
+            PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {}
 
             PeerRole::OutboundFullRelay => {
                 let expected: Services = (*self.p2p_config.node_type).into();
@@ -871,7 +902,9 @@ where
     fn should_load_addresses_from(peer_role: PeerRole) -> bool {
         // Load addresses only from outbound peers, like it's done in Bitcoin Core
         match peer_role {
-            PeerRole::OutboundFullRelay | PeerRole::OutboundManual => true,
+            PeerRole::OutboundFullRelay | PeerRole::OutboundReserved | PeerRole::OutboundManual => {
+                true
+            }
             PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
         }
     }
@@ -883,6 +916,7 @@ where
             PeerRole::Inbound => true,
             PeerRole::OutboundFullRelay
             | PeerRole::OutboundBlockRelay
+            | PeerRole::OutboundReserved
             | PeerRole::OutboundManual
             | PeerRole::Feeler => false,
         }
@@ -979,6 +1013,7 @@ where
                 .filter_map(|peer| match peer.peer_role {
                     PeerRole::Inbound
                     | PeerRole::OutboundFullRelay
+                    | PeerRole::OutboundReserved
                     | PeerRole::OutboundManual
                     | PeerRole::Feeler => None,
                     PeerRole::OutboundBlockRelay => Some(peer.peer_address),
@@ -998,21 +1033,6 @@ where
         Ok(())
     }
 
-    fn determine_outbound_peer_role(pending_connect: &PendingConnect) -> PeerRole {
-        match pending_connect.outbound_connect_type {
-            OutboundConnectType::Automatic { block_relay_only } => {
-                if block_relay_only {
-                    PeerRole::OutboundBlockRelay
-                } else {
-                    PeerRole::OutboundFullRelay
-                }
-            }
-            OutboundConnectType::Reserved => PeerRole::OutboundManual,
-            OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
-            OutboundConnectType::Feeler => PeerRole::Feeler,
-        }
-    }
-
     fn accept_connection(
         &mut self,
         peer_address: SocketAddress,
@@ -1023,13 +1043,13 @@ where
     ) {
         let peer_id = info.peer_id;
 
-        let (peer_role, response) = match role {
+        let (peer_role, response_sender) = match role {
             Role::Inbound => (PeerRole::Inbound, None),
             Role::Outbound => {
                 let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
-                let role = Self::determine_outbound_peer_role(&pending_connect);
+                let role = (&pending_connect.outbound_connect_type).into();
                 let response_sender = match pending_connect.outbound_connect_type {
                     OutboundConnectType::Automatic {
                         block_relay_only: _,
@@ -1074,8 +1094,8 @@ where
             }
         }
 
-        if let Some(response) = response {
-            response.send(accept_res);
+        if let Some(response_sender) = response_sender {
+            response_sender.send(accept_res);
         }
 
         if peer_role == PeerRole::Feeler {
@@ -1177,7 +1197,7 @@ where
 
     fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, PeerRole)> + '_ {
         let pending = self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
-            let role = Self::determine_outbound_peer_role(pending_conn);
+            let role = (&pending_conn.outbound_connect_type).into();
             (*addr, role)
         });
         let connected =
@@ -1227,12 +1247,13 @@ where
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
+        let mut cur_conn_ip_port_to_role_map = BTreeMap::new();
         for (addr, role) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
             match role {
                 PeerRole::Inbound => {}
-                PeerRole::OutboundManual => {
+                PeerRole::OutboundReserved | PeerRole::OutboundManual => {
                     cur_outbound_conn_addr_groups.insert(addr_group);
                 }
                 PeerRole::OutboundFullRelay => {
@@ -1247,6 +1268,9 @@ where
                     cur_feeler_conn_count += 1;
                 }
             }
+
+            let socket_addr = addr.socket_addr();
+            cur_conn_ip_port_to_role_map.insert((socket_addr.ip(), socket_addr.port()), role);
         }
 
         let needed_outbound_full_relay_conn_count = {
@@ -1262,6 +1286,13 @@ where
 
         let new_full_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
+            &|addr| {
+                self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundFullRelay,
+                )
+            },
             needed_outbound_full_relay_conn_count,
         );
 
@@ -1289,6 +1320,13 @@ where
 
         let new_block_relay_conn_addresses = self.peerdb.select_non_reserved_outbound_addresses(
             &cur_outbound_conn_addr_groups,
+            &|addr| {
+                self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundBlockRelay,
+                )
+            },
             needed_outbound_block_relay_conn_count,
         );
 
@@ -1303,9 +1341,14 @@ where
 
         let cur_pending_outbound_conn_addresses =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
-        let new_reserved_conn_addresses = self
-            .peerdb
-            .select_reserved_outbound_addresses(&cur_pending_outbound_conn_addresses);
+        let new_reserved_conn_addresses = self.peerdb.select_reserved_outbound_addresses(&|addr| {
+            !cur_pending_outbound_conn_addresses.contains(addr)
+                && self.allow_new_outbound_connection(
+                    &cur_conn_ip_port_to_role_map,
+                    addr,
+                    PeerRole::OutboundReserved,
+                )
+        });
 
         for address in &new_reserved_conn_addresses {
             self.connect(*address, OutboundConnectType::Reserved);
@@ -1559,6 +1602,11 @@ where
             PeerManagerEvent::GenericQuery(query_func) => {
                 query_func(self);
             }
+
+            #[cfg(test)]
+            PeerManagerEvent::GenericMut(mut_func) => {
+                mut_func(self);
+            }
         }
     }
 
@@ -1653,8 +1701,121 @@ where
         self.peers.get(&peer_id).is_some()
     }
 
-    fn is_address_connected(&self, address: &SocketAddress) -> bool {
-        self.peers.values().any(|peer| peer.peer_address == *address)
+    // Return an error if a connection to the specified address already exists and it prevents us
+    // from establishing another connection to the same address with the connection type determined
+    // by `new_peer_role`.
+    fn maybe_reject_because_already_connected(
+        &self,
+        new_peer_addr: &SocketAddress,
+        new_peer_role: PeerRole,
+    ) -> crate::Result<()> {
+        match new_peer_role {
+            // Don't reject inbound connections. The address will have a random port number anyway,
+            // so we won't be able to tell whether the connections come from the same node or not.
+            PeerRole::Inbound
+            // Don't reject feeler connections either.
+            | PeerRole::Feeler => {
+                return Ok(());
+            }
+            PeerRole::OutboundFullRelay
+            | PeerRole::OutboundBlockRelay
+            | PeerRole::OutboundReserved
+            | PeerRole::OutboundManual => {}
+        }
+
+        let conflicting_connection =
+            self.peer_addresses_iter().find(|(existing_peer_addr, existing_peer_role)| {
+                // If the ip addresses are different, allow the connection.
+                if existing_peer_addr.ip_addr() != new_peer_addr.ip_addr() {
+                    return false;
+                }
+
+                !self.may_allow_outbound_connection_to_existing_ip(
+                    existing_peer_addr.socket_addr().port(),
+                    *existing_peer_role,
+                    new_peer_addr.socket_addr().port(),
+                    new_peer_role,
+                )
+            });
+
+        if let Some((existing_peer_addr, existing_peer_role)) = conflicting_connection {
+            Err(P2pError::PeerError(PeerError::AlreadyConnected {
+                existing_peer_addr,
+                existing_peer_role,
+                new_peer_addr: *new_peer_addr,
+                new_peer_role,
+            }))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Return true if the specified `new_peer_addr` can be used for a new outbound connection.
+    ///
+    /// This is basically a replacement for `maybe_reject_because_already_connected` that
+    /// is used when selecting addresses for new automatic outbound connections; it will be
+    /// called for every address in peerdb, so we want to avoid the linear complexity of
+    /// `maybe_reject_because_already_connected`.
+    /// Note that calling this function mainly serves as an optimization - we don't want to select
+    /// addresses that will be rejected anyway when we'll try to connect to them.
+    fn allow_new_outbound_connection(
+        &self,
+        // Note: we use the (ip_addr, port) pair as a key instead of SocketAddress to ensure
+        // that the keys are always sorted first by the ip and then by port.
+        existing_connections: &BTreeMap<(IpAddr, /*port:*/ u16), PeerRole>,
+        new_peer_addr: &SocketAddress,
+        new_peer_role: PeerRole,
+    ) -> bool {
+        assert!(new_peer_role.is_outbound());
+
+        let new_peer_ip = new_peer_addr.socket_addr().ip();
+        let new_peer_port = new_peer_addr.socket_addr().port();
+        existing_connections.range((new_peer_ip, 0)..=(new_peer_ip, u16::MAX)).all(
+            |((_, existing_peer_port), existing_peer_role)| {
+                self.may_allow_outbound_connection_to_existing_ip(
+                    *existing_peer_port,
+                    *existing_peer_role,
+                    new_peer_port,
+                    new_peer_role,
+                )
+            },
+        )
+    }
+
+    /// This function is supposed to be called for every existing peer whose ip address
+    /// equals the ip address of some "new peer"; it returns true if a connection to the new peer
+    /// *may* be allowed. If it returns true for all such existing peers, then the connection
+    /// will be allowed.
+    fn may_allow_outbound_connection_to_existing_ip(
+        &self,
+        existing_peer_port: u16,
+        existing_peer_role: PeerRole,
+        new_peer_port: u16,
+        new_peer_role: PeerRole,
+    ) -> bool {
+        assert!(new_peer_role.is_outbound());
+
+        if existing_peer_port == new_peer_port {
+            // Can't have multiple connections to the same socket address.
+            return false;
+        }
+
+        // Allow the connection if explicitly told to do so.
+        if *self.p2p_config.peer_manager_config.allow_same_ip_connections {
+            return true;
+        }
+
+        if existing_peer_role.is_outbound() {
+            // Outbound connections to different socket addresses are ok.
+            return true;
+        }
+
+        // The existing connection is inbound, the new one is outbound and the ip addresses
+        // are the same. We assume that the connections are to different nodes (and therefore
+        // allow the new connection) if the new connection is a manual one (because the user
+        // should know better; also, functional tests use manual connections for test nodes
+        // and those nodes do share the same ip address).
+        new_peer_role.is_outbound_manual()
     }
 
     /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)
@@ -1967,12 +2128,18 @@ pub trait Observer {
     fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
 }
 
-pub trait PeerManagerQueryInterface {
+pub trait PeerManagerInterface {
     #[cfg(test)]
     fn peers(&self) -> &BTreeMap<PeerId, PeerContext>;
+
+    #[cfg(test)]
+    fn peerdb(&self) -> &dyn peerdb::PeerDbInterface;
+
+    #[cfg(test)]
+    fn peerdb_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface;
 }
 
-impl<T, S> PeerManagerQueryInterface for PeerManager<T, S>
+impl<T, S> PeerManagerInterface for PeerManager<T, S>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -1982,7 +2149,22 @@ where
     fn peers(&self) -> &BTreeMap<PeerId, PeerContext> {
         &self.peers
     }
+
+    #[cfg(test)]
+    fn peerdb(&self) -> &dyn peerdb::PeerDbInterface {
+        &self.peerdb
+    }
+
+    #[cfg(test)]
+    fn peerdb_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface {
+        &mut self.peerdb
+    }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub mod test_utils {
+    pub use super::tests::utils::*;
+}
