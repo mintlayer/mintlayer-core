@@ -15,7 +15,7 @@
 
 use common::{address::Address, chain::ChainConfig};
 use iced::{
-    widget::{column, container, row, text_input, tooltip, tooltip::Position, Text},
+    widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element,
 };
 use iced_aw::Grid;
@@ -63,12 +63,19 @@ pub fn view_stake(
                 .push(field("Pool Id".to_owned()))
                 .push(field("Pool balance".to_owned()));
             for (pool_id, balance) in account.staking_balance.iter() {
+                let pool_id_str = Address::new(chain_config, pool_id)
+                    .expect("Encoding pool id to address can't fail (GUI)")
+                    .to_string();
                 staking_balance_grid = staking_balance_grid
-                    .push(field(
-                        Address::new(chain_config, pool_id)
-                            .expect("Encoding pool id to address can't fail (GUI)")
-                            .to_string(),
-                    ))
+                    .push(row![
+                        field(pool_id_str.clone()),
+                        button(
+                            Text::new(iced_aw::Icon::ClipboardCheck.to_string())
+                                .font(iced_aw::ICON_FONT),
+                        )
+                        .style(iced::theme::Button::Text)
+                        .on_press(WalletMessage::CopyToClipboard(pool_id_str)),
+                    ])
                     .push(field(print_coin_amount(chain_config, *balance)));
             }
             staking_balance_grid

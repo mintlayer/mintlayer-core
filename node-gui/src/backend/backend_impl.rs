@@ -16,6 +16,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use common::{
+    address::Address,
     chain::{ChainConfig, GenBlock},
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
@@ -40,8 +41,9 @@ use super::{
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
     messages::{
-        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, EncryptionAction,
-        EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
+        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
+        EncryptionAction, EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId,
+        WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -432,6 +434,33 @@ impl Backend {
         Ok(TransactionInfo { wallet_id })
     }
 
+    async fn create_delegation(
+        &mut self,
+        request: CreateDelegationRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let CreateDelegationRequest {
+            wallet_id,
+            account_id,
+            pool_id,
+            delegation_address,
+        } = request;
+
+        let pool_id = Address::from_str(&self.chain_config, &pool_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+
+        let delegation_key = parse_address(&self.chain_config, &delegation_address)
+            .map_err(|err| BackendError::AddressError(err.to_string()))?;
+
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .create_delegation(delegation_key, pool_id)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id })
+    }
+
     fn get_account_balance(
         controller: &ReadOnlyController<WalletHandlesClient>,
     ) -> BTreeMap<Currency, Amount> {
@@ -507,6 +536,10 @@ impl Backend {
             BackendRequest::StakeAmount(stake_request) => {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
+            }
+            BackendRequest::CreateDelegation(delegation_request) => {
+                let result = self.create_delegation(delegation_request).await;
+                Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
             }
             BackendRequest::TransactionList {
                 wallet_id,

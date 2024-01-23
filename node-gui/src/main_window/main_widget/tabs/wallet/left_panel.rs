@@ -138,6 +138,7 @@ pub fn view_left_panel(
             panel_button("Addresses", SelectedPanel::Addresses, selected_panel),
             panel_button("Send", SelectedPanel::Send, selected_panel),
             panel_button("Staking", SelectedPanel::Staking, selected_panel),
+            panel_button("Delegation", SelectedPanel::Delegation, selected_panel),
         ],
         Column::new().height(Length::Fill),
         scan_progress_widget,

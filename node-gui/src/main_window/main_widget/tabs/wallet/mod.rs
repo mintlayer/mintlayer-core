@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod addresses;
+mod delegation;
 mod left_panel;
 mod send;
 mod stake;
@@ -32,7 +33,9 @@ use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 
 use crate::{
     backend::{
-        messages::{AccountId, BackendRequest, SendRequest, StakeRequest, WalletId},
+        messages::{
+            AccountId, BackendRequest, CreateDelegationRequest, SendRequest, StakeRequest, WalletId,
+        },
         BackendSender,
     },
     main_window::NodeState,
@@ -46,6 +49,7 @@ pub enum SelectedPanel {
     Addresses,
     Send,
     Staking,
+    Delegation,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +81,11 @@ pub enum WalletMessage {
     CreateStakingPool,
     CreateStakingPoolSucceed,
 
+    PoolIdEdit(String),
+    DelegationAddressEdit(String),
+    CreateDelegation,
+    CreateDelegationSucceed,
+
     ToggleStaking(bool),
 
     TransactionList { skip: usize },
@@ -94,6 +103,8 @@ pub struct AccountState {
     margin_per_thousand: String,
     cost_per_block_amount: String,
     decommission_address: String,
+    delegation_pool_id: String,
+    delegation_address: String,
 }
 
 pub struct WalletTab {
@@ -256,6 +267,29 @@ impl WalletTab {
                 backend_sender.send(BackendRequest::CloseWallet(self.wallet_id));
                 Command::none()
             }
+            WalletMessage::PoolIdEdit(value) => {
+                self.account_state.delegation_pool_id = value;
+                Command::none()
+            }
+            WalletMessage::DelegationAddressEdit(value) => {
+                self.account_state.delegation_address = value;
+                Command::none()
+            }
+            WalletMessage::CreateDelegation => {
+                let request = CreateDelegationRequest {
+                    wallet_id: self.wallet_id,
+                    account_id: self.selected_account,
+                    pool_id: self.account_state.delegation_pool_id.clone(),
+                    delegation_address: self.account_state.delegation_address.clone(),
+                };
+                backend_sender.send(BackendRequest::CreateDelegation(request));
+                Command::none()
+            }
+            WalletMessage::CreateDelegationSucceed => {
+                self.account_state.delegation_pool_id.clear();
+                self.account_state.delegation_address.clear();
+                Command::none()
+            }
         }
     }
 }
@@ -318,6 +352,13 @@ impl Tab for WalletTab {
                             &self.account_state.margin_per_thousand,
                             &self.account_state.cost_per_block_amount,
                             &self.account_state.decommission_address,
+                            still_syncing.clone(),
+                        ),
+                        SelectedPanel::Delegation => delegation::view_delegation(
+                            &node_state.chain_config,
+                            account,
+                            &self.account_state.delegation_pool_id,
+                            &self.account_state.delegation_address,
                             still_syncing.clone(),
                         ),
                     };
