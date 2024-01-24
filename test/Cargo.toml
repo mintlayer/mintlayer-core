@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 homepage = "https://github.com/mintlayer/mintlayer-core/issues"
 
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 utils = { path = "../utils" }
 node-lib = { path = "../node-lib" }
