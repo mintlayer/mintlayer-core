@@ -16,6 +16,7 @@
 use std::{collections::VecDeque, path::PathBuf};
 
 use crossterm::tty::IsTty;
+use wallet_controller::NodeInterface;
 
 use crate::errors::WalletCliError;
 
@@ -28,7 +29,7 @@ pub trait ConsoleInput: Send + 'static {
 pub trait ConsoleOutput: Send + 'static {
     fn print_line(&mut self, line: &str);
 
-    fn print_error(&mut self, error: WalletCliError);
+    fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>);
 }
 
 pub struct StdioInputConsole;
@@ -55,7 +56,7 @@ impl ConsoleOutput for StdioOutputConsole {
         println!("{line}");
     }
 
-    fn print_error(&mut self, error: WalletCliError) {
+    fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>) {
         if let WalletCliError::InvalidCommandInput(e) = &error {
             // Print help and parse errors using styles
             e.print().expect("Should not fail normally");
@@ -70,7 +71,7 @@ pub struct FileInput {
 }
 
 impl FileInput {
-    pub fn new(file_path: PathBuf) -> Result<Self, WalletCliError> {
+    pub fn new<N: NodeInterface>(file_path: PathBuf) -> Result<Self, WalletCliError<N>> {
         let data = std::fs::read_to_string(&file_path)
             .map_err(|e| WalletCliError::FileError(file_path, e))?;
         let lines = data.lines().map(|line| line.to_owned()).collect();

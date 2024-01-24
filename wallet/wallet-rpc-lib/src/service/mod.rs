@@ -20,55 +20,41 @@ mod worker;
 use std::{path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
-use node_comm::rpc_client::MaybeDummyNode;
-use rpc::RpcAuthData;
 use utils::shallow_clone::ShallowClone;
 
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
+use wallet_controller::NodeInterface;
 pub use worker::{CreatedWallet, WalletController, WalletControllerError};
 
 use events::WalletServiceEvents;
 
-pub type WalletResult<T> = Result<T, WalletControllerError>;
+// pub type WalletResult<T> = Result<T, WalletControllerError>;
 
 /// Wallet service
-pub struct WalletService {
+pub struct WalletService<N> {
     task: tokio::task::JoinHandle<()>,
-    command_tx: worker::CommandSender,
-    node_rpc: MaybeDummyNode,
+    command_tx: worker::CommandSender<N>,
+    node_rpc: N,
     chain_config: Arc<ChainConfig>,
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum InitError {
+pub enum InitError<N: NodeInterface> {
     #[error(transparent)]
     Wallet(#[from] wallet::WalletError),
     #[error(transparent)]
     NodeRpc(#[from] node_comm::rpc_client::NodeRpcError),
     #[error(transparent)]
-    Controller(#[from] WalletControllerError),
+    Controller(#[from] WalletControllerError<N>),
 }
 
-impl WalletService {
+impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
     pub async fn start(
         chain_config: Arc<ChainConfig>,
         wallet_file: Option<PathBuf>,
-        node_config: Option<(Option<String>, RpcAuthData)>,
-    ) -> Result<Self, InitError> {
-        let node_rpc = wallet_controller::make_opt_rpc_client(
-            node_config.map(|(addr, auth)| {
-                let rpc_address = {
-                    let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-                    addr.unwrap_or_else(default_addr)
-                };
-
-                (rpc_address, auth)
-            }),
-            chain_config.clone(),
-        )
-        .await?;
-
+        node_rpc: N,
+    ) -> Result<Self, InitError<N>> {
         let (wallet_events, events_rx) = WalletServiceEvents::new();
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -113,7 +99,7 @@ impl WalletService {
         })
     }
 
-    pub fn node_rpc(&self) -> &MaybeDummyNode {
+    pub fn node_rpc(&self) -> &N {
         &self.node_rpc
     }
 
@@ -122,7 +108,7 @@ impl WalletService {
     }
 
     /// Get wallet service handle
-    pub fn handle(&self) -> WalletHandle {
+    pub fn handle(&self) -> WalletHandle<N> {
         handle::create(worker::CommandSender::clone(&self.command_tx))
     }
 

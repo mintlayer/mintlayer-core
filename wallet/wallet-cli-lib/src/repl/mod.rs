@@ -18,6 +18,7 @@ pub mod non_interactive;
 
 use clap::{Command, FromArgMatches, Subcommand};
 use tokio::sync::mpsc;
+use wallet_controller::NodeInterface;
 
 use crate::{
     cli_event_loop::Event,
@@ -63,10 +64,10 @@ pub fn get_repl_command(cold_wallet: bool) -> Command {
 }
 
 /// Try to parse REPL input string as a [WalletCommands]
-fn parse_input(
+fn parse_input<N: NodeInterface>(
     line: &str,
     repl_command: &Command,
-) -> Result<Option<WalletCommand>, WalletCliError> {
+) -> Result<Option<WalletCommand>, WalletCliError<N>> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
         return Ok(None);
@@ -82,10 +83,10 @@ fn parse_input(
     Ok(Some(command))
 }
 
-fn run_command_blocking(
-    event_tx: &mpsc::UnboundedSender<Event>,
+fn run_command_blocking<N: NodeInterface>(
+    event_tx: &mpsc::UnboundedSender<Event<N>>,
     command: WalletCommand,
-) -> Result<ConsoleCommand, WalletCliError> {
+) -> Result<ConsoleCommand, WalletCliError<N>> {
     let (res_tx, res_rx) = tokio::sync::oneshot::channel();
     event_tx
         .send(Event::HandleCommand { command, res_tx })

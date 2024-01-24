@@ -36,17 +36,8 @@ pub async fn make_rpc_client(
     rpc_client::NodeRpcClient::new(remote_socket_address, rpc_auth).await
 }
 
-pub async fn make_opt_rpc_client(
-    node_opts: Option<(String, RpcAuthData)>,
-    chain_config: Arc<ChainConfig>,
-) -> Result<rpc_client::MaybeDummyNode, NodeRpcError> {
-    let rpc_client = if let Some((addr, auth)) = node_opts {
-        Some(make_rpc_client(addr, auth).await?)
-    } else {
-        None
-    };
-
-    Ok(rpc_client::MaybeDummyNode::new(rpc_client, chain_config))
+pub fn make_cold_wallet_rpc_client(chain_config: Arc<ChainConfig>) -> rpc_client::MaybeDummyNode {
+    rpc_client::MaybeDummyNode::new(None, chain_config)
 }
 
 pub async fn make_handles_client(

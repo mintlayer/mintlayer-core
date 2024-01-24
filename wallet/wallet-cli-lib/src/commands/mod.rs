@@ -29,11 +29,10 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
-use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
 use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
-use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{types::NewTransaction, CreatedWallet, WalletRpc, WalletService};
 
 use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
@@ -629,20 +628,23 @@ struct CliWalletState {
     selected_account: U31,
 }
 
-pub struct CommandHandler {
+pub struct CommandHandler<N: Clone> {
     // the CliController if there is a loaded wallet
     state: Option<CliWalletState>,
     config: ControllerConfig,
-    wallet_rpc: WalletRpc,
+    wallet_rpc: WalletRpc<N>,
 }
 
-impl CommandHandler {
+impl<N> CommandHandler<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
-        node_opts: Option<(Option<String>, RpcAuthData)>,
-    ) -> Result<Self, WalletCliError> {
-        let wallet_service = WalletService::start(chain_config, None, node_opts)
+        node_rpc: N,
+    ) -> Result<Self, WalletCliError<N>> {
+        let wallet_service = WalletService::start(chain_config, None, node_rpc)
             .await
             .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 
@@ -658,7 +660,7 @@ impl CommandHandler {
         })
     }
 
-    async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
+    async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError<N>> {
         let CliWalletState { selected_account } =
             self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
@@ -670,7 +672,7 @@ impl CommandHandler {
         Ok(())
     }
 
-    async fn repl_status(&mut self) -> Result<String, WalletCliError> {
+    async fn repl_status(&mut self) -> Result<String, WalletCliError<N>> {
         let status = match self.state.as_ref() {
             Some(CliWalletState { selected_account }) => {
                 let accounts = self.wallet_rpc.account_names().await?;
@@ -689,7 +691,7 @@ impl CommandHandler {
         Ok(status)
     }
 
-    fn get_selected_acc(&mut self) -> Result<U31, WalletCliError> {
+    fn get_selected_acc(&mut self) -> Result<U31, WalletCliError<N>> {
         self.state
             .as_mut()
             .map(|state| state.selected_account)
@@ -712,7 +714,7 @@ impl CommandHandler {
     async fn handle_cold_wallet_command(
         &mut self,
         command: ColdWalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError> {
+    ) -> Result<ConsoleCommand, WalletCliError<N>> {
         match command {
             ColdWalletCommand::CreateWallet {
                 wallet_path,
@@ -984,7 +986,7 @@ impl CommandHandler {
         &mut self,
         chain_config: &Arc<ChainConfig>,
         command: WalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError> {
+    ) -> Result<ConsoleCommand, WalletCliError<N>> {
         match command {
             WalletCommand::ColdCommands(command) => self.handle_cold_wallet_command(command).await,
 
@@ -1354,7 +1356,8 @@ impl CommandHandler {
                 let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
-                    .collect::<Result<Vec<_>, WalletCliError>>()?;
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                )?;
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
                     .wallet_rpc
