@@ -10,7 +10,7 @@ rust-version.workspace = true
 [dependencies]
 common = {path = '../../common'}
 crypto = {path = '../../crypto'}
-pos_accounting = {path = '../../pos_accounting'}
+pos-accounting = {path = '../../pos-accounting'}
 utils = {path = '../../utils'}
 utxo = {path = '../../utxo'}
 

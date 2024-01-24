@@ -12,7 +12,7 @@ common = { path = "../common" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
-pos_accounting = { path = "../pos_accounting" }
+pos-accounting = { path = "../pos-accounting" }
 serialization = { path = "../serialization" }
 mempool = { path = "../mempool" }
 storage = { path = "../storage", features = ["inmemory"] }

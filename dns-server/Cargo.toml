@@ -1,5 +1,5 @@
 [package]
-name = "dns_server"
+name = "dns-server"
 license.workspace = true
 version.workspace = true
 edition.workspace = true

@@ -12,7 +12,7 @@ chainstate = { path = "../chainstate/" }
 chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
 mempool = { path = "../mempool/" }
-pos_accounting = { path = '../pos_accounting/' }
+pos-accounting = { path = '../pos-accounting/' }
 subsystem = { path = "../subsystem/" }
 tokens-accounting = { path = '../tokens-accounting/' }
 utils = { path = "../utils/" }

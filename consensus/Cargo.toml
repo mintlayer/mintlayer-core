@@ -10,7 +10,7 @@ chainstate-types = { path = '../chainstate/types' }
 common = { path = '../common' }
 crypto = { path = '../crypto' }
 logging = { path = "../logging" }
-pos_accounting = { path = '../pos_accounting' }
+pos-accounting = { path = '../pos-accounting' }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
 utxo = { path = '../utxo' }
