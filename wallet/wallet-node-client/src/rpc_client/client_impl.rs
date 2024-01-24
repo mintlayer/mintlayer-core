@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
@@ -21,7 +23,7 @@ use common::{
         Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
@@ -32,7 +34,8 @@ use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
     types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+        peer_id::PeerId, socket_address::SocketAddress,
     },
 };
 use serialization::hex_encoded::HexEncoded;
@@ -220,18 +223,28 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         P2pRpcClient::list_banned(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
-        P2pRpcClient::ban(&self.http_client, address)
+    async fn p2p_ban(
+        &self,
+        address: BannableAddress,
+        duration: Duration,
+    ) -> Result<(), Self::Error> {
+        P2pRpcClient::ban(&self.http_client, address, duration)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
     async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
         P2pRpcClient::unban(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
+        P2pRpcClient::list_discouraged(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
@@ -243,6 +256,12 @@ impl NodeInterface for NodeRpcClient {
     }
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         P2pRpcClient::get_connected_peers(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error> {
+        P2pRpcClient::get_reserved_nodes(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

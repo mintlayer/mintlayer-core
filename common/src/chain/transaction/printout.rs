@@ -61,10 +61,7 @@ pub fn transaction_summary(tx: &Transaction, chain_config: &ChainConfig) -> Stri
     };
     let fmt_timelock = |tl: &OutputTimeLock| match tl {
         OutputTimeLock::UntilHeight(h) => format!("OutputTimeLock::UntilHeight({h})"),
-        OutputTimeLock::UntilTime(t) => format!(
-            "OutputTimeLock::UntilTime({})",
-            t.into_time().as_standard_printable_time()
-        ),
+        OutputTimeLock::UntilTime(t) => format!("OutputTimeLock::UntilTime({})", t.into_time()),
         OutputTimeLock::ForBlockCount(n) => format!("OutputTimeLock::ForBlockCount({n} blocks)"),
         OutputTimeLock::ForSeconds(secs) => {
             format!("OutputTimeLock::ForSeconds({secs} seconds)")

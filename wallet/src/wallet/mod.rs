@@ -79,7 +79,7 @@ pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V5;
 pub enum WalletError {
     #[error("Wallet is not initialized")]
     WalletNotInitialized,
-    #[error("The wallet belongs to a different chain then the one specified")]
+    #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
     #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
     UnsupportedWalletVersion(u32),

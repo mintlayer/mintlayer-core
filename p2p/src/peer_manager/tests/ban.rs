@@ -50,23 +50,22 @@ use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv, P2pBasicTestTimeGetter};
 use test_utils::random::{make_seedable_rng, Seed};
 
-// Check that a peer is automatically banned once the ban threshold is reached.
-// Also check that it's disconnected once banned, and that it's unbanned once the ban
-// duration has expired.
+// Check that a peer is not banned automatically.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn auto_ban_connected_peer(#[case] seed: Seed) {
+async fn dont_auto_ban_connected_peer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
+    let test_score = 1000;
     let ban_config = BanConfig {
-        ban_threshold: 100.into(),
-        ban_duration: Duration::from_secs(60 * 60).into(),
-        discouragement_threshold: 1000.into(),
-        discouragement_duration: Duration::from_secs(60 * 60 * 10).into(),
+        // Make sure that discouragement mechanics doesn't kick in.
+        discouragement_threshold: (test_score + 1).into(),
+
+        discouragement_duration: Default::default(),
     };
     let p2p_config = Arc::new(test_p2p_config_with_ban_config(ban_config.clone()));
 
@@ -78,7 +77,7 @@ async fn auto_ban_connected_peer(#[case] seed: Seed) {
         conn_event_sender,
         peer_mgr_event_sender,
         mut cmd_receiver,
-        mut peer_mgr_notification_receiver,
+        _peer_mgr_notification_receiver,
     ) = make_standalone_peer_manager(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -103,13 +102,8 @@ async fn auto_ban_connected_peer(#[case] seed: Seed) {
     let cmd = expect_recv!(cmd_receiver);
     assert_eq!(cmd, Command::Accept { peer_id });
 
-    // Increase the score by 1/2 of the threshold, check that the peer is not banned.
-    adjust_peer_score(
-        &peer_mgr_event_sender,
-        peer_id,
-        *ban_config.ban_threshold / 2,
-    )
-    .await;
+    // Increase the score by a large amount, check that the peer is not banned.
+    adjust_peer_score(&peer_mgr_event_sender, peer_id, test_score).await;
 
     let is_banned = query_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
         peer_mgr.peer_db().is_address_banned(&peer_addr.as_bannable())
@@ -117,38 +111,8 @@ async fn auto_ban_connected_peer(#[case] seed: Seed) {
     .await;
     assert!(!is_banned);
 
+    // No disconnection happens
     expect_no_recv!(cmd_receiver);
-
-    // Increase the score by 1/2 of the threshold again, check that the peer is banned now.
-    adjust_peer_score(
-        &peer_mgr_event_sender,
-        peer_id,
-        *ban_config.ban_threshold / 2,
-    )
-    .await;
-
-    let is_banned = query_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
-        peer_mgr.peer_db().is_address_banned(&peer_addr.as_bannable())
-    })
-    .await;
-    assert!(is_banned);
-
-    // The banned peer should be disconnected.
-    let cmd = expect_recv!(cmd_receiver);
-    assert_eq!(cmd, Command::Disconnect { peer_id });
-
-    wait_for_no_recv(&mut peer_mgr_notification_receiver).await;
-
-    // Wait for ban duration to pass; check that the peer is no longer banned.
-    time_getter.advance_time(*ban_config.ban_duration);
-
-    wait_for_heartbeat(&mut peer_mgr_notification_receiver).await;
-
-    let is_banned = query_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
-        peer_mgr.peer_db().is_address_banned(&peer_addr.as_bannable())
-    })
-    .await;
-    assert!(!is_banned);
 
     drop(conn_event_sender);
     drop(peer_mgr_event_sender);
@@ -167,16 +131,11 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let ban_config = BanConfig {
-        ban_threshold: Default::default(),
-        ban_duration: Duration::from_secs(60 * 60).into(),
-        discouragement_threshold: Default::default(),
-        discouragement_duration: Duration::from_secs(60 * 60 * 10).into(),
-    };
-    let p2p_config = Arc::new(test_p2p_config_with_ban_config(ban_config.clone()));
+    let p2p_config = Arc::new(test_p2p_config());
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
+    let ban_duration = Duration::from_secs(60 * 60);
 
     let (
         peer_mgr,
@@ -214,7 +173,12 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
     .await;
     assert!(!is_banned);
 
-    ban_peer_manually(&peer_mgr_event_sender, peer_addr.as_bannable()).await;
+    ban_peer_manually(
+        &peer_mgr_event_sender,
+        peer_addr.as_bannable(),
+        ban_duration,
+    )
+    .await;
 
     let is_banned = query_peer_manager(&peer_mgr_event_sender, move |peer_mgr| {
         peer_mgr.peer_db().is_address_banned(&peer_addr.as_bannable())
@@ -227,7 +191,7 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
 
     wait_for_no_recv(&mut peer_mgr_notification_receiver).await;
 
-    time_getter.advance_time(*ban_config.ban_duration);
+    time_getter.advance_time(ban_duration);
 
     wait_for_heartbeat(&mut peer_mgr_notification_receiver).await;
 
@@ -257,6 +221,7 @@ async fn reject_incoming_connection_from_banned_peer(#[case] seed: Seed) {
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
+    let ban_duration = Duration::from_secs(60 * 60);
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -273,7 +238,7 @@ async fn reject_incoming_connection_from_banned_peer(#[case] seed: Seed) {
     );
     let [banned_addr, normal_addr]: [_; 2] = peer_addrs.try_into().unwrap();
 
-    peer_mgr.ban(banned_addr.as_bannable());
+    peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
     let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
         let mut peer_mgr = peer_mgr;
@@ -341,6 +306,7 @@ async fn no_outgoing_connection_to_banned_peer(#[case] seed: Seed) {
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
+    let ban_duration = Duration::from_secs(60 * 60);
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -360,7 +326,7 @@ async fn no_outgoing_connection_to_banned_peer(#[case] seed: Seed) {
     peer_mgr.peerdb.peer_discovered(banned_addr);
     peer_mgr.peerdb.peer_discovered(normal_addr);
 
-    peer_mgr.ban(banned_addr.as_bannable());
+    peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
     let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
         let mut peer_mgr = peer_mgr;
@@ -423,6 +389,7 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
+    let ban_duration = Duration::from_secs(60 * 60);
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -439,7 +406,7 @@ async fn banned_address_is_not_announced(#[case] seed: Seed) {
     );
     let [banned_addr, normal_addr, peer1_addr, peer2_addr]: [_; 4] = addrs.try_into().unwrap();
 
-    peer_mgr.ban(banned_addr.as_bannable());
+    peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
     let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
         let mut peer_mgr = peer_mgr;
@@ -542,6 +509,7 @@ async fn banned_address_not_in_addr_response(#[case] seed: Seed) {
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
+    let ban_duration = Duration::from_secs(60 * 60);
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -561,7 +529,7 @@ async fn banned_address_not_in_addr_response(#[case] seed: Seed) {
     peer_mgr.peerdb.peer_discovered(banned_addr);
     peer_mgr.peerdb.peer_discovered(normal_addr);
 
-    peer_mgr.ban(banned_addr.as_bannable());
+    peer_mgr.ban(banned_addr.as_bannable(), ban_duration);
 
     let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
         let mut peer_mgr = peer_mgr;

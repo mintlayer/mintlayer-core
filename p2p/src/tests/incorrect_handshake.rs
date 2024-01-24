@@ -77,10 +77,17 @@ where
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.
-    test_node.expect_no_banning().await;
+    test_node.expect_no_punishment().await;
 
-    // Note: no peer ban here, because peers are not banned during "manual outbound" connections.
+    // Note: no peer discouragement here, because peers are not discouraged during
+    // "manual outbound" connections.
     let test_node_remnants = test_node.join().await;
+    assert_eq!(
+        test_node_remnants.peer_mgr.peerdb().list_discouraged().count(),
+        0
+    );
+
+    // For consistency, check that we don't ban automatically.
     assert_eq!(
         test_node_remnants.peer_mgr.peerdb().list_banned().count(),
         0
@@ -145,7 +152,13 @@ where
     // The peer address should be banned.
     let test_node_remnants = test_node.join().await;
     // TODO: check the actual address instead of the count, same in other places.
-    assert!(test_node_remnants.peer_mgr.peerdb().list_banned().count() > 0);
+    assert!(test_node_remnants.peer_mgr.peerdb().list_discouraged().count() > 0);
+
+    // For consistency, check that we don't ban automatically.
+    assert_eq!(
+        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
+        0
+    );
 }
 
 #[tracing::instrument]

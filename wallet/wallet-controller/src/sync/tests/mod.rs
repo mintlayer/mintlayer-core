@@ -25,7 +25,7 @@ use common::{
         tokens::{RPCTokenInfo, TokenId},
         DelegationId, PoolId, SignedTransaction, Transaction,
     },
-    primitives::Amount,
+    primitives::{time::Time, Amount},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -40,7 +40,10 @@ use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
@@ -326,19 +329,29 @@ impl NodeInterface for MockNode {
     async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         unreachable!()
     }
-    async fn p2p_ban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+    async fn p2p_ban(
+        &self,
+        _address: BannableAddress,
+        _duration: Duration,
+    ) -> Result<(), Self::Error> {
         unreachable!()
     }
     async fn p2p_unban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         unreachable!()
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         unreachable!()
     }
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error> {
         unreachable!()
     }
     async fn p2p_add_reserved_node(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {

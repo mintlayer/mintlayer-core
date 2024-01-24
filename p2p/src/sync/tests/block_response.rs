@@ -150,12 +150,9 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
         let chain_config = Arc::new(create_unit_test_config());
         let p2p_config = Arc::new(P2pConfig {
             ban_config: BanConfig {
-                // We want to count bannable errors in this test, but don't want a disconnect
+                // We want to count discourageable errors in this test, but don't want a disconnect
                 // to happen because of them.
-                ban_threshold: 1000.into(),
-
-                ban_duration: Default::default(),
-                discouragement_threshold: Default::default(),
+                discouragement_threshold: 1000.into(),
                 discouragement_duration: Default::default(),
             },
 

@@ -17,13 +17,14 @@ use chainstate::ChainInfo;
 use common::{
     address::dehexify::{dehexify_all_addresses, to_dehexified_json},
     chain::{tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{time::Time, BlockHeight, Id, Idable, H256},
 };
 use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress, PeerId,
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, str::FromStr, time::Duration};
 use wallet_controller::{
     types::BlockInfo, ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
@@ -587,16 +588,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.disconnect_peer(PeerId::from_u64(peer_id)).await)
     }
 
-    async fn list_banned(&self) -> rpc::RpcResult<Vec<BannableAddress>> {
+    async fn list_banned(&self) -> rpc::RpcResult<Vec<(BannableAddress, Time)>> {
         rpc::handle_result(self.list_banned().await)
     }
 
-    async fn ban_address(&self, address: BannableAddress) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.ban_address(address).await)
+    async fn ban_address(
+        &self,
+        address: BannableAddress,
+        duration: Duration,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(self.ban_address(address, duration).await)
     }
 
     async fn unban_address(&self, address: BannableAddress) -> rpc::RpcResult<()> {
         rpc::handle_result(self.unban_address(address).await)
+    }
+
+    async fn list_discouraged(&self) -> rpc::RpcResult<Vec<(BannableAddress, Time)>> {
+        rpc::handle_result(self.list_discouraged().await)
     }
 
     async fn peer_count(&self) -> rpc::RpcResult<usize> {
@@ -605,6 +614,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
     async fn connected_peers(&self) -> rpc::RpcResult<Vec<ConnectedPeer>> {
         rpc::handle_result(self.connected_peers().await)
+    }
+
+    async fn reserved_peers(&self) -> rpc::RpcResult<Vec<SocketAddress>> {
+        rpc::handle_result(self.reserved_peers().await)
     }
 
     async fn add_reserved_peer(&self, address: String) -> rpc::RpcResult<()> {

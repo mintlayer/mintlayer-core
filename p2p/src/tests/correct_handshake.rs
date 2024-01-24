@@ -90,7 +90,7 @@ where
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.
-    test_node.expect_no_banning().await;
+    test_node.expect_no_punishment().await;
 
     let test_node_remnants = test_node.join().await;
 
@@ -170,7 +170,7 @@ where
 
     // This is mainly needed to ensure that the corresponding events, if any, reach
     // peer manager before we end the test.
-    test_node.expect_no_banning().await;
+    test_node.expect_no_punishment().await;
 
     let test_node_remnants = test_node.join().await;
 

@@ -23,6 +23,8 @@ use std::{
 };
 
 use clap::Parser;
+use itertools::Itertools;
+
 use common::{
     address::Address,
     chain::{
@@ -531,13 +533,24 @@ pub enum WalletCommand {
     #[clap(name = "node-list-banned-peers")]
     ListBanned,
 
-    /// Ban address in the node
+    /// Ban an address in the node for the specified duration
     #[clap(name = "node-ban-peer-address")]
-    Ban { address: BannableAddress },
+    Ban {
+        /// IP address to ban.
+        address: BannableAddress,
+        /// Duration of the ban, e.g. 1M (1 month) or "1y 3M 10d 6h 30m 45s"
+        /// (1 year 3 months 10 days 6 hours 30 minutes 45 seconds).
+        #[arg(value_parser = clap::value_parser!(helper_types::Duration))]
+        duration: helper_types::Duration,
+    },
 
     /// Unban address in the node
     #[clap(name = "node-unban-peer-address")]
     Unban { address: BannableAddress },
+
+    /// List discouraged addresses/peers in the node
+    #[clap(name = "node-list-discouraged-peers")]
+    ListDiscouraged,
 
     /// Get the number of connected peer in the node
     #[clap(name = "node-peer-count")]
@@ -550,6 +563,10 @@ pub enum WalletCommand {
     /// Get connected peers in JSON format
     #[clap(name = "node-list-connected-peers-json")]
     ConnectedPeersJson,
+
+    /// Get reserved peers in the node
+    #[clap(name = "node-list-reserved-peers")]
+    ReservedPeers,
 
     /// Add a reserved peer in the node
     #[clap(name = "node-add-reserved-peer")]
@@ -1117,7 +1134,7 @@ where
                 Ok(ConsoleCommand::Print(format!(
                     "{} ({})",
                     timestamp,
-                    timestamp.into_time().as_standard_printable_time()
+                    timestamp.into_time()
                 )))
             }
 
@@ -1732,15 +1749,34 @@ where
 
             WalletCommand::ListBanned => {
                 let list = self.wallet_rpc.list_banned().await?;
-                Ok(ConsoleCommand::Print(format!("{list:#?}")))
+
+                let msg = list
+                    .iter()
+                    .map(|(addr, banned_until)| format!("{addr} (banned until {banned_until})"))
+                    .join("\n");
+
+                Ok(ConsoleCommand::Print(msg))
             }
-            WalletCommand::Ban { address } => {
-                self.wallet_rpc.ban_address(address).await?;
+            WalletCommand::Ban { address, duration } => {
+                self.wallet_rpc.ban_address(address, duration.into()).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Unban { address } => {
                 self.wallet_rpc.unban_address(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
+            WalletCommand::ListDiscouraged => {
+                let list = self.wallet_rpc.list_discouraged().await?;
+
+                let msg = list
+                    .iter()
+                    .map(|(addr, discouraged_until)| {
+                        format!("{addr} (discouraged until {discouraged_until})")
+                    })
+                    .join("\n");
+
+                Ok(ConsoleCommand::Print(msg))
             }
 
             WalletCommand::PeerCount => {
@@ -1755,6 +1791,10 @@ where
                 let peers = self.wallet_rpc.connected_peers().await?;
                 let peers_json = serde_json::to_string(&peers)?;
                 Ok(ConsoleCommand::Print(peers_json))
+            }
+            WalletCommand::ReservedPeers => {
+                let peers = self.wallet_rpc.reserved_peers().await?;
+                Ok(ConsoleCommand::Print(format!("{peers:#?}")))
             }
             WalletCommand::AddReservedPeer { address } => {
                 self.wallet_rpc.add_reserved_peer(address).await?;

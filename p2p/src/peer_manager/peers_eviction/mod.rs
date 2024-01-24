@@ -306,6 +306,10 @@ fn select_for_eviction_outbound(
         return None;
     }
 
+    // Note: currently, this 'is_banned_or_discouraged' condition can only happen in tests, because,
+    // from the one hand, automatic outbound connections are never established to banned or
+    // discouraged peers and, from the other hand, peers are always automatically disconnected
+    // when they receive the banned or discouraged status.
     if let Some(candidate) = candidates.iter().filter(|ec| ec.is_banned_or_discouraged).choose(rng)
     {
         return Some(candidate.peer_id);

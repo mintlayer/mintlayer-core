@@ -73,10 +73,6 @@ pub struct P2pConfigFile {
     pub whitelisted_addresses: Option<Vec<IpAddr>>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: Option<usize>,
-    /// The score threshold after which a peer is banned.
-    pub ban_threshold: Option<u32>,
-    /// Duration of bans in seconds.
-    pub ban_duration: Option<u64>,
     /// The score threshold after which a peer becomes discouraged.
     pub discouragement_threshold: Option<u32>,
     /// Duration of discouragement in seconds.
@@ -109,8 +105,6 @@ impl From<P2pConfigFile> for P2pConfig {
             reserved_nodes,
             whitelisted_addresses,
             max_inbound_connections,
-            ban_threshold,
-            ban_duration,
             discouragement_threshold,
             discouragement_duration,
             max_clock_diff,
@@ -130,8 +124,6 @@ impl From<P2pConfigFile> for P2pConfig {
             reserved_nodes: reserved_nodes.unwrap_or_default(),
             whitelisted_addresses: whitelisted_addresses.unwrap_or_default(),
             ban_config: BanConfig {
-                ban_threshold: ban_threshold.into(),
-                ban_duration: ban_duration.map(Duration::from_secs).into(),
                 discouragement_threshold: discouragement_threshold.into(),
                 discouragement_duration: discouragement_duration.map(Duration::from_secs).into(),
             },

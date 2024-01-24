@@ -266,7 +266,7 @@ where
         result_receiver
     }
 
-    pub async fn expect_no_banning(&mut self) {
+    pub async fn expect_no_punishment(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
                 match self.peer_mgr_notification_receiver.recv().await.unwrap() {
@@ -275,6 +275,9 @@ where
                         new_score: _,
                     }
                     | PeerManagerNotification::Ban { address: _ } => {
+                        break;
+                    }
+                    | PeerManagerNotification::Discourage { address: _ } => {
                         break;
                     }
                     _ => {}

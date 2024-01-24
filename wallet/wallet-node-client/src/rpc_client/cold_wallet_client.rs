@@ -13,20 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
         Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
-    types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId},
+    types::{
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+        socket_address::SocketAddress, PeerId,
+    },
 };
 
 use crate::node_traits::NodeInterface;
@@ -168,15 +173,23 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
-    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
-    async fn p2p_ban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+    async fn p2p_ban(
+        &self,
+        _address: BannableAddress,
+        _duration: Duration,
+    ) -> Result<(), Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
     async fn p2p_unban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
@@ -185,6 +198,10 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

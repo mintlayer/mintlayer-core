@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, panic, sync::Arc};
+use std::{collections::BTreeSet, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use logging::log;
@@ -351,11 +351,13 @@ impl TestNode {
                     | PeerManagerEvent::GetBindAddresses(_)
                     | PeerManagerEvent::GetConnectedPeers(_)
                     | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                    | PeerManagerEvent::GetReserved(_)
                     | PeerManagerEvent::AddReserved(_, _)
                     | PeerManagerEvent::RemoveReserved(_, _)
                     | PeerManagerEvent::ListBanned(_)
-                    | PeerManagerEvent::Ban(_, _)
+                    | PeerManagerEvent::Ban(_, _, _)
                     | PeerManagerEvent::Unban(_, _)
+                    | PeerManagerEvent::ListDiscouraged(_)
                     | PeerManagerEvent::GenericQuery(_)
                     | PeerManagerEvent::GenericMut(_) => {
                         panic!("Unexpected peer manager event: {peer_event:?}");
@@ -621,11 +623,13 @@ pub enum PeerManagerEventDesc {
         // values must be easy to predict. Currently, PeerBlockSyncStatus only contains a Time
         // value, which may be hard to predict, depending on the test.
     },
+    GetReserved,
     AddReserved(IpOrSocketAddress),
     RemoveReserved(IpOrSocketAddress),
     ListBanned,
-    Ban(BannableAddress),
+    Ban(BannableAddress, Duration),
     Unban(BannableAddress),
+    ListDiscouraged,
     GenericQuery,
     GenericMut,
 }
@@ -665,6 +669,7 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
                 peer_id,
                 new_status: _,
             } => PeerManagerEventDesc::PeerBlockSyncStatusUpdate { peer_id: *peer_id },
+            PeerManagerEvent::GetReserved(_) => PeerManagerEventDesc::GetReserved,
             PeerManagerEvent::AddReserved(addr, _) => {
                 PeerManagerEventDesc::AddReserved(addr.clone())
             }
@@ -672,8 +677,9 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
                 PeerManagerEventDesc::RemoveReserved(addr.clone())
             }
             PeerManagerEvent::ListBanned(_) => PeerManagerEventDesc::ListBanned,
-            PeerManagerEvent::Ban(addr, _) => PeerManagerEventDesc::Ban(*addr),
+            PeerManagerEvent::Ban(addr, duration, _) => PeerManagerEventDesc::Ban(*addr, *duration),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
+            PeerManagerEvent::ListDiscouraged(_) => PeerManagerEventDesc::ListDiscouraged,
             PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
             PeerManagerEvent::GenericMut(_) => PeerManagerEventDesc::GenericMut,
         }

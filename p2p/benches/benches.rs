@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -35,7 +35,10 @@ pub fn peer_db(c: &mut Criterion) {
     }
 
     for _ in 0..1000 {
-        peerdb.ban(TestAddressMaker::new_random_address().as_bannable());
+        peerdb.ban(
+            TestAddressMaker::new_random_address().as_bannable(),
+            Duration::from_secs(60 * 60 * 24),
+        );
     }
 
     let outbound_addr_groups = (0..5)

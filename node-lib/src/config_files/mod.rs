@@ -172,8 +172,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         reserved_nodes,
         whitelisted_addresses,
         max_inbound_connections,
-        ban_threshold,
-        ban_duration,
         discouragement_threshold,
         discouragement_duration,
         max_clock_diff,
@@ -192,7 +190,9 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
     let whitelisted_addresses = options.p2p_whitelist_addr.clone().or(whitelisted_addresses);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
-    let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
+    let discouragement_threshold =
+        options.p2p_discouragement_threshold.or(discouragement_threshold);
+    let discouragement_duration = options.p2p_discouragement_duration.or(discouragement_duration);
     let ping_check_period = options.p2p_ping_check_period.or(ping_check_period);
     let ping_timeout = options.p2p_ping_timeout.or(ping_timeout);
     let max_clock_diff = options.p2p_max_clock_diff.or(max_clock_diff);
@@ -212,8 +212,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         reserved_nodes,
         whitelisted_addresses,
         max_inbound_connections,
-        ban_threshold,
-        ban_duration,
         discouragement_threshold,
         discouragement_duration,
         max_clock_diff,

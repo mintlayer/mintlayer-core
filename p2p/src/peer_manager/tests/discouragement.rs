@@ -41,7 +41,7 @@ use crate::{
         MAX_ADDR_RATE_PER_SECOND,
     },
     testing_utils::{
-        test_p2p_config, test_p2p_config_with_ban_config, test_p2p_config_with_peer_mgr_config,
+        test_p2p_config_with_ban_config, test_p2p_config_with_peer_mgr_config,
         test_peer_mgr_config_with_no_auto_outbound_connections, TestAddressMaker,
         TestTransportMaker, TestTransportTcp,
     },
@@ -52,7 +52,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 // Check that a peer is discouraged once the threshold is reached.
 // Also check that
-// 1) it's NOT disconnected when becoming discouraged;
+// 1) it's disconnected when becoming discouraged;
 // 2) it's no longer discouraged once the duration has expired.
 #[tracing::instrument(skip(seed))]
 #[rstest]
@@ -66,8 +66,6 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
     let ban_config = BanConfig {
         discouragement_threshold: 100.into(),
         discouragement_duration: Duration::from_secs(60 * 60).into(),
-        ban_threshold: 1000.into(),
-        ban_duration: Duration::from_secs(60 * 60 * 10).into(),
     };
     let p2p_config = Arc::new(test_p2p_config_with_ban_config(ban_config.clone()));
 
@@ -134,8 +132,9 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
     .await;
     assert!(is_discouraged);
 
-    // No disconnection should happen
-    expect_no_recv!(cmd_receiver);
+    // The discouraged peer should be disconnected.
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(cmd, Command::Disconnect { peer_id });
 
     wait_for_no_recv(&mut peer_mgr_notification_receiver).await;
 
@@ -156,17 +155,40 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
     let _peer_mgr = peer_mgr_join_handle.await.unwrap();
 }
 
-// Check that an incoming connection from a discouraged peer is NOT rejected.
+// Check that an incoming connection from a discouraged peer is NOT rejected if
+// max_inbound_connections is not reached yet.
 #[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn dont_reject_incoming_connection_from_discouraged_peer(#[case] seed: Seed) {
+async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reached(
+    #[case] seed: Seed,
+) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
-    let p2p_config = Arc::new(test_p2p_config());
+    let p2p_config = Arc::new(test_p2p_config_with_peer_mgr_config(PeerManagerConfig {
+        max_inbound_connections: 1.into(),
+
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        outbound_block_relay_count: Default::default(),
+        outbound_block_relay_extra_count: Default::default(),
+        outbound_full_relay_count: Default::default(),
+        outbound_full_relay_extra_count: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
+        peerdb_config: Default::default(),
+    }));
 
     let time_getter = P2pBasicTestTimeGetter::new();
     let bind_addr = TestTransportTcp::make_address();
@@ -198,6 +220,125 @@ async fn dont_reject_incoming_connection_from_discouraged_peer(#[case] seed: See
     );
     let cmd = expect_recv!(cmd_receiver);
     assert_eq!(cmd, Command::Accept { peer_id });
+
+    drop(conn_event_sender);
+    drop(peer_mgr_event_sender);
+
+    let _peer_mgr = peer_mgr_join_handle.await.unwrap();
+}
+
+// Check that an incoming connection from a discouraged peer is rejected if max_inbound_connections
+// is already reached, even if there are peers eligible for eviction.
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = Arc::new(config::create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config_with_peer_mgr_config(PeerManagerConfig {
+        max_inbound_connections: 1.into(),
+
+        // Allow evicting any inbound peer.
+        preserved_inbound_count_address_group: 0.into(),
+        preserved_inbound_count_ping: 0.into(),
+        preserved_inbound_count_new_blocks: 0.into(),
+        preserved_inbound_count_new_transactions: 0.into(),
+
+        outbound_block_relay_count: Default::default(),
+        outbound_block_relay_extra_count: Default::default(),
+        outbound_full_relay_count: Default::default(),
+        outbound_full_relay_extra_count: Default::default(),
+        outbound_block_relay_connection_min_age: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        enable_feeler_connections: Default::default(),
+        feeler_connections_interval: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+        allow_same_ip_connections: Default::default(),
+        peerdb_config: Default::default(),
+    }));
+
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address();
+
+    let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
+        make_standalone_peer_manager(
+            Arc::clone(&chain_config),
+            Arc::clone(&p2p_config),
+            vec![bind_addr],
+            time_getter.get_time_getter(),
+        );
+
+    let peer_addrs = make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups(
+        &peer_mgr.peerdb,
+        3,
+        &mut rng,
+    );
+    let [discouraged_addr, normal_addr1, normal_addr2]: [_; 3] = peer_addrs.try_into().unwrap();
+
+    peer_mgr.discourage(discouraged_addr.as_bannable());
+
+    let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
+        let mut peer_mgr = peer_mgr;
+        let _ = peer_mgr.run_internal(None).await;
+        peer_mgr
+    });
+
+    // Connection from a normal peer is accepted.
+    let normal_peer1_id = inbound_block_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        normal_addr1,
+        bind_addr,
+        &chain_config,
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::Accept {
+            peer_id: normal_peer1_id
+        }
+    );
+
+    // Connection from the discouraged peer is rejected, because the limit is reached.
+    let discouraged_peer_id = inbound_block_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        discouraged_addr,
+        bind_addr,
+        &chain_config,
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::Disconnect {
+            peer_id: discouraged_peer_id
+        }
+    );
+
+    // The previous normal peer gets evicted and the connection from another normal one is accepted.
+    let normal_peer2_id = inbound_block_relay_peer_accepted_by_backend(
+        &conn_event_sender,
+        normal_addr2,
+        bind_addr,
+        &chain_config,
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::Disconnect {
+            peer_id: normal_peer1_id
+        }
+    );
+    let cmd = expect_recv!(cmd_receiver);
+    assert_eq!(
+        cmd,
+        Command::Accept {
+            peer_id: normal_peer2_id
+        }
+    );
 
     drop(conn_event_sender);
     drop(peer_mgr_event_sender);

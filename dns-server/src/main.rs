@@ -58,8 +58,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         boot_nodes: Vec::new(),
         reserved_nodes: Vec::new(),
         whitelisted_addresses: Default::default(),
-        // Note: this ban config (as well as any other non-backend setting here) won't have
-        // any effect on the dns server.
+        // Note: this ban config (as well as any other settings related to the peer or sync manager)
+        // won't have any effect on the dns server.
         ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),

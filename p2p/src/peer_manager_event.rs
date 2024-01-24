@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common::{
     chain::{Block, Transaction},
-    primitives::Id,
+    primitives::{time::Time, Id},
 };
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
@@ -61,7 +63,7 @@ pub enum PeerManagerEvent {
 
     /// Increases the ban score of a peer by the given amount.
     ///
-    /// The peer is discouraged or banned if the new score exceeds the corresponding threshold.
+    /// The peer is discouraged if the new score exceeds the corresponding threshold.
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// New tip block received.
@@ -95,13 +97,19 @@ pub enum PeerManagerEvent {
         new_status: PeerBlockSyncStatus,
     },
 
+    GetReserved(oneshot_nofail::Sender<Vec<SocketAddress>>),
     AddReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
-
     RemoveReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
-    ListBanned(oneshot_nofail::Sender<Vec<BannableAddress>>),
-    Ban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
+    ListBanned(oneshot_nofail::Sender<Vec<(BannableAddress, Time)>>),
+    Ban(
+        BannableAddress,
+        Duration,
+        oneshot_nofail::Sender<crate::Result<()>>,
+    ),
     Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
+
+    ListDiscouraged(oneshot_nofail::Sender<Vec<(BannableAddress, Time)>>),
 
     GenericQuery(Box<dyn PeerManagerQueryFunc>),
     #[cfg(test)]

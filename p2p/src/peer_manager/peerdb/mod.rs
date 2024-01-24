@@ -35,6 +35,7 @@ mod storage_load;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     sync::Arc,
+    time::Duration,
 };
 
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
@@ -487,7 +488,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             // that haven't been advertised in a while?
             // 3) also store last_connect_time in AddressData to avoid removing addresses
             // that we've recently connected to?
-            // 4) Allow removing banned addresses?
+            // 4) Allow removing banned/discouraged addresses?
             existing_addr_data.reserved() || existing_addr_data.is_unreachable()
         } else {
             debug_assert!(
@@ -537,6 +538,10 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.reserved_nodes.contains(address)
     }
 
+    pub fn get_reserved_nodes(&self) -> impl Iterator<Item = SocketAddress> + '_ {
+        self.reserved_nodes.iter().copied()
+    }
+
     pub fn add_reserved_node(&mut self, address: SocketAddress) {
         self.change_address_state(address, AddressStateTransitionTo::SetReserved);
         self.reserved_nodes.insert(address);
@@ -552,14 +557,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.banned_addresses.contains_key(address)
     }
 
-    pub fn list_banned(&self) -> impl Iterator<Item = &BannableAddress> {
-        self.banned_addresses.keys()
+    pub fn list_banned(&self) -> impl Iterator<Item = (BannableAddress, Time)> + '_ {
+        self.banned_addresses.iter().map(|(addr, time)| (*addr, *time))
     }
 
     /// Changes the address state to banned
-    pub fn ban(&mut self, address: BannableAddress) {
-        let ban_till = (self.time_getter.get_time() + *self.p2p_config.ban_config.ban_duration)
-            .expect("Ban duration is expected to be valid");
+    pub fn ban(&mut self, address: BannableAddress, duration: Duration) {
+        let ban_till = self.time_getter.get_time().saturating_duration_add(duration);
 
         update_db(&self.storage, |tx| {
             tx.add_banned_address(&address, ban_till)
@@ -581,12 +585,16 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.discouraged_addresses.contains_key(address)
     }
 
+    pub fn list_discouraged(&self) -> impl Iterator<Item = (BannableAddress, Time)> + '_ {
+        self.discouraged_addresses.iter().map(|(addr, time)| (*addr, *time))
+    }
+
     /// Changes the address state to discouraged
     pub fn discourage(&mut self, address: BannableAddress) {
-        // TODO: do we need to prolong the discouragement if the peer continues misbehaving?
-        let discourage_till = (self.time_getter.get_time()
-            + *self.p2p_config.ban_config.discouragement_duration)
-            .expect("Discouragement duration is expected to be valid");
+        let discourage_till = self
+            .time_getter
+            .get_time()
+            .saturating_duration_add(*self.p2p_config.ban_config.discouragement_duration);
 
         update_db(&self.storage, |tx| {
             tx.add_discouraged_address(&address, discourage_till)

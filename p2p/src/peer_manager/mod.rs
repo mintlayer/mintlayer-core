@@ -429,8 +429,8 @@ where
 
     /// Adjust peer score
     ///
-    /// Discourage and/or ban the peer if the score reaches the corresponding threshold.
-    fn adjust_peer_score(&mut self, peer_id: PeerId, score_adjustment: u32) {
+    /// Discourage the peer if the score reaches the corresponding threshold.
+    fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) {
         let peer = match self.peers.get(&peer_id) {
             Some(peer) => peer,
             None => return,
@@ -438,7 +438,7 @@ where
 
         if self.is_whitelisted_node(peer.peer_role, &peer.peer_address) {
             log::info!(
-                "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score_adjustment}",
+                "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
             );
             return;
         }
@@ -448,24 +448,20 @@ where
             None => return,
         };
 
-        let new_score = peer.score.saturating_add(score_adjustment);
-        let peer_address = peer.peer_address.as_bannable();
-        peer.score = new_score;
+        peer.score = peer.score.saturating_add(score);
 
         log::info!(
-            "Adjusting peer score for peer {peer_id}, adjustment {score_adjustment}, new score {new_score}",
+            "Adjusting peer score for peer {peer_id}, adjustment {score}, new score {}",
+            peer.score
         );
 
         if let Some(o) = self.observer.as_mut() {
             o.on_peer_ban_score_adjustment(peer.peer_address, peer.score)
         }
 
-        if new_score >= *self.p2p_config.ban_config.ban_threshold {
-            self.ban(peer_address);
-        }
-
-        if new_score >= *self.p2p_config.ban_config.discouragement_threshold {
-            self.discourage(peer_address);
+        if peer.score >= *self.p2p_config.ban_config.discouragement_threshold {
+            let address = peer.peer_address.as_bannable();
+            self.discourage(address);
         }
     }
 
@@ -494,20 +490,14 @@ where
             o.on_peer_ban_score_adjustment(peer_address, score);
         }
 
-        if score >= *self.p2p_config.ban_config.ban_threshold {
-            let address = peer_address.as_bannable();
-            self.ban(address);
-        }
-
         if score >= *self.p2p_config.ban_config.discouragement_threshold {
             let address = peer_address.as_bannable();
             self.discourage(address);
         }
     }
 
-    fn ban(&mut self, address: BannableAddress) {
-        let to_disconnect = self
-            .peers
+    fn bannable_peers_for_addr(&self, address: BannableAddress) -> Vec<PeerId> {
+        self.peers
             .values()
             .filter_map(|peer| {
                 if peer.peer_address.as_bannable() == address {
@@ -516,7 +506,11 @@ where
                     None
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
+
+    fn ban(&mut self, address: BannableAddress, duration: Duration) {
+        let to_disconnect = self.bannable_peers_for_addr(address);
 
         log::info!(
             "Banning {:?}, the following peers will be disconnected: {:?}",
@@ -524,7 +518,7 @@ where
             to_disconnect
         );
 
-        self.peerdb.ban(address);
+        self.peerdb.ban(address, duration);
 
         if let Some(o) = self.observer.as_mut() {
             o.on_peer_ban(address);
@@ -536,12 +530,22 @@ where
     }
 
     fn discourage(&mut self, address: BannableAddress) {
-        log::info!("Discouraging {address:?}");
+        let to_disconnect = self.bannable_peers_for_addr(address);
+
+        log::info!(
+            "Discouraging {:?}, the following peers will be disconnected: {:?}",
+            address,
+            to_disconnect
+        );
 
         self.peerdb.discourage(address);
 
         if let Some(o) = self.observer.as_mut() {
             o.on_peer_discouragement(address);
+        }
+
+        for peer_id in to_disconnect {
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -698,7 +702,7 @@ where
         // Ok and for outbound ones we've already called it in try_connect. But new connections
         // might have appeared since try_connect was called, so the call below is not redundant.
         self.maybe_reject_because_already_connected(address, peer_role)?;
-        
+
         // Note: for outbound connections, ban and discouragement statuses have already been
         // checked in try_connect, so when we do the checks here, they'll only work for
         // inbound connections. And since inbound connections from discouraged addresses are
@@ -722,10 +726,16 @@ where
                 // TODO: Always allow connections from the whitelisted IPs
                 if self.inbound_peer_count()
                     >= *self.p2p_config.peer_manager_config.max_inbound_connections
-                    && !self.try_evict_random_inbound_connection()
                 {
-                    log::info!("no peer is selected for eviction, new connection is dropped");
-                    return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    if self.peerdb.is_address_discouraged(&address.as_bannable()) {
+                        log::info!("Rejecting inbound connection from a discouraged address - too many peers");
+                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    }
+
+                    if !self.try_evict_random_inbound_connection() {
+                        log::info!("Rejecting inbound connection - too many peers and none of them can be evicted");
+                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    }
                 }
             }
 
@@ -1170,6 +1180,7 @@ where
         let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
         let mut cur_conn_ip_port_to_role_map = BTreeMap::new();
+
         for (addr, role) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
@@ -1369,7 +1380,7 @@ where
             })
             // Note: some of the addresses may have become banned or discouraged after they've been
             // cached. It's not clear whether it's better to filter them out here, which will
-            // reveal to peers what addresses we've ban or discouraged, or keep them as is.
+            // reveal to peers what addresses we've banned or discouraged, or keep them as is.
             // But it's probably not that important.
             .clone();
 
@@ -1515,6 +1526,9 @@ where
                 let peers = self.get_connected_peers();
                 response_sender.send(peers);
             }
+            PeerManagerEvent::GetReserved(response_sender) => {
+                response_sender.send(self.peerdb.get_reserved_nodes().collect())
+            }
             PeerManagerEvent::AddReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.peerdb.add_reserved_node(address);
@@ -1528,15 +1542,18 @@ where
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::ListBanned(response_sender) => {
-                response_sender.send(self.peerdb.list_banned().cloned().collect())
+                response_sender.send(self.peerdb.list_banned().collect())
             }
-            PeerManagerEvent::Ban(address, response_sender) => {
-                self.ban(address);
+            PeerManagerEvent::Ban(address, duration, response_sender) => {
+                self.ban(address, duration);
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::Unban(address, response_sender) => {
                 self.peerdb.unban(&address);
                 response_sender.send(Ok(()));
+            }
+            PeerManagerEvent::ListDiscouraged(response_sender) => {
+                response_sender.send(self.peerdb.list_discouraged().collect())
             }
             PeerManagerEvent::GenericQuery(query_func) => {
                 query_func(self);

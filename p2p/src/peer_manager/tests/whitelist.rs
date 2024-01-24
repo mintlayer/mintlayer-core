@@ -322,7 +322,11 @@ fn manual_ban_overrides_whitelisting() {
     assert!(pm.is_whitelisted_node(PeerRole::Inbound, &address_1));
 
     let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
-    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_sender));
+    pm.handle_control_event(PeerManagerEvent::Ban(
+        address_1.as_bannable(),
+        Duration::from_secs(60 * 60),
+        ban_sender,
+    ));
     ban_receiver.try_recv().unwrap().unwrap();
 
     // Peer is disconnected by the peer manager

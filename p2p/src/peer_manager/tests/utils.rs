@@ -21,8 +21,8 @@ use tokio::sync::mpsc;
 
 use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
 use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, services::Service, socket_address::SocketAddress,
-    PeerId,
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, services::Service,
+    socket_address::SocketAddress, PeerId,
 };
 use test_utils::assert_matches_return_val;
 
@@ -158,7 +158,7 @@ pub fn inbound_full_relay_peer_accepted_by_backend(
         .send(ConnectivityEvent::InboundAccepted {
             peer_address,
             bind_address,
-            peer_info: make_full_relay_peer_info(peer_id, &chain_config),
+            peer_info: make_full_relay_peer_info(peer_id, chain_config),
             node_address_as_seen_by_peer: None,
         })
         .unwrap();
@@ -178,7 +178,7 @@ pub fn outbound_block_relay_peer_accepted_by_backend(
         .send(ConnectivityEvent::OutboundAccepted {
             peer_address,
             bind_address,
-            peer_info: make_block_relay_peer_info(peer_id, &chain_config),
+            peer_info: make_block_relay_peer_info(peer_id, chain_config),
             node_address_as_seen_by_peer: None,
         })
         .unwrap();
@@ -204,15 +204,6 @@ pub fn outbound_full_relay_peer_accepted_by_backend(
         .unwrap();
 
     peer_id
-}
-
-/// Send a ConnectivityEvent simulating a PeerManagerMessage being received from the backend.
-pub fn peer_mgr_message_received_from_backend(
-    conn_event_sender: &mpsc::UnboundedSender<ConnectivityEvent>,
-    peer_id: PeerId,
-    message: PeerManagerMessage,
-) {
-    conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 }
 
 pub async fn wait_for_heartbeat(
@@ -304,11 +295,12 @@ pub async fn adjust_peer_score(
 pub async fn ban_peer_manually(
     peer_mgr_event_sender: &mpsc::UnboundedSender<PeerManagerEvent>,
     peer_addr: BannableAddress,
+    duration: Duration,
 ) {
     let (result_sender, result_receiver) = oneshot_nofail::channel();
 
     peer_mgr_event_sender
-        .send(PeerManagerEvent::Ban(peer_addr, result_sender))
+        .send(PeerManagerEvent::Ban(peer_addr, duration, result_sender))
         .unwrap();
 
     result_receiver.await.unwrap().unwrap();

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use chainstate::ChainInfo;
 use common::{
     chain::{
@@ -20,13 +22,16 @@ use common::{
         Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
-use p2p::types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p::types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
@@ -87,11 +92,17 @@ pub trait NodeInterface {
 
     async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
     async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error>;
-    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error>;
-    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error>;
+    async fn p2p_list_banned(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error>;
+    async fn p2p_ban(
+        &self,
+        address: BannableAddress,
+        duration: Duration,
+    ) -> Result<(), Self::Error>;
     async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error>;
+    async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error>;
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error>;
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;
+    async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error>;
     async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
     async fn p2p_remove_reserved_node(&self, address: IpOrSocketAddress)
         -> Result<(), Self::Error>;

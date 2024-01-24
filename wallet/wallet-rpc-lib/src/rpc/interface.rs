@@ -18,7 +18,7 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use p2p_types::bannable_address::BannableAddress;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet_controller::{types::BlockInfo, ConnectedPeer};
 use wallet_types::with_locked::WithLocked;
 
@@ -321,19 +321,33 @@ trait WalletRpc {
     async fn disconnect_peer(&self, peer_id: u64) -> rpc::RpcResult<()>;
 
     #[method(name = "node_list_banned_peers")]
-    async fn list_banned(&self) -> rpc::RpcResult<Vec<BannableAddress>>;
+    async fn list_banned(
+        &self,
+    ) -> rpc::RpcResult<Vec<(BannableAddress, common::primitives::time::Time)>>;
 
     #[method(name = "node_ban_peer_address")]
-    async fn ban_address(&self, address: BannableAddress) -> rpc::RpcResult<()>;
+    async fn ban_address(
+        &self,
+        address: BannableAddress,
+        duration: std::time::Duration,
+    ) -> rpc::RpcResult<()>;
 
     #[method(name = "node_unban_peer_address")]
     async fn unban_address(&self, address: BannableAddress) -> rpc::RpcResult<()>;
+
+    #[method(name = "node_list_discouraged_peers")]
+    async fn list_discouraged(
+        &self,
+    ) -> rpc::RpcResult<Vec<(BannableAddress, common::primitives::time::Time)>>;
 
     #[method(name = "node-peer-count")]
     async fn peer_count(&self) -> rpc::RpcResult<usize>;
 
     #[method(name = "node_list_connected_peers")]
     async fn connected_peers(&self) -> rpc::RpcResult<Vec<ConnectedPeer>>;
+
+    #[method(name = "node_list_reserved_peers")]
+    async fn reserved_peers(&self) -> rpc::RpcResult<Vec<SocketAddress>>;
 
     #[method(name = "node_add_reserved_peer")]
     async fn add_reserved_peer(&self, address: String) -> rpc::RpcResult<()>;

@@ -127,8 +127,6 @@ pub enum DialError {
 pub enum ConversionError {
     #[error("Invalid address: {0}")]
     InvalidAddress(String),
-    #[error("Failed to decode data: {0}")]
-    DecodeError(serialization::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -183,12 +181,6 @@ impl From<DialError> for P2pError {
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {
         P2pError::DialError(DialError::IoError(e.kind()))
-    }
-}
-
-impl From<serialization::Error> for P2pError {
-    fn from(err: serialization::Error) -> P2pError {
-        P2pError::ConversionError(ConversionError::DecodeError(err))
     }
 }
 
@@ -272,7 +264,6 @@ impl BanScore for ConversionError {
     fn ban_score(&self) -> u32 {
         match self {
             ConversionError::InvalidAddress(_) => 0,
-            ConversionError::DecodeError(_) => 100,
         }
     }
 }
