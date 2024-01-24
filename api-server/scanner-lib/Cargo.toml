@@ -13,7 +13,7 @@ chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
 node-comm = { path = "../../wallet/wallet-node-client" }
-pos_accounting = { path = "../../pos_accounting" }
+pos-accounting = { path = "../../pos-accounting" }
 utils = { path = "../../utils" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
 constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }

@@ -13,7 +13,7 @@ consensus = {path = "../consensus"}
 constraints-value-accumulator = {path = './constraints-value-accumulator'}
 crypto = {path = '../crypto'}
 logging = {path = '../logging'}
-pos_accounting = {path = '../pos_accounting'}
+pos-accounting = {path = '../pos-accounting'}
 rpc = {path = '../rpc'}
 serialization = {path = "../serialization"}
 subsystem = {path = '../subsystem'}

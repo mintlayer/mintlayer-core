@@ -36,7 +36,7 @@ members = [
   "p2p",                                # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",             # P2p backend agnostic tests.
   "p2p/types",                          # P2p support types with minimal dependencies.
-  "pos_accounting",                     # PoS accounting and balances abstractions.
+  "pos-accounting",                     # PoS accounting and balances abstractions.
   "rpc",                                # Rpc abstraction and implementation.
   "script",                             # Bitcoin script and its interfaces.
   "serialization",                      # Full featured serialization interfaces and implementations.

@@ -13,7 +13,7 @@ crypto = { path = '../../crypto/' }
 logging = { path = "../../logging" }
 test-utils = {path = '../../test-utils'}
 utils = { path = "../../utils" }
-pos_accounting = {path = '../../pos_accounting'}
+pos-accounting = {path = '../../pos-accounting'}
 serialization = { path = "../../serialization" }
 
 async-trait.workspace = true

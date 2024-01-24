@@ -15,7 +15,7 @@ common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
-pos_accounting = {path = '../../pos_accounting'}
+pos-accounting = {path = '../../pos-accounting'}
 node-comm = { path = "../../wallet/wallet-node-client" }
 mempool = { path = "../../mempool" }
 

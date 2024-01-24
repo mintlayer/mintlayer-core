@@ -1,5 +1,5 @@
 [package]
-name = "pos_accounting"
+name = "pos-accounting"
 license.workspace = true
 version.workspace = true
 edition.workspace = true
