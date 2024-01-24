@@ -22,7 +22,7 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{Destination, GenBlock, PoolId},
+    chain::{DelegationId, Destination, GenBlock, PoolId},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -71,6 +71,7 @@ pub struct AccountInfo {
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
     pub staking_balance: BTreeMap<PoolId, Amount>,
+    pub delegations_balance: BTreeMap<DelegationId, Amount>,
     pub transaction_list: TransactionList,
 }
 
@@ -98,6 +99,22 @@ pub struct StakeRequest {
     pub mpt: String,
     pub cost_per_block: String,
     pub decommission_address: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateDelegationRequest {
+    pub wallet_id: WalletId,
+    pub account_id: AccountId,
+    pub pool_id: String,
+    pub delegation_address: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DelegateStakingRequest {
+    pub wallet_id: WalletId,
+    pub account_id: AccountId,
+    pub delegation_id: DelegationId,
+    pub delegation_amount: String,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +167,8 @@ pub enum BackendRequest {
     ToggleStaking(WalletId, AccountId, bool),
     SendAmount(SendRequest),
     StakeAmount(StakeRequest),
+    CreateDelegation(CreateDelegationRequest),
+    DelegateStaking(DelegateStakingRequest),
 
     TransactionList {
         wallet_id: WalletId,
@@ -176,10 +195,13 @@ pub enum BackendEvent {
     WalletBestBlock(WalletId, (Id<GenBlock>, BlockHeight)),
     Balance(WalletId, AccountId, BTreeMap<Currency, Amount>),
     StakingBalance(WalletId, AccountId, BTreeMap<PoolId, Amount>),
+    DelegationsBalance(WalletId, AccountId, BTreeMap<DelegationId, Amount>),
     NewAddress(Result<AddressInfo, BackendError>),
     ToggleStaking(Result<(WalletId, AccountId, bool), BackendError>),
     SendAmount(Result<TransactionInfo, BackendError>),
     StakeAmount(Result<TransactionInfo, BackendError>),
+    CreateDelegation(Result<TransactionInfo, BackendError>),
+    DelegateStaking(Result<(TransactionInfo, DelegationId), BackendError>),
     Broadcast(Result<(), BackendError>),
 
     TransactionList(WalletId, AccountId, Result<TransactionList, BackendError>),

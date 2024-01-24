@@ -16,6 +16,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use common::{
+    address::Address,
     chain::{ChainConfig, GenBlock},
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
@@ -40,8 +41,9 @@ use super::{
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
     messages::{
-        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, EncryptionAction,
-        EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
+        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
+        DelegateStakingRequest, EncryptionAction, EncryptionState, SendRequest, StakeRequest,
+        TransactionInfo, WalletId, WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -68,9 +70,9 @@ struct AccountData {
     /// The variable is stored here so that the backend can send transaction list updates automatically.
     transaction_list_skip: usize,
 
-    /// If set, pool balances should be updated in the UI.
+    /// If set, pool balances and delegations should be updated in the UI.
     /// The flag is necessary because the pool balances load requires RPC call and may fail.
-    update_pool_balance: bool,
+    update_pool_balance_and_delegations: bool,
 }
 
 pub struct Backend {
@@ -150,7 +152,7 @@ impl Backend {
     fn get_account_data(_controller: &GuiController, _account_index: U31) -> AccountData {
         AccountData {
             transaction_list_skip: 0,
-            update_pool_balance: true,
+            update_pool_balance_and_delegations: true,
         }
     }
 
@@ -172,6 +174,7 @@ impl Backend {
             staking_enabled: false,
             balance: Self::get_account_balance(&controller),
             staking_balance: BTreeMap::new(),
+            delegations_balance: BTreeMap::new(),
             transaction_list,
         }
     }
@@ -431,6 +434,56 @@ impl Backend {
         Ok(TransactionInfo { wallet_id })
     }
 
+    async fn create_delegation(
+        &mut self,
+        request: CreateDelegationRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let CreateDelegationRequest {
+            wallet_id,
+            account_id,
+            pool_id,
+            delegation_address,
+        } = request;
+
+        let pool_id = Address::from_str(&self.chain_config, &pool_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+
+        let delegation_key = parse_address(&self.chain_config, &delegation_address)
+            .map_err(|err| BackendError::AddressError(err.to_string()))?;
+
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .create_delegation(delegation_key, pool_id)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id })
+    }
+
+    async fn delegate_staking(
+        &mut self,
+        request: DelegateStakingRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let DelegateStakingRequest {
+            wallet_id,
+            account_id,
+            delegation_id,
+            delegation_amount,
+        } = request;
+
+        let delegation_amount = parse_coin_amount(&self.chain_config, &delegation_amount)
+            .ok_or(BackendError::InvalidAmount(delegation_amount))?;
+
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .delegate_staking(delegation_amount, delegation_id)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id })
+    }
+
     fn get_account_balance(
         controller: &ReadOnlyController<WalletHandlesClient>,
     ) -> BTreeMap<Currency, Amount> {
@@ -507,6 +560,15 @@ impl Backend {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
             }
+            BackendRequest::CreateDelegation(request) => {
+                let result = self.create_delegation(request).await;
+                Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
+            }
+            BackendRequest::DelegateStaking(request) => {
+                let delegation_id = request.delegation_id;
+                let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
+                Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
+            }
             BackendRequest::TransactionList {
                 wallet_id,
                 account_id,
@@ -563,7 +625,7 @@ impl Backend {
 
                 // GuiWalletEvents will notify about stake pool balance update
                 // (when a new wallet block is added/removed from the DB)
-                account_data.update_pool_balance = true;
+                account_data.update_pool_balance_and_delegations = true;
 
                 // GuiWalletEvents will notify about transaction list
                 // (when a wallet transaction is added/updated/removed)
@@ -591,10 +653,10 @@ impl Backend {
 
         // `get_stake_pool_balances` may fail if we ever start using remote RPC
         for (wallet_id, wallet_data) in self.wallets.iter_mut() {
-            for (account_id, account_data) in wallet_data
-                .accounts
-                .iter_mut()
-                .filter(|(_account_id, account_data)| account_data.update_pool_balance)
+            for (account_id, account_data) in
+                wallet_data.accounts.iter_mut().filter(|(_account_id, account_data)| {
+                    account_data.update_pool_balance_and_delegations
+                })
             {
                 let staking_balance_res = wallet_data
                     .controller
@@ -604,16 +666,34 @@ impl Backend {
                     Ok(staking_balance) => {
                         Self::send_event(
                             &self.low_priority_event_tx,
-                            BackendEvent::StakingBalance(
-                                *wallet_id,
-                                *account_id,
-                                staking_balance.clone(),
-                            ),
+                            BackendEvent::StakingBalance(*wallet_id, *account_id, staking_balance),
                         );
-                        account_data.update_pool_balance = false;
+                        account_data.update_pool_balance_and_delegations = false;
                     }
                     Err(err) => {
                         log::error!("Staking balance loading failed: {err}");
+                    }
+                }
+
+                let delegations_res = wallet_data
+                    .controller
+                    .readonly_controller(account_id.account_index())
+                    .get_delegations()
+                    .await;
+                match delegations_res {
+                    Ok(delegations_balance) => {
+                        Self::send_event(
+                            &self.low_priority_event_tx,
+                            BackendEvent::DelegationsBalance(
+                                *wallet_id,
+                                *account_id,
+                                BTreeMap::from_iter(delegations_balance.into_iter()),
+                            ),
+                        );
+                        account_data.update_pool_balance_and_delegations = false;
+                    }
+                    Err(err) => {
+                        log::error!("Delegations loading failed: {err}");
                     }
                 }
             }
