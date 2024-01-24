@@ -24,7 +24,7 @@ members = [
   "common",                             # Everything else, until it's moved to another crate.
   "consensus",                          # Consensus related logic.
   "crypto",                             # Cryptographic primitives and their interfaces.
-  "dns_server",                         # DNS-server.
+  "dns-server",                         # DNS-server.
   "logging",                            # Logging engine and its interfaces.
   "mempool",                            # Mempool interface and implementation.
   "mempool/types",                      # Common mempool types.
@@ -75,6 +75,7 @@ default-members = [
   "chainstate",
   "common",
   "crypto",
+  "dns-server",
   "logging",
   "mempool",
   "node-daemon",

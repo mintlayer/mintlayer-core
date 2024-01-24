@@ -1818,7 +1818,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dns_server"
+name = "dns-server"
 version = "0.2.0"
 dependencies = [
  "async-trait",
