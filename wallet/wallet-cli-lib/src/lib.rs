@@ -31,7 +31,7 @@ use common::chain::{
 use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
-use node_comm::rpc_client::MaybeDummyNode;
+use node_comm::rpc_client::ColdWalletClient;
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
@@ -59,7 +59,7 @@ pub async fn run(
         None => match &args.network {
             Some(Network::Regtest(regtest_options)) => Arc::new(
                 regtest_chain_config(&regtest_options.chain_config).map_err(|err| {
-                    WalletCliError::<MaybeDummyNode>::InvalidConfig(err.to_string())
+                    WalletCliError::<ColdWalletClient>::InvalidConfig(err.to_string())
                 })?,
             ),
             _ => Arc::new(common::chain::config::Builder::new(chain_type).build()),
@@ -70,7 +70,7 @@ pub async fn run(
 
     let mode = if let Some(file_path) = &cli_args.commands_file {
         repl::non_interactive::log::init();
-        let file_input = console::FileInput::new::<MaybeDummyNode>(file_path.clone())?;
+        let file_input = console::FileInput::new::<ColdWalletClient>(file_path.clone())?;
         Mode::CommandsList { file_input }
     } else if input.is_tty() {
         let logger = repl::interactive::log::InteractiveLogger::init();
@@ -126,7 +126,7 @@ async fn start_hot_wallet(
             password: password.clone(),
         },
         _ => {
-            return Err(Box::new(WalletCliError::<MaybeDummyNode>::InvalidConfig(
+            return Err(Box::new(WalletCliError::<ColdWalletClient>::InvalidConfig(
                 "Invalid RPC cookie/username/password combination".to_owned(),
             )))
         }

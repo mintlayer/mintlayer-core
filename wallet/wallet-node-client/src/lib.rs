@@ -36,8 +36,8 @@ pub async fn make_rpc_client(
     rpc_client::NodeRpcClient::new(remote_socket_address, rpc_auth).await
 }
 
-pub fn make_cold_wallet_rpc_client(chain_config: Arc<ChainConfig>) -> rpc_client::MaybeDummyNode {
-    rpc_client::MaybeDummyNode::new(None, chain_config)
+pub fn make_cold_wallet_rpc_client(chain_config: Arc<ChainConfig>) -> rpc_client::ColdWalletClient {
+    rpc_client::ColdWalletClient::new(chain_config)
 }
 
 pub async fn make_handles_client(

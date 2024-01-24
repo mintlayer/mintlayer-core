@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub mod client_impl;
-pub mod dummy_client;
+pub mod cold_wallet_client;
 
 use std::sync::Arc;
 
@@ -38,17 +38,13 @@ pub enum NodeRpcError {
 }
 
 #[derive(Clone, Debug)]
-pub struct MaybeDummyNode {
-    opt_client: Option<NodeRpcClient>,
+pub struct ColdWalletClient {
     chain_config: Arc<ChainConfig>,
 }
 
-impl MaybeDummyNode {
-    pub fn new(opt_client: Option<NodeRpcClient>, chain_config: Arc<ChainConfig>) -> Self {
-        Self {
-            opt_client,
-            chain_config,
-        }
+impl ColdWalletClient {
+    pub fn new(chain_config: Arc<ChainConfig>) -> Self {
+        Self { chain_config }
     }
 }
 

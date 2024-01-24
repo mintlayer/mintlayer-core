@@ -230,7 +230,7 @@ pub fn parse_token_amount<N: NodeInterface>(
 
 #[cfg(test)]
 mod tests {
-    use node_comm::rpc_client::MaybeDummyNode;
+    use node_comm::rpc_client::ColdWalletClient;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -242,7 +242,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_parse_utxo_outpoint(#[case] seed: Seed) {
         fn check(input: String, is_tx: bool, idx: u32, hash: H256) {
-            let utxo_outpoint = parse_utxo_outpoint::<MaybeDummyNode>(input).unwrap();
+            let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
 
             match utxo_outpoint.source_id() {
                 OutPointSourceId::Transaction(id) => {
