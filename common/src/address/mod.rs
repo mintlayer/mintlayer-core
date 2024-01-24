@@ -109,6 +109,8 @@ impl<T: Addressable> Address<T> {
     }
 
     pub fn to_short_string(&self, cfg: &ChainConfig) -> Result<String, AddressError> {
+        use std::str::from_utf8;
+
         let obj = self.decode_object(cfg)?;
         let prefix_len = obj.address_prefix(cfg).len();
 
@@ -116,10 +118,11 @@ impl<T: Addressable> Address<T> {
             self.to_string()
         } else {
             // prefix + 4 first chars + ... + 4 last chars
+            let bytes = self.address.as_bytes();
             format!(
                 "{}...{}",
-                self.address[0..prefix_len + 4].to_owned(),
-                self.address[self.address.len() - 4..self.address.len()].to_owned()
+                from_utf8(&bytes[0..prefix_len + 4]).expect("ids are always ascii"),
+                from_utf8(&bytes[bytes.len() - 4..bytes.len()]).expect("ids are always ascii"),
             )
         };
         Ok(result)

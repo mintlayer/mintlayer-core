@@ -40,6 +40,7 @@ const SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT: &str =
 const SEND_DELEGATION_ID_TOOLTIP_TEXT: &str =
     "The delegation id, from which the delegated coins will be taken";
 
+#[allow(clippy::too_many_arguments)]
 pub fn view_delegation(
     chain_config: &ChainConfig,
     account: &AccountInfo,
