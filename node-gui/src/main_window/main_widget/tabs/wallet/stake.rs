@@ -59,23 +59,33 @@ pub fn view_stake(
                 .push(field("No staking pools found".to_owned()))
                 .push(field(String::new()))
         } else {
-            let mut staking_balance_grid = Grid::with_columns(2)
+            let mut staking_balance_grid = Grid::with_columns(3)
                 .push(field("Pool Id".to_owned()))
+                .push(field(String::new()))
                 .push(field("Pool balance".to_owned()));
             for (pool_id, balance) in account.staking_balance.iter() {
-                let pool_id_str = Address::new(chain_config, pool_id)
-                    .expect("Encoding pool id to address can't fail (GUI)")
-                    .to_string();
+                let pool_id_address = Address::new(chain_config, pool_id)
+                    .expect("Encoding pool id to address can't fail (GUI)");
                 staking_balance_grid = staking_balance_grid
-                    .push(row![
-                        field(pool_id_str.clone()),
+                    .push(
+                        tooltip(
+                            field(
+                                pool_id_address.to_short_string(chain_config).expect("cannot fail"),
+                            ),
+                            pool_id_address.to_string(),
+                            Position::Bottom,
+                        )
+                        .gap(5)
+                        .style(iced::theme::Container::Box),
+                    )
+                    .push(
                         button(
                             Text::new(iced_aw::Icon::ClipboardCheck.to_string())
                                 .font(iced_aw::ICON_FONT),
                         )
                         .style(iced::theme::Button::Text)
-                        .on_press(WalletMessage::CopyToClipboard(pool_id_str)),
-                    ])
+                        .on_press(WalletMessage::CopyToClipboard(pool_id_address.to_string())),
+                    )
                     .push(field(print_coin_amount(chain_config, *balance)));
             }
             staking_balance_grid

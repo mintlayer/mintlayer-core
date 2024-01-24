@@ -60,13 +60,24 @@ pub fn view_delegation(
             for (delegation_id, balance) in
                 account.delegations_balance.iter().map(|(id, b)| (*id, *b))
             {
-                let delegation_id_str = Address::new(chain_config, &delegation_id)
-                    .expect("Encoding pool id to address can't fail (GUI)")
-                    .to_string();
+                let delegation_address = Address::new(chain_config, &delegation_id)
+                    .expect("Encoding pool id to address can't fail (GUI)");
                 let delegate_staking_amount =
                     delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
                 delegation_balance_grid = delegation_balance_grid
-                    .push(field(delegation_id_str.clone()))
+                    .push(
+                        tooltip(
+                            field(
+                                delegation_address
+                                    .to_short_string(chain_config)
+                                    .expect("cannot fail"),
+                            ),
+                            delegation_address.to_string(),
+                            Position::Bottom,
+                        )
+                        .gap(5)
+                        .style(iced::theme::Container::Box),
+                    )
                     .push(
                         button(
                             Text::new(iced_aw::Icon::ClipboardCheck.to_string())
@@ -74,11 +85,13 @@ pub fn view_delegation(
                         )
                         .style(iced::theme::Button::Text)
                         .width(Length::Shrink)
-                        .on_press(WalletMessage::CopyToClipboard(delegation_id_str)),
+                        .on_press(WalletMessage::CopyToClipboard(
+                            delegation_address.to_string(),
+                        )),
                     )
                     .push(field(print_coin_amount(chain_config, balance)))
                     .push(
-                        text_input("Amount:", &delegate_staking_amount)
+                        text_input("Amount", &delegate_staking_amount)
                             .on_input(move |value| {
                                 WalletMessage::DelegationAmountEdit((delegation_id, value))
                             })
@@ -99,7 +112,7 @@ pub fn view_delegation(
 
     column![
         row![
-            text_input("Pool id for new delegation:", pool_id)
+            text_input("Pool id for new delegation", pool_id)
                 .on_input(|value| { WalletMessage::PoolIdEdit(value) })
                 .padding(15),
             tooltip(
@@ -111,7 +124,7 @@ pub fn view_delegation(
             .style(iced::theme::Container::Box)
         ],
         row![
-            text_input("Delegation address:", delegation_address)
+            text_input("Delegation address", delegation_address)
                 .on_input(|value| { WalletMessage::DelegationAddressEdit(value) })
                 .padding(15),
             tooltip(

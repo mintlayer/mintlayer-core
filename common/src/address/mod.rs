@@ -107,6 +107,23 @@ impl<T: Addressable> Address<T> {
         let qrcode = qrcode_from_str(&self.address)?;
         Ok(qrcode)
     }
+
+    pub fn to_short_string(&self, cfg: &ChainConfig) -> Result<String, AddressError> {
+        let obj = self.decode_object(cfg)?;
+        let prefix_len = obj.address_prefix(cfg).len();
+
+        let result = if self.address.len() < prefix_len + 8 {
+            self.to_string()
+        } else {
+            // prefix + 4 first chars + ... + 4 last chars
+            format!(
+                "{}...{}",
+                self.address[0..prefix_len + 4].to_owned(),
+                self.address[self.address.len() - 4..self.address.len()].to_owned()
+            )
+        };
+        Ok(result)
+    }
 }
 
 impl<T> Display for Address<T> {
@@ -118,8 +135,8 @@ impl<T> Display for Address<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain::config::create_mainnet;
-    use crate::chain::Destination;
+    use crate::chain::config::{create_mainnet, create_regtest};
+    use crate::chain::{DelegationId, Destination, PoolId};
     use crypto::{
         key::{KeyKind, PrivateKey},
         vrf::VRFPublicKey,
@@ -162,6 +179,40 @@ mod tests {
         assert_eq!(
             hex,
             "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f"
+        );
+    }
+
+    #[test]
+    fn to_short_string() {
+        let cfg = create_regtest();
+
+        let address =
+            Address::<Destination>::from_str(&cfg, "rmt1qyyra5j3qduhyd43wa50lpn2ddpg9ql0u50ceu68")
+                .unwrap();
+        assert_eq!("rmt1qyy...eu68", address.to_short_string(&cfg).unwrap());
+
+        let vrf = Address::<VRFPublicKey>::from_str(
+            &cfg,
+            "rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme",
+        )
+        .unwrap();
+        assert_eq!("rvrfpk1qre...kzme", vrf.to_short_string(&cfg).unwrap());
+
+        let pool_id = Address::<PoolId>::from_str(
+            &cfg,
+            "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v",
+        )
+        .unwrap();
+        assert_eq!("rpool1zg7...fr6v", pool_id.to_short_string(&cfg).unwrap());
+
+        let delegation_id = Address::<DelegationId>::from_str(
+            &cfg,
+            "rdelg1zl206x6hkh6cmtmyhmjx3zhtc2qaunckcuvxsywpnervkclj2keq2wmdff",
+        )
+        .unwrap();
+        assert_eq!(
+            "rdelg1zl2...mdff",
+            delegation_id.to_short_string(&cfg).unwrap()
         );
     }
 }
