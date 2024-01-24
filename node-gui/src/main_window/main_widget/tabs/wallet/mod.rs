@@ -38,7 +38,7 @@ use crate::{
     backend::{
         messages::{
             AccountId, BackendRequest, CreateDelegationRequest, DelegateStakingRequest,
-            SendRequest, StakeRequest, WalletId,
+            SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
         },
         BackendSender,
     },
@@ -85,10 +85,15 @@ pub enum WalletMessage {
     CreateStakingPool,
     CreateStakingPoolSucceed,
 
-    PoolIdEdit(String),
+    DelegationPoolIdEdit(String),
     DelegationAddressEdit(String),
     CreateDelegation,
     CreateDelegationSucceed,
+    SendDelegationAddressEdit(String),
+    SendDelegationAmountEdit(String),
+    SendDelegationIdEdit(String),
+    SendDelegationToAddress,
+    SendDelegationToAddressSucceed,
     DelegateStaking(DelegationId),
     DelegationAmountEdit((DelegationId, String)),
     DelegateStakingSucceed(DelegationId),
@@ -110,9 +115,14 @@ pub struct AccountState {
     margin_per_thousand: String,
     cost_per_block_amount: String,
     decommission_address: String,
+
     delegation_pool_id: String,
     delegation_address: String,
     delegate_staking_amounts: BTreeMap<DelegationId, String>,
+
+    send_delegation_address: String,
+    send_delegation_amount: String,
+    send_delegation_id: String,
 }
 
 pub struct WalletTab {
@@ -275,7 +285,7 @@ impl WalletTab {
                 backend_sender.send(BackendRequest::CloseWallet(self.wallet_id));
                 Command::none()
             }
-            WalletMessage::PoolIdEdit(value) => {
+            WalletMessage::DelegationPoolIdEdit(value) => {
                 self.account_state.delegation_pool_id = value;
                 Command::none()
             }
@@ -319,6 +329,35 @@ impl WalletTab {
             }
             WalletMessage::DelegateStakingSucceed(delegation_id) => {
                 self.account_state.delegate_staking_amounts.remove(&delegation_id);
+                Command::none()
+            }
+            WalletMessage::SendDelegationAddressEdit(value) => {
+                self.account_state.send_delegation_address = value;
+                Command::none()
+            }
+            WalletMessage::SendDelegationAmountEdit(value) => {
+                self.account_state.send_delegation_amount = value;
+                Command::none()
+            }
+            WalletMessage::SendDelegationIdEdit(value) => {
+                self.account_state.send_delegation_id = value;
+                Command::none()
+            }
+            WalletMessage::SendDelegationToAddress => {
+                let request = SendDelegateToAddressRequest {
+                    wallet_id: self.wallet_id,
+                    account_id: self.selected_account,
+                    address: self.account_state.send_delegation_address.clone(),
+                    amount: self.account_state.send_delegation_amount.clone(),
+                    delegation_id: self.account_state.send_delegation_id.clone(),
+                };
+                backend_sender.send(BackendRequest::SendDelegationToAddress(request));
+                Command::none()
+            }
+            WalletMessage::SendDelegationToAddressSucceed => {
+                self.account_state.send_delegation_address.clear();
+                self.account_state.send_delegation_amount.clear();
+                self.account_state.send_delegation_id.clear();
                 Command::none()
             }
         }
@@ -390,6 +429,9 @@ impl Tab for WalletTab {
                             account,
                             &self.account_state.delegation_pool_id,
                             &self.account_state.delegation_address,
+                            &self.account_state.send_delegation_address,
+                            &self.account_state.send_delegation_amount,
+                            &self.account_state.send_delegation_id,
                             &self.account_state.delegate_staking_amounts,
                             still_syncing.clone(),
                         ),

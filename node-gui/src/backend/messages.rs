@@ -118,6 +118,15 @@ pub struct DelegateStakingRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct SendDelegateToAddressRequest {
+    pub wallet_id: WalletId,
+    pub account_id: AccountId,
+    pub address: String,
+    pub amount: String,
+    pub delegation_id: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
 }
@@ -169,6 +178,7 @@ pub enum BackendRequest {
     StakeAmount(StakeRequest),
     CreateDelegation(CreateDelegationRequest),
     DelegateStaking(DelegateStakingRequest),
+    SendDelegationToAddress(SendDelegateToAddressRequest),
 
     TransactionList {
         wallet_id: WalletId,
@@ -202,6 +212,7 @@ pub enum BackendEvent {
     StakeAmount(Result<TransactionInfo, BackendError>),
     CreateDelegation(Result<TransactionInfo, BackendError>),
     DelegateStaking(Result<(TransactionInfo, DelegationId), BackendError>),
+    SendDelegationToAddress(Result<TransactionInfo, BackendError>),
     Broadcast(Result<(), BackendError>),
 
     TransactionList(WalletId, AccountId, Result<TransactionList, BackendError>),
