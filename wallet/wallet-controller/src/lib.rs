@@ -25,6 +25,7 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use futures::never::Never;
+use node_comm::rpc_client::MaybeDummyNode;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -58,7 +59,8 @@ use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
-    handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
+    handles_client::WalletHandlesClient, make_opt_rpc_client, make_rpc_client,
+    rpc_client::NodeRpcClient,
 };
 use wallet::{
     wallet::WalletPoolsFilter, wallet_events::WalletEvents, DefaultWallet, WalletError,
@@ -126,7 +128,7 @@ impl<T, WalletEvents> std::fmt::Debug for Controller<T, WalletEvents> {
     }
 }
 
-pub type RpcController<WalletEvents> = Controller<NodeRpcClient, WalletEvents>;
+pub type RpcController<WalletEvents> = Controller<MaybeDummyNode, WalletEvents>;
 pub type HandlesController<WalletEvents> = Controller<WalletHandlesClient, WalletEvents>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controller<T, W> {

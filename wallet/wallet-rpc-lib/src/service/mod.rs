@@ -17,12 +17,12 @@ mod events;
 mod handle;
 mod worker;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
+use node_comm::rpc_client::MaybeDummyNode;
+use rpc::RpcAuthData;
 use utils::shallow_clone::ShallowClone;
-
-pub use wallet_controller::NodeRpcClient;
 
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
@@ -36,7 +36,7 @@ pub type WalletResult<T> = Result<T, WalletControllerError>;
 pub struct WalletService {
     task: tokio::task::JoinHandle<()>,
     command_tx: worker::CommandSender,
-    node_rpc: NodeRpcClient,
+    node_rpc: MaybeDummyNode,
     chain_config: Arc<ChainConfig>,
 }
 
@@ -51,22 +51,28 @@ pub enum InitError {
 }
 
 impl WalletService {
-    pub async fn start(config: crate::WalletServiceConfig) -> Result<Self, InitError> {
-        let chain_config = config.chain_config;
+    pub async fn start(
+        chain_config: Arc<ChainConfig>,
+        wallet_file: Option<PathBuf>,
+        node_config: Option<(Option<String>, RpcAuthData)>,
+    ) -> Result<Self, InitError> {
+        let node_rpc = wallet_controller::make_opt_rpc_client(
+            node_config.map(|(addr, auth)| {
+                let rpc_address = {
+                    let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
+                    addr.unwrap_or_else(default_addr)
+                };
+
+                (rpc_address, auth)
+            }),
+            chain_config.clone(),
+        )
+        .await?;
 
         let (wallet_events, events_rx) = WalletServiceEvents::new();
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let node_rpc = {
-            let rpc_address = {
-                let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-                config.node_rpc_address.unwrap_or_else(default_addr)
-            };
-
-            wallet_controller::make_rpc_client(rpc_address, config.node_credentials).await?
-        };
-
-        let controller = if let Some(wallet_file) = &config.wallet_file {
+        let controller = if let Some(wallet_file) = &wallet_file {
             let wallet = {
                 // TODO: Allow user to set password (config file only)
                 let wallet_password = None;
@@ -107,7 +113,7 @@ impl WalletService {
         })
     }
 
-    pub fn node_rpc(&self) -> &NodeRpcClient {
+    pub fn node_rpc(&self) -> &MaybeDummyNode {
         &self.node_rpc
     }
 

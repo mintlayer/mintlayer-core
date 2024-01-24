@@ -125,6 +125,7 @@ fn process_line(
     super::run_command_blocking(event_tx, command).map(Option::Some)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     mut console: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
@@ -133,8 +134,9 @@ pub fn run(
     history_file: Option<PathBuf>,
     vi_mode: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
+    cold_wallet: bool,
 ) -> Result<(), WalletCliError> {
-    let repl_command = get_repl_command();
+    let repl_command = get_repl_command(cold_wallet);
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),

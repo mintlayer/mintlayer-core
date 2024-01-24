@@ -74,6 +74,7 @@ pub fn run(
     mut output: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
+    cold_wallet: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
 ) -> Result<(), WalletCliError> {
     for res_rx in startup_command_futures {
@@ -84,7 +85,7 @@ pub fn run(
         }
     }
 
-    let repl_command = get_repl_command();
+    let repl_command = get_repl_command(cold_wallet);
 
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);

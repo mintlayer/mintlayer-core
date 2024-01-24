@@ -76,6 +76,7 @@ pub async fn run(
         exit_on_error,
         vi_mode,
         in_top_x_mb,
+        cold_wallet,
     } = args.cli_args();
 
     let mode = if let Some(file_path) = commands_file {
@@ -114,10 +115,10 @@ pub async fn run(
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::OpenWallet {
+                command: WalletCommand::ColdCommands(commands::ColdWalletCommand::OpenWallet {
                     wallet_path,
                     encryption_password: wallet_password,
-                },
+                }),
                 res_tx,
             })
             .expect("should not fail");
@@ -145,12 +146,14 @@ pub async fn run(
             history_file,
             vi_mode,
             startup_command_futures,
+            cold_wallet,
         ),
         Mode::NonInteractive => repl::non_interactive::run(
             input,
             output,
             event_tx,
             exit_on_error.unwrap_or(false),
+            cold_wallet,
             startup_command_futures,
         ),
         Mode::CommandsList { file_input } => repl::non_interactive::run(
@@ -158,11 +161,13 @@ pub async fn run(
             output,
             event_tx,
             exit_on_error.unwrap_or(true),
+            cold_wallet,
             startup_command_futures,
         ),
     });
 
-    cli_event_loop::run(&chain_config, event_rx, in_top_x_mb, rpc_address, rpc_auth).await?;
+    let node_opts = (!cold_wallet).then_some((rpc_address, rpc_auth));
+    cli_event_loop::run(&chain_config, event_rx, in_top_x_mb, node_opts).await?;
 
     repl_handle.join().expect("Should not panic")
 }

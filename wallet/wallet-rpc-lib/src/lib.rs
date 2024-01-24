@@ -58,7 +58,15 @@ pub async fn start_services(
     rpc_config: WalletRpcConfig,
 ) -> Result<(WalletService, rpc::Rpc), StartupError> {
     // Start the wallet service
-    let wallet_service = WalletService::start(wallet_config).await?;
+    let wallet_service = WalletService::start(
+        wallet_config.chain_config,
+        wallet_config.wallet_file,
+        Some((
+            wallet_config.node_rpc_address,
+            wallet_config.node_credentials,
+        )),
+    )
+    .await?;
 
     // Start the RPC server
     let rpc_server = {

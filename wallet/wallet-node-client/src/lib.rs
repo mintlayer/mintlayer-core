@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use blockprod::BlockProductionHandle;
 use chainstate::ChainstateHandle;
+use common::chain::ChainConfig;
 use handles_client::WalletHandlesClientError;
 use mempool::MempoolHandle;
 use p2p::P2pHandle;
@@ -31,6 +34,19 @@ pub async fn make_rpc_client(
     rpc_auth: RpcAuthData,
 ) -> Result<rpc_client::NodeRpcClient, NodeRpcError> {
     rpc_client::NodeRpcClient::new(remote_socket_address, rpc_auth).await
+}
+
+pub async fn make_opt_rpc_client(
+    node_opts: Option<(String, RpcAuthData)>,
+    chain_config: Arc<ChainConfig>,
+) -> Result<rpc_client::MaybeDummyNode, NodeRpcError> {
+    let rpc_client = if let Some((addr, auth)) = node_opts {
+        Some(make_rpc_client(addr, auth).await?)
+    } else {
+        None
+    };
+
+    Ok(rpc_client::MaybeDummyNode::new(rpc_client, chain_config))
 }
 
 pub async fn make_handles_client(

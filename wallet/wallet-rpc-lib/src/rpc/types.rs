@@ -31,6 +31,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
+use node_comm::rpc_client::MaybeDummyNode;
 use serialization::hex::HexEncode;
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
@@ -71,7 +72,7 @@ pub enum RpcError {
     InvalidBlockId,
 
     #[error("Wallet error: {0}")]
-    Controller(#[from] wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+    Controller(#[from] wallet_controller::ControllerError<MaybeDummyNode>),
 
     #[error("RPC error: {0}")]
     RpcError(node_comm::rpc_client::NodeRpcError),

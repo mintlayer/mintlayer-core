@@ -224,7 +224,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
         node = self.nodes[0]
         decommission_address = ""
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true", "--cold-wallet"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 
@@ -299,10 +299,9 @@ class WalletDecommissionRequest(BitcoinTestFramework):
 
         decommission_signed_tx = ""
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true", "--cold-wallet"]) as wallet:
             # open cold wallet
             await wallet.open_wallet("cold_wallet")
-            assert_in("Success", await wallet.sync())
 
             # sign decommission request
             decommission_signed_tx_output = await wallet.sign_raw_transaction(decommission_req)

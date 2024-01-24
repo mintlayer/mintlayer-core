@@ -107,6 +107,10 @@ pub struct CliArgs {
     /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
     #[arg(long, default_value_t = 5)]
     pub in_top_x_mb: usize,
+
+    /// use the wallet without a connection to a node
+    #[clap(long)]
+    pub cold_wallet: bool,
 }
 
 impl From<&Network> for ChainType {

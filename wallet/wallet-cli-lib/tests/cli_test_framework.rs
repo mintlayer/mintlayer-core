@@ -102,6 +102,7 @@ impl CliTestFramework {
                     exit_on_error: None,
                     vi_mode: false,
                     in_top_x_mb: 5,
+                    cold_wallet: false,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -117,6 +118,7 @@ impl CliTestFramework {
                 exit_on_error: None,
                 vi_mode: false,
                 in_top_x_mb: 5,
+                cold_wallet: false,
             },
         };
 

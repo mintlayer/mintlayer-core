@@ -21,6 +21,7 @@ use chainstate::{ChainInfo, TokenIssuanceError};
 use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
+use node_comm::rpc_client::MaybeDummyNode;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
@@ -49,10 +50,7 @@ use wallet_controller::{
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
-use crate::{
-    service::{CreatedWallet, NodeRpcClient},
-    WalletHandle, WalletRpcConfig,
-};
+use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
@@ -63,14 +61,14 @@ use self::types::{
 
 pub struct WalletRpc {
     wallet: WalletHandle,
-    node: NodeRpcClient,
+    node: MaybeDummyNode,
     chain_config: Arc<ChainConfig>,
 }
 
 type WRpcResult<T> = Result<T, RpcError>;
 
 impl WalletRpc {
-    pub fn new(wallet: WalletHandle, node: NodeRpcClient, chain_config: Arc<ChainConfig>) -> Self {
+    pub fn new(wallet: WalletHandle, node: MaybeDummyNode, chain_config: Arc<ChainConfig>) -> Self {
         Self {
             wallet,
             node,
@@ -1069,7 +1067,7 @@ impl WalletRpc {
 
 pub async fn start(
     wallet_handle: WalletHandle,
-    node_rpc: NodeRpcClient,
+    node_rpc: MaybeDummyNode,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
 ) -> anyhow::Result<rpc::Rpc> {

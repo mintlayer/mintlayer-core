@@ -37,14 +37,12 @@ pub async fn run(
     chain_config: &Arc<ChainConfig>,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
     in_top_x_mb: usize,
-    node_rpc_address: Option<String>,
-    node_credentials: RpcAuthData,
+    node_opts: Option<(Option<String>, RpcAuthData)>,
 ) -> Result<(), WalletCliError> {
     let mut command_handler = CommandHandler::new(
         ControllerConfig { in_top_x_mb },
         chain_config.clone(),
-        node_rpc_address,
-        node_credentials,
+        node_opts,
     )
     .await?;
 

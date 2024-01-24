@@ -17,11 +17,12 @@ use std::{ops::ControlFlow, path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
 use futures::{future::BoxFuture, never::Never};
+use node_comm::rpc_client::MaybeDummyNode;
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 use wallet::wallet::Mnemonic;
-use wallet_controller::{ControllerError, NodeInterface, NodeRpcClient};
+use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::types::RpcError;
@@ -31,8 +32,7 @@ use crate::Event;
 use super::WalletServiceEvents;
 
 pub type WalletController = wallet_controller::RpcController<super::WalletServiceEvents>;
-pub type WalletControllerError =
-    wallet_controller::ControllerError<wallet_controller::NodeRpcClient>;
+pub type WalletControllerError = wallet_controller::ControllerError<MaybeDummyNode>;
 pub type CommandReceiver = mpsc::UnboundedReceiver<WalletCommand>;
 pub type CommandSender = mpsc::UnboundedSender<WalletCommand>;
 
@@ -64,7 +64,7 @@ pub struct WalletWorker {
     controller: Option<WalletController>,
     command_rx: CommandReceiver,
     chain_config: Arc<ChainConfig>,
-    node_rpc: NodeRpcClient,
+    node_rpc: MaybeDummyNode,
     subscribers: Vec<mpsc::UnboundedSender<Event>>,
     events_rx: mpsc::UnboundedReceiver<Event>,
     wallet_events: WalletServiceEvents,
@@ -74,7 +74,7 @@ impl WalletWorker {
     fn new(
         controller: Option<WalletController>,
         chain_config: Arc<ChainConfig>,
-        node_rpc: NodeRpcClient,
+        node_rpc: MaybeDummyNode,
         command_rx: CommandReceiver,
         events_rx: mpsc::UnboundedReceiver<Event>,
         wallet_events: WalletServiceEvents,
@@ -94,7 +94,7 @@ impl WalletWorker {
     pub fn spawn(
         controller: Option<WalletController>,
         chain_config: Arc<ChainConfig>,
-        node_rpc: NodeRpcClient,
+        node_rpc: MaybeDummyNode,
         command_rx: CommandReceiver,
         events_rx: mpsc::UnboundedReceiver<Event>,
         wallet_events: WalletServiceEvents,
@@ -168,7 +168,7 @@ impl WalletWorker {
         }
     }
 
-    pub fn close_wallet(&mut self) -> Result<(), ControllerError<NodeRpcClient>> {
+    pub fn close_wallet(&mut self) -> Result<(), ControllerError<MaybeDummyNode>> {
         self.controller = None;
         Ok(())
     }
@@ -177,7 +177,7 @@ impl WalletWorker {
         &mut self,
         wallet_path: PathBuf,
         password: Option<String>,
-    ) -> Result<(), ControllerError<NodeRpcClient>> {
+    ) -> Result<(), ControllerError<MaybeDummyNode>> {
         let wallet =
             WalletController::open_wallet(self.chain_config.clone(), wallet_path, password)?;
 
