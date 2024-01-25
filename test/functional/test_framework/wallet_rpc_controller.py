@@ -145,7 +145,7 @@ class WalletRpcController:
 
     async def new_public_key(self) -> bytes:
         addr = await self.new_address()
-        public_key = self._write_command("address_reveal_public_key", [self.account, addr])['result']['public_key']
+        public_key = self._write_command("address_reveal_public_key", [self.account, addr])['result']['public_key_hex']
 
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
