@@ -98,7 +98,7 @@ trait WalletRpc {
     #[method(name = "address_new")]
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo>;
 
-    #[method(name = "address_show_public_key")]
+    #[method(name = "address_reveal_public_key")]
     async fn issue_public_key(
         &self,
         account_index: AccountIndexArg,
