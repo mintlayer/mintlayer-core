@@ -201,6 +201,8 @@ pub enum WalletError {
     InputCannotBeSigned,
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+    #[error("The specified address is not found in this wallet")]
+    AddressNotFound,
 }
 
 /// Result type used for the wallet
@@ -924,10 +926,19 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn get_new_public_key(&mut self, account_index: U31) -> WalletResult<PublicKey> {
-        self.for_account_rw(account_index, |account, db_tx| {
-            account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
-        })
+    pub fn find_public_key(
+        &mut self,
+        account_index: U31,
+        address: Destination,
+    ) -> WalletResult<PublicKey> {
+        let account = self.get_account(account_index)?;
+        match address {
+            Destination::Address(addr) => account.find_corresponding_pub_key(&addr),
+            Destination::PublicKey(pk) => Ok(pk),
+            Destination::ScriptHash(_)
+            | Destination::AnyoneCanSpend
+            | Destination::ClassicMultisig(_) => Err(WalletError::NoUtxos),
+        }
     }
 
     pub fn get_transaction_list(

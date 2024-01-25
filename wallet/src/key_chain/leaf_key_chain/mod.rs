@@ -388,6 +388,14 @@ impl LeafKeySoftChain {
         self.public_key_hash_to_index.get(pkh).copied()
     }
 
+    /// Get public key for public key hash or None if no key found
+    pub fn get_public_key_from_public_key_hash(&self, pkh: &PublicKeyHash) -> Option<PublicKey> {
+        let child_number = self.public_key_hash_to_index.get(pkh)?;
+        self.derived_public_keys
+            .get(child_number)
+            .map(|pk| pk.clone().into_public_key())
+    }
+
     /// Mark a specific key as used in the key pool. This will update the last used key index if
     /// necessary. Returns false if a key was found and set to used.
     fn mark_child_key_as_used(

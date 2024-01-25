@@ -386,6 +386,17 @@ impl AccountKeyChain {
             .any(|purpose| self.get_leaf_key_chain(*purpose).is_public_key_hash_mine(pubkey_hash))
     }
 
+    /// Find the corresponding public key for a given public key hash
+    pub fn get_public_key_from_public_key_hash(
+        &self,
+        pubkey_hash: &PublicKeyHash,
+    ) -> Option<PublicKey> {
+        KeyPurpose::ALL.iter().find_map(|purpose| {
+            self.get_leaf_key_chain(*purpose)
+                .get_public_key_from_public_key_hash(pubkey_hash)
+        })
+    }
+
     /// Derive addresses until there are lookahead unused ones
     pub fn top_up_all(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> KeyChainResult<()> {
         let lookahead_size = self.lookahead_size();

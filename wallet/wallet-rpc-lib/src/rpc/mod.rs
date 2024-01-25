@@ -58,6 +58,7 @@ use self::types::{
     VrfPublicKeyInfo,
 };
 
+#[derive(Clone)]
 pub struct WalletRpc<N: Clone> {
     wallet: WalletHandle<N>,
     node: N,
@@ -195,17 +196,25 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(AddressInfo::new(child_number, destination))
     }
 
-    pub async fn issue_public_key(&self, account_index: U31) -> WRpcResult<PublicKeyInfo, N> {
+    pub async fn find_public_key(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> WRpcResult<PublicKeyInfo, N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        let address = Address::from_str(&self.chain_config, &address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
+
         let publick_key = self
             .wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config).await?.new_public_key()
+                    w.synced_controller(account_index, config).await?.find_public_key(address)
                 })
             })
             .await??;
-        Ok(PublicKeyInfo::new(publick_key))
+        Ok(PublicKeyInfo::new(publick_key, &self.chain_config))
     }
 
     pub async fn get_legacy_vrf_public_key(

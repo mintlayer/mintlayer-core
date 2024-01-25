@@ -142,9 +142,12 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_public_key(&mut self) -> Result<PublicKey, ControllerError<T>> {
+    pub fn find_public_key(
+        &mut self,
+        address: Destination,
+    ) -> Result<PublicKey, ControllerError<T>> {
         self.wallet
-            .get_new_public_key(self.account_index)
+            .find_public_key(self.account_index, address)
             .map_err(ControllerError::WalletError)
     }
 

@@ -806,13 +806,13 @@ fn wallet_accounts_creation() {
     let error = wallet.create_next_account(None).err().unwrap();
     assert_eq!(error, WalletError::EmptyLastAccount);
 
-    let acc1_pk = wallet.get_new_public_key(res.0).unwrap();
+    let acc1_pk = wallet.get_new_address(res.0).unwrap().1;
     let tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
-                Destination::PublicKey(acc1_pk),
+                acc1_pk.decode_object(&chain_config).unwrap(),
             )],
             vec![],
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -1303,7 +1303,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = block1_amount;
 
-    let decommission_key = wallet.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let decommission_key = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
@@ -1314,7 +1314,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key.clone()),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
@@ -1346,7 +1346,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let (pool_id, pool_data) = pool_ids.first().unwrap();
     assert_eq!(
         pool_data.decommission_key,
-        Destination::PublicKey(decommission_key)
+        decommission_key.decode_object(&chain_config).unwrap()
     );
     assert_eq!(
         &pool_data.utxo_outpoint,
@@ -3666,7 +3666,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
     let res = wallet.create_next_account(Some("name".into())).unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
-    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+    let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
@@ -3677,7 +3677,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
@@ -3767,7 +3767,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     let res = wallet.create_next_account(Some("name".into())).unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
-    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+    let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
@@ -3778,7 +3778,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
@@ -3851,7 +3851,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let res = wallet.create_next_account(Some("name".into())).unwrap();
     assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
-    let decommission_key = wallet.get_new_public_key(acc_1_index).unwrap();
+    let decommission_key = wallet.get_new_address(acc_1_index).unwrap().1;
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
@@ -3862,7 +3862,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
@@ -3930,7 +3930,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
     let mut cold_wallet = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
-    let decommission_key = cold_wallet.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let decommission_key = cold_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&hot_wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -3959,7 +3959,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
@@ -4026,7 +4026,7 @@ fn filter_pools(#[case] seed: Seed) {
     let another_mnemonic =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
     let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), another_mnemonic);
-    let decommission_key = wallet2.get_new_public_key(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let decommission_key = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let coin_balance = get_coin_balance(&wallet1);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -4053,7 +4053,7 @@ fn filter_pools(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: Destination::PublicKey(decommission_key),
+                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
             },
         )
         .unwrap();
