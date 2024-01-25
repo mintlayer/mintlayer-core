@@ -130,34 +130,53 @@ impl Args {
                 .with_node_credentials(node_credentials)
         };
 
-        let rpc_config = {
-            // Credentials used to access the wallet RPC interface
-            let auth_credentials = match (rpc_cookie_file, rpc_username, rpc_password) {
-                (Some(cookie_file), None, None) => Some(RpcCreds::cookie_file(cookie_file)?),
-                (None, Some(user), Some(pass)) => Some(RpcCreds::basic(user, pass)?),
-                (None, None, None) => {
-                    ensure!(rpc_no_authentication, ConfigError::NoAuth);
-                    None
-                }
-                _ => panic!("Should not happen due to arg constraints"),
-            };
-
-            let bind_addr = match wallet_rpc_address {
-                None => {
-                    let port = WalletRpcConfig::default_port(*ws_config.chain_config.chain_type());
-                    std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), port)
-                }
-                Some(addr) => addr.parse().map_err(ConfigError::InvalidRpcBindAddr)?,
-            };
-
-            WalletRpcConfig {
-                bind_addr,
-                auth_credentials,
-            }
-        };
+        let rpc_config = make_wallet_config(
+            rpc_cookie_file,
+            rpc_username,
+            rpc_password,
+            rpc_no_authentication,
+            wallet_rpc_address,
+            *ws_config.chain_config.chain_type(),
+        )?;
 
         Ok((ws_config, rpc_config))
     }
+}
+
+pub fn make_wallet_config(
+    rpc_cookie_file: Option<PathBuf>,
+    rpc_username: Option<String>,
+    rpc_password: Option<String>,
+    rpc_no_authentication: bool,
+    wallet_rpc_address: Option<String>,
+    chain_type: ChainType,
+) -> Result<WalletRpcConfig, ConfigError> {
+    let rpc_config = {
+        // Credentials used to access the wallet RPC interface
+        let auth_credentials = match (rpc_cookie_file, rpc_username, rpc_password) {
+            (Some(cookie_file), None, None) => Some(RpcCreds::cookie_file(cookie_file)?),
+            (None, Some(user), Some(pass)) => Some(RpcCreds::basic(user, pass)?),
+            (None, None, None) => {
+                ensure!(rpc_no_authentication, ConfigError::NoAuth);
+                None
+            }
+            _ => panic!("Should not happen due to arg constraints"),
+        };
+
+        let bind_addr = match wallet_rpc_address {
+            None => {
+                let port = WalletRpcConfig::default_port(chain_type);
+                std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), port)
+            }
+            Some(addr) => addr.parse().map_err(ConfigError::InvalidRpcBindAddr)?,
+        };
+
+        WalletRpcConfig {
+            bind_addr,
+            auth_credentials,
+        }
+    };
+    Ok(rpc_config)
 }
 
 #[derive(thiserror::Error, Debug)]

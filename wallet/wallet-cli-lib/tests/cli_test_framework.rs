@@ -104,6 +104,12 @@ impl CliTestFramework {
                     vi_mode: false,
                     in_top_x_mb: 5,
                     cold_wallet: false,
+                    enable_wallet_rpc_interface: false,
+                    wallet_rpc_address: None,
+                    wallet_rpc_username: None,
+                    wallet_rpc_password: None,
+                    wallet_rpc_cookie_file: None,
+                    wallet_rpc_no_authentication: false,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -120,6 +126,12 @@ impl CliTestFramework {
                 vi_mode: false,
                 in_top_x_mb: 5,
                 cold_wallet: false,
+                enable_wallet_rpc_interface: false,
+                wallet_rpc_address: None,
+                wallet_rpc_username: None,
+                wallet_rpc_password: None,
+                wallet_rpc_cookie_file: None,
+                wallet_rpc_no_authentication: false,
             },
         };
 

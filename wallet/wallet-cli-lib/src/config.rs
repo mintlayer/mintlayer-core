@@ -111,6 +111,30 @@ pub struct CliArgs {
     /// use the wallet without a connection to a node
     #[clap(long)]
     pub cold_wallet: bool,
+
+    /// enable the RPC interface of the wallet
+    #[clap(long)]
+    pub enable_wallet_rpc_interface: bool,
+
+    /// Address to bind the RPC interface to
+    #[arg(long, value_name("ADDR"))]
+    pub wallet_rpc_address: Option<String>,
+
+    /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
+    #[clap(long)]
+    pub wallet_rpc_cookie_file: Option<PathBuf>,
+
+    /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub wallet_rpc_username: Option<String>,
+
+    /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub wallet_rpc_password: Option<String>,
+
+    /// Enable running the wallet service without RPC authentication
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]))]
+    pub wallet_rpc_no_authentication: bool,
 }
 
 impl From<&Network> for ChainType {

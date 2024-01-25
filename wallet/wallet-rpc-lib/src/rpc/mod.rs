@@ -58,6 +58,7 @@ use self::types::{
     VrfPublicKeyInfo,
 };
 
+#[derive(Clone)]
 pub struct WalletRpc<N: Clone> {
     wallet: WalletHandle<N>,
     node: N,
@@ -73,6 +74,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             node,
             chain_config,
         }
+    }
+
+    pub async fn closed(&self) {
+        self.wallet.closed().await
     }
 
     pub fn chain_config(&self) -> &ChainConfig {

@@ -102,6 +102,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
         !self.0.is_closed()
     }
 
+    /// Completes when the receiver has dropped
+    pub async fn closed(&self) {
+        self.0.closed().await
+    }
+
     fn send_raw(&self, cmd: WalletCommand<N>) -> Result<(), SubmitError> {
         self.0.send(cmd).map_err(|_| SubmitError::Send)
     }
