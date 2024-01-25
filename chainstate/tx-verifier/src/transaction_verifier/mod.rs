@@ -439,12 +439,8 @@ where
                             ConnectTransactionError::DelegationDataNotFound(delegation_id),
                         )?;
                     if !accounting_view.pool_exists(*delegation_data.source_pool())? {
-                        // clear the nonce
-                        self.account_nonce.insert(
-                            AccountType::Delegation(delegation_id),
-                            CachedOperation::Erase,
-                        );
-
+                        // When deleting a delegation nonce value is preserved in the db
+                        // in case reorg happens so we don't have to restore it
                         Some(
                             self.pos_accounting_adapter
                                 .operations(tx_source)

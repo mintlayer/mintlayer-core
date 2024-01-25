@@ -32,7 +32,8 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
+        PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
 };
@@ -41,7 +42,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::PoSAccountingDeltaData;
+use pos_accounting::{make_delegation_id, PoSAccountingDeltaData};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -549,4 +550,301 @@ fn pos_reorg_simple(#[case] seed: Seed) {
     tf1.process_block(block_c, BlockSource::Peer).unwrap().unwrap();
 
     assert_eq!(<Id<GenBlock>>::from(block_c_id), tf1.best_block_id());
+}
+
+// Produce `genesis -> a -> b -> c` chain, where block `a` creates delegation with some coins and
+// block `b` and `c` spend it.
+// Then produce a parallel `genesis -> a -> d` that should trigger a in-memory reorg for blocks `b` and `c`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+    let (stake_pool_data, staking_sk) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        amount_to_stake,
+        pool_id,
+        stake_pool_data,
+    )
+    .build();
+    let target_block_time = chain_config.target_block_spacing();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+    // produce block `a` at height 1 and create delegation and delegate some coins
+    let genesis_outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let delegation_id = make_delegation_id(&genesis_outpoint);
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_id,
+        ))
+        .build();
+    let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
+
+    let delegate_staking_tx = TransactionBuilder::new()
+        .add_input(
+            UtxoOutPoint::new(create_delegation_tx_id.into(), 0).into(),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(500)),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::DelegateStaking(
+            Amount::from_atoms(500),
+            delegation_id,
+        ))
+        .build();
+
+    tf.make_pos_block_builder(&mut rng)
+        .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+    let block_a_id = tf.best_block_id();
+
+    // produce block `b` at height 2 and spend some coins from delegation
+    let spend_delegation_1_outpoint = AccountOutPoint::new(
+        AccountNonce::new(0),
+        AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(100)),
+    );
+
+    let spend_delegation_1_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(spend_delegation_1_outpoint),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    let block_b_index = tf
+        .make_pos_block_builder(&mut rng)
+        .add_transaction(spend_delegation_1_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_b_index.block_id()),
+        tf.best_block_id()
+    );
+
+    // produce block `c` at height 3 and spend the rest from delegation
+    let spend_delegation_2_outpoint = AccountOutPoint::new(
+        AccountNonce::new(1),
+        AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(400)),
+    );
+
+    let spend_delegation_2_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(spend_delegation_2_outpoint),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    let block_c_index = tf
+        .make_pos_block_builder(&mut rng)
+        .add_transaction(spend_delegation_2_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_c_index.block_id()),
+        tf.best_block_id()
+    );
+
+    // produce block at height 2 that should trigger in memory reorg for block `c`
+    tf.make_pos_block_builder(&mut rng)
+        .with_parent(block_a_id)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk)
+        .build_and_process()
+        .unwrap();
+    // block_c is still the tip
+    assert_eq!(
+        Id::<GenBlock>::from(*block_c_index.block_id()),
+        tf.best_block_id()
+    );
+}
+
+// Produce `genesis -> a -> b -> c -> d` chain, where block `a` creates new pool,
+// block `b` creates delegation with some coins, block `c` decommissions new pool and
+// block `d` spend the entire delegation.
+// Then produce a parallel `genesis -> a -> e` that should trigger a in-memory reorg for blocks `b`, `c` and `d`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+    let (stake_pool_data, staking_sk) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        (amount_to_stake * 2).unwrap(),
+        pool_id,
+        stake_pool_data,
+    )
+    .build();
+    let target_block_time = chain_config.target_block_spacing();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+    // produce block `a` at height 1 and create additional pool
+    let (stake_pool_data_2, _) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk);
+    let genesis_outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let stake_pool_2_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_2_id,
+            Box::new(stake_pool_data_2),
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(stake_pool_2_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+    let block_a_id = tf.best_block_id();
+
+    // produce block `b` at height 2: create delegation and delegation some coins
+    let block_a_transfer_outpoint = UtxoOutPoint::new(stake_pool_2_tx_id.into(), 1);
+    let delegation_id = make_delegation_id(&block_a_transfer_outpoint);
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(block_a_transfer_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000)),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_2_id,
+        ))
+        .build();
+    let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
+
+    let delegate_staking_tx = TransactionBuilder::new()
+        .add_input(
+            UtxoOutPoint::new(create_delegation_tx_id.into(), 0).into(),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::DelegateStaking(
+            Amount::from_atoms(1000),
+            delegation_id,
+        ))
+        .build();
+
+    tf.make_pos_block_builder(&mut rng)
+        .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+
+    // produce block `c` at height 3: decommission pool_2
+    let produce_block_outpoint = UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0);
+
+    let decommission_pool_tx = TransactionBuilder::new()
+        .add_input(produce_block_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount_to_stake),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
+        .build();
+
+    let block_c_index = tf
+        .make_pos_block_builder(&mut rng)
+        .add_transaction(decommission_pool_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_c_index.block_id()),
+        tf.best_block_id()
+    );
+
+    // produce block `d` at height 4 and spend whole delegation
+    let spend_delegation_2_outpoint = AccountOutPoint::new(
+        AccountNonce::new(0),
+        AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(1000)),
+    );
+
+    let spend_delegation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(spend_delegation_2_outpoint),
+            empty_witness(&mut rng),
+        )
+        .build();
+
+    let block_d_index = tf
+        .make_pos_block_builder(&mut rng)
+        .add_transaction(spend_delegation_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_d_index.block_id()),
+        tf.best_block_id()
+    );
+
+    // produce block at height 2 that should trigger in memory reorg for blocks `b`, `c`, `d`
+    tf.make_pos_block_builder(&mut rng)
+        .with_parent(block_a_id)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk)
+        .build_and_process()
+        .unwrap();
+    // block_d is still the tip
+    assert_eq!(
+        Id::<GenBlock>::from(*block_d_index.block_id()),
+        tf.best_block_id()
+    );
 }
