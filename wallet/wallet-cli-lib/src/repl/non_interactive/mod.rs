@@ -17,6 +17,7 @@ pub mod log;
 
 use clap::Command;
 use tokio::sync::{mpsc, oneshot};
+use wallet_controller::NodeInterface;
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
@@ -32,11 +33,11 @@ enum LineOutput {
     Exit,
 }
 
-fn process_line(
+fn process_line<N: NodeInterface>(
     repl_command: &Command,
-    event_tx: &mpsc::UnboundedSender<Event>,
+    event_tx: &mpsc::UnboundedSender<Event<N>>,
     line: &str,
-) -> Result<LineOutput, WalletCliError> {
+) -> Result<LineOutput, WalletCliError<N>> {
     let command_opt = parse_input(line, repl_command)?;
 
     let command = match command_opt {
@@ -49,10 +50,10 @@ fn process_line(
     to_line_output(command_output, line)
 }
 
-fn to_line_output(
+fn to_line_output<N: NodeInterface>(
     command_output: ConsoleCommand,
     line: &str,
-) -> Result<LineOutput, WalletCliError> {
+) -> Result<LineOutput, WalletCliError<N>> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
         ConsoleCommand::SetStatus {
@@ -69,13 +70,14 @@ fn to_line_output(
     }
 }
 
-pub fn run(
+pub fn run<N: NodeInterface>(
     mut input: impl ConsoleInput,
     mut output: impl ConsoleOutput,
-    event_tx: mpsc::UnboundedSender<Event>,
+    event_tx: mpsc::UnboundedSender<Event<N>>,
     exit_on_error: bool,
-    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
-) -> Result<(), WalletCliError> {
+    cold_wallet: bool,
+    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
+) -> Result<(), WalletCliError<N>> {
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open")?;
         let line_out = to_line_output(res, "startup command");
@@ -84,7 +86,7 @@ pub fn run(
         }
     }
 
-    let repl_command = get_repl_command();
+    let repl_command = get_repl_command(cold_wallet);
 
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);
@@ -97,11 +99,11 @@ pub fn run(
     Ok(())
 }
 
-fn handle_response(
-    res: Result<LineOutput, WalletCliError>,
+fn handle_response<N: NodeInterface>(
+    res: Result<LineOutput, WalletCliError<N>>,
     output: &mut impl ConsoleOutput,
     exit_on_error: bool,
-) -> Option<Result<(), WalletCliError>> {
+) -> Option<Result<(), WalletCliError<N>>> {
     match res {
         Ok(LineOutput::Print(text)) => {
             output.print_line(&text);

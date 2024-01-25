@@ -29,14 +29,11 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
-use rpc::RpcAuthData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
 use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
-use wallet_controller::{ControllerConfig, PeerId, DEFAULT_ACCOUNT_INDEX};
-use wallet_rpc_lib::{
-    types::NewTransaction, CreatedWallet, WalletRpc, WalletService, WalletServiceConfig,
-};
+use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_rpc_lib::{types::NewTransaction, CreatedWallet, WalletRpc, WalletService};
 
 use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
 
@@ -47,7 +44,153 @@ use self::helper_types::{
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "kebab-case")]
+pub enum ColdWalletCommand {
+    /// Create new wallet
+    #[clap(name = "wallet-create")]
+    CreateWallet {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+
+        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
+        /// Not storing the seed-phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// elsewhere if this wallet is compromised.
+        whether_to_store_seed_phrase: CliStoreSeedPhrase,
+
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+        mnemonic: Option<String>,
+    },
+
+    /// Open an exiting wallet by specifying the file location of the wallet file
+    #[clap(name = "wallet-open")]
+    OpenWallet {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+        /// The existing password, if the wallet is encrypted.
+        encryption_password: Option<String>,
+    },
+
+    /// Close the currently open wallet file
+    #[clap(name = "wallet-close")]
+    CloseWallet,
+
+    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
+    #[clap(name = "wallet-encrypt-private-keys")]
+    EncryptPrivateKeys {
+        /// The new encryption password
+        password: String,
+    },
+
+    /// Completely and totally remove any existing encryption, expects the wallet to be unlocked.
+    /// WARNING: After this, your wallet file will be USABLE BY ANYONE without a password.
+    #[clap(name = "wallet-disable-private-keys-encryption")]
+    RemovePrivateKeysEncryption,
+
+    /// Unlocks the private keys for usage.
+    #[clap(name = "wallet-unlock-private-keys")]
+    UnlockPrivateKeys {
+        /// The current encryption password.
+        password: String,
+    },
+
+    /// Locks the private keys so they can't be used until they are unlocked again
+    #[clap(name = "wallet-lock-private-keys")]
+    LockPrivateKeys,
+
+    /// Show the seed phrase for the loaded wallet if it has been stored.
+    #[clap(name = "wallet-show-seed-phrase")]
+    ShowSeedPhrase,
+
+    /// Delete the seed phrase from the loaded wallet's database, if it has been stored.
+    #[clap(name = "wallet-purge-seed-phrase")]
+    PurgeSeedPhrase,
+
+    /// Set the lookahead size for key generation.
+    ///
+    /// Lookahead size (or called gap) is the number of addresses to generate and the blockchain for incoming transactions to them
+    /// after the last address that was seen to contain a transaction on the blockchain.
+    /// Do not attempt to reduce the size of this value unless you're sure there are no incoming transactions in these addresses.
+    #[clap(name = "wallet-set-lookahead-size")]
+    SetLookaheadSize {
+        /// The new lookahead size
+        lookahead_size: u32,
+
+        /// Forces the reduction of lookahead size even below the known last used address
+        /// the new wallet can lose track of known addresses and balance
+        i_know_what_i_am_doing: Option<CliForceReduce>,
+    },
+
+    /// Creates a QR code of the provided address
+    #[clap(name = "address-qrcode")]
+    AddressQRCode {
+        /// A Destination address
+        address: String,
+    },
+
+    /// Generate a new unused address
+    #[clap(name = "address-new")]
+    NewAddress,
+
+    /// Generate a new unused public key
+    #[clap(name = "address-new-public-key")]
+    NewPublicKey,
+
+    /// Show receive-addresses with their usage state.
+    /// Note that whether an address is used isn't based on the wallet,
+    /// but on the blockchain. So if an address is used in a transaction,
+    /// it will be marked as used only when the transaction is included
+    /// in a block.
+    #[clap(name = "address-show")]
+    ShowReceiveAddresses,
+
+    /// Show the issued staking VRF (Verifiable Random Function) keys for this account.
+    /// These keys are generated when pools are created.
+    /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
+    /// where no one can control the possible outcomes, to ensure decentralization.
+    #[clap(name = "staking-show-vrf-public-keys")]
+    GetVrfPublicKey,
+
+    /// Shows the legacy VRF key that uses an abandoned derivation mechanism.
+    /// This will not be used for new pools and should be avoided
+    #[clap(name = "staking-show-legacy-vrf-key")]
+    GetLegacyVrfPublicKey,
+
+    /// Signs the inputs that are not yet signed.
+    /// The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
+    /// in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
+    /// to the network.
+    #[clap(name = "account-sign-raw-transaction")]
+    SignRawTransaction {
+        /// Hex encoded transaction.
+        transaction: HexEncoded<PartiallySignedTransaction>,
+    },
+
+    /// Print command history in the wallet for this execution
+    #[clap(name = "history-print")]
+    PrintHistory,
+
+    /// Clear command history for this execution
+    #[clap(name = "history-clear")]
+    ClearHistory,
+
+    /// Clear screen
+    #[clap(name = "screen-clear")]
+    ClearScreen,
+
+    /// Print the version of the wallet software and possibly the git commit hash, if found
+    Version,
+
+    /// Exit the wallet
+    Exit,
+}
+
+#[derive(Debug, Parser)]
+#[clap(rename_all = "kebab-case")]
 pub enum WalletCommand {
+    #[command(flatten)]
+    ColdCommands(ColdWalletCommand),
+
     /// Creates a new account with an optional name.
     /// Returns an error if the last created account does not have a transaction history.
     #[clap(name = "account-create")]
@@ -80,23 +223,6 @@ pub enum WalletCommand {
         /// The state of utxos to be included (confirmed, unconfirmed, etc)
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
-    },
-
-    /// Signs the inputs that are not yet signed.
-    /// The input is a special format of the transaction serialized to hex. This format is automatically used in this wallet
-    /// in functions such as staking-decommission-pool-request. Once all signatures are complete, the result can be broadcast
-    /// to the network.
-    #[clap(name = "account-sign-raw-transaction")]
-    SignRawTransaction {
-        /// Hex encoded transaction.
-        transaction: HexEncoded<PartiallySignedTransaction>,
-    },
-
-    /// Creates a QR code of the provided address
-    #[clap(name = "address-qrcode")]
-    AddressQRCode {
-        /// A Destination address
-        address: String,
     },
 
     /// Issue a new non-fungible token (NFT) from scratch
@@ -207,22 +333,6 @@ pub enum WalletCommand {
         amount: DecimalAmount,
     },
 
-    /// Generate a new unused address
-    #[clap(name = "address-new")]
-    NewAddress,
-
-    /// Generate a new unused public key
-    #[clap(name = "address-new-public-key")]
-    NewPublicKey,
-
-    /// Show receive-addresses with their usage state.
-    /// Note that whether an address is used isn't based on the wallet,
-    /// but on the blockchain. So if an address is used in a transaction,
-    /// it will be marked as used only when the transaction is included
-    /// in a block.
-    #[clap(name = "address-show")]
-    ShowReceiveAddresses,
-
     /// Send a given coin amount to a given address. The wallet will automatically calculate the required information
     /// Optionally, one can also mention the utxos to be used.
     #[clap(name = "address-send")]
@@ -303,18 +413,6 @@ pub enum WalletCommand {
     #[clap(name = "staking-list-created-block-ids")]
     ListCreatedBlocksIds,
 
-    /// Show the issued staking VRF (Verifiable Random Function) keys for this account.
-    /// These keys are generated when pools are created.
-    /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
-    /// where no one can control the possible outcomes, to ensure decentralization.
-    #[clap(name = "staking-show-vrf-public-keys")]
-    GetVrfPublicKey,
-
-    /// Shows the legacy VRF key that uses an abandoned derivation mechanism.
-    /// This will not be used for new pools and should be avoided
-    #[clap(name = "staking-show-legacy-vrf-key")]
-    GetLegacyVrfPublicKey,
-
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.
     /// The decommission key is the key that can decommission the pool.
@@ -366,36 +464,6 @@ pub enum WalletCommand {
         pool_id: String,
     },
 
-    /// Create new wallet
-    #[clap(name = "wallet-create")]
-    CreateWallet {
-        /// File path of the wallet file
-        wallet_path: PathBuf,
-
-        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
-        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
-        /// Not storing the seed-phrase can be seen as a security measure
-        /// to ensure sufficient secrecy in case that seed-phrase is reused
-        /// elsewhere if this wallet is compromised.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
-
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
-        mnemonic: Option<String>,
-    },
-
-    /// Open an exiting wallet by specifying the file location of the wallet file
-    #[clap(name = "wallet-open")]
-    OpenWallet {
-        /// File path of the wallet file
-        wallet_path: PathBuf,
-        /// The existing password, if the wallet is encrypted.
-        encryption_password: Option<String>,
-    },
-
-    /// Close the currently open wallet file
-    #[clap(name = "wallet-close")]
-    CloseWallet,
-
     /// Rescan the blockchain and re-detect all operations related to the selected account in this wallet
     #[clap(name = "wallet-rescan")]
     Rescan,
@@ -403,52 +471,6 @@ pub enum WalletCommand {
     /// Force the wallet to scan the remaining blocks from node until the tip is reached
     #[clap(name = "wallet-sync")]
     SyncWallet,
-
-    /// Show the seed phrase for the loaded wallet if it has been stored.
-    #[clap(name = "wallet-show-seed-phrase")]
-    ShowSeedPhrase,
-
-    /// Delete the seed phrase from the loaded wallet's database, if it has been stored.
-    #[clap(name = "wallet-purge-seed-phrase")]
-    PurgeSeedPhrase,
-
-    /// Set the lookahead size for key generation.
-    ///
-    /// Lookahead size (or called gap) is the number of addresses to generate and the blockchain for incoming transactions to them
-    /// after the last address that was seen to contain a transaction on the blockchain.
-    /// Do not attempt to reduce the size of this value unless you're sure there are no incoming transactions in these addresses.
-    #[clap(name = "wallet-set-lookahead-size")]
-    SetLookaheadSize {
-        /// The new lookahead size
-        lookahead_size: u32,
-
-        /// Forces the reduction of lookahead size even below the known last used address
-        /// the new wallet can lose track of known addresses and balance
-        i_know_what_i_am_doing: Option<CliForceReduce>,
-    },
-
-    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
-    #[clap(name = "wallet-encrypt-private-keys")]
-    EncryptPrivateKeys {
-        /// The new encryption password
-        password: String,
-    },
-
-    /// Completely and totally remove any existing encryption, expects the wallet to be unlocked.
-    /// WARNING: After this, your wallet file will be USABLE BY ANYONE without a password.
-    #[clap(name = "wallet-disable-private-keys-encryption")]
-    RemovePrivateKeysEncryption,
-
-    /// Unlocks the private keys for usage.
-    #[clap(name = "wallet-unlock-private-keys")]
-    UnlockPrivateKeys {
-        /// The current encryption password.
-        password: String,
-    },
-
-    /// Locks the private keys so they can't be used until they are unlocked again
-    #[clap(name = "wallet-lock-private-keys")]
-    LockPrivateKeys,
 
     /// Node version
     #[clap(name = "node-version")]
@@ -587,24 +609,6 @@ pub enum WalletCommand {
         /// Transaction id, encoded in hex
         transaction_id: HexEncoded<Id<Transaction>>,
     },
-
-    /// Print command history in the wallet for this execution
-    #[clap(name = "history-print")]
-    PrintHistory,
-
-    /// Clear command history for this execution
-    #[clap(name = "history-clear")]
-    ClearHistory,
-
-    /// Clear screen
-    #[clap(name = "screen-clear")]
-    ClearScreen,
-
-    /// Print the version of the wallet software and possibly the git commit hash, if found
-    Version,
-
-    /// Exit the wallet
-    Exit,
 }
 
 #[derive(Debug)]
@@ -624,28 +628,23 @@ struct CliWalletState {
     selected_account: U31,
 }
 
-pub struct CommandHandler {
+pub struct CommandHandler<N: Clone> {
     // the CliController if there is a loaded wallet
     state: Option<CliWalletState>,
     config: ControllerConfig,
-    wallet_rpc: WalletRpc,
+    wallet_rpc: WalletRpc<N>,
 }
 
-impl CommandHandler {
+impl<N> CommandHandler<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
-        node_rpc_address: Option<String>,
-        node_credentials: RpcAuthData,
-    ) -> Result<Self, WalletCliError> {
-        let wallet_config = WalletServiceConfig {
-            chain_config,
-            wallet_file: None,
-            node_rpc_address,
-            node_credentials,
-        };
-
-        let wallet_service = WalletService::start(wallet_config)
+        node_rpc: N,
+    ) -> Result<Self, WalletCliError<N>> {
+        let wallet_service = WalletService::start(chain_config, None, node_rpc)
             .await
             .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 
@@ -661,7 +660,7 @@ impl CommandHandler {
         })
     }
 
-    async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
+    async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError<N>> {
         let CliWalletState { selected_account } =
             self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
@@ -673,7 +672,7 @@ impl CommandHandler {
         Ok(())
     }
 
-    async fn repl_status(&mut self) -> Result<String, WalletCliError> {
+    async fn repl_status(&mut self) -> Result<String, WalletCliError<N>> {
         let status = match self.state.as_ref() {
             Some(CliWalletState { selected_account }) => {
                 let accounts = self.wallet_rpc.account_names().await?;
@@ -692,7 +691,7 @@ impl CommandHandler {
         Ok(status)
     }
 
-    fn get_selected_acc(&mut self) -> Result<U31, WalletCliError> {
+    fn get_selected_acc(&mut self) -> Result<U31, WalletCliError<N>> {
         self.state
             .as_mut()
             .map(|state| state.selected_account)
@@ -712,13 +711,12 @@ impl CommandHandler {
         ConsoleCommand::Print(status_text)
     }
 
-    pub async fn handle_wallet_command(
+    async fn handle_cold_wallet_command(
         &mut self,
-        chain_config: &Arc<ChainConfig>,
-        command: WalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError> {
+        command: ColdWalletCommand,
+    ) -> Result<ConsoleCommand, WalletCliError<N>> {
         match command {
-            WalletCommand::CreateWallet {
+            ColdWalletCommand::CreateWallet {
                 wallet_path,
                 mnemonic,
                 whether_to_store_seed_phrase,
@@ -752,7 +750,7 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::OpenWallet {
+            ColdWalletCommand::OpenWallet {
                 wallet_path,
                 encryption_password,
             } => {
@@ -769,7 +767,7 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::CloseWallet => {
+            ColdWalletCommand::CloseWallet => {
                 utils::ensure!(self.state.is_some(), WalletCliError::NoWallet);
 
                 self.wallet_rpc.close_wallet().await?;
@@ -782,7 +780,7 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::EncryptPrivateKeys { password } => {
+            ColdWalletCommand::EncryptPrivateKeys { password } => {
                 self.wallet_rpc.encrypt_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -790,7 +788,7 @@ impl CommandHandler {
                 ))
             }
 
-            WalletCommand::RemovePrivateKeysEncryption => {
+            ColdWalletCommand::RemovePrivateKeysEncryption => {
                 self.wallet_rpc.remove_private_key_encryption().await?;
 
                 Ok(ConsoleCommand::Print(
@@ -798,7 +796,7 @@ impl CommandHandler {
                 ))
             }
 
-            WalletCommand::UnlockPrivateKeys { password } => {
+            ColdWalletCommand::UnlockPrivateKeys { password } => {
                 self.wallet_rpc.unlock_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
@@ -806,7 +804,7 @@ impl CommandHandler {
                 ))
             }
 
-            WalletCommand::LockPrivateKeys => {
+            ColdWalletCommand::LockPrivateKeys => {
                 self.wallet_rpc.lock_private_keys().await?;
 
                 Ok(ConsoleCommand::Print(
@@ -814,7 +812,31 @@ impl CommandHandler {
                 ))
             }
 
-            WalletCommand::SetLookaheadSize {
+            ColdWalletCommand::ShowSeedPhrase => {
+                let phrase = self.wallet_rpc.get_seed_phrase().await?;
+
+                let msg = if let Some(phrase) = phrase {
+                    format!("The stored seed phrase is \"{}\"", phrase.join(" "))
+                } else {
+                    "No stored seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase stored elsewhere when you created the wallet.".into()
+                };
+
+                Ok(ConsoleCommand::Print(msg))
+            }
+
+            ColdWalletCommand::PurgeSeedPhrase => {
+                let phrase = self.wallet_rpc.purge_seed_phrase().await?;
+
+                let msg = if let Some(phrase) = phrase {
+                    format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
+                } else {
+                    "No stored seed phrase for this wallet.".into()
+                };
+
+                Ok(ConsoleCommand::Print(msg))
+            }
+
+            ColdWalletCommand::SetLookaheadSize {
                 lookahead_size,
                 i_know_what_i_am_doing,
             } => {
@@ -830,6 +852,143 @@ impl CommandHandler {
                         .to_owned(),
                 ))
             }
+
+            ColdWalletCommand::AddressQRCode { address } => {
+                let addr: Address<Destination> =
+                    Address::from_str(self.wallet_rpc.chain_config(), &address)
+                        .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
+
+                let qr_code = utils::qrcode::qrcode_from_str(addr.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                Ok(ConsoleCommand::Print(qr_code_string))
+            }
+
+            ColdWalletCommand::NewAddress => {
+                let selected_account = self.get_selected_acc()?;
+                let address = self.wallet_rpc.issue_address(selected_account).await?;
+                Ok(ConsoleCommand::Print(address.address))
+            }
+
+            ColdWalletCommand::NewPublicKey => {
+                let selected_account = self.get_selected_acc()?;
+                let public_key =
+                    self.wallet_rpc.issue_public_key(selected_account).await?.public_key;
+                Ok(ConsoleCommand::Print(public_key))
+            }
+
+            ColdWalletCommand::ShowReceiveAddresses => {
+                let selected_account = self.get_selected_acc()?;
+                let addresses_with_usage =
+                    self.wallet_rpc.get_issued_addresses(selected_account).await?;
+
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
+
+                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
+                        let is_used = if info.used { "Yes" } else { "No" };
+                        prettytable::row![info.index, info.address, is_used]
+                    }));
+
+                    addresses_table
+                };
+
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            ColdWalletCommand::GetVrfPublicKey => {
+                let selected_account = self.get_selected_acc()?;
+                let addresses_with_usage =
+                    self.wallet_rpc.get_vrf_key_usage(selected_account).await?;
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
+
+                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
+                        let is_used = if info.used { "Yes" } else { "No" };
+                        prettytable::row![info.child_number, info.vrf_public_key, is_used]
+                    }));
+
+                    addresses_table
+                };
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            ColdWalletCommand::GetLegacyVrfPublicKey => {
+                let selected_account = self.get_selected_acc()?;
+                let legacy_pubkey =
+                    self.wallet_rpc.get_legacy_vrf_public_key(selected_account).await?;
+                Ok(ConsoleCommand::Print(legacy_pubkey.vrf_public_key))
+            }
+
+            ColdWalletCommand::SignRawTransaction { transaction } => {
+                let selected_account = self.get_selected_acc()?;
+                let result = self
+                    .wallet_rpc
+                    .sign_raw_transaction(selected_account, transaction, self.config)
+                    .await?;
+
+                let output_str = match result.into_signed_tx() {
+                    Ok(signed_tx) => {
+                        let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
+
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                        )
+                    }
+                    Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
+                        let result_hex: HexEncoded<PartiallySignedTransaction> =
+                            partially_signed_tx.into();
+
+                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map_err(WalletCliError::QrCodeEncoding)?;
+                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                        format!(
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
+                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                        )
+                    }
+                    Err(err) => {
+                        return Err(WalletCliError::FailedToConvertToSignedTransaction(err))
+                    }
+                };
+
+                Ok(ConsoleCommand::Print(output_str))
+            }
+
+            ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
+            ColdWalletCommand::Exit => Ok(ConsoleCommand::Exit),
+            ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
+            ColdWalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
+            ColdWalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
+        }
+    }
+
+    pub async fn handle_wallet_command(
+        &mut self,
+        chain_config: &Arc<ChainConfig>,
+        command: WalletCommand,
+    ) -> Result<ConsoleCommand, WalletCliError<N>> {
+        match command {
+            WalletCommand::ColdCommands(command) => self.handle_cold_wallet_command(command).await,
 
             WalletCommand::ChainstateInfo => {
                 let info = self.wallet_rpc.chainstate_info().await?;
@@ -941,61 +1100,6 @@ impl CommandHandler {
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
                 Ok(Self::tx_submitted_command())
-            }
-
-            WalletCommand::AddressQRCode { address } => {
-                let addr: Address<Destination> =
-                    Address::from_str(self.wallet_rpc.chain_config(), &address)
-                        .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
-
-                let qr_code = utils::qrcode::qrcode_from_str(addr.to_string())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
-                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
-                Ok(ConsoleCommand::Print(qr_code_string))
-            }
-
-            WalletCommand::SignRawTransaction { transaction } => {
-                let selected_account = self.get_selected_acc()?;
-                let result = self
-                    .wallet_rpc
-                    .sign_raw_transaction(selected_account, transaction, self.config)
-                    .await?;
-
-                let output_str = match result.into_signed_tx() {
-                    Ok(signed_tx) => {
-                        let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
-
-                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map_err(WalletCliError::QrCodeEncoding)?;
-                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
-
-                        format!(
-                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
-                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
-                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}"
-                        )
-                    }
-                    Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
-                        let result_hex: HexEncoded<PartiallySignedTransaction> =
-                            partially_signed_tx.into();
-
-                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map_err(WalletCliError::QrCodeEncoding)?;
-                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
-
-                        format!(
-                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
-                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}"
-                        )
-                    }
-                    Err(err) => {
-                        return Err(WalletCliError::FailedToConvertToSignedTransaction(err))
-                    }
-                };
-
-                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
@@ -1211,48 +1315,6 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
             }
 
-            WalletCommand::NewAddress => {
-                let selected_account = self.get_selected_acc()?;
-                let address = self.wallet_rpc.issue_address(selected_account).await?;
-                Ok(ConsoleCommand::Print(address.address))
-            }
-
-            WalletCommand::NewPublicKey => {
-                let selected_account = self.get_selected_acc()?;
-                let public_key =
-                    self.wallet_rpc.issue_public_key(selected_account).await?.public_key;
-                Ok(ConsoleCommand::Print(public_key))
-            }
-
-            WalletCommand::GetVrfPublicKey => {
-                let selected_account = self.get_selected_acc()?;
-                let addresses_with_usage =
-                    self.wallet_rpc.get_vrf_key_usage(selected_account).await?;
-                let addresses_table = {
-                    let mut addresses_table = prettytable::Table::new();
-                    addresses_table.set_titles(prettytable::row![
-                        "Index",
-                        "Address",
-                        "Is used in transaction history",
-                    ]);
-
-                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
-                        let is_used = if info.used { "Yes" } else { "No" };
-                        prettytable::row![info.child_number, info.vrf_public_key, is_used]
-                    }));
-
-                    addresses_table
-                };
-                Ok(ConsoleCommand::Print(addresses_table.to_string()))
-            }
-
-            WalletCommand::GetLegacyVrfPublicKey => {
-                let selected_account = self.get_selected_acc()?;
-                let legacy_pubkey =
-                    self.wallet_rpc.get_legacy_vrf_public_key(selected_account).await?;
-                Ok(ConsoleCommand::Print(legacy_pubkey.vrf_public_key))
-            }
-
             WalletCommand::GetTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let tx = self
@@ -1294,7 +1356,8 @@ impl CommandHandler {
                 let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
-                    .collect::<Result<Vec<_>, WalletCliError>>()?;
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                )?;
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
                     .wallet_rpc
@@ -1427,30 +1490,6 @@ impl CommandHandler {
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
-            WalletCommand::ShowSeedPhrase => {
-                let phrase = self.wallet_rpc.get_seed_phrase().await?;
-
-                let msg = if let Some(phrase) = phrase {
-                    format!("The stored seed phrase is \"{}\"", phrase.join(" "))
-                } else {
-                    "No stored seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase stored elsewhere when you created the wallet.".into()
-                };
-
-                Ok(ConsoleCommand::Print(msg))
-            }
-
-            WalletCommand::PurgeSeedPhrase => {
-                let phrase = self.wallet_rpc.purge_seed_phrase().await?;
-
-                let msg = if let Some(phrase) = phrase {
-                    format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
-                } else {
-                    "No stored seed phrase for this wallet.".into()
-                };
-
-                Ok(ConsoleCommand::Print(msg))
-            }
-
             WalletCommand::NodeVersion => {
                 let version = self.wallet_rpc.node_version().await?;
                 Ok(ConsoleCommand::Print(version))
@@ -1550,36 +1589,6 @@ impl CommandHandler {
                 self.wallet_rpc.remove_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
-            WalletCommand::ShowReceiveAddresses => {
-                let selected_account = self.get_selected_acc()?;
-                let addresses_with_usage =
-                    self.wallet_rpc.get_issued_addresses(selected_account).await?;
-
-                let addresses_table = {
-                    let mut addresses_table = prettytable::Table::new();
-                    addresses_table.set_titles(prettytable::row![
-                        "Index",
-                        "Address",
-                        "Is used in transaction history",
-                    ]);
-
-                    addresses_table.extend(addresses_with_usage.into_iter().map(|info| {
-                        let is_used = if info.used { "Yes" } else { "No" };
-                        prettytable::row![info.index, info.address, is_used]
-                    }));
-
-                    addresses_table
-                };
-
-                Ok(ConsoleCommand::Print(addresses_table.to_string()))
-            }
-
-            WalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
-
-            WalletCommand::Exit => Ok(ConsoleCommand::Exit),
-            WalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
-            WalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
-            WalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
         }
     }
 }

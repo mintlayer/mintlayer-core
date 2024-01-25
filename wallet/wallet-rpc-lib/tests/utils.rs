@@ -25,6 +25,7 @@ use common::{
     primitives::BlockHeight,
 };
 use test_utils::{test_dir::TestRoot, test_root};
+use wallet_controller::NodeRpcClient;
 use wallet_rpc_lib::{
     config::WalletServiceConfig, types::AccountIndexArg, WalletHandle, WalletService,
 };
@@ -41,7 +42,7 @@ pub const ACCOUNT0_ARG: AccountIndexArg = AccountIndexArg { account: 0 };
 pub const ACCOUNT1_ARG: AccountIndexArg = AccountIndexArg { account: 1 };
 
 pub struct TestFramework {
-    pub wallet_service: WalletService,
+    pub wallet_service: WalletService<NodeRpcClient>,
     pub shutdown_trigger: subsystem::ShutdownTrigger,
     pub node_manager_task: subsystem::ManagerJoinHandle,
     pub test_root: TestRoot,
@@ -145,7 +146,7 @@ impl TestFramework {
         rpc::new_ws_client(rpc_addr, rpc_auth).await.unwrap()
     }
 
-    pub fn handle(&self) -> WalletHandle {
+    pub fn handle(&self) -> WalletHandle<NodeRpcClient> {
         self.wallet_service.handle()
     }
 

@@ -19,10 +19,12 @@ pub mod error;
 mod rpc;
 mod service;
 
-pub use rpc::{types, RpcAuthData, RpcCreds, RpcError, WalletRpc, WalletRpcServer};
+pub use rpc::{types, RpcCreds, RpcError, WalletRpc, WalletRpcServer};
 pub use service::{
-    CreatedWallet, Event, EventStream, TxState, WalletHandle, WalletResult, WalletService,
+    CreatedWallet, Event, EventStream, TxState, WalletHandle,
+    /* WalletResult, */ WalletService,
 };
+use wallet_controller::NodeRpcClient;
 
 use std::time::Duration;
 
@@ -37,7 +39,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(thiserror::Error, Debug)]
 pub enum StartupError {
     #[error(transparent)]
-    WalletService(#[from] service::InitError),
+    WalletService(#[from] service::InitError<NodeRpcClient>),
 
     #[error("Failed to start RPC server: {0}")]
     Rpc(anyhow::Error),
@@ -56,9 +58,27 @@ pub async fn run(
 pub async fn start_services(
     wallet_config: WalletServiceConfig,
     rpc_config: WalletRpcConfig,
-) -> Result<(WalletService, rpc::Rpc), StartupError> {
+) -> Result<(WalletService<NodeRpcClient>, rpc::Rpc), StartupError> {
     // Start the wallet service
-    let wallet_service = WalletService::start(wallet_config).await?;
+    let rpc_address = {
+        let default_addr = || {
+            format!(
+                "127.0.0.1:{}",
+                wallet_config.chain_config.default_rpc_port()
+            )
+        };
+        wallet_config.node_rpc_address.unwrap_or_else(default_addr)
+    };
+
+    let node_rpc = wallet_controller::make_rpc_client(rpc_address, wallet_config.node_credentials)
+        .await
+        .map_err(|err| StartupError::WalletService(service::InitError::NodeRpc(err)))?;
+    let wallet_service = WalletService::start(
+        wallet_config.chain_config,
+        wallet_config.wallet_file,
+        node_rpc,
+    )
+    .await?;
 
     // Start the RPC server
     let rpc_server = {
@@ -74,7 +94,7 @@ pub async fn start_services(
 }
 
 /// Run a wallet daemon with RPC interface
-pub async fn wait_for_shutdown(wallet_service: WalletService, rpc_server: rpc::Rpc) {
+pub async fn wait_for_shutdown(wallet_service: WalletService<NodeRpcClient>, rpc_server: rpc::Rpc) {
     // Start the wallet service
     let wallet_handle = wallet_service.handle();
 

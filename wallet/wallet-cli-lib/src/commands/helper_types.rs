@@ -16,7 +16,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
-use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
+use wallet_controller::{NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
     chain::{
@@ -151,31 +151,37 @@ impl CliStoreSeedPhrase {
 ///
 /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)
 /// e.g block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-pub fn parse_utxo_outpoint(mut input: String) -> Result<UtxoOutPoint, WalletCliError> {
+pub fn parse_utxo_outpoint<N: NodeInterface>(
+    mut input: String,
+) -> Result<UtxoOutPoint, WalletCliError<N>> {
     if !input.ends_with(')') {
-        return Err(WalletCliError::InvalidInput("Invalid input format".into()));
+        return Err(WalletCliError::<N>::InvalidInput(
+            "Invalid input format".into(),
+        ));
     }
     input.pop();
 
     let mut parts: Vec<&str> = input.split('(').collect();
-    let last = parts.pop().ok_or(WalletCliError::InvalidInput(
+    let last = parts.pop().ok_or(WalletCliError::<N>::InvalidInput(
         "Invalid input format".to_owned(),
     ))?;
     parts.extend(last.split(','));
 
     if parts.len() != 3 {
-        return Err(WalletCliError::InvalidInput("Invalid input format".into()));
+        return Err(WalletCliError::<N>::InvalidInput(
+            "Invalid input format".into(),
+        ));
     }
 
-    let h256 =
-        H256::from_str(parts[1]).map_err(|err| WalletCliError::InvalidInput(err.to_string()))?;
-    let output_index =
-        u32::from_str(parts[2]).map_err(|err| WalletCliError::InvalidInput(err.to_string()))?;
+    let h256 = H256::from_str(parts[1])
+        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?;
+    let output_index = u32::from_str(parts[2])
+        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?;
     let source_id = match parts[0] {
         "tx" => OutPointSourceId::Transaction(Id::new(h256)),
         "block" => OutPointSourceId::BlockReward(Id::new(h256)),
         _ => {
-            return Err(WalletCliError::InvalidInput(
+            return Err(WalletCliError::<N>::InvalidInput(
                 "Invalid input: unknown ID type".into(),
             ));
         }
@@ -186,10 +192,10 @@ pub fn parse_utxo_outpoint(mut input: String) -> Result<UtxoOutPoint, WalletCliE
 
 /// Try to parse a total token supply from a string
 /// Valid values are "unlimited", "lockable" and "fixed(Amount)"
-pub fn parse_token_supply(
+pub fn parse_token_supply<N: NodeInterface>(
     input: &str,
     token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliError> {
+) -> Result<TokenTotalSupply, WalletCliError<N>> {
     match input {
         "unlimited" => Ok(TokenTotalSupply::Unlimited),
         "lockable" => Ok(TokenTotalSupply::Lockable),
@@ -198,32 +204,33 @@ pub fn parse_token_supply(
 }
 
 /// Try to parse a fixed total token supply in the format of "fixed(Amount)"
-fn parse_fixed_token_supply(
+fn parse_fixed_token_supply<N: NodeInterface>(
     input: &str,
     token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliError> {
+) -> Result<TokenTotalSupply, WalletCliError<N>> {
     if let Some(inner) = input.strip_prefix("fixed(").and_then(|str| str.strip_suffix(')')) {
         Ok(TokenTotalSupply::Fixed(parse_token_amount(
             token_number_of_decimals,
             inner,
         )?))
     } else {
-        Err(WalletCliError::InvalidInput(format!(
+        Err(WalletCliError::<N>::InvalidInput(format!(
             "Failed to parse token supply from {input}"
         )))
     }
 }
 
-pub fn parse_token_amount(
+pub fn parse_token_amount<N: NodeInterface>(
     token_number_of_decimals: u8,
     value: &str,
-) -> Result<Amount, WalletCliError> {
+) -> Result<Amount, WalletCliError<N>> {
     Amount::from_fixedpoint_str(value, token_number_of_decimals)
-        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+        .ok_or_else(|| WalletCliError::<N>::InvalidInput(value.to_owned()))
 }
 
 #[cfg(test)]
 mod tests {
+    use node_comm::rpc_client::ColdWalletClient;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -235,7 +242,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_parse_utxo_outpoint(#[case] seed: Seed) {
         fn check(input: String, is_tx: bool, idx: u32, hash: H256) {
-            let utxo_outpoint = parse_utxo_outpoint(input).unwrap();
+            let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
 
             match utxo_outpoint.source_id() {
                 OutPointSourceId::Transaction(id) => {

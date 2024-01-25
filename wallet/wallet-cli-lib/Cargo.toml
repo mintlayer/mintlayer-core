@@ -15,6 +15,7 @@ crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 p2p-types = { path = "../../p2p/types" }
+node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
@@ -33,6 +34,7 @@ serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+futures.workspace = true
 
 prettytable-rs = "0.10"
 

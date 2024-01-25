@@ -25,7 +25,7 @@ use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
 use serialization::hex_encoded::HexEncoded;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
 use wallet::{
     account::{PartiallySignedTransaction, PoolData},
@@ -42,17 +42,14 @@ use common::{
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, DecimalAmount, Id},
 };
 pub use interface::WalletRpcServer;
-pub use rpc::{rpc_creds::RpcCreds, Rpc, RpcAuthData};
+pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{Balances, BlockInfo},
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
-use crate::{
-    service::{CreatedWallet, NodeRpcClient},
-    WalletHandle, WalletRpcConfig,
-};
+use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
@@ -61,16 +58,16 @@ use self::types::{
     VrfPublicKeyInfo,
 };
 
-pub struct WalletRpc {
-    wallet: WalletHandle,
-    node: NodeRpcClient,
+pub struct WalletRpc<N: Clone> {
+    wallet: WalletHandle<N>,
+    node: N,
     chain_config: Arc<ChainConfig>,
 }
 
-type WRpcResult<T> = Result<T, RpcError>;
+type WRpcResult<T, N> = Result<T, RpcError<N>>;
 
-impl WalletRpc {
-    pub fn new(wallet: WalletHandle, node: NodeRpcClient, chain_config: Arc<ChainConfig>) -> Self {
+impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
+    pub fn new(wallet: WalletHandle<N>, node: N, chain_config: Arc<ChainConfig>) -> Self {
         Self {
             wallet,
             node,
@@ -82,7 +79,7 @@ impl WalletRpc {
         &self.chain_config
     }
 
-    fn shutdown(&self) -> WRpcResult<()> {
+    fn shutdown(&self) -> WRpcResult<(), N> {
         self.wallet.shallow_clone().stop().map_err(RpcError::SubmitError)
     }
 
@@ -91,7 +88,7 @@ impl WalletRpc {
         path: PathBuf,
         store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
-    ) -> WRpcResult<CreatedWallet> {
+    ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
@@ -105,7 +102,7 @@ impl WalletRpc {
         &self,
         wallet_path: PathBuf,
         password: Option<String>,
-    ) -> WRpcResult<()> {
+    ) -> WRpcResult<(), N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move { wallet_manager.open_wallet(wallet_path, password).await })
@@ -113,7 +110,7 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn close_wallet(&self) -> WRpcResult<()> {
+    pub async fn close_wallet(&self) -> WRpcResult<(), N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move { wallet_manager.close_wallet() })
@@ -125,30 +122,30 @@ impl WalletRpc {
         &self,
         lookahead_size: u32,
         force_reduce: bool,
-    ) -> WRpcResult<()> {
+    ) -> WRpcResult<(), N> {
         self.wallet
             .call(move |w| w.set_lookahead_size(lookahead_size, force_reduce))
             .await?
     }
 
-    pub async fn encrypt_private_keys(&self, password: String) -> WRpcResult<()> {
+    pub async fn encrypt_private_keys(&self, password: String) -> WRpcResult<(), N> {
         self.wallet.call(|w| w.encrypt_wallet(&Some(password))).await?
     }
 
-    pub async fn remove_private_key_encryption(&self) -> WRpcResult<()> {
+    pub async fn remove_private_key_encryption(&self) -> WRpcResult<(), N> {
         self.wallet.call(|w| w.encrypt_wallet(&None)).await?
     }
 
-    pub async fn unlock_private_keys(&self, password: String) -> WRpcResult<()> {
+    pub async fn unlock_private_keys(&self, password: String) -> WRpcResult<(), N> {
         self.wallet.call(move |w| w.unlock_wallet(&password)).await?
     }
 
-    pub async fn lock_private_keys(&self) -> WRpcResult<()> {
+    pub async fn lock_private_keys(&self) -> WRpcResult<(), N> {
         self.wallet.call(|w| w.lock_wallet()).await?
     }
 
-    async fn best_block(&self, _: EmptyArgs) -> WRpcResult<BlockInfo> {
-        let res = self.wallet.call(|w| Ok::<_, RpcError>(w.best_block())).await??;
+    async fn best_block(&self, _: EmptyArgs) -> WRpcResult<BlockInfo, N> {
+        let res = self.wallet.call(|w| Ok::<_, RpcError<N>>(w.best_block())).await??;
         Ok(BlockInfo::from_tuple(res))
     }
 
@@ -156,7 +153,7 @@ impl WalletRpc {
         &self,
         account_index: U31,
         transactions: Vec<SignedTransaction>,
-    ) -> WRpcResult<Block> {
+    ) -> WRpcResult<Block, N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -172,7 +169,7 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn generate_blocks(&self, account_index: U31, block_count: u32) -> WRpcResult<()> {
+    pub async fn generate_blocks(&self, account_index: U31, block_count: u32) -> WRpcResult<(), N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move { w.generate_blocks(account_index, block_count).await })
@@ -180,12 +177,12 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn create_account(&self, name: Option<String>) -> WRpcResult<NewAccountInfo> {
+    pub async fn create_account(&self, name: Option<String>) -> WRpcResult<NewAccountInfo, N> {
         let (num, name) = self.wallet.call(|w| w.create_account(name)).await??;
         Ok(NewAccountInfo::new(num, name))
     }
 
-    pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo> {
+    pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
         let (child_number, destination) = self
             .wallet
@@ -198,7 +195,7 @@ impl WalletRpc {
         Ok(AddressInfo::new(child_number, destination))
     }
 
-    pub async fn issue_public_key(&self, account_index: U31) -> WRpcResult<PublicKeyInfo> {
+    pub async fn issue_public_key(&self, account_index: U31) -> WRpcResult<PublicKeyInfo, N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
         let publick_key = self
             .wallet
@@ -214,7 +211,7 @@ impl WalletRpc {
     pub async fn get_legacy_vrf_public_key(
         &self,
         account_index: U31,
-    ) -> WRpcResult<LegacyVrfPublicKeyInfo> {
+    ) -> WRpcResult<LegacyVrfPublicKeyInfo, N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(
@@ -227,7 +224,10 @@ impl WalletRpc {
             })
     }
 
-    pub async fn get_vrf_key_usage(&self, account_index: U31) -> WRpcResult<Vec<VrfPublicKeyInfo>> {
+    pub async fn get_vrf_key_usage(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<Vec<VrfPublicKeyInfo>, N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -247,7 +247,7 @@ impl WalletRpc {
     pub async fn get_issued_addresses(
         &self,
         account_index: U31,
-    ) -> WRpcResult<Vec<AddressWithUsageInfo>> {
+    ) -> WRpcResult<Vec<AddressWithUsageInfo>, N> {
         let addresses: BTreeMap<_, _> = self
             .wallet
             .call(move |controller| {
@@ -266,7 +266,7 @@ impl WalletRpc {
         account_index: U31,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WRpcResult<Balances> {
+    ) -> WRpcResult<Balances, N> {
         let balances: Balances = self
             .wallet
             .call_async(move |w| {
@@ -285,7 +285,7 @@ impl WalletRpc {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput)>> {
+    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput)>, N> {
         self.wallet
             .call(move |w| {
                 w.readonly_controller(account_index)
@@ -298,7 +298,7 @@ impl WalletRpc {
         &self,
         account_index: U31,
         transaction_id: Id<Transaction>,
-    ) -> WRpcResult<TxData> {
+    ) -> WRpcResult<TxData, N> {
         self.wallet
             .call(move |controller| {
                 controller
@@ -312,7 +312,7 @@ impl WalletRpc {
     pub async fn pending_transactions(
         &self,
         account_index: U31,
-    ) -> WRpcResult<Vec<WithId<Transaction>>> {
+    ) -> WRpcResult<Vec<WithId<Transaction>>, N> {
         self.wallet
             .call(move |w| {
                 w.readonly_controller(account_index).pending_transactions().map(|txs| {
@@ -326,7 +326,7 @@ impl WalletRpc {
         &self,
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
-    ) -> WRpcResult<()> {
+    ) -> WRpcResult<(), N> {
         self.node
             .submit_transaction(tx.take(), options)
             .await
@@ -338,7 +338,7 @@ impl WalletRpc {
         account_index: U31,
         tx: HexEncoded<PartiallySignedTransaction>,
         config: ControllerConfig,
-    ) -> WRpcResult<PartiallySignedTransaction> {
+    ) -> WRpcResult<PartiallySignedTransaction, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -359,7 +359,7 @@ impl WalletRpc {
         amount_str: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)
@@ -387,7 +387,7 @@ impl WalletRpc {
         address: String,
         amount_str: DecimalAmount,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -422,7 +422,7 @@ impl WalletRpc {
         margin_ratio_per_thousand: String,
         decommission_address: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let cost_per_block =
@@ -460,7 +460,7 @@ impl WalletRpc {
         account_index: U31,
         pool_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
@@ -485,7 +485,7 @@ impl WalletRpc {
         account_index: U31,
         pool_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<PartiallySignedTransaction> {
+    ) -> WRpcResult<PartiallySignedTransaction, N> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
@@ -510,7 +510,7 @@ impl WalletRpc {
         address: String,
         pool_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewDelegation> {
+    ) -> WRpcResult<NewDelegation, N> {
         let address =
             Address::from_str(&self.chain_config, &address).map_err(|_| RpcError::InvalidPoolId)?;
 
@@ -545,7 +545,7 @@ impl WalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
 
@@ -575,7 +575,7 @@ impl WalletRpc {
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)
@@ -599,7 +599,7 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn start_staking(&self, account_index: U31) -> WRpcResult<()> {
+    pub async fn start_staking(&self, account_index: U31) -> WRpcResult<(), N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
 
         self.wallet
@@ -612,7 +612,7 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn stop_staking(&self, account_index: U31) -> WRpcResult<()> {
+    pub async fn stop_staking(&self, account_index: U31) -> WRpcResult<(), N> {
         self.wallet
             .call(move |controller| {
                 controller.stop_staking(account_index)?;
@@ -625,7 +625,7 @@ impl WalletRpc {
         &self,
         account_index: U31,
         transaction_id: Id<Transaction>,
-    ) -> WRpcResult<()> {
+    ) -> WRpcResult<(), N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
         self.wallet
             .call_async(move |w| {
@@ -643,7 +643,7 @@ impl WalletRpc {
         account_index: U31,
         data: Vec<u8>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -670,7 +670,7 @@ impl WalletRpc {
         token_total_supply: TokenTotalSupply,
         is_freezable: IsTokenFreezable,
         config: ControllerConfig,
-    ) -> WRpcResult<RpcTokenId> {
+    ) -> WRpcResult<RpcTokenId, N> {
         ensure!(
             number_of_decimals <= self.chain_config.token_max_dec_count(),
             RpcError::Controller(ControllerError::WalletError(WalletError::TokenIssuance(
@@ -712,7 +712,7 @@ impl WalletRpc {
         address: String,
         metadata: Metadata,
         config: ControllerConfig,
-    ) -> WRpcResult<RpcTokenId> {
+    ) -> WRpcResult<RpcTokenId, N> {
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
         self.wallet
@@ -740,7 +740,7 @@ impl WalletRpc {
         address: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -772,7 +772,7 @@ impl WalletRpc {
         token_id: String,
         amount: DecimalAmount,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -801,7 +801,7 @@ impl WalletRpc {
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -827,7 +827,7 @@ impl WalletRpc {
         token_id: String,
         is_unfreezable: IsTokenUnfreezable,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -852,7 +852,7 @@ impl WalletRpc {
         account_index: U31,
         token_id: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -878,7 +878,7 @@ impl WalletRpc {
         token_id: String,
         address: String,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction> {
+    ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
             .and_then(|address| address.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -900,7 +900,7 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn rescan(&self) -> WRpcResult<()> {
+    pub async fn rescan(&self) -> WRpcResult<(), N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -911,13 +911,13 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn sync(&self) -> WRpcResult<()> {
+    pub async fn sync(&self) -> WRpcResult<(), N> {
         self.wallet
             .call_async(move |controller| Box::pin(async move { controller.sync_once().await }))
             .await?
     }
 
-    pub async fn list_pool_ids(&self, account_index: U31) -> WRpcResult<Vec<PoolInfo>> {
+    pub async fn list_pool_ids(&self, account_index: U31) -> WRpcResult<Vec<PoolInfo>, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -935,7 +935,10 @@ impl WalletRpc {
             })
     }
 
-    pub async fn list_delegation_ids(&self, account_index: U31) -> WRpcResult<Vec<DelegationInfo>> {
+    pub async fn list_delegation_ids(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<Vec<DelegationInfo>, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
@@ -953,7 +956,10 @@ impl WalletRpc {
             })
     }
 
-    pub async fn list_created_blocks_ids(&self, account_index: U31) -> WRpcResult<Vec<BlockInfo>> {
+    pub async fn list_created_blocks_ids(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<Vec<BlockInfo>, N> {
         self.wallet
             .call(move |controller| {
                 controller.readonly_controller(account_index).get_created_blocks()
@@ -961,29 +967,29 @@ impl WalletRpc {
             .await?
     }
 
-    pub async fn get_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>> {
+    pub async fn get_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>, N> {
         self.wallet.call(move |controller| controller.seed_phrase()).await?
     }
 
-    pub async fn purge_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>> {
+    pub async fn purge_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>, N> {
         self.wallet.call(move |controller| controller.delete_seed_phrase()).await?
     }
 
-    pub async fn number_of_accounts(&self) -> WRpcResult<usize> {
+    pub async fn number_of_accounts(&self) -> WRpcResult<usize, N> {
         self.wallet
-            .call(move |controller| Ok::<_, RpcError>(controller.account_names().count()))
+            .call(move |controller| Ok::<_, RpcError<N>>(controller.account_names().count()))
             .await?
     }
 
-    pub async fn account_names(&self) -> WRpcResult<Vec<Option<String>>> {
+    pub async fn account_names(&self) -> WRpcResult<Vec<Option<String>>, N> {
         self.wallet
             .call(move |controller| {
-                Ok::<_, RpcError>(controller.account_names().cloned().collect())
+                Ok::<_, RpcError<N>>(controller.account_names().cloned().collect())
             })
             .await?
     }
 
-    pub async fn stake_pool_balance(&self, pool_id: String) -> WRpcResult<Option<String>> {
+    pub async fn stake_pool_balance(&self, pool_id: String) -> WRpcResult<Option<String>, N> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
@@ -995,81 +1001,81 @@ impl WalletRpc {
             .map(|balance| balance.into_fixedpoint_str(self.chain_config.coin_decimals())))
     }
 
-    pub async fn node_version(&self) -> WRpcResult<String> {
+    pub async fn node_version(&self) -> WRpcResult<String, N> {
         self.node.node_version().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn node_shutdown(&self) -> WRpcResult<()> {
+    pub async fn node_shutdown(&self) -> WRpcResult<(), N> {
         self.node.node_shutdown().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn connect_to_peer(&self, address: IpOrSocketAddress) -> WRpcResult<()> {
+    pub async fn connect_to_peer(&self, address: IpOrSocketAddress) -> WRpcResult<(), N> {
         self.node.p2p_connect(address).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn disconnect_peer(&self, peer_id: PeerId) -> WRpcResult<()> {
+    pub async fn disconnect_peer(&self, peer_id: PeerId) -> WRpcResult<(), N> {
         self.node.p2p_disconnect(peer_id).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn list_banned(&self) -> WRpcResult<Vec<BannableAddress>> {
+    pub async fn list_banned(&self) -> WRpcResult<Vec<BannableAddress>, N> {
         self.node.p2p_list_banned().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn ban_address(&self, address: BannableAddress) -> WRpcResult<()> {
+    pub async fn ban_address(&self, address: BannableAddress) -> WRpcResult<(), N> {
         self.node.p2p_ban(address).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn unban_address(&self, address: BannableAddress) -> WRpcResult<()> {
+    pub async fn unban_address(&self, address: BannableAddress) -> WRpcResult<(), N> {
         self.node.p2p_unban(address).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn peer_count(&self) -> WRpcResult<usize> {
+    pub async fn peer_count(&self) -> WRpcResult<usize, N> {
         self.node.p2p_get_peer_count().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn connected_peers(&self) -> WRpcResult<Vec<ConnectedPeer>> {
+    pub async fn connected_peers(&self) -> WRpcResult<Vec<ConnectedPeer>, N> {
         self.node.p2p_get_connected_peers().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn add_reserved_peer(&self, address: IpOrSocketAddress) -> WRpcResult<()> {
+    pub async fn add_reserved_peer(&self, address: IpOrSocketAddress) -> WRpcResult<(), N> {
         self.node.p2p_add_reserved_node(address).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn remove_reserved_peer(&self, address: IpOrSocketAddress) -> WRpcResult<()> {
+    pub async fn remove_reserved_peer(&self, address: IpOrSocketAddress) -> WRpcResult<(), N> {
         self.node.p2p_remove_reserved_node(address).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn submit_block(&self, block: HexEncoded<Block>) -> WRpcResult<()> {
+    pub async fn submit_block(&self, block: HexEncoded<Block>) -> WRpcResult<(), N> {
         self.node.submit_block(block.take()).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn chainstate_info(&self) -> WRpcResult<ChainInfo> {
+    pub async fn chainstate_info(&self) -> WRpcResult<ChainInfo, N> {
         self.node.chainstate_info().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn node_best_block_id(&self) -> WRpcResult<Id<GenBlock>> {
+    pub async fn node_best_block_id(&self) -> WRpcResult<Id<GenBlock>, N> {
         self.node.get_best_block_id().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn node_best_block_height(&self) -> WRpcResult<BlockHeight> {
+    pub async fn node_best_block_height(&self) -> WRpcResult<BlockHeight, N> {
         self.node.get_best_block_height().await.map_err(RpcError::RpcError)
     }
 
     pub async fn node_block_id(
         &self,
         block_height: BlockHeight,
-    ) -> WRpcResult<Option<Id<GenBlock>>> {
+    ) -> WRpcResult<Option<Id<GenBlock>>, N> {
         self.node.get_block_id_at_height(block_height).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn get_node_block(&self, block_id: Id<Block>) -> WRpcResult<Option<Block>> {
+    pub async fn get_node_block(&self, block_id: Id<Block>) -> WRpcResult<Option<Block>, N> {
         self.node.get_block(block_id).await.map_err(RpcError::RpcError)
     }
 }
 
-pub async fn start(
-    wallet_handle: WalletHandle,
-    node_rpc: NodeRpcClient,
+pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
+    wallet_handle: WalletHandle<N>,
+    node_rpc: N,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
 ) -> anyhow::Result<rpc::Rpc> {

@@ -38,11 +38,12 @@ pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 use wallet::account::PoolData;
 pub use wallet_controller::types::{Balances, BlockInfo, DecimalAmount};
+use wallet_controller::NodeInterface;
 
 use crate::service::SubmitError;
 
 #[derive(Debug, thiserror::Error)]
-pub enum RpcError {
+pub enum RpcError<N: NodeInterface> {
     #[error("Account index out of supported range")]
     AcctIndexOutOfRange,
 
@@ -71,10 +72,10 @@ pub enum RpcError {
     InvalidBlockId,
 
     #[error("Wallet error: {0}")]
-    Controller(#[from] wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+    Controller(#[from] wallet_controller::ControllerError<N>),
 
     #[error("RPC error: {0}")]
-    RpcError(node_comm::rpc_client::NodeRpcError),
+    RpcError(N::Error),
 
     #[error("No wallet opened")]
     NoWalletOpened,
@@ -83,8 +84,8 @@ pub enum RpcError {
     SubmitError(#[from] SubmitError),
 }
 
-impl From<RpcError> for rpc::Error {
-    fn from(e: RpcError) -> Self {
+impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
+    fn from(e: RpcError<N>) -> Self {
         Self::owned::<()>(-1, e.to_string(), None)
     }
 }
@@ -99,7 +100,7 @@ pub struct AccountIndexArg {
 }
 
 impl AccountIndexArg {
-    pub fn index(&self) -> Result<U31, RpcError> {
+    pub fn index<N: NodeInterface>(&self) -> Result<U31, RpcError<N>> {
         U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
     }
 }
@@ -304,10 +305,10 @@ enum TokenTotalSupply {
 }
 
 impl TokenTotalSupply {
-    fn into_token_supply(
+    fn into_token_supply<N: NodeInterface>(
         self,
         chain_config: &ChainConfig,
-    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+    ) -> Result<tokens::TokenTotalSupply, RpcError<N>> {
         match self {
             Self::Lockable => Ok(tokens::TokenTotalSupply::Lockable),
             Self::Unlimited => Ok(tokens::TokenTotalSupply::Unlimited),
@@ -330,10 +331,10 @@ pub struct TokenMetadata {
 }
 
 impl TokenMetadata {
-    pub fn token_supply(
+    pub fn token_supply<N: NodeInterface>(
         &self,
         chain_config: &ChainConfig,
-    ) -> Result<tokens::TokenTotalSupply, RpcError> {
+    ) -> Result<tokens::TokenTotalSupply, RpcError<N>> {
         self.token_supply.into_token_supply(chain_config)
     }
 

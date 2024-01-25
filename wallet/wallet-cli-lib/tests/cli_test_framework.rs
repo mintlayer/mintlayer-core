@@ -15,6 +15,7 @@
 
 use crypto::random::Rng;
 use tokio::task::JoinHandle;
+use wallet_controller::NodeInterface;
 
 use std::{
     sync::{mpsc, Arc},
@@ -57,7 +58,7 @@ impl ConsoleOutput for MockConsoleOutput {
         self.output_tx.send(line.to_owned()).unwrap();
     }
 
-    fn print_error(&mut self, error: WalletCliError) {
+    fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>) {
         self.output_tx.send(error.to_string()).unwrap();
     }
 }
@@ -102,6 +103,7 @@ impl CliTestFramework {
                     exit_on_error: None,
                     vi_mode: false,
                     in_top_x_mb: 5,
+                    cold_wallet: false,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -117,6 +119,7 @@ impl CliTestFramework {
                 exit_on_error: None,
                 vi_mode: false,
                 in_top_x_mb: 5,
+                cold_wallet: false,
             },
         };
 

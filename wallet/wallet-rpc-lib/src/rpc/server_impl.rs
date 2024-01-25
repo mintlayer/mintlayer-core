@@ -23,8 +23,10 @@ use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
-use std::str::FromStr;
-use wallet_controller::{types::BlockInfo, ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
+use std::{fmt::Debug, str::FromStr};
+use wallet_controller::{
+    types::BlockInfo, ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
+};
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
@@ -40,7 +42,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
-impl WalletRpcServer for WalletRpc {
+impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer for WalletRpc<N> {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.shutdown())
     }
@@ -128,21 +130,21 @@ impl WalletRpcServer for WalletRpc {
     }
 
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {
-        rpc::handle_result(self.issue_address(account_index.index()?).await)
+        rpc::handle_result(self.issue_address(account_index.index::<N>()?).await)
     }
 
     async fn issue_public_key(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<PublicKeyInfo> {
-        rpc::handle_result(self.issue_public_key(account_index.index()?).await)
+        rpc::handle_result(self.issue_public_key(account_index.index::<N>()?).await)
     }
 
     async fn get_issued_addresses(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>> {
-        rpc::handle_result(self.get_issued_addresses(account_index.index()?).await)
+        rpc::handle_result(self.get_issued_addresses(account_index.index::<N>()?).await)
     }
 
     async fn get_balance(
@@ -152,7 +154,7 @@ impl WalletRpcServer for WalletRpc {
     ) -> rpc::RpcResult<Balances> {
         rpc::handle_result(
             self.get_balance(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 UtxoStates::ALL,
                 with_locked.unwrap_or(WithLocked::Unlocked),
             )
@@ -163,7 +165,7 @@ impl WalletRpcServer for WalletRpc {
     async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>> {
         let utxos = self
             .get_utxos(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 UtxoTypes::ALL,
                 UtxoStates::ALL,
                 WithLocked::Unlocked,
@@ -197,8 +199,14 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.send_coins(account_index.index()?, address, amount_str, vec![], config)
-                .await,
+            self.send_coins(
+                account_index.index::<N>()?,
+                address,
+                amount_str,
+                vec![],
+                config,
+            )
+            .await,
         )
     }
 
@@ -216,7 +224,7 @@ impl WalletRpcServer for WalletRpc {
         };
         rpc::handle_result(
             self.create_stake_pool(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 amount,
                 cost_per_block,
                 margin_ratio_per_thousand,
@@ -237,7 +245,7 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.decommission_stake_pool(account_index.index()?, pool_id, config).await,
+            self.decommission_stake_pool(account_index.index::<N>()?, pool_id, config).await,
         )
     }
 
@@ -252,7 +260,8 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.create_delegation(account_index.index()?, address, pool_id, config).await,
+            self.create_delegation(account_index.index::<N>()?, address, pool_id, config)
+                .await,
         )
     }
 
@@ -267,7 +276,7 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.delegate_staking(account_index.index()?, amount, delegation_id, config)
+            self.delegate_staking(account_index.index::<N>()?, amount, delegation_id, config)
                 .await,
         )
     }
@@ -285,7 +294,7 @@ impl WalletRpcServer for WalletRpc {
         };
         rpc::handle_result(
             self.send_from_delegation_to_address(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 address,
                 amount,
                 delegation_id,
@@ -296,29 +305,29 @@ impl WalletRpcServer for WalletRpc {
     }
 
     async fn start_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.start_staking(account_index.index()?).await)
+        rpc::handle_result(self.start_staking(account_index.index::<N>()?).await)
     }
 
     async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.stop_staking(account_index.index()?).await)
+        rpc::handle_result(self.stop_staking(account_index.index::<N>()?).await)
     }
 
     async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>> {
-        rpc::handle_result(self.list_pool_ids(account_index.index()?).await)
+        rpc::handle_result(self.list_pool_ids(account_index.index::<N>()?).await)
     }
 
     async fn list_delegation_ids(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<DelegationInfo>> {
-        rpc::handle_result(self.list_delegation_ids(account_index.index()?).await)
+        rpc::handle_result(self.list_delegation_ids(account_index.index::<N>()?).await)
     }
 
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<BlockInfo>> {
-        rpc::handle_result(self.list_created_blocks_ids(account_index.index()?).await)
+        rpc::handle_result(self.list_created_blocks_ids(account_index.index::<N>()?).await)
     }
 
     async fn issue_new_nft(
@@ -334,7 +343,7 @@ impl WalletRpcServer for WalletRpc {
 
         rpc::handle_result(
             self.issue_new_nft(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 destination_address,
                 metadata.into_metadata(),
                 config,
@@ -354,11 +363,11 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
 
-        let token_supply = metadata.token_supply(&self.chain_config)?;
+        let token_supply = metadata.token_supply::<N>(&self.chain_config)?;
         let is_freezable = metadata.is_freezable();
         rpc::handle_result(
             self.issue_new_token(
-                account_index.index()?,
+                account_index.index::<N>()?,
                 metadata.number_of_decimals,
                 destination_address,
                 metadata.token_ticker.into_bytes(),
@@ -383,7 +392,7 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.change_token_authority(account_index.index()?, token_id, address, config)
+            self.change_token_authority(account_index.index::<N>()?, token_id, address, config)
                 .await,
         )
     }
@@ -401,8 +410,14 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.mint_tokens(account_index.index()?, token_id, address, amount, config)
-                .await,
+            self.mint_tokens(
+                account_index.index::<N>()?,
+                token_id,
+                address,
+                amount,
+                config,
+            )
+            .await,
         )
     }
 
@@ -418,7 +433,7 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.unmint_tokens(account_index.index()?, token_id, amount, config).await,
+            self.unmint_tokens(account_index.index::<N>()?, token_id, amount, config).await,
         )
     }
 
@@ -432,7 +447,9 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
 
-        rpc::handle_result(self.lock_token_supply(account_index.index()?, token_id, config).await)
+        rpc::handle_result(
+            self.lock_token_supply(account_index.index::<N>()?, token_id, config).await,
+        )
     }
 
     async fn freeze_token(
@@ -453,8 +470,13 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.freeze_token(account_index.index()?, token_id, is_unfreezable, config)
-                .await,
+            self.freeze_token(
+                account_index.index::<N>()?,
+                token_id,
+                is_unfreezable,
+                config,
+            )
+            .await,
         )
     }
 
@@ -468,7 +490,7 @@ impl WalletRpcServer for WalletRpc {
             in_top_x_mb: options.in_top_x_mb,
         };
 
-        rpc::handle_result(self.unfreeze_token(account_index.index()?, token_id, config).await)
+        rpc::handle_result(self.unfreeze_token(account_index.index::<N>()?, token_id, config).await)
     }
 
     async fn send_tokens(
@@ -484,8 +506,14 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.send_tokens(account_index.index()?, token_id, address, amount, config)
-                .await,
+            self.send_tokens(
+                account_index.index::<N>()?,
+                token_id,
+                address,
+                amount,
+                config,
+            )
+            .await,
         )
     }
 
@@ -500,7 +528,7 @@ impl WalletRpcServer for WalletRpc {
         };
 
         rpc::handle_result(
-            self.deposit_data(account_index.index()?, data.into_bytes(), config).await,
+            self.deposit_data(account_index.index::<N>()?, data.into_bytes(), config).await,
         )
     }
 
@@ -516,7 +544,7 @@ impl WalletRpcServer for WalletRpc {
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>> {
-        rpc::handle_result(self.get_vrf_key_usage(account_index.index()?).await)
+        rpc::handle_result(self.get_vrf_key_usage(account_index.index::<N>()?).await)
     }
 
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion> {
@@ -529,7 +557,7 @@ impl WalletRpcServer for WalletRpc {
 
     async fn connect_to_peer(&self, address: String) -> rpc::RpcResult<()> {
         let address =
-            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::InvalidIpAddress)?;
+            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::<N>::InvalidIpAddress)?;
         rpc::handle_result(self.connect_to_peer(address).await)
     }
 
@@ -559,13 +587,13 @@ impl WalletRpcServer for WalletRpc {
 
     async fn add_reserved_peer(&self, address: String) -> rpc::RpcResult<()> {
         let address =
-            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::InvalidIpAddress)?;
+            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::<N>::InvalidIpAddress)?;
         rpc::handle_result(self.add_reserved_peer(address).await)
     }
 
     async fn remove_reserved_peer(&self, address: String) -> rpc::RpcResult<()> {
         let address =
-            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::InvalidIpAddress)?;
+            IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::<N>::InvalidIpAddress)?;
         rpc::handle_result(self.remove_reserved_peer(address).await)
     }
 
@@ -593,7 +621,7 @@ impl WalletRpcServer for WalletRpc {
     }
 
     async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>> {
-        let hash = H256::from_str(&block_id).map_err(|_| RpcError::InvalidBlockId)?;
+        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
         rpc::handle_result(self.get_node_block(hash.into()).await)
     }
 
@@ -604,7 +632,7 @@ impl WalletRpcServer for WalletRpc {
     ) -> rpc::RpcResult<()> {
         let transactions = transactions.into_iter().map(HexEncoded::take).collect();
         rpc::handle_result(
-            self.generate_block(account_index.index()?, transactions).await.map(|_| {}),
+            self.generate_block(account_index.index::<N>()?, transactions).await.map(|_| {}),
         )
     }
 
@@ -614,7 +642,7 @@ impl WalletRpcServer for WalletRpc {
         block_count: u32,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.generate_blocks(account_index.index()?, block_count).await.map(|_| {}),
+            self.generate_blocks(account_index.index::<N>()?, block_count).await.map(|_| {}),
         )
     }
 
@@ -624,7 +652,8 @@ impl WalletRpcServer for WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.abandon_transaction(account_index.index()?, transaction_id.take()).await,
+            self.abandon_transaction(account_index.index::<N>()?, transaction_id.take())
+                .await,
         )
     }
 
@@ -633,7 +662,7 @@ impl WalletRpcServer for WalletRpc {
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<Id<Transaction>>> {
         rpc::handle_result(
-            self.pending_transactions(account_index.index()?)
+            self.pending_transactions(account_index.index::<N>()?)
                 .await
                 .map(|txs| txs.into_iter().map(|tx| tx.get_id()).collect::<Vec<_>>()),
         )
@@ -645,7 +674,7 @@ impl WalletRpcServer for WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<serde_json::Value> {
         rpc::handle_result(
-            self.get_transaction(account_index.index()?, transaction_id.take())
+            self.get_transaction(account_index.index::<N>()?, transaction_id.take())
                 .await
                 .map(|tx| {
                     let str = JsonEncoded::new(tx.get_transaction()).to_string();
@@ -661,7 +690,7 @@ impl WalletRpcServer for WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String> {
         rpc::handle_result(
-            self.get_transaction(account_index.index()?, transaction_id.take())
+            self.get_transaction(account_index.index::<N>()?, transaction_id.take())
                 .await
                 .map(|tx| HexEncode::hex_encode(tx.get_transaction())),
         )
@@ -673,7 +702,7 @@ impl WalletRpcServer for WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String> {
         rpc::handle_result(
-            self.get_transaction(account_index.index()?, transaction_id.take())
+            self.get_transaction(account_index.index::<N>()?, transaction_id.take())
                 .await
                 .map(|tx| HexEncode::hex_encode(tx.get_signed_transaction())),
         )

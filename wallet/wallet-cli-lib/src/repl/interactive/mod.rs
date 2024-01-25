@@ -27,6 +27,7 @@ use reedline::{
     ReedlineMenu, Signal, Vi,
 };
 use tokio::sync::{mpsc, oneshot};
+use wallet_controller::NodeInterface;
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
@@ -40,12 +41,12 @@ const HISTORY_MAX_LINES: usize = 1000;
 const HISTORY_MENU_NAME: &str = "history_menu";
 const COMPLETION_MENU_NAME: &str = "completion_menu";
 
-fn create_line_editor(
+fn create_line_editor<N: NodeInterface>(
     printer: reedline::ExternalPrinter<String>,
     repl_command: super::Command,
     history_file: Option<PathBuf>,
     vi_mode: bool,
-) -> Result<Reedline, WalletCliError> {
+) -> Result<Reedline, WalletCliError<N>> {
     let commands = repl_command
         .get_subcommands()
         .map(|command| command.get_name().to_owned())
@@ -99,11 +100,11 @@ fn create_line_editor(
     Ok(line_editor)
 }
 
-fn process_line(
+fn process_line<N: NodeInterface>(
     repl_command: &Command,
-    event_tx: &mpsc::UnboundedSender<Event>,
+    event_tx: &mpsc::UnboundedSender<Event<N>>,
     sig: reedline::Signal,
-) -> Result<Option<ConsoleCommand>, WalletCliError> {
+) -> Result<Option<ConsoleCommand>, WalletCliError<N>> {
     let line = match sig {
         Signal::Success(line) => line,
         Signal::CtrlC => {
@@ -125,16 +126,18 @@ fn process_line(
     super::run_command_blocking(event_tx, command).map(Option::Some)
 }
 
-pub fn run(
+#[allow(clippy::too_many_arguments)]
+pub fn run<N: NodeInterface>(
     mut console: impl ConsoleOutput,
-    event_tx: mpsc::UnboundedSender<Event>,
+    event_tx: mpsc::UnboundedSender<Event<N>>,
     exit_on_error: bool,
     logger: log::InteractiveLogger,
     history_file: Option<PathBuf>,
     vi_mode: bool,
-    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
-) -> Result<(), WalletCliError> {
-    let repl_command = get_repl_command();
+    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
+    cold_wallet: bool,
+) -> Result<(), WalletCliError<N>> {
+    let repl_command = get_repl_command(cold_wallet);
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),
@@ -183,13 +186,13 @@ pub fn run(
     }
 }
 
-fn handle_response(
-    res: Result<Option<ConsoleCommand>, WalletCliError>,
+fn handle_response<N: NodeInterface>(
+    res: Result<Option<ConsoleCommand>, WalletCliError<N>>,
     console: &mut impl ConsoleOutput,
     prompt: &mut wallet_prompt::WalletPrompt,
     line_editor: &mut Reedline,
     exit_on_error: bool,
-) -> Option<Result<(), WalletCliError>> {
+) -> Option<Result<(), WalletCliError<N>>> {
     match res {
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);

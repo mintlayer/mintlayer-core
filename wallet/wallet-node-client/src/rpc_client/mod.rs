@@ -14,7 +14,11 @@
 // limitations under the License.
 
 pub mod client_impl;
+pub mod cold_wallet_client;
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
 use rpc::new_http_client;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
@@ -31,6 +35,17 @@ pub enum NodeRpcError {
     ClientCreationError(jsonrpsee::core::ClientError),
     #[error("Response error: {0}")]
     ResponseError(jsonrpsee::core::ClientError),
+}
+
+#[derive(Clone, Debug)]
+pub struct ColdWalletClient {
+    chain_config: Arc<ChainConfig>,
+}
+
+impl ColdWalletClient {
+    pub fn new(chain_config: Arc<ChainConfig>) -> Self {
+        Self { chain_config }
+    }
 }
 
 #[derive(Clone, Debug)]
