@@ -1091,7 +1091,7 @@ where
                     wallet_rpc_lib::types::StakingStatus::Staking => "Staking",
                     wallet_rpc_lib::types::StakingStatus::NotStaking => "Not staking",
                 };
-                Ok(ConsoleCommand::Print(format!("Status is {status}")))
+                Ok(ConsoleCommand::Print(status.to_string()))
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
