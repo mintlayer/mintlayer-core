@@ -378,6 +378,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             # no created block by us yet
             assert_equal(0, len(created_block_ids))
             assert_in("Staking started successfully", await wallet.start_staking())
+            assert_equal("Staking", await wallet.staking_status())
             assert_in("Success", await wallet.select_account(1))
 
             block_height = await wallet.get_best_block_height()
@@ -438,6 +439,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("Success", await wallet.stop_staking())
+            assert_in("Not staking", await wallet.staking_status())
             assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id))
 
             transactions = node.mempool_transactions()

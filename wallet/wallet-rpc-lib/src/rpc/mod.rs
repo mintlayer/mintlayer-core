@@ -55,7 +55,7 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, EmptyArgs, LegacyVrfPublicKeyInfo,
     NewAccountInfo, NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcTokenId,
-    VrfPublicKeyInfo,
+    StakingStatus, VrfPublicKeyInfo,
 };
 
 pub struct WalletRpc<N: Clone> {
@@ -617,6 +617,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .call(move |controller| {
                 controller.stop_staking(account_index)?;
                 Ok::<(), ControllerError<_>>(())
+            })
+            .await?
+    }
+
+    pub async fn staking_status(&self, account_index: U31) -> WRpcResult<StakingStatus, N> {
+        self.wallet
+            .call(move |controller| {
+                let status = StakingStatus::new(controller.is_staking(account_index));
+                Ok::<_, ControllerError<_>>(status)
             })
             .await?
     }

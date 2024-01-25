@@ -378,3 +378,19 @@ impl NewTransaction {
 pub struct NodeVersion {
     pub version: String,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum StakingStatus {
+    Staking,
+    NotStaking,
+}
+
+impl StakingStatus {
+    pub fn new(is_staking: bool) -> Self {
+        if is_staking {
+            Self::Staking
+        } else {
+            Self::NotStaking
+        }
+    }
+}

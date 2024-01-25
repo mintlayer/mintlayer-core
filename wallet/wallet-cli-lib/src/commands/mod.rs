@@ -405,6 +405,10 @@ pub enum WalletCommand {
     #[clap(name = "staking-stop")]
     StopStaking,
 
+    /// Show the staking status for the currently selected account in this wallet.
+    #[clap(name = "staking-status")]
+    StakingStatus,
+
     /// Print the balance of available staking pools
     #[clap(name = "staking-pool-balance")]
     StakePoolBalance { pool_id: String },
@@ -1078,6 +1082,16 @@ where
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc.stop_staking(selected_account).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
+            WalletCommand::StakingStatus => {
+                let selected_account = self.get_selected_acc()?;
+                let status = self.wallet_rpc.staking_status(selected_account).await?;
+                let status = match status {
+                    wallet_rpc_lib::types::StakingStatus::Staking => "Staking",
+                    wallet_rpc_lib::types::StakingStatus::NotStaking => "Not staking",
+                };
+                Ok(ConsoleCommand::Print(status.to_string()))
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
