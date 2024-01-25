@@ -42,8 +42,8 @@ use super::{
     error::BackendError,
     messages::{
         AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
-        DelegateStakingRequest, EncryptionAction, EncryptionState, SendRequest, StakeRequest,
-        TransactionInfo, WalletId, WalletInfo,
+        DelegateStakingRequest, EncryptionAction, EncryptionState, SendDelegateToAddressRequest,
+        SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -484,6 +484,37 @@ impl Backend {
         Ok(TransactionInfo { wallet_id })
     }
 
+    async fn send_delegation_to_address(
+        &mut self,
+        request: SendDelegateToAddressRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let SendDelegateToAddressRequest {
+            wallet_id,
+            account_id,
+            address,
+            amount,
+            delegation_id,
+        } = request;
+
+        let address = parse_address(&self.chain_config, &address)
+            .map_err(|err| BackendError::AddressError(err.to_string()))?;
+
+        let amount = parse_coin_amount(&self.chain_config, &amount)
+            .ok_or(BackendError::InvalidAmount(amount))?;
+
+        let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .send_to_address_from_delegation(address, amount, delegation_id)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id })
+    }
+
     fn get_account_balance(
         controller: &ReadOnlyController<WalletHandlesClient>,
     ) -> BTreeMap<Currency, Amount> {
@@ -568,6 +599,13 @@ impl Backend {
                 let delegation_id = request.delegation_id;
                 let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
                 Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
+            }
+            BackendRequest::SendDelegationToAddress(request) => {
+                let result = self.send_delegation_to_address(request).await;
+                Self::send_event(
+                    &self.event_tx,
+                    BackendEvent::SendDelegationToAddress(result),
+                );
             }
             BackendRequest::TransactionList {
                 wallet_id,

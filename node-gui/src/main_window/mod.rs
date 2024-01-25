@@ -537,6 +537,26 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
+                BackendEvent::SendDelegationToAddress(Ok(transaction_info)) => {
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::SendDelegationToAddressSucceed,
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
+                }
+                BackendEvent::SendDelegationToAddress(Err(error)) => {
+                    self.show_error(error.to_string());
+                    Command::none()
+                }
                 BackendEvent::Broadcast(Ok(())) => {
                     self.show_info("Success".to_owned());
                     Command::none()
