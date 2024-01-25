@@ -34,6 +34,15 @@ pub enum TxRelayPolicy {
     DontRelay,
 }
 
+/// Transaction priority for block inclusion and mempool eviction
+#[derive(
+    Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Debug, serde::Serialize, serde::Deserialize,
+)]
+pub enum TxPriority {
+    Normal,
+    High,
+}
+
 /// Options specifying how should a transaction be handled by mempool and p2p.
 // Can be extended further with custom eviction policies, tx orphan pool policies, etc.
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -43,12 +52,17 @@ pub struct TxOptions {
 
     /// Whether the transaction should be relayed
     relay_policy: TxRelayPolicy,
+
+    /// Priority for including the transaction in the block and evicting it from the mempool.
+    /// Overrides the usual feerate-based priority.
+    priority: TxPriority,
 }
 
 impl TxOptions {
     /// Default options for given transaction origin
     pub const fn default_for(origin: TxOrigin) -> Self {
         let trust_policy = TxTrustPolicy::Untrusted;
+        let priority = TxPriority::Normal;
 
         let relay_policy = match origin {
             TxOrigin::Local(origin) => match origin {
@@ -62,13 +76,23 @@ impl TxOptions {
         TxOptions {
             trust_policy,
             relay_policy,
+            priority,
         }
     }
 
     /// Apply given user-specified overrides to the options
     pub const fn with_overrides(mut self, overrides: TxOptionsOverrides) -> Self {
-        if let Some(trust_policy) = overrides.trust_policy {
+        let TxOptionsOverrides {
+            trust_policy,
+            priority,
+        } = overrides;
+
+        if let Some(trust_policy) = trust_policy {
             self.trust_policy = trust_policy;
+        }
+
+        if let Some(priority) = priority {
+            self.priority = priority;
         }
 
         self
@@ -81,6 +105,10 @@ impl TxOptions {
     pub fn relay_policy(&self) -> TxRelayPolicy {
         self.relay_policy
     }
+
+    pub fn priority(&self) -> TxPriority {
+        self.priority
+    }
 }
 
 /// Mechanism to apply user-specified overrides to [TxOptions].
@@ -89,4 +117,17 @@ impl TxOptions {
 pub struct TxOptionsOverrides {
     /// Override transaction trust policy.
     trust_policy: Option<TxTrustPolicy>,
+
+    /// Override transaction priority
+    priority: Option<TxPriority>,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn priority_ord_correct() {
+        assert!(TxPriority::Normal < TxPriority::High);
+    }
 }
