@@ -35,7 +35,7 @@ use super::ColdWalletClient;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ColdWalletRpcError {
-    #[error("Methods is not available in cold wallet mode")]
+    #[error("Method is not available in cold wallet mode")]
     NotAvailable,
 }
 
