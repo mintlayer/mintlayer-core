@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     address::Address,
     chain::{ChainConfig, DelegationId},
+    primitives::DecimalAmount,
 };
 use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
@@ -103,7 +104,11 @@ pub fn view_delegation(
                     .push(
                         text_input("Amount", &delegate_staking_amount)
                             .on_input(move |value| {
-                                WalletMessage::DelegationAmountEdit((delegation_id, value))
+                                if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                                    WalletMessage::DelegationAmountEdit((delegation_id, value))
+                                } else {
+                                    WalletMessage::NoOp
+                                }
                             })
                             .padding(5)
                             .width(Length::Fixed(100.)),
@@ -124,7 +129,13 @@ pub fn view_delegation(
         // ----- Create delegation
         row![
             text_input("Pool Id for new delegation", pool_id)
-                .on_input(|value| { WalletMessage::DelegationPoolIdEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::DelegationPoolIdEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -136,7 +147,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Delegation address", delegation_address)
-                .on_input(|value| { WalletMessage::DelegationAddressEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::DelegationAddressEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -153,7 +170,13 @@ pub fn view_delegation(
         // ----- Send delegation to address
         row![
             text_input("Address", send_delegation_address)
-                .on_input(|value| { WalletMessage::SendDelegationAddressEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::SendDelegationAddressEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -165,7 +188,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Amount to send", send_delegation_amount)
-                .on_input(|value| { WalletMessage::SendDelegationAmountEdit(value) })
+                .on_input(|value| {
+                    if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                        WalletMessage::SendDelegationAmountEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -177,7 +206,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Delegation Id", send_delegation_id)
-                .on_input(|value| { WalletMessage::SendDelegationIdEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::SendDelegationIdEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),

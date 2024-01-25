@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{address::Address, chain::ChainConfig};
+use common::{address::Address, chain::ChainConfig, primitives::DecimalAmount};
 use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element,
@@ -112,7 +112,13 @@ pub fn view_stake(
     column![
         row![
             text_input("Pledge amount for the new staking pool", stake_amount)
-                .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
+                .on_input(|value| {
+                    if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                        WalletMessage::StakeAmountEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                 })
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -124,7 +130,13 @@ pub fn view_stake(
 
         row![
             text_input("Cost per block", cost_per_block)
-                .on_input(|value| { WalletMessage::CostPerBlockEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_digit()) {
+                        WalletMessage::CostPerBlockEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -136,7 +148,13 @@ pub fn view_stake(
 
         row![
             text_input("Margin ratio per thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]", mpt)
-                .on_input(|value| { WalletMessage::MarginPerThousandEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_digit() | (ch=='.') | (ch=='%')) {
+                        WalletMessage::MarginPerThousandEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -148,7 +166,13 @@ pub fn view_stake(
 
         row![
             text_input("Decommission address", decommission_key)
-                .on_input(|value| { WalletMessage::DecommissionAddressEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::DecommissionAddressEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),

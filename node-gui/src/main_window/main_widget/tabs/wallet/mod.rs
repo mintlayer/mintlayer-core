@@ -104,6 +104,7 @@ pub enum WalletMessage {
 
     StillSyncing,
     Close,
+    NoOp,
 }
 
 /// State that should be reset after changing the selected account
@@ -360,6 +361,7 @@ impl WalletTab {
                 self.account_state.send_delegation_id.clear();
                 Command::none()
             }
+            WalletMessage::NoOp => Command::none(),
         }
     }
 }
