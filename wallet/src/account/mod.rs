@@ -1188,13 +1188,14 @@ impl Account {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
-    /// Get a new public key that hasn't been used before
-    pub fn get_new_public_key<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        purpose: KeyPurpose,
+    /// Get the corresponding public key for a given public key hash
+    pub fn find_corresponding_pub_key(
+        &self,
+        public_key_hash: &PublicKeyHash,
     ) -> WalletResult<PublicKey> {
-        Ok(self.key_chain.issue_key(db_tx, purpose)?.into_public_key())
+        self.key_chain
+            .get_public_key_from_public_key_hash(public_key_hash)
+            .ok_or(WalletError::AddressNotFound)
     }
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {

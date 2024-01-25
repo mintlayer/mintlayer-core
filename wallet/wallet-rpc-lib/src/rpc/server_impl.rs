@@ -136,8 +136,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn issue_public_key(
         &self,
         account_index: AccountIndexArg,
+        address: String,
     ) -> rpc::RpcResult<PublicKeyInfo> {
-        rpc::handle_result(self.issue_public_key(account_index.index::<N>()?).await)
+        rpc::handle_result(self.find_public_key(account_index.index::<N>()?, address).await)
     }
 
     async fn get_issued_addresses(

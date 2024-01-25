@@ -133,8 +133,8 @@ pub enum ColdWalletCommand {
     NewAddress,
 
     /// Generate a new unused public key
-    #[clap(name = "address-new-public-key")]
-    NewPublicKey,
+    #[clap(name = "address-reveal-public-key")]
+    RevealPublicKey { public_key_hash: String },
 
     /// Show receive-addresses with their usage state.
     /// Note that whether an address is used isn't based on the wallet,
@@ -874,11 +874,14 @@ where
                 Ok(ConsoleCommand::Print(address.address))
             }
 
-            ColdWalletCommand::NewPublicKey => {
+            ColdWalletCommand::RevealPublicKey { public_key_hash } => {
                 let selected_account = self.get_selected_acc()?;
                 let public_key =
-                    self.wallet_rpc.issue_public_key(selected_account).await?.public_key;
-                Ok(ConsoleCommand::Print(public_key))
+                    self.wallet_rpc.find_public_key(selected_account, public_key_hash).await?;
+                Ok(ConsoleCommand::Print(format!(
+                    "Public key as hex and as address:\n{}\n{}",
+                    public_key.public_key_hex, public_key.public_key_address
+                )))
             }
 
             ColdWalletCommand::ShowReceiveAddresses => {

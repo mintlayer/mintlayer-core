@@ -139,13 +139,17 @@ impl AddressWithUsageInfo {
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PublicKeyInfo {
-    pub public_key: String,
+    pub public_key_hex: String,
+    pub public_key_address: String,
 }
 
 impl PublicKeyInfo {
-    pub fn new(pub_key: PublicKey) -> Self {
+    pub fn new(pub_key: PublicKey, chain_config: &ChainConfig) -> Self {
         Self {
-            public_key: pub_key.hex_encode(),
+            public_key_hex: pub_key.hex_encode(),
+            public_key_address: Address::new(chain_config, &Destination::PublicKey(pub_key))
+                .expect("addressable")
+                .to_string(),
         }
     }
 }
