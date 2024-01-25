@@ -32,6 +32,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
+use utils_tokio::broadcaster;
 use utxo::Utxo;
 
 use crate::{
@@ -45,6 +46,10 @@ where
 {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>) {
         self.deref_mut().subscribe_to_events(handler)
+    }
+
+    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
+        self.deref_mut().subscribe_to_event_broadcast()
     }
 
     fn process_block(
@@ -176,7 +181,7 @@ where
         self.deref().wait_for_all_events()
     }
 
-    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
+    fn subscribers(&self) -> &[EventHandler<ChainstateEvent>] {
         self.deref().subscribers()
     }
 

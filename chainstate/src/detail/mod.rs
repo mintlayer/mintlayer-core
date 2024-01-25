@@ -30,6 +30,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
+use utils_tokio::broadcaster;
 
 use self::{
     block_invalidation::BlockInvalidator,
@@ -93,6 +94,7 @@ pub struct Chainstate<S, V> {
     events_controller: EventsController<ChainstateEvent>,
     time_getter: TimeGetter,
     is_initial_block_download_finished: SetFlag,
+    event_broadcast: broadcaster::Broadcaster<ChainstateEvent>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -137,6 +139,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
         self.events_controller.subscribe_to_events(handler);
+    }
+
+    pub fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
+        self.event_broadcast.subscribe()
     }
 
     pub fn new(
@@ -191,6 +197,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         time_getter: TimeGetter,
     ) -> Self {
         let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
+        let events_controller = EventsController::new();
+        let event_broadcast = broadcaster::Broadcaster::new();
         Self {
             chain_config,
             chainstate_config,
@@ -198,7 +206,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             tx_verification_strategy,
             orphan_blocks,
             custom_orphan_error_hook,
-            events_controller: EventsController::new(),
+            events_controller,
+            event_broadcast,
             time_getter,
             is_initial_block_download_finished: SetFlag::new(),
         }
@@ -231,12 +240,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
+    fn broadcast_new_tip_event(&mut self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.block_height();
                 let new_id = *new_block_index.block_id();
-                self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
+                let event = ChainstateEvent::NewTip(new_id, new_height);
+
+                self.event_broadcast.broadcast(&event);
+                self.events_controller.broadcast(event);
             }
             None => (),
         }
@@ -623,8 +635,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         &self.orphan_blocks
     }
 
-    pub fn events_controller(&self) -> &EventsController<ChainstateEvent> {
-        &self.events_controller
+    pub fn subscribers(&self) -> &[EventHandler<ChainstateEvent>] {
+        self.events_controller.subscribers()
     }
 
     pub fn is_initial_block_download(&self) -> bool {

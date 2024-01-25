@@ -40,6 +40,11 @@ use tower_http::{
 };
 use utils::cookie::load_cookie;
 
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    pub use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+}
+
 /// The RPC subsystem builder. Used to populate the RPC server with method handlers.
 pub struct Builder {
     http_bind_address: SocketAddr,

@@ -23,7 +23,7 @@ use std::{
     sync::Arc,
 };
 
-use self::types::block::RpcBlock;
+use self::types::{block::RpcBlock, event::RpcEvent};
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
@@ -34,7 +34,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use rpc::RpcResult;
+use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
@@ -127,6 +127,9 @@ trait ChainstateRpc {
     /// Return information about the chain.
     #[method(name = "info")]
     async fn info(&self) -> RpcResult<ChainInfo>;
+
+    #[subscription(name = "subscribe_events", item = RpcEvent)]
+    async fn subscribe_events(&self) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -281,6 +284,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn info(&self) -> RpcResult<ChainInfo> {
         rpc::handle_result(self.call(move |this| this.info()).await)
+    }
+
+    async fn subscribe_events(&self, pending: subscription::Pending) -> subscription::Reply {
+        let event_rx = self.call_mut(move |this| this.subscribe_to_event_broadcast()).await?;
+        rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
     }
 }
 

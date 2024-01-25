@@ -17,6 +17,7 @@ node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
+utils-tokio = { path = "../../utils/tokio" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
 wallet-types = { path = "../types" }
@@ -36,6 +37,7 @@ tokio.workspace = true
 
 consensus = { path = "../../consensus" }
 mempool = { path = "../../mempool" }
+rpc = { path = "../../rpc", features = [ "test-support" ] }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 wallet-test-node = { path = "../wallet-test-node" }

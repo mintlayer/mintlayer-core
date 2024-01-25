@@ -20,6 +20,7 @@ subsystem = {path = '../subsystem'}
 tx-verifier = {path = './tx-verifier'}
 tokens-accounting = {path = '../tokens-accounting'}
 utils = {path = '../utils'}
+utils-tokio = {path = '../utils/tokio'}
 utxo = {path = '../utxo'}
 
 async-trait.workspace = true

@@ -32,10 +32,13 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
+use utils_tokio::broadcaster;
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send + Sync {
+    // TODO: The two following should be unified
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
+    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
     fn process_block(
         &mut self,
         block: Block,
@@ -115,7 +118,7 @@ pub trait ChainstateInterface: Send + Sync {
     fn get_chain_config(&self) -> &Arc<ChainConfig>;
     fn get_chainstate_config(&self) -> ChainstateConfig;
     fn wait_for_all_events(&self);
-    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
+    fn subscribers(&self) -> &[EventHandler<ChainstateEvent>];
     fn calculate_median_time_past(
         &self,
         starting_block: &Id<GenBlock>,

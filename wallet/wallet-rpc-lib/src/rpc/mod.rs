@@ -103,19 +103,21 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         wallet_path: PathBuf,
         password: Option<String>,
     ) -> WRpcResult<(), N> {
-        self.wallet
+        Ok(self
+            .wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move { wallet_manager.open_wallet(wallet_path, password).await })
             })
-            .await?
+            .await??)
     }
 
     pub async fn close_wallet(&self) -> WRpcResult<(), N> {
-        self.wallet
+        Ok(self
+            .wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move { wallet_manager.close_wallet() })
             })
-            .await?
+            .await??)
     }
 
     pub async fn set_lookahead_size(

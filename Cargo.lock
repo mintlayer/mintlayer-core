@@ -942,6 +942,7 @@ dependencies = [
  "tokio",
  "tx-verifier",
  "utils",
+ "utils-tokio",
  "utxo",
 ]
 
@@ -1028,6 +1029,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "tokens-accounting",
+ "tokio",
  "tx-verifier",
  "utils",
  "utxo",
@@ -3800,6 +3802,7 @@ dependencies = [
  "tokens-accounting",
  "tokio",
  "utils",
+ "utils-tokio",
  "utxo",
 ]
 
@@ -5432,6 +5435,7 @@ dependencies = [
  "tower",
  "tower-http",
  "utils",
+ "utils-tokio",
 ]
 
 [[package]]
@@ -7333,6 +7337,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "utils-tokio"
+version = "0.2.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "utxo"
 version = "0.2.0"
 dependencies = [
@@ -7610,6 +7621,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utils-tokio",
  "wallet",
  "wallet-controller",
  "wallet-test-node",

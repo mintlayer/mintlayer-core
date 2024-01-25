@@ -18,9 +18,8 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{
-    chain::{
-        config::{regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions},
-        ChainConfig,
+    chain::config::{
+        regtest::GenesisStakingSettings, regtest_options::ChainConfigOptions, ChainConfig,
     },
     primitives::BlockHeight,
 };
@@ -32,10 +31,8 @@ use wallet_rpc_lib::{
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
 
 pub use crypto::random::Rng;
-pub use jsonrpsee::{
-    core::client::{ClientT, SubscriptionClientT},
-    core::JsonValue,
-};
+pub use rpc::test_support::{ClientT, Subscription, SubscriptionClientT};
+pub use serde_json::Value as JsonValue;
 pub use test_utils::random::{make_seedable_rng, Seed};
 
 pub const ACCOUNT0_ARG: AccountIndexArg = AccountIndexArg { account: 0 };

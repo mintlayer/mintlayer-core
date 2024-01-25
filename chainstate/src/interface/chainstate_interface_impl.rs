@@ -41,6 +41,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
+use utils_tokio::broadcaster;
 use utxo::{Utxo, UtxosView};
 
 pub struct ChainstateInterfaceImpl<S, V> {
@@ -60,6 +61,10 @@ where
 {
     fn subscribe_to_events(&mut self, handler: EventHandler<ChainstateEvent>) {
         self.chainstate.subscribe_to_events(handler)
+    }
+
+    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
+        self.chainstate.subscribe_to_event_broadcast()
     }
 
     fn process_block(
@@ -292,8 +297,8 @@ where
         self.chainstate.wait_for_all_events()
     }
 
-    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
-        self.chainstate.events_controller().subscribers()
+    fn subscribers(&self) -> &[EventHandler<ChainstateEvent>] {
+        self.chainstate.subscribers()
     }
 
     fn calculate_median_time_past(

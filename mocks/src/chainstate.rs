@@ -41,6 +41,7 @@ mockall::mock! {
 
     impl ChainstateInterface for ChainstateInterface {
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
+        fn subscribe_to_event_broadcast(&mut self) -> utils_tokio::broadcaster::Receiver<ChainstateEvent>;
         fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
         fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
         fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
@@ -94,7 +95,7 @@ mockall::mock! {
         fn get_best_block_index(&self) -> Result<chainstate_types::GenBlockIndex, ChainstateError>;
         fn get_chainstate_config(&self) -> ChainstateConfig;
         fn wait_for_all_events(&self);
-        fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
+        fn subscribers(&self) -> &[EventHandler<ChainstateEvent>];
         fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> Result<BlockTimestamp, ChainstateError>;
         fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
         fn orphans_count(&self) -> usize;

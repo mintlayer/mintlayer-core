@@ -13,6 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod event;
-pub mod signed_transaction;
+use common::{
+    chain::Block,
+    primitives::{BlockHeight, Id},
+};
+
+use crate::ChainstateEvent;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum RpcEvent {
+    NewTip { id: Id<Block>, height: BlockHeight },
+}
+
+impl RpcEvent {
+    pub fn from_event(event: ChainstateEvent) -> Self {
+        match event {
+            ChainstateEvent::NewTip(id, height) => Self::NewTip { id, height },
+        }
+    }
+}
