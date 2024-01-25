@@ -25,8 +25,8 @@ use wallet_types::with_locked::WithLocked;
 use crate::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount, DelegationInfo,
     EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, TokenMetadata,
-    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, StakingStatus,
+    TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -182,6 +182,10 @@ trait WalletRpc {
 
     #[method(name = "staking_stop")]
     async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()>;
+
+    #[method(name = "staking_status")]
+    async fn staking_status(&self, account_index: AccountIndexArg)
+        -> rpc::RpcResult<StakingStatus>;
 
     #[method(name = "staking_list_pool_ids")]
     async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>>;

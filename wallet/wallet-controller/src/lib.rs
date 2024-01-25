@@ -497,6 +497,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(())
     }
 
+    pub fn is_staking(&mut self, account_index: U31) -> bool {
+        self.staking_started.contains(&account_index)
+    }
+
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         *self
             .wallet

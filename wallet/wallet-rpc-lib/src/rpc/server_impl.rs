@@ -35,8 +35,8 @@ use crate::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
         NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
-        StakePoolBalance, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     Event, RpcError,
 };
@@ -310,6 +310,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
     async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()> {
         rpc::handle_result(self.stop_staking(account_index.index::<N>()?).await)
+    }
+
+    async fn staking_status(
+        &self,
+        account_index: AccountIndexArg,
+    ) -> rpc::RpcResult<StakingStatus> {
+        rpc::handle_result(self.staking_status(account_index.index::<N>()?).await)
     }
 
     async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>> {

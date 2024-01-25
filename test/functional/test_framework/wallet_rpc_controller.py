@@ -281,6 +281,13 @@ class WalletRpcController:
         self._write_command(f"staking_stop", [self.account])['result']
         return "Success"
 
+    async def staking_status(self) -> str:
+        result = self._write_command(f"staking_status", [self.account])['result']
+        if result == "Staking":
+            return "Status is Staking"
+        else:
+            return "Status is Not staking"
+
     async def get_addresses_usage(self) -> str:
         return self._write_command("address_show")['result']
 

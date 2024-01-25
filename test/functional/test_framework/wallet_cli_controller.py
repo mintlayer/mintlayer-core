@@ -314,6 +314,9 @@ class WalletCliController:
     async def stop_staking(self) -> str:
         return await self._write_command(f"staking-stop\n")
 
+    async def staking_status(self) -> str:
+        return await self._write_command(f"staking-status\n")
+
     async def generate_block(self, transactions: [str]) -> str:
         return await self._write_command(f"generate-block {transactions}\n")
 
