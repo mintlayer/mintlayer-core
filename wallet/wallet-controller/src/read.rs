@@ -262,7 +262,8 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             })
             .collect();
 
-        tasks.try_collect().await
+        let delegations = tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect();
+        Ok(delegations)
     }
 
     pub fn get_created_blocks(&self) -> Result<Vec<BlockInfo>, ControllerError<T>> {
@@ -276,22 +277,18 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         &self,
         delegation_data: &DelegationData,
         delegation_id: DelegationId,
-    ) -> Result<(DelegationId, Amount), ControllerError<T>> {
+    ) -> Result<Option<(DelegationId, Amount)>, ControllerError<T>> {
         if delegation_data.not_staked_yet {
-            return Ok((delegation_id, Amount::ZERO));
+            return Ok(Some((delegation_id, Amount::ZERO)));
         }
 
         self.rpc_client
             .get_delegation_share(delegation_data.pool_id, delegation_id)
             .await
             .map_err(ControllerError::NodeCallError)
-            .and_then(|balance| {
-                balance.ok_or(ControllerError::SyncError(format!(
-                    "Delegation id {} from wallet not found in node",
-                    Address::new(self.chain_config, &delegation_id)?
-                )))
-            })
-            .map(|balance| (delegation_id, balance))
+            // If the balance is not found, it means that the delegation has been deleted from
+            // chainstate due to the pool being decommissioned and the delegation's balance being 0
+            .map(|opt_balance| opt_balance.map(|balance| (delegation_id, balance)))
             .log_err()
     }
 }
