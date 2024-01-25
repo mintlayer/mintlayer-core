@@ -7167,6 +7167,7 @@ dependencies = [
  "crypto",
  "fallible-iterator 0.3.0",
  "itertools 0.12.0",
+ "logging",
  "mockall",
  "pos-accounting",
  "replace_with",

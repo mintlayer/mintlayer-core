@@ -21,6 +21,7 @@ use common::{
     chain::{PoolId, UtxoOutPoint},
     primitives::Amount,
 };
+use logging::log;
 use pos_accounting::{
     DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingDeltaData,
     PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView, PoolData,
@@ -159,6 +160,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         pool_id: PoolId,
         pool_data: PoolData,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        log::debug!("Creating a pool: {}", pool_id);
+
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
         let undo = delta.create_pool(pool_id, pool_data)?;
 
@@ -171,6 +174,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         &mut self,
         pool_id: PoolId,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        log::debug!("Decommissioning a pool: {}", pool_id);
+
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
         let undo = delta.decommission_pool(pool_id)?;
@@ -205,6 +210,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         let (delegation_id, undo) =
             delta.create_delegation_id(target_pool, spend_key, input0_outpoint)?;
 
+        log::debug!("Creating a delegation: {}", delegation_id);
+
         self.merge_delta(delta.consume())?;
 
         Ok((delegation_id, undo))
@@ -214,6 +221,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         &mut self,
         delegation_id: common::chain::DelegationId,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        log::debug!("Deleting a delegation: {}", delegation_id);
+
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
         let undo = delta.delete_delegation_id(delegation_id)?;
@@ -228,6 +237,12 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         delegation_target: common::chain::DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        log::debug!(
+            "Delegating {:?} coins to {}",
+            amount_to_delegate,
+            delegation_target
+        );
+
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
         let undo = delta.delegate_staking(delegation_target, amount_to_delegate)?;
@@ -242,6 +257,12 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         delegation_id: common::chain::DelegationId,
         amount: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        log::debug!(
+            "Spending {:?} coins from delegation {}",
+            amount,
+            delegation_id
+        );
+
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
         let undo = delta.spend_share_from_delegation_id(delegation_id, amount)?;
