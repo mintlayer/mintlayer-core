@@ -50,7 +50,9 @@ enum TabIndex {
     #[default]
     Summary = 0,
     Networking = 1,
-    Settings = 2,
+    // TODO: enable setting when needed
+    // Settings = 2,
+
     // Notice that the wallet tabs are added dynamically to these variants, so a higher index may be valid
 }
 
@@ -97,12 +99,13 @@ impl TabsWidget {
                 TabIndex::Networking as usize,
                 self.networking_tab.tab_label(),
                 self.networking_tab.view(node_state),
-            )
-            .push(
-                TabIndex::Settings as usize,
-                self.settings_tab.tab_label(),
-                self.settings_tab.view(node_state),
             );
+        // TODO: enable settings tab when needed
+        //.push(
+        //    TabIndex::Settings as usize,
+        //    self.settings_tab.tab_label(),
+        //    self.settings_tab.view(node_state),
+        //);
 
         for (idx, wallet) in self.wallets.iter().enumerate() {
             tabs = tabs.push(

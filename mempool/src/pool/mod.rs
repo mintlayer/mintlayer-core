@@ -1036,7 +1036,11 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         block_height: BlockHeight,
         work_queue: &mut WorkQueue,
     ) -> Result<(), reorg::ReorgError> {
-        log::info!("new tip: block {block_id:?} height {block_height:?}");
+        log::info!(
+            "New block tip: {:?} at height {}",
+            block_id.as_hash(),
+            block_height.into_int()
+        );
         reorg::handle_new_tip(self, block_id, work_queue)?;
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::DecimalAmount;
 use iced::{
     widget::{column, text_input, Text},
     Element,
@@ -27,10 +28,22 @@ pub fn view_send(
 ) -> Element<'static, WalletMessage> {
     column![
         text_input("Address", send_address)
-            .on_input(|value| { WalletMessage::SendAddressEdit(value) })
+            .on_input(|value| {
+                if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                    WalletMessage::SendAddressEdit(value)
+                } else {
+                    WalletMessage::NoOp
+                }
+            })
             .padding(15),
         text_input("Amount", send_amount)
-            .on_input(|value| { WalletMessage::SendAmountEdit(value) })
+            .on_input(|value| {
+                if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                    WalletMessage::SendAmountEdit(value)
+                } else {
+                    WalletMessage::NoOp
+                }
+            })
             .padding(15),
         iced::widget::button(Text::new("Send"))
             .on_press(still_syncing.unwrap_or(WalletMessage::Send))

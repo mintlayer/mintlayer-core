@@ -113,7 +113,8 @@ fn make_menu_file<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
             menu_item("Create new wallet", MenuMessage::CreateNewWallet),
             menu_item("Import wallet", MenuMessage::ImportWallet),
             menu_item("Open wallet", MenuMessage::OpenWallet),
-            menu_item("Settings", MenuMessage::NoOp),
+            // TODO: enable setting when needed
+            // menu_item("Settings", MenuMessage::NoOp),
             menu_item("Exit", MenuMessage::Exit),
         ],
     )

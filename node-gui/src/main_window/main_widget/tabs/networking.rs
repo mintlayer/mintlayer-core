@@ -55,7 +55,7 @@ impl Tab for NetworkingTab {
         let header = |text: &'static str| container(Text::new(text)).padding(5);
         let field = |text: String| container(Text::new(text)).padding(5);
         let mut peers = Grid::with_columns(5)
-            .push(header("id"))
+            .push(header("#"))
             .push(header("Socket"))
             .push(header("Inbound"))
             .push(header("User agent"))
@@ -70,11 +70,14 @@ impl Tab for NetworkingTab {
                 .push(field(peer.version.to_string()));
         }
 
-        column![peers]
-            .padding(10)
-            .spacing(15)
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .into()
+        column![
+            Text::new("The following is a list of peers connected to your node").size(16),
+            peers
+        ]
+        .padding(10)
+        .spacing(15)
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .into()
     }
 }

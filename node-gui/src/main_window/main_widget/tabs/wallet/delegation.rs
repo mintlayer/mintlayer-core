@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     address::Address,
     chain::{ChainConfig, DelegationId},
+    primitives::DecimalAmount,
 };
 use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
@@ -27,18 +28,24 @@ use iced_aw::Grid;
 
 use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
 
-use super::WalletMessage;
+use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
 
 const POOL_ID_TOOLTIP_TEXT: &str =
     "The pool id of the pool that will get the delegation and stake the coins.";
 const DELEGATION_ADDRESS_TOOLTIP_TEXT: &str =
     "The address, that will have the authority to sign withdrawals from a pool.";
 
-const SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT: &str = " The address that will be receiving the coins";
+const SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT: &str = "The address that will be receiving the coins";
 const SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT: &str =
     "The amount that will be taken away from the delegation";
 const SEND_DELEGATION_ID_TOOLTIP_TEXT: &str =
     "The delegation id, from which the delegated coins will be taken";
+
+const CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT: &str = "Before delegating your coins, you create an account that you own, which you can fund with coins (and withdraw from). \
+    Once this is created, you can delegate coins to it for staking. If the pool is decommissioned, it is your responsibility to withdraw the coins and move them to another pool.";
+
+const WITHDRAW_BUTTON_TOOLTIP_TEXT: &str =
+    "Withdrawing coins from delegation means they won't be staked anymore. The coins will be locked for the maturity period before they can be normally used.";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_delegation(
@@ -61,16 +68,22 @@ pub fn view_delegation(
                 .push(field("No delegations found".to_owned()))
                 .push(field(String::new()))
         } else {
-            let mut delegation_balance_grid = Grid::with_columns(5)
+            let mut delegation_balance_grid = Grid::with_columns(7)
                 .push(field("Delegation Id".to_owned()))
+                .push(field("".to_owned()))
+                .push(field("Pool Id".to_owned()))
                 .push(field("".to_owned()))
                 .push(field("Delegation balance".to_owned()))
                 .push(field("".to_owned()))
                 .push(field("".to_owned()));
-            for (delegation_id, balance) in
-                account.delegations_balance.iter().map(|(id, b)| (*id, *b))
+            for (delegation_id, pool_id, balance) in account
+                .delegations_balance
+                .iter()
+                .map(|(del_id, (pool_id, b))| (*del_id, *pool_id, *b))
             {
                 let delegation_address = Address::new(chain_config, &delegation_id)
+                    .expect("Encoding pool id to address can't fail (GUI)");
+                let pool_address = Address::new(chain_config, &pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 let delegate_staking_amount =
                     delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
@@ -99,11 +112,33 @@ pub fn view_delegation(
                             delegation_address.to_string(),
                         )),
                     )
+                    .push(
+                        tooltip(
+                            field(pool_address.to_short_string(chain_config).expect("cannot fail")),
+                            pool_address.to_string(),
+                            Position::Bottom,
+                        )
+                        .gap(5)
+                        .style(iced::theme::Container::Box),
+                    )
+                    .push(
+                        button(
+                            Text::new(iced_aw::Icon::ClipboardCheck.to_string())
+                                .font(iced_aw::ICON_FONT),
+                        )
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Shrink)
+                        .on_press(WalletMessage::CopyToClipboard(pool_address.to_string())),
+                    )
                     .push(field(print_coin_amount(chain_config, balance)))
                     .push(
                         text_input("Amount", &delegate_staking_amount)
                             .on_input(move |value| {
-                                WalletMessage::DelegationAmountEdit((delegation_id, value))
+                                if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                                    WalletMessage::DelegationAmountEdit((delegation_id, value))
+                                } else {
+                                    WalletMessage::NoOp
+                                }
                             })
                             .padding(5)
                             .width(Length::Fixed(100.)),
@@ -120,11 +155,33 @@ pub fn view_delegation(
         }
     };
 
+    let maturity_period = chain_config.staking_pool_spend_maturity_block_count(1.into()).to_int();
+    let maturity_period_text = format!(
+        "Maturity period: {maturity_period} blocks (a block takes on average {} seconds)",
+        chain_config.target_block_spacing().as_secs()
+    );
+
     column![
+        row![
+            Text::new(maturity_period_text).size(13),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                MATURITY_PERIOD_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         // ----- Create delegation
         row![
             text_input("Pool Id for new delegation", pool_id)
-                .on_input(|value| { WalletMessage::DelegationPoolIdEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::DelegationPoolIdEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -136,7 +193,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Delegation address", delegation_address)
-                .on_input(|value| { WalletMessage::DelegationAddressEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::DelegationAddressEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -146,14 +209,29 @@ pub fn view_delegation(
             .gap(10)
             .style(iced::theme::Container::Box)
         ],
-        iced::widget::button(Text::new("Create delegation"))
-            .padding(10)
-            .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
+        row![
+            iced::widget::button(Text::new("Create delegation"))
+                .padding(10)
+                .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         iced::widget::horizontal_rule(10),
         // ----- Send delegation to address
         row![
             text_input("Address", send_delegation_address)
-                .on_input(|value| { WalletMessage::SendDelegationAddressEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::SendDelegationAddressEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -165,7 +243,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Amount to send", send_delegation_amount)
-                .on_input(|value| { WalletMessage::SendDelegationAmountEdit(value) })
+                .on_input(|value| {
+                    if value.parse::<DecimalAmount>().is_ok() || value.is_empty() {
+                        WalletMessage::SendDelegationAmountEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -177,7 +261,13 @@ pub fn view_delegation(
         ],
         row![
             text_input("Delegation Id", send_delegation_id)
-                .on_input(|value| { WalletMessage::SendDelegationIdEdit(value) })
+                .on_input(|value| {
+                    if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+                        WalletMessage::SendDelegationIdEdit(value)
+                    } else {
+                        WalletMessage::NoOp
+                    }
+                })
                 .padding(10),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
@@ -187,9 +277,18 @@ pub fn view_delegation(
             .gap(10)
             .style(iced::theme::Container::Box)
         ],
-        iced::widget::button(Text::new("Send to address from delegation"))
-            .padding(10)
-            .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
+        row![
+            iced::widget::button(Text::new("Withdraw from delegation"))
+                .padding(10)
+                .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                WITHDRAW_BUTTON_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         iced::widget::horizontal_rule(10),
         // ----- Delegation balance grid
         delegation_balance_grid,

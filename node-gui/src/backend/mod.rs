@@ -79,7 +79,10 @@ pub struct InitializedNode {
 
 pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<BackendControls> {
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
+        std::env::set_var(
+            "RUST_LOG",
+            "info,wgpu_core=error,hyper=error,jsonrpsee-server=error",
+        );
     }
 
     let opts = node_lib::Options::from_args(std::env::args_os());

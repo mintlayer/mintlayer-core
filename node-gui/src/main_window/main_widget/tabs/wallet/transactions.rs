@@ -15,10 +15,11 @@
 
 use common::chain::ChainConfig;
 use iced::{
-    widget::{container, row, Column, Text},
-    Alignment, Element,
+    widget::{button, container, row, tooltip, tooltip::Position, Column, Text},
+    Alignment, Element, Length,
 };
 use iced_aw::Grid;
+use serialization::hex::HexEncode;
 
 use crate::{
     backend::messages::AccountInfo,
@@ -35,9 +36,10 @@ pub fn view_transactions(
     let mut transactions = Column::new();
 
     let current_transaction_list = &account.transaction_list;
-    let mut transaction_list = Grid::with_columns(6)
+    let mut transaction_list = Grid::with_columns(7)
         .push(field("#".into()))
-        .push(field("Tx Id".into()))
+        .push(field("Transaction Id".into()))
+        .push(field(String::new()))
         .push(field("Timestamp (UTC)".into()))
         .push(field("Type".into()))
         .push(field("Amount".into()))
@@ -52,9 +54,26 @@ pub fn view_transactions(
             || "-".to_owned(),
             |timestamp| print_block_timestamp(*timestamp),
         );
+        let full_tx_id_str = format!("0x{}", tx.txid.hex_encode());
         transaction_list = transaction_list
             .push(field(format!("{}", current_transaction_list.skip + index)))
-            .push(field(tx.txid.to_string()))
+            .push(
+                tooltip(
+                    field(tx.txid.to_string()),
+                    full_tx_id_str.clone(),
+                    Position::Bottom,
+                )
+                .gap(5)
+                .style(iced::theme::Container::Box),
+            )
+            .push(
+                button(
+                    Text::new(iced_aw::Icon::ClipboardCheck.to_string()).font(iced_aw::ICON_FONT),
+                )
+                .style(iced::theme::Button::Text)
+                .width(Length::Shrink)
+                .on_press(WalletMessage::CopyToClipboard(full_tx_id_str)),
+            )
             .push(field(timestamp))
             .push(field(tx.tx_type.type_name().to_owned()))
             .push(field(amount_str))

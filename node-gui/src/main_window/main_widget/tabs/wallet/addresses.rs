@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, container, Text},
+    widget::{button, column, container, row, tooltip, Text},
     Element,
 };
 use iced_aw::Grid;
@@ -22,6 +22,8 @@ use iced_aw::Grid;
 use crate::backend::messages::AccountInfo;
 
 use super::WalletMessage;
+
+const NEW_ADDRESS_TOOLTIP_TEXT: &str = "You can create as many addresses as you desire; however, you're limited by how many addresses you create before using them. An address is labeled as used, when a transaction is found on the blockchain that utilizes that address.";
 
 pub fn view_addresses(
     account: &AccountInfo,
@@ -43,8 +45,17 @@ pub fn view_addresses(
     }
     column![
         addresses,
-        iced::widget::button(Text::new("New address"))
-            .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress),)
+        row![
+            iced::widget::button(Text::new("New address"))
+                .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                NEW_ADDRESS_TOOLTIP_TEXT,
+                tooltip::Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
     ]
     .into()
 }

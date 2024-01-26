@@ -66,11 +66,14 @@ impl Tab for SummaryTab {
                 node_state.chain_info.best_block_timestamp,
             )));
 
-        column![chainstate]
-            .padding(10)
-            .spacing(15)
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .into()
+        column![
+            Text::new("The following is the syncing state of your node. In a healthy network, the block timestamp should be close to the current wall-clock time.").size(16),
+            chainstate
+        ]
+        .padding(10)
+        .spacing(15)
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .into()
     }
 }

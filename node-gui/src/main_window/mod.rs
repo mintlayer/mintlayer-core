@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, ti
 use chainstate::ChainInfo;
 use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig},
-    primitives::{semver::SemVer, user_agent::UserAgent, Amount},
+    primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{widget::Text, Command, Element};
 use iced_aw::native::Modal;
@@ -80,6 +80,10 @@ impl NodeState {
 
 fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
+}
+
+fn print_margin_ratio(value: PerThousand) -> String {
+    value.into_decimal_str()
 }
 
 fn print_coin_amount_with_ticker(chain_config: &ChainConfig, value: Amount) -> String {
