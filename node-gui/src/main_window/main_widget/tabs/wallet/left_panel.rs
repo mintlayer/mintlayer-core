@@ -25,11 +25,12 @@ use crate::{
 
 use super::{SelectedPanel, WalletMessage};
 
-const TRANSACTIONS_TOOLTIP_TEXT: &str = "TODO";
-const ADDRESSES_TOOLTIP_TEXT: &str = "TODO";
-const SEND_TOOLTIP_TEXT: &str = "TODO";
-const STAKING_TOOLTIP_TEXT: &str = "TODO";
-const DELEGATION_TOOLTIP_TEXT: &str = "TODO";
+const TRANSACTIONS_TOOLTIP_TEXT: &str =
+    "List of all transactions related to this account in the wallet.";
+const ADDRESSES_TOOLTIP_TEXT: &str = "List all the addresses generated in this account in the wallet. Addresses can be used for various purposes, such as destinations for coins sent to you, and also as an indicator to who is allowed to decommission a staking pool.";
+const SEND_TOOLTIP_TEXT: &str = "Send coins to another address.";
+const STAKING_TOOLTIP_TEXT: &str = "Staking is the process of assisting the network in generating blocks. If you have the minimum amount of required coins for staking, you can participate by creating a pool, staking, and earn rewards for it. Your node will be required to be left running.";
+const DELEGATION_TOOLTIP_TEXT: &str = "Delegation is part of staking, where if you do not own the minimum required amount to stake, you can delegate your coins to a pool to do the staking for you. The staking pool earns a cut of your rewards, and you won't have to keep your node running.";
 
 #[derive(Clone, PartialEq, Eq)]
 struct AccountPickItem {

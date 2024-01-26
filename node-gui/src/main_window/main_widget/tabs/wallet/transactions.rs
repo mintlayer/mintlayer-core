@@ -38,7 +38,7 @@ pub fn view_transactions(
     let current_transaction_list = &account.transaction_list;
     let mut transaction_list = Grid::with_columns(7)
         .push(field("#".into()))
-        .push(field("Tx Id".into()))
+        .push(field("Transaction Id".into()))
         .push(field(String::new()))
         .push(field("Timestamp (UTC)".into()))
         .push(field("Type".into()))
