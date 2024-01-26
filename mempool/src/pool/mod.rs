@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mempool_types::tx_origin::LocalTxOrigin;
 use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -22,6 +21,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use utxo::UtxosStorageRead;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -368,7 +368,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let is_ibd = chainstate_handle.call(|chainstate| chainstate.is_initial_block_download())?;
         ensure!(!is_ibd, TxValidationError::AddedDuringIBD);
 
-        for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
+        for attempt_idx in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
                 let tip_index =
@@ -377,6 +377,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             })??;
 
             let mut tx_verifier = self.tx_verifier.derive_child();
+
+            log::trace!(
+                "Verifying tx {:?}, attempt #{}, tip = {:?}, tx_verifier's best block for utxos = {:?}",
+                transaction.tx_id(),
+                attempt_idx,
+                tip,
+                tx_verifier.get_best_block_for_utxos()?
+            );
 
             let verifier_time =
                 self.clock.get_time().saturating_duration_add(config::FUTURE_TIMELOCK_TOLERANCE);
@@ -393,7 +401,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 &BlockTimestamp::from_time(verifier_time),
             );
 
-            if tip != chainstate_handle.call(|c| c.get_best_block_id())?? {
+            let cur_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+            if tip != cur_tip {
+                log::debug!(
+                    "Tip has changed from {tip:?} to {cur_tip:?} when verifying tx {:?}",
+                    transaction.tx_id()
+                );
                 continue;
             }
 
@@ -874,7 +887,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             // from the transaction verifier at the moment. To be addressed in the future.
 
             log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
-            reorg::refresh_mempool(self);
+
+            if let Err(refresh_err) = reorg::refresh_mempool(self) {
+                log::error!("Refreshing mempool failed: {refresh_err}");
+            }
         }
     }
 }
@@ -974,19 +990,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 Ok(TxStatus::InOrphanPool)
             }
             Err(err) => {
-                if matches!(
-                    err,
-                    Error::Orphan(OrphanPoolError::NotSupportedForLocalOrigin(
-                        LocalTxOrigin::PastBlock
-                    ))
-                ) {
-                    // Note: logging this error can make our test logs huge, so we use the "trace"
-                    // level in this case, see
-                    // https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
-                    log::trace!("Transaction rejected: {}", err);
-                } else {
-                    log::warn!("Transaction rejected: {}", err);
-                }
+                log::warn!("Transaction rejected: {}", err);
 
                 let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
                 self.events_controller.broadcast(event.into());

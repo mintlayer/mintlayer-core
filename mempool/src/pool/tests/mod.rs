@@ -1135,17 +1135,14 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         BlockReward::new(vec![]),
     )
     .map_err(|_| anyhow::Error::msg("block creation error"))?;
+    let block_id = block.get_id();
 
     mempool
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
     mempool
-        .on_new_tip(
-            Id::new(H256::zero()),
-            BlockHeight::new(1),
-            &mut WorkQueue::new(),
-        )
+        .on_new_tip(block_id, BlockHeight::new(1), &mut WorkQueue::new())
         .unwrap();
 
     assert!(!mempool.contains_transaction(&child_2_high_fee_id));

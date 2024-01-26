@@ -781,7 +781,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_higher_block_ids_sorted_by_height(0.into())
     }
 
-    /// Return ids of all blocks with height bigger than the specified one,
+    /// Return ids of all blocks with height bigger or equal to the specified one,
     /// sorted by height (lower first).
     // TODO: this function iterates over all block indices in the DB, which is too expensive
     // for places where it's currently used (such as block invalidation or best chain selection).
