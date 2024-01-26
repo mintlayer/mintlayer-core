@@ -44,6 +44,9 @@ const MARGIN_PER_THOUSAND_TOOLTIP_TEXT: &str = "After subtracting \"cost per blo
 
 const DECOMMISSION_ADDRESS_TOOLTIP_TEXT: &str = "The key that can decommission the pool. It's recommended to keep the decommission key in a cold storage.";
 
+const START_STAKING_TOOLTIP_TEXT: &str = "TODO";
+const CREATE_STAKING_POOL_TOOLTIP_TEXT: &str = "TODO";
+
 pub fn view_stake(
     chain_config: &ChainConfig,
     account: &AccountInfo,
@@ -115,7 +118,14 @@ pub fn view_stake(
         row![
             Text::new(staking_status),
             iced::widget::button(Text::new(staking_button))
-                .on_press(still_syncing.clone().unwrap_or(WalletMessage::ToggleStaking(new_state)))
+                .on_press(still_syncing.clone().unwrap_or(WalletMessage::ToggleStaking(new_state))),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                START_STAKING_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
         ]
     } else {
         row![]
@@ -194,9 +204,19 @@ pub fn view_stake(
             .style(iced::theme::Container::Box)
         ],
 
-        iced::widget::button(Text::new("Create staking pool"))
-            .padding(15)
-            .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool)),
+        row![
+            iced::widget::button(Text::new("Create staking pool"))
+                .padding(15)
+                .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                CREATE_STAKING_POOL_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
+
         staking_enabled_row.spacing(10).align_items(Alignment::Center),
         iced::widget::horizontal_rule(10),
         staking_balance_grid,

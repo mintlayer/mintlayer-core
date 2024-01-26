@@ -35,11 +35,14 @@ const POOL_ID_TOOLTIP_TEXT: &str =
 const DELEGATION_ADDRESS_TOOLTIP_TEXT: &str =
     "The address, that will have the authority to sign withdrawals from a pool.";
 
-const SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT: &str = " The address that will be receiving the coins";
+const SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT: &str = "The address that will be receiving the coins";
 const SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT: &str =
     "The amount that will be taken away from the delegation";
 const SEND_DELEGATION_ID_TOOLTIP_TEXT: &str =
     "The delegation id, from which the delegated coins will be taken";
+
+const SEND_TO_ADDRESS_BUTTON_TOOLTIP_TEXT: &str = "TODO";
+const CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT: &str = "TODO";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_delegation(
@@ -187,9 +190,18 @@ pub fn view_delegation(
             .gap(10)
             .style(iced::theme::Container::Box)
         ],
-        iced::widget::button(Text::new("Create delegation"))
-            .padding(10)
-            .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
+        row![
+            iced::widget::button(Text::new("Create delegation"))
+                .padding(10)
+                .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         iced::widget::horizontal_rule(10),
         // ----- Send delegation to address
         row![
@@ -246,9 +258,18 @@ pub fn view_delegation(
             .gap(10)
             .style(iced::theme::Container::Box)
         ],
-        iced::widget::button(Text::new("Send to address from delegation"))
-            .padding(10)
-            .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
+        row![
+            iced::widget::button(Text::new("Send to address from delegation"))
+                .padding(10)
+                .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                SEND_TO_ADDRESS_BUTTON_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         iced::widget::horizontal_rule(10),
         // ----- Delegation balance grid
         delegation_balance_grid,

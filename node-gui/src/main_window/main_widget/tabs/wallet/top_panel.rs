@@ -15,7 +15,7 @@
 
 use common::{chain::ChainConfig, primitives::Amount};
 use iced::{
-    widget::{button, row, Row, Text},
+    widget::{button, row, tooltip, Row, Text},
     Alignment, Element, Length,
 };
 use wallet::account::Currency;
@@ -27,6 +27,8 @@ use crate::{
 
 use super::WalletMessage;
 
+const ENCRYPT_WALLET_TOOLTIP_TEXT: &str = "TODO";
+
 pub fn view_top_panel(
     chain_config: &ChainConfig,
     wallet_info: &WalletInfo,
@@ -36,21 +38,28 @@ pub fn view_top_panel(
     let balance = print_coin_amount_with_ticker(chain_config, balance);
     let balance = Text::new(balance).size(20);
 
-    let password =
-        match wallet_info.encryption {
-            EncryptionState::EnabledLocked => {
-                row![iced::widget::button(Text::new("Unlock")).on_press(WalletMessage::Unlock)]
-            }
-            EncryptionState::EnabledUnlocked => row![
-                iced::widget::button(Text::new("Lock")).on_press(WalletMessage::Lock),
-                iced::widget::button(Text::new("Disable wallet encryption"))
-                    .on_press(WalletMessage::RemovePassword)
-            ],
-            EncryptionState::Disabled => row![iced::widget::button(Text::new("Encrypt wallet"))
-                .on_press(WalletMessage::SetPassword),],
+    let password = match wallet_info.encryption {
+        EncryptionState::EnabledLocked => {
+            row![iced::widget::button(Text::new("Unlock")).on_press(WalletMessage::Unlock)]
         }
-        .align_items(Alignment::Center)
-        .spacing(10);
+        EncryptionState::EnabledUnlocked => row![
+            iced::widget::button(Text::new("Lock")).on_press(WalletMessage::Lock),
+            iced::widget::button(Text::new("Disable wallet encryption"))
+                .on_press(WalletMessage::RemovePassword)
+        ],
+        EncryptionState::Disabled => row![
+            iced::widget::button(Text::new("Encrypt wallet")).on_press(WalletMessage::SetPassword),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                ENCRYPT_WALLET_TOOLTIP_TEXT,
+                tooltip::Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
+    }
+    .align_items(Alignment::Center)
+    .spacing(10);
 
     row![
         balance,

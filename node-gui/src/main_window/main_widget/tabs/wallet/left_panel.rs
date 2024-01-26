@@ -32,6 +32,8 @@ const SEND_TOOLTIP_TEXT: &str = "Send coins to another address.";
 const STAKING_TOOLTIP_TEXT: &str = "Staking is the process of assisting the network in generating blocks. If you have the minimum amount of required coins for staking, you can participate by creating a pool, staking, and earn rewards for it. Your node will be required to be left running.";
 const DELEGATION_TOOLTIP_TEXT: &str = "Delegation is part of staking, where if you do not own the minimum required amount to stake, you can delegate your coins to a pool to do the staking for you. The staking pool earns a cut of your rewards, and you won't have to keep your node running.";
 
+const NEW_ACCOUNT_TOOLTIP_TEXT: &str = "TODO";
+
 #[derive(Clone, PartialEq, Eq)]
 struct AccountPickItem {
     account_id: AccountId,
@@ -142,6 +144,13 @@ pub fn view_left_panel(
                 button(Text::new("+"))
                     .style(iced::theme::Button::Positive)
                     .on_press(WalletMessage::NewAccount),
+                tooltip(
+                    Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                    NEW_ACCOUNT_TOOLTIP_TEXT,
+                    tooltip::Position::Bottom
+                )
+                .gap(10)
+                .style(iced::theme::Container::Box)
             ]
             .align_items(Alignment::Center)
             .spacing(10)
