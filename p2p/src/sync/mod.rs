@@ -400,7 +400,7 @@ pub async fn subscribe_to_tx_processed(
     let subscribe_func = Arc::new(subscribe_func);
 
     mempool_handle
-        .call_mut(|this| this.subscribe_to_events(subscribe_func))
+        .call_mut(|this| this.subscribe_to_subsystem_events(subscribe_func))
         .await
         .map_err(|_| P2pError::SubsystemFailure)?;
 

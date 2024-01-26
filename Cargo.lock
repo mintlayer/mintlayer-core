@@ -3710,6 +3710,7 @@ dependencies = [
  "tokens-accounting",
  "tokio",
  "utils",
+ "utils-networking",
  "utxo",
 ]
 

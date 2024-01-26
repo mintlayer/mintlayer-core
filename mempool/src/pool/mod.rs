@@ -41,6 +41,7 @@ use common::{
 use logging::log;
 use serialization::Encode;
 use utils::{ensure, eventhandler::EventsController, shallow_clone::ShallowClone};
+use utils_networking::broadcaster;
 
 pub use self::feerate::FeeRate;
 pub use self::memory_usage_estimator::MemoryUsageEstimator;
@@ -59,7 +60,7 @@ use crate::{
         BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
         TxValidationError,
     },
-    event::{self, MempoolEvent},
+    event::{self, MempoolEvent, RpcMempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
@@ -94,7 +95,8 @@ pub struct Mempool<M> {
     chainstate_handle: chainstate::ChainstateHandle,
     clock: TimeGetter,
     memory_usage_estimator: M,
-    events_controller: EventsController<MempoolEvent>,
+    subsystem_events: EventsController<MempoolEvent>,
+    rpc_events: broadcaster::Broadcaster<RpcMempoolEvent>,
     tx_verifier: tx_verifier::TransactionVerifier,
     orphans: TxOrphanPool,
 }
@@ -130,7 +132,8 @@ impl<M> Mempool<M> {
             rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
-            events_controller: Default::default(),
+            subsystem_events: Default::default(),
+            rpc_events: broadcaster::Broadcaster::new(),
             tx_verifier,
             orphans: TxOrphanPool::new(),
         }
@@ -969,7 +972,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let origin = tx.origin();
         let relay_policy = tx.options().relay_policy();
 
-        match self.validate_transaction(tx) {
+        let result = match self.validate_transaction(tx) {
             Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
@@ -981,10 +984,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
                 self.finalize_tx(transaction)?;
                 self.store.assert_valid();
-
-                let event = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
-                self.events_controller.broadcast(event.into());
-
                 Ok(TxStatus::InMempool)
             }
             Ok(ValidationOutcome::Orphan { transaction }) => {
@@ -993,12 +992,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             }
             Err(err) => {
                 log::warn!("Transaction {tx_id} rejected: {err}");
-
-                let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
-                self.events_controller.broadcast(event.into());
                 Err(err)
             }
-        }
+        };
+
+        self.broadcast_tx_processed(tx_id, origin, relay_policy, result.clone());
+
+        result
     }
 
     pub fn get_all(&self) -> Vec<SignedTransaction> {
@@ -1018,8 +1018,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
     }
 
-    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
-        self.events_controller.subscribe_to_events(handler)
+    pub fn subscribe_to_subsystem_events(
+        &mut self,
+        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
+    ) {
+        self.subsystem_events.subscribe_to_events(handler)
+    }
+
+    pub fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<RpcMempoolEvent> {
+        self.rpc_events.subscribe()
     }
 
     pub fn process_chainstate_event(
@@ -1036,6 +1043,31 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
+    fn broadcast_tx_processed(
+        &mut self,
+        tx_id: Id<Transaction>,
+        origin: TxOrigin,
+        relay_policy: crate::tx_options::TxRelayPolicy,
+        result: Result<TxStatus, Error>, /* TODO context */
+    ) {
+        // Dispatch the subsystem event first
+        match result {
+            Ok(TxStatus::InMempool) => {
+                let evt = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
+                self.subsystem_events.broadcast(evt.into());
+            }
+            Ok(TxStatus::InOrphanPool) => {
+                // In orphan pool, the transaction has not been accepted or rejected yet
+            },
+            Err(err) => {
+                let evt = event::TransactionProcessed::rejected(tx_id, err, origin);
+                self.subsystem_events.broadcast(evt.into());
+            }
+        }
+
+        // TODO(PR): Dispatch the RPC event
+    }
+
     pub fn on_new_tip(
         &mut self,
         block_id: Id<Block>,
@@ -1049,7 +1081,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         );
         reorg::handle_new_tip(self, block_id, work_queue)?;
         let event = event::NewTip::new(block_id, block_height);
-        self.events_controller.broadcast(event.into());
+        self.subsystem_events.broadcast(event.clone().into());
+        self.rpc_events.broadcast(&event.into());
         Ok(())
     }
 

@@ -17,6 +17,7 @@ use common::{
     chain::{Block, Transaction},
     primitives::{BlockHeight, Id},
 };
+use utils::ensure;
 
 use crate::{
     error::{Error, MempoolBanScore},
@@ -79,10 +80,27 @@ impl TransactionProcessed {
     pub fn relay_policy(&self) -> TxRelayPolicy {
         self.relay_policy
     }
+
+    pub fn to_rpc_event(&self) -> Option<RpcMempoolEvent> {
+        let Self {
+            tx_id,
+            origin,
+            relay_policy: _,
+            result,
+        } = self;
+
+        // Only emit events for transactions that actually end up in mempool
+        ensure!(result.is_ok());
+
+        Some(RpcMempoolEvent::TxProcessed {
+            tx_id: *tx_id,
+            origin: *origin,
+        })
+    }
 }
 
 /// Event triggered when mempool has synced up to given tip
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NewTip {
     block_id: Id<Block>,
     height: BlockHeight,
@@ -102,11 +120,20 @@ impl NewTip {
     }
 }
 
-/// Events emitted by mempool
+/// Events emitted by mempool destined for other subsystems
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MempoolEvent {
     NewTip(NewTip),
     TransactionProcessed(TransactionProcessed),
+}
+
+impl MempoolEvent {
+    pub fn to_rpc_event(&self) -> Option<RpcMempoolEvent> {
+        match self {
+            MempoolEvent::NewTip(new_tip) => Some(RpcMempoolEvent::NewTip(new_tip.clone())),
+            MempoolEvent::TransactionProcessed(tx_processed) => tx_processed.to_rpc_event(),
+        }
+    }
 }
 
 impl From<TransactionProcessed> for MempoolEvent {
@@ -118,5 +145,37 @@ impl From<TransactionProcessed> for MempoolEvent {
 impl From<NewTip> for MempoolEvent {
     fn from(event: NewTip) -> Self {
         Self::NewTip(event)
+    }
+}
+
+/// Events emitted by mempool destined for RPC subscribers
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum RpcMempoolEvent {
+    NewTip(NewTip),
+
+    TxProcessed {
+        tx_id: Id<Transaction>,
+        origin: TxOrigin,
+    },
+
+    TxEvicted {
+        tx_id: Id<Transaction>,
+        origin: TxOrigin,
+    },
+}
+
+impl RpcMempoolEvent {
+    pub fn tx_processed(tx_id: Id<Transaction>, origin: TxOrigin) -> Self {
+        Self::TxProcessed { tx_id, origin }
+    }
+
+    pub fn tx_evicted(tx_id: Id<Transaction>, origin: TxOrigin) -> Self {
+        Self::TxEvicted { tx_id, origin }
+    }
+}
+
+impl From<NewTip> for RpcMempoolEvent {
+    fn from(new_tip: NewTip) -> Self {
+        Self::NewTip(new_tip)
     }
 }

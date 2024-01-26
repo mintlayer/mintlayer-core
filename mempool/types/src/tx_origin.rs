@@ -16,7 +16,10 @@
 use p2p_types::peer_id::PeerId;
 
 /// Tracks where a transaction originates
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
+#[serde(untagged)]
 pub enum TxOrigin {
     /// Transaction originates locally
     Local(LocalTxOrigin),
@@ -38,7 +41,9 @@ impl From<RemoteTxOrigin> for TxOrigin {
 }
 
 /// Signifies transaction originates in our local node
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub enum LocalTxOrigin {
     /// Transaction was submitted to local node's mempool. It should not be propagated further.
     Mempool,
@@ -54,7 +59,9 @@ pub enum LocalTxOrigin {
 ///
 /// If it eventually turns out to be valid, it should be propagated further to other peers.
 /// If it's not valid, the original peer should be penalized as appropriate.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
 pub struct RemoteTxOrigin(PeerId);
 
 impl RemoteTxOrigin {

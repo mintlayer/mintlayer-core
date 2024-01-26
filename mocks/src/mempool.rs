@@ -23,7 +23,7 @@ use common::{
 };
 use mempool::{
     error::{BlockConstructionError, Error},
-    event::MempoolEvent,
+    event::{MempoolEvent, RpcMempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
     FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
@@ -61,7 +61,8 @@ mockall::mock! {
             packing_strategy: PackingStrategy,
         ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
-        fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+        fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+        fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<RpcMempoolEvent>;
         fn memory_usage(&self) -> usize;
         fn get_max_size(&self) -> MempoolMaxSize;
         fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;

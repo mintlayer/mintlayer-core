@@ -201,6 +201,7 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
             .map_err(|_| ReorgError::BestBlockForUtxos)?
     );
 
+    // Try to apply transactions that have been reorged out
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
         let origin = LocalTxOrigin::PastBlock.into();

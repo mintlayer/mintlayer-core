@@ -22,12 +22,11 @@ use common::{
     primitives::Id,
 };
 use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
+use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
 use crate::{FeeRate, MempoolMaxSize, TxStatus};
-
-use rpc::RpcResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GetTxResponse {
@@ -77,6 +76,9 @@ trait MempoolRpc {
 
     #[method(name = "get_fee_rate_points")]
     async fn get_fee_rate_points(&self) -> RpcResult<Vec<(usize, FeeRate)>>;
+
+    #[subscription(name = "subscribe_events", item = crate::event::RpcMempoolEvent)]
+    async fn subscribe_events(&self) -> subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -157,5 +159,10 @@ impl MempoolRpcServer for super::MempoolHandle {
         // MIN(1) + 9 = 10, to keep it as const
         const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
         rpc::handle_result(self.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await)
+    }
+
+    async fn subscribe_events(&self, pending: subscription::Pending) -> subscription::Reply {
+        let events = self.call_mut(|m| m.subscribe_to_rpc_events()).await?;
+        subscription::connect_broadcast(events, pending).await
     }
 }

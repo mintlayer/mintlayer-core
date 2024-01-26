@@ -15,7 +15,7 @@
 
 use crate::{
     error::{BlockConstructionError, Error},
-    event::MempoolEvent,
+    event::{MempoolEvent, RpcMempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
     FeeRate, MempoolMaxSize, TxOptions, TxStatus,
@@ -25,6 +25,7 @@ use common::{
     primitives::Id,
 };
 use std::{num::NonZeroUsize, sync::Arc};
+use utils_networking::broadcaster;
 
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
@@ -73,7 +74,10 @@ pub trait MempoolInterface: Send + Sync {
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
     /// Subscribe to events emitted by mempool
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+    fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+
+    /// Subscribe to RPC events emitted by mempool
+    fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<RpcMempoolEvent>;
 
     /// Get current memory usage
     fn memory_usage(&self) -> usize;
