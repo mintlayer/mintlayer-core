@@ -44,12 +44,15 @@ impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
 where
     T::Target: ChainstateInterface,
 {
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>) {
-        self.deref_mut().subscribe_to_events(handler)
+    fn subscribe_to_subsystem_events(
+        &mut self,
+        handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>,
+    ) {
+        self.deref_mut().subscribe_to_subsystem_events(handler)
     }
 
-    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
-        self.deref_mut().subscribe_to_event_broadcast()
+    fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
+        self.deref_mut().subscribe_to_rpc_events()
     }
 
     fn process_block(

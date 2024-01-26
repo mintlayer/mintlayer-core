@@ -225,7 +225,7 @@ fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
                 events_.lock().unwrap().push((block_id, block_height));
             }
         });
-        chainstate.subscribe_to_events(handler);
+        chainstate.subscribe_to_subsystem_events(handler);
     }
 
     events
@@ -252,7 +252,7 @@ async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
     let blocks = rng.gen_range(8..128);
 
     let mut receivers: Vec<_> =
-        (0..subscribers).map(|_| tf.chainstate.subscribe_to_event_broadcast()).collect();
+        (0..subscribers).map(|_| tf.chainstate.subscribe_to_rpc_events()).collect();
 
     let event_processor = tokio::spawn(async move {
         let mut events = vec![Vec::new(); receivers.len()];

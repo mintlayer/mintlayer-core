@@ -36,9 +36,11 @@ use utils_tokio::broadcaster;
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send + Sync {
-    // TODO: The two following should be unified
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
-    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
+    fn subscribe_to_subsystem_events(
+        &mut self,
+        handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>,
+    );
+    fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
     fn process_block(
         &mut self,
         block: Block,

@@ -287,7 +287,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn subscribe_events(&self, pending: subscription::Pending) -> subscription::Reply {
-        let event_rx = self.call_mut(move |this| this.subscribe_to_event_broadcast()).await?;
+        let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
         rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
     }
 }

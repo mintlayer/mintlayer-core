@@ -392,7 +392,7 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
             }
         },
     );
-    tf.chainstate.subscribe_to_events(subscribe_func);
+    tf.chainstate.subscribe_to_subsystem_events(subscribe_func);
 }
 
 fn check_block_reorg_state(

@@ -299,7 +299,7 @@ impl JobManager {
                             },
                         );
 
-                    this.subscribe_to_events(subscribe_func);
+                    this.subscribe_to_subsystem_events(subscribe_func);
                 })
                 .await
         });
