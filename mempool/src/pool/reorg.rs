@@ -162,10 +162,17 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
     if is_ibd || new_tip != actual_tip {
         log::debug!("Not updating mempool: is_ibd = {is_ibd}, new_tip = {new_tip:?}, actual_tip = {actual_tip:?}");
 
-        // We still need to update the current tx_verifier tip
-        let mut old_transactions = mempool.reset();
-        if old_transactions.next().is_some() {
-            log::warn!("Discarding mempool transactions during IBD or because the tip has changed");
+        if is_ibd {
+            // Note: mempool.reset() will also re-create the tx verifier from the current chainstate,
+            // which will also change its "best block for utxos". This is not really needed here,
+            // but some existing functional tests, namely blockprod_ibd.py and mempool_ibd.py,
+            // use this fact to detect that the corresponding new tip event has already reached
+            // the mempool. TODO: refactor the tests, remove this call of "mempool.reset()".
+            let mut old_transactions = mempool.reset();
+            if old_transactions.next().is_some() {
+                // Note: actually, this should never happen during ibd.
+                log::warn!("Discarding mempool transactions during IBD");
+            }
         }
         return Ok(());
     }
