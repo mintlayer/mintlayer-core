@@ -26,7 +26,7 @@ use crypto::{
     key::hdkd::{child_number::ChildNumber, u31::U31},
     vrf::VRFPublicKey,
 };
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
 use wallet::{
@@ -249,7 +249,9 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .log_err()
     }
 
-    pub async fn get_delegations(&self) -> Result<Vec<(DelegationId, Amount)>, ControllerError<T>> {
+    pub async fn get_delegations(
+        &self,
+    ) -> Result<Vec<(DelegationId, PoolId, Amount)>, ControllerError<T>> {
         let delegations = self
             .wallet
             .get_delegations(self.account_index)
@@ -258,7 +260,13 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         let tasks: FuturesUnordered<_> = delegations
             .into_iter()
             .map(|(delegation_id, delegation_data)| {
-                self.get_delegation_share(delegation_data, *delegation_id)
+                self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                    res.map(|opt| {
+                        opt.map(|(delegation_id, amount)| {
+                            (delegation_id, delegation_data.pool_id, amount)
+                        })
+                    })
+                })
             })
             .collect();
 

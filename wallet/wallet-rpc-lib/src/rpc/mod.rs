@@ -964,10 +964,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|delegations: Vec<(DelegationId, Amount)>| {
+            .map(|delegations: Vec<(DelegationId, PoolId, Amount)>| {
                 delegations
                     .into_iter()
-                    .map(|(delegation_id, balance)| {
+                    .map(|(delegation_id, _, balance)| {
                         DelegationInfo::new(delegation_id, balance, &self.chain_config)
                     })
                     .collect()

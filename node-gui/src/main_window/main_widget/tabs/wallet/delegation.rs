@@ -62,16 +62,22 @@ pub fn view_delegation(
                 .push(field("No delegations found".to_owned()))
                 .push(field(String::new()))
         } else {
-            let mut delegation_balance_grid = Grid::with_columns(5)
+            let mut delegation_balance_grid = Grid::with_columns(7)
                 .push(field("Delegation Id".to_owned()))
+                .push(field("".to_owned()))
+                .push(field("Pool Id".to_owned()))
                 .push(field("".to_owned()))
                 .push(field("Delegation balance".to_owned()))
                 .push(field("".to_owned()))
                 .push(field("".to_owned()));
-            for (delegation_id, balance) in
-                account.delegations_balance.iter().map(|(id, b)| (*id, *b))
+            for (delegation_id, pool_id, balance) in account
+                .delegations_balance
+                .iter()
+                .map(|(del_id, (pool_id, b))| (*del_id, *pool_id, *b))
             {
                 let delegation_address = Address::new(chain_config, &delegation_id)
+                    .expect("Encoding pool id to address can't fail (GUI)");
+                let pool_address = Address::new(chain_config, &pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 let delegate_staking_amount =
                     delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
@@ -99,6 +105,24 @@ pub fn view_delegation(
                         .on_press(WalletMessage::CopyToClipboard(
                             delegation_address.to_string(),
                         )),
+                    )
+                    .push(
+                        tooltip(
+                            field(pool_address.to_short_string(chain_config).expect("cannot fail")),
+                            pool_address.to_string(),
+                            Position::Bottom,
+                        )
+                        .gap(5)
+                        .style(iced::theme::Container::Box),
+                    )
+                    .push(
+                        button(
+                            Text::new(iced_aw::Icon::ClipboardCheck.to_string())
+                                .font(iced_aw::ICON_FONT),
+                        )
+                        .style(iced::theme::Button::Text)
+                        .width(Length::Shrink)
+                        .on_press(WalletMessage::CopyToClipboard(pool_address.to_string())),
                     )
                     .push(field(print_coin_amount(chain_config, balance)))
                     .push(

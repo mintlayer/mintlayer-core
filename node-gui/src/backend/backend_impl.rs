@@ -725,7 +725,11 @@ impl Backend {
                             BackendEvent::DelegationsBalance(
                                 *wallet_id,
                                 *account_id,
-                                BTreeMap::from_iter(delegations_balance.into_iter()),
+                                BTreeMap::from_iter(
+                                    delegations_balance
+                                        .into_iter()
+                                        .map(|(del, pool, balance)| (del, (pool, balance))),
+                                ),
                             ),
                         );
                         account_data.update_pool_balance_and_delegations = false;

@@ -71,7 +71,7 @@ pub struct AccountInfo {
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
     pub staking_balance: BTreeMap<PoolId, Amount>,
-    pub delegations_balance: BTreeMap<DelegationId, Amount>,
+    pub delegations_balance: BTreeMap<DelegationId, (PoolId, Amount)>,
     pub transaction_list: TransactionList,
 }
 
@@ -205,7 +205,11 @@ pub enum BackendEvent {
     WalletBestBlock(WalletId, (Id<GenBlock>, BlockHeight)),
     Balance(WalletId, AccountId, BTreeMap<Currency, Amount>),
     StakingBalance(WalletId, AccountId, BTreeMap<PoolId, Amount>),
-    DelegationsBalance(WalletId, AccountId, BTreeMap<DelegationId, Amount>),
+    DelegationsBalance(
+        WalletId,
+        AccountId,
+        BTreeMap<DelegationId, (PoolId, Amount)>,
+    ),
     NewAddress(Result<AddressInfo, BackendError>),
     ToggleStaking(Result<(WalletId, AccountId, bool), BackendError>),
     SendAmount(Result<TransactionInfo, BackendError>),
