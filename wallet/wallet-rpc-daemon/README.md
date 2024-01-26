@@ -9,24 +9,54 @@ The full set of methods is specified in [src/rpc/interface.rs](src/rpc/interface
 
 ## Accessing from command line
 
+Both http and websocket are reached using the same port number. When running the RPC server of the wallet, it will
+bind to a single port that will be used for both. By default, this port is 3034 for the wallet (13034 for testnet).
+
+In RPC, websocket functionality is a superset of http functionality. In addition to simple RPC calls,
+that are achieved using http's simple request/response mechanism, websocket provides subscription to events
+in the wallet (and node). For example, the user can subscribe to incoming transactions to the wallet,
+or incoming blocks to the node, and a notification will be sent out through the active websocket connection
+when events happen.
+
+### Example on using RPC with the command line
+
 Using `curl` over HTTP (replace all caps placeholders as appropriate):
 
 ```sh
-curl -H 'Content-Type: application/json' \
-  -d '{"jsonrpc": "2.0", "id": ID, "method": METHOD, "params": [PARAM1, PARAM2, ...]}' \
-  USER:PASS@HOST:PORT
+curl -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": ID, "method": METHOD, "params": [PARAM1, PARAM2, ...]}' http://USER:PASS@HOST:PORT
 ```
 
-Using `websocat` over WebSockets (replace all caps placeholders as appropriate):
+for example, to get the balance of account with index 0 from an open wallet, with RPC, assuming authentication is disabled
 
 ```sh
-websocat --jsonrpc USER:PASS@HOST:PORT
+curl -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": [{"account": 0}]}' http://127.0.0.1:3034
 ```
 
-And then type in the method invocations one per line in the following format:
+For websocket, you can use `websocat` (replace all caps placeholders as appropriate):
+
+```sh
+websocat ws://USER:PASS@HOST:PORT
 ```
-METHOD PARAM1 PARAM2 ...
+
+and then type in the method invocations one per line in the following format:
+
 ```
+{"jsonrpc": "2.0", "id": ID, "method": METHOD, "params": [PARAM1, PARAM2, ...]}
+```
+
+for example, to get the balance of account with index 0 from an open wallet, with RPC
+
+```
+{"jsonrpc": "2.0", "id": 1, "method": "account_balance", "params": [{"account": 0}]}
+```
+
+as another example, since this is websocket, you can also subscribe to events. So to do that, send the function:
+
+```
+{"jsonrpc": "2.0", "method": "subscribe_wallet_events", "params":[{}], "id": 1}
+```
+
+which will return a confirmation with a result. Then, the wallet will notify you for events.
 
 ## Value representations
 
