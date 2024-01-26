@@ -27,7 +27,10 @@ use crate::{
 
 use super::WalletMessage;
 
-const ENCRYPT_WALLET_TOOLTIP_TEXT: &str = "TODO";
+const ENCRYPT_WALLET_TOOLTIP_TEXT: &str = "Encrypting the wallet will protect all the private keys and secret information in the wallet. \
+    Not everything will be encrypted, but unlocking the wallet will be required to send coins, or do anything that requires private keys. \
+    Encryption provides security in case your wallet file was found by someone unauthorized. Keep in mind that if you lose your password, you will absolutely \
+    lose access to your wallet and the only way to recover your assets is by using the recovery phrase.";
 
 pub fn view_top_panel(
     chain_config: &ChainConfig,

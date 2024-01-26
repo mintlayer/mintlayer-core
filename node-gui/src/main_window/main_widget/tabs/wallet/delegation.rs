@@ -28,7 +28,7 @@ use iced_aw::Grid;
 
 use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
 
-use super::WalletMessage;
+use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
 
 const POOL_ID_TOOLTIP_TEXT: &str =
     "The pool id of the pool that will get the delegation and stake the coins.";
@@ -41,8 +41,11 @@ const SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT: &str =
 const SEND_DELEGATION_ID_TOOLTIP_TEXT: &str =
     "The delegation id, from which the delegated coins will be taken";
 
-const SEND_TO_ADDRESS_BUTTON_TOOLTIP_TEXT: &str = "TODO";
-const CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT: &str = "TODO";
+const CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT: &str = "Before delegating your coins, you create an account that you own, which you can fund with coins (and withdraw from). \
+    Once this is created, you can delegate coins to it for staking. If the pool is decommissioned, it is your responsibility to withdraw the coins and move them to another pool.";
+
+const WITHDRAW_BUTTON_TOOLTIP_TEXT: &str =
+    "Withdrawing coins from delegation means they won't be staked anymore. The coins will be locked for the maturity period before they can be normally used.";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_delegation(
@@ -152,7 +155,23 @@ pub fn view_delegation(
         }
     };
 
+    let maturity_period = chain_config.staking_pool_spend_maturity_block_count(1.into()).to_int();
+    let maturity_period_text = format!(
+        "Maturity period: {maturity_period} blocks (a block takes on average {} seconds)",
+        chain_config.target_block_spacing().as_secs()
+    );
+
     column![
+        row![
+            Text::new(maturity_period_text).size(13),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                MATURITY_PERIOD_TOOLTIP_TEXT,
+                Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ],
         // ----- Create delegation
         row![
             text_input("Pool Id for new delegation", pool_id)
@@ -259,12 +278,12 @@ pub fn view_delegation(
             .style(iced::theme::Container::Box)
         ],
         row![
-            iced::widget::button(Text::new("Send to address from delegation"))
+            iced::widget::button(Text::new("Withdraw from delegation"))
                 .padding(10)
                 .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
             tooltip(
                 Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
-                SEND_TO_ADDRESS_BUTTON_TOOLTIP_TEXT,
+                WITHDRAW_BUTTON_TOOLTIP_TEXT,
                 Position::Bottom
             )
             .gap(10)

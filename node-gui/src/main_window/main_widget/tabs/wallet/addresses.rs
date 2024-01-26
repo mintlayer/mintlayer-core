@@ -23,7 +23,7 @@ use crate::backend::messages::AccountInfo;
 
 use super::WalletMessage;
 
-const NEW_ADDRESS_TOOLTIP_TEXT: &str = "TODO";
+const NEW_ADDRESS_TOOLTIP_TEXT: &str = "You can create as many addresses as you desire; however, you're limited by how many addresses you create before using them. An address is labeled as used, when a transaction is found on the blockchain that utilizes that address.";
 
 pub fn view_addresses(
     account: &AccountInfo,
