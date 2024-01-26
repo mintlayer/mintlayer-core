@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{button, column, pick_list, progress_bar, row, text, Column, Text},
+    widget::{button, column, pick_list, progress_bar, row, text, tooltip, Column, Text},
     Alignment, Element, Length,
 };
 
@@ -24,6 +24,12 @@ use crate::{
 };
 
 use super::{SelectedPanel, WalletMessage};
+
+const TRANSACTIONS_TOOLTIP_TEXT: &str = "TODO";
+const ADDRESSES_TOOLTIP_TEXT: &str = "TODO";
+const SEND_TOOLTIP_TEXT: &str = "TODO";
+const STAKING_TOOLTIP_TEXT: &str = "TODO";
+const DELEGATION_TOOLTIP_TEXT: &str = "TODO";
 
 #[derive(Clone, PartialEq, Eq)]
 struct AccountPickItem {
@@ -73,18 +79,27 @@ pub fn view_left_panel(
         WalletMessage::SelectAccount(item.account_id)
     });
 
-    let panel_button = |label, panel, selected_panel| {
-        let label = text(label).size(16);
+    let panel_button = |label, panel, selected_panel, tooltip_text| {
+        let label = row![
+            text(label).size(16).width(Length::Fill),
+            tooltip(
+                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                tooltip_text,
+                tooltip::Position::Bottom
+            )
+            .gap(10)
+            .style(iced::theme::Container::Box)
+        ];
 
-        let button = button(label)
+        button(label)
             .style(if panel == selected_panel {
                 iced::theme::Button::Primary
             } else {
                 iced::theme::Button::Text
             })
-            .width(Length::Fill);
-
-        button.on_press(WalletMessage::SelectPanel(panel)).padding(8)
+            .width(Length::Fill)
+            .on_press(WalletMessage::SelectPanel(panel))
+            .padding(8)
     };
 
     // `next_height` is used to prevent flickering when a new block is found
@@ -134,11 +149,36 @@ pub fn view_left_panel(
         .spacing(10)
         .padding(10),
         column![
-            panel_button("Transactions", SelectedPanel::Transactions, selected_panel),
-            panel_button("Addresses", SelectedPanel::Addresses, selected_panel),
-            panel_button("Send", SelectedPanel::Send, selected_panel),
-            panel_button("Staking", SelectedPanel::Staking, selected_panel),
-            panel_button("Delegation", SelectedPanel::Delegation, selected_panel),
+            panel_button(
+                "Transactions",
+                SelectedPanel::Transactions,
+                selected_panel,
+                TRANSACTIONS_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Addresses",
+                SelectedPanel::Addresses,
+                selected_panel,
+                ADDRESSES_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Send",
+                SelectedPanel::Send,
+                selected_panel,
+                SEND_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Staking",
+                SelectedPanel::Staking,
+                selected_panel,
+                STAKING_TOOLTIP_TEXT
+            ),
+            panel_button(
+                "Delegation",
+                SelectedPanel::Delegation,
+                selected_panel,
+                DELEGATION_TOOLTIP_TEXT
+            ),
         ],
         Column::new().height(Length::Fill),
         scan_progress_widget,
