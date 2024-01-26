@@ -56,7 +56,7 @@ pub fn view_top_panel(
         balance,
         Row::new().width(Length::Fill),
         password,
-        button(Text::new("Close"))
+        button(Text::new("Close wallet"))
             .style(iced::theme::Button::Destructive)
             .on_press(WalletMessage::Close),
     ]
