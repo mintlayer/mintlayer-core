@@ -34,8 +34,8 @@ use crate::tx_origin::LocalTxOrigin;
 pub enum ReorgError {
     #[error(transparent)]
     Chainstate(#[from] chainstate::ChainstateError),
-    #[error("Could not find the previous tip")]
-    OldTip,
+    #[error("Could not obtain the best block for utxos")]
+    BestBlockForUtxos,
     #[error("Could not find the previous tip index")]
     OldTipIndex,
     #[error("Could not find the new tip index")]
@@ -121,7 +121,13 @@ fn fetch_disconnected_txs<M>(
     mempool: &Mempool<M>,
     new_tip: Id<Block>,
 ) -> Result<impl Iterator<Item = SignedTransaction>, ReorgError> {
-    let old_tip = mempool.tx_verifier.get_best_block_for_utxos().map_err(|_| ReorgError::OldTip)?;
+    let old_tip = mempool
+        .tx_verifier
+        .get_best_block_for_utxos()
+        .map_err(|_| ReorgError::BestBlockForUtxos)?;
+
+    log::debug!("Fetching disconnected txs, old_tip = {old_tip:?}");
+
     mempool
         .blocking_chainstate_handle()
         .call(move |c| ReorgData::from_chainstate(c, old_tip, new_tip.into()))?
@@ -135,14 +141,38 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
 ) -> Result<(), ReorgError> {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
-    let is_ibd = mempool.blocking_chainstate_handle().call(|cs| cs.is_initial_block_download())?;
-    if is_ibd {
-        log::debug!("Not updating mempool tx verifier during IBD");
+    let (is_ibd, actual_tip) = mempool.blocking_chainstate_handle().call(|cs| {
+        let is_ibd = cs.is_initial_block_download();
+        let actual_tip = cs.get_best_block_id()?;
+        Ok::<_, chainstate::ChainstateError>((is_ibd, actual_tip))
+    })??;
 
-        // We still need to update the current tx_verifier tip
-        let mut old_transactions = mempool.reset();
-        if old_transactions.next().is_some() {
-            log::warn!("Discarding mempool transactions during IBD");
+    // Note:
+    // 1) When chainstate receives multiple blocks in rapid succession, mempool may start lagging
+    // behind it significantly. So a situation is possible when the chainstate is out of ibd
+    // already, but new_tip corresponds to an earlier block, which was obtained when the node
+    // was still in ibd.
+    // 2) If we allowed mempool to handle new_tip events normally while it's lagging, it would lead
+    // to issues. E.g. in the past it was possible for mempool to try connecting transactions of
+    // a past block to some of that block's descendants because of this.
+    // So we bail out if new_tip isn't equal to the actual tip of the chainstate.
+    // (Note that this check doesn't fully prevent mempool from falling out of sync with chainstate.
+    // E.g a new chainstate tip may appear while mempool is in the process of reorging transactions,
+    // which still may cause issues).
+    if is_ibd || new_tip != actual_tip {
+        log::debug!("Not updating mempool: is_ibd = {is_ibd}, new_tip = {new_tip:?}, actual_tip = {actual_tip:?}");
+
+        if is_ibd {
+            // Note: mempool.reset() will also re-create the tx verifier from the current chainstate,
+            // which will also change its "best block for utxos". This is not really needed here,
+            // but some existing functional tests, namely blockprod_ibd.py and mempool_ibd.py,
+            // use this fact to detect that the corresponding new tip event has already reached
+            // the mempool. TODO: refactor the tests, remove this call of "mempool.reset()".
+            let mut old_transactions = mempool.reset();
+            if old_transactions.next().is_some() {
+                // Note: actually, this should never happen during ibd.
+                log::warn!("Discarding mempool transactions during IBD");
+            }
         }
         return Ok(());
     }
@@ -154,25 +184,28 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
         Ok(to_insert) => reorg_mempool_transactions(mempool, to_insert, work_queue),
         Err(_) => refresh_mempool(mempool),
     }
-
-    Ok(())
 }
 
 fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     mempool: &mut Mempool<M>,
     txs_to_insert: impl Iterator<Item = SignedTransaction>,
     work_queue: &mut WorkQueue,
-) {
+) -> Result<(), ReorgError> {
     let old_transactions = mempool.reset();
+
+    log::debug!(
+        "Reorging mempool txs, tx_verifier's best block for utxos after mempool reset: {:?}",
+        mempool
+            .tx_verifier
+            .get_best_block_for_utxos()
+            .map_err(|_| ReorgError::BestBlockForUtxos)?
+    );
 
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
         let origin = LocalTxOrigin::PastBlock.into();
         if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
-            // Note: logging this error can make our test logs huge, so we use the "trace"
-            // level in this case, see
-            // https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
-            log::trace!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
+            log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
 
@@ -183,8 +216,12 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }
     }
+
+    Ok(())
 }
 
-pub fn refresh_mempool<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>) {
+pub fn refresh_mempool<M: MemoryUsageEstimator>(
+    mempool: &mut Mempool<M>,
+) -> Result<(), ReorgError> {
     reorg_mempool_transactions(mempool, std::iter::empty(), &mut WorkQueue::new())
 }
