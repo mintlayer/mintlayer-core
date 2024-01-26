@@ -3866,6 +3866,15 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             },
         )
         .unwrap();
+
+    // remove the signatures and try to sign it again
+    let tx = stake_pool_transaction.transaction().clone();
+    let stake_pool_transaction = wallet
+        .sign_raw_transaction(acc_0_index, TransactionToSign::Tx(tx))
+        .unwrap()
+        .into_signed_tx()
+        .unwrap();
+
     let _ = create_block(
         &chain_config,
         &mut wallet,
@@ -3888,15 +3897,20 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .unwrap();
 
     // Try to sign decommission request with wrong account
-    let sign_from_acc0_res =
-        wallet.sign_raw_transaction(acc_0_index, decommission_partial_tx.clone());
+    let sign_from_acc0_res = wallet.sign_raw_transaction(
+        acc_0_index,
+        TransactionToSign::Partial(decommission_partial_tx.clone()),
+    );
     assert_eq!(
         sign_from_acc0_res.unwrap_err(),
         WalletError::InputCannotBeSigned
     );
 
     let signed_tx = wallet
-        .sign_raw_transaction(acc_1_index, decommission_partial_tx)
+        .sign_raw_transaction(
+            acc_1_index,
+            TransactionToSign::Partial(decommission_partial_tx),
+        )
         .unwrap()
         .into_signed_tx()
         .unwrap();
@@ -3986,7 +4000,10 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
 
     // sign the tx with cold wallet
     let signed_tx = cold_wallet
-        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, decommission_partial_tx)
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            TransactionToSign::Partial(decommission_partial_tx),
+        )
         .unwrap()
         .into_signed_tx()
         .unwrap();

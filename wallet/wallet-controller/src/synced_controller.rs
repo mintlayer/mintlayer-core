@@ -36,7 +36,7 @@ use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
-    account::{PartiallySignedTransaction, UnconfirmedTokenInfo},
+    account::{PartiallySignedTransaction, TransactionToSign, UnconfirmedTokenInfo},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, StakePoolDataArguments,
@@ -618,7 +618,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     pub fn sign_raw_transaction(
         &mut self,
-        tx: PartiallySignedTransaction,
+        tx: TransactionToSign,
     ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
         self.wallet
             .sign_raw_transaction(self.account_index, tx)

@@ -82,6 +82,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("{0}")]
     SubmitError(#[from] SubmitError),
+
+    #[error("Invalid hex encoded transaction")]
+    InvalidRawTransaction,
+
+    #[error("Invalid hex encoded partially signed transaction")]
+    InvalidPartialTransaction,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

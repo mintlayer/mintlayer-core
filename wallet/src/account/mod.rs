@@ -42,7 +42,7 @@ use crate::send_request::{
 };
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{SendRequest, WalletError, WalletResult};
+use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -88,6 +88,11 @@ use self::utxo_selector::{CoinSelectionAlgo, PayFee};
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
     pub consolidate_fee_rate: FeeRate,
+}
+
+pub enum TransactionToSign {
+    Tx(Transaction),
+    Partial(PartiallySignedTransaction),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -1135,23 +1140,100 @@ impl Account {
         PartiallySignedTransaction::new(tx, witnesses, input_utxos, destinations)
     }
 
+    fn tx_to_partially_signed_tx(
+        &self,
+        tx: Transaction,
+        median_time: BlockTimestamp,
+    ) -> WalletResult<PartiallySignedTransaction> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+
+        let (input_utxos, destinations) = tx
+            .inputs()
+            .iter()
+            .map(|tx_inp| match tx_inp {
+                TxInput::Utxo(outpoint) => {
+                    // find utxo from cache
+                    self.find_unspent_utxo_with_destination(outpoint, current_block_info)
+                }
+                TxInput::Account(acc_outpoint) => {
+                    // find delegation destination
+                    match acc_outpoint.account() {
+                        AccountSpending::DelegationBalance(delegation_id, _) => self
+                            .output_cache
+                            .delegation_data(delegation_id)
+                            .map(|data| (None, Some(data.destination.clone())))
+                            .ok_or(WalletError::DelegationNotFound(*delegation_id)),
+                    }
+                }
+                TxInput::AccountCommand(_, cmd) => {
+                    // find authority of the token
+                    match cmd {
+                        AccountCommand::MintTokens(token_id, _)
+                        | AccountCommand::UnmintTokens(token_id)
+                        | AccountCommand::LockTokenSupply(token_id)
+                        | AccountCommand::ChangeTokenAuthority(token_id, _)
+                        | AccountCommand::FreezeToken(token_id, _)
+                        | AccountCommand::UnfreezeToken(token_id) => self
+                            .output_cache
+                            .token_data(token_id)
+                            .map(|data| (None, Some(data.authority.clone())))
+                            .ok_or(WalletError::UnknownTokenId(*token_id)),
+                    }
+                }
+            })
+            .collect::<WalletResult<Vec<_>>>()?
+            .into_iter()
+            .unzip();
+
+        let num_inputs = tx.inputs().len();
+        PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)
+    }
+
+    fn find_unspent_utxo_with_destination(
+        &self,
+        outpoint: &UtxoOutPoint,
+        current_block_info: BlockInfo,
+    ) -> WalletResult<(Option<TxOutput>, Option<Destination>)> {
+        let (txo, _) =
+            self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
+
+        Ok((
+            Some(txo.clone()),
+            Some(
+                get_tx_output_destination(txo, &|pool_id| {
+                    self.output_cache.pool_data(*pool_id).ok()
+                })
+                .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
+            ),
+        ))
+    }
+
     pub fn sign_raw_transaction(
         &self,
-        tx: PartiallySignedTransaction,
+        tx: TransactionToSign,
+        median_time: BlockTimestamp,
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<PartiallySignedTransaction> {
-        let inputs_utxo_refs: Vec<_> = tx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let ptx = match tx {
+            TransactionToSign::Partial(ptx) => ptx,
+            TransactionToSign::Tx(tx) => self.tx_to_partially_signed_tx(tx, median_time)?,
+        };
 
-        let witnesses = tx
+        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+
+        let witnesses = ptx
             .witnesses()
             .iter()
             .enumerate()
             .map(|(i, witness)| match witness {
                 Some(w) => Ok(Some(w.clone())),
-                None => match tx.destinations().get(i).expect("cannot fail") {
+                None => match ptx.destinations().get(i).expect("cannot fail") {
                     Some(destination) => {
                         let s = self
-                            .sign_input(tx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
+                            .sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
                             .ok_or(WalletError::InputCannotBeSigned)?;
                         Ok(Some(s.clone()))
                     }
@@ -1160,7 +1242,7 @@ impl Account {
             })
             .collect::<Result<Vec<_>, WalletError>>()?;
 
-        Ok(tx.new_witnesses(witnesses))
+        Ok(ptx.new_witnesses(witnesses))
     }
 
     pub fn account_index(&self) -> U31 {

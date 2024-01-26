@@ -170,8 +170,8 @@ pub enum ColdWalletCommand {
     /// to the network.
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
-        /// Hex encoded transaction.
-        transaction: HexEncoded<PartiallySignedTransaction>,
+        /// Hex encoded transaction or PartiallySignedTransaction.
+        transaction: String,
     },
 
     /// Print command history in the wallet for this execution

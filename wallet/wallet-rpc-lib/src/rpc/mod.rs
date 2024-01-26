@@ -24,11 +24,11 @@ use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
-use serialization::hex_encoded::HexEncoded;
+use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
 use wallet::{
-    account::{PartiallySignedTransaction, PoolData},
+    account::{PartiallySignedTransaction, PoolData, TransactionToSign},
     WalletError,
 };
 
@@ -351,16 +351,28 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn sign_raw_transaction(
         &self,
         account_index: U31,
-        tx: HexEncoded<PartiallySignedTransaction>,
+        raw_tx: String,
         config: ControllerConfig,
     ) -> WRpcResult<PartiallySignedTransaction, N> {
+        let hex_bytes = hex::decode(raw_tx).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let mut bytes = hex_bytes.as_slice();
+        let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let tx_to_sign = if bytes.is_empty() {
+            TransactionToSign::Tx(tx)
+        } else {
+            let mut bytes = hex_bytes.as_slice();
+            let ptx = PartiallySignedTransaction::decode_all(&mut bytes)
+                .map_err(|_| RpcError::InvalidPartialTransaction)?;
+            TransactionToSign::Partial(ptx)
+        };
+
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .sign_raw_transaction(tx.take())
+                        .sign_raw_transaction(tx_to_sign)
                         .map_err(RpcError::Controller)
                 })
             })
