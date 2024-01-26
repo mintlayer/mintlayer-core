@@ -20,7 +20,10 @@ use iced::{
 };
 use iced_aw::Grid;
 
-use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
+use crate::{
+    backend::messages::AccountInfo,
+    main_window::{print_coin_amount, print_margin_ratio},
+};
 
 use super::WalletMessage;
 
@@ -59,11 +62,13 @@ pub fn view_stake(
                 .push(field("No staking pools found".to_owned()))
                 .push(field(String::new()))
         } else {
-            let mut staking_balance_grid = Grid::with_columns(3)
+            let mut staking_balance_grid = Grid::with_columns(5)
                 .push(field("Pool Id".to_owned()))
                 .push(field(String::new()))
+                .push(field("Margin ratio".to_owned()))
+                .push(field("Cost per block".to_owned()))
                 .push(field("Pool balance".to_owned()));
-            for (pool_id, balance) in account.staking_balance.iter() {
+            for (pool_id, (pool_data, balance)) in account.staking_balance.iter() {
                 let pool_id_address = Address::new(chain_config, pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 staking_balance_grid = staking_balance_grid
@@ -86,6 +91,13 @@ pub fn view_stake(
                         .style(iced::theme::Button::Text)
                         .on_press(WalletMessage::CopyToClipboard(pool_id_address.to_string())),
                     )
+                    .push(field(print_margin_ratio(
+                        pool_data.margin_ratio_per_thousand,
+                    )))
+                    .push(field(print_coin_amount(
+                        chain_config,
+                        pool_data.cost_per_block,
+                    )))
                     .push(field(print_coin_amount(chain_config, *balance)));
             }
             staking_balance_grid

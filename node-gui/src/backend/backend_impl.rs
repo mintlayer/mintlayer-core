@@ -173,8 +173,8 @@ impl Backend {
                 .expect("get_all_issued_addresses should not fail normally"),
             staking_enabled: false,
             balance: Self::get_account_balance(&controller),
-            staking_balance: BTreeMap::new(),
-            delegations_balance: BTreeMap::new(),
+            staking_balance: Default::default(),
+            delegations_balance: Default::default(),
             transaction_list,
         }
     }
@@ -696,15 +696,24 @@ impl Backend {
                     account_data.update_pool_balance_and_delegations
                 })
             {
-                let staking_balance_res = wallet_data
+                let pool_info_res = wallet_data
                     .controller
-                    .get_stake_pool_balances(account_id.account_index())
+                    .readonly_controller(account_id.account_index())
+                    .get_pool_ids()
                     .await;
-                match staking_balance_res {
+                match pool_info_res {
                     Ok(staking_balance) => {
                         Self::send_event(
                             &self.low_priority_event_tx,
-                            BackendEvent::StakingBalance(*wallet_id, *account_id, staking_balance),
+                            BackendEvent::StakingBalance(
+                                *wallet_id,
+                                *account_id,
+                                BTreeMap::from_iter(
+                                    staking_balance
+                                        .into_iter()
+                                        .map(|(id, data, balance)| (id, (data, balance))),
+                                ),
+                            ),
                         );
                         account_data.update_pool_balance_and_delegations = false;
                     }

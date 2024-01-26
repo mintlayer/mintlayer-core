@@ -21,6 +21,7 @@ use std::{
 use common::{
     chain::{
         output_value::OutputValue,
+        stakelock::StakePoolData,
         tokens::{
             is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
             RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen, RPCIsTokenUnfreezable,
@@ -29,7 +30,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id},
+    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -67,29 +68,31 @@ impl DelegationData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PoolData {
     pub utxo_outpoint: UtxoOutPoint,
     pub creation_block: BlockInfo,
     pub decommission_key: Destination,
     pub stake_destination: Destination,
     pub vrf_public_key: VRFPublicKey,
+    pub margin_ratio_per_thousand: PerThousand,
+    pub cost_per_block: Amount,
 }
 
 impl PoolData {
     fn new(
         utxo_outpoint: UtxoOutPoint,
         creation_block: BlockInfo,
-        decommission_key: Destination,
-        stake_destination: Destination,
-        vrf_public_key: VRFPublicKey,
+        pool_data: &StakePoolData,
     ) -> Self {
         PoolData {
             utxo_outpoint,
             creation_block,
-            decommission_key,
-            stake_destination,
-            vrf_public_key,
+            decommission_key: pool_data.decommission_key().clone(),
+            stake_destination: pool_data.staker().clone(),
+            vrf_public_key: pool_data.vrf_public_key().clone(),
+            margin_ratio_per_thousand: pool_data.margin_ratio_per_thousand(),
+            cost_per_block: pool_data.cost_per_block(),
         }
     }
 }
@@ -760,9 +763,7 @@ impl OutputCache {
                                 PoolData::new(
                                     UtxoOutPoint::new(tx.id(), idx as u32),
                                     block_info,
-                                    data.decommission_key().clone(),
-                                    data.staker().clone(),
-                                    data.vrf_public_key().clone(),
+                                    data,
                                 )
                             });
                     }

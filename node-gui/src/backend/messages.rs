@@ -27,7 +27,7 @@ use common::{
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
-use wallet::account::{transaction_list::TransactionList, Currency};
+use wallet::account::{transaction_list::TransactionList, Currency, PoolData};
 
 use super::BackendError;
 
@@ -70,7 +70,7 @@ pub struct AccountInfo {
     pub addresses: BTreeMap<ChildNumber, Address<Destination>>,
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
-    pub staking_balance: BTreeMap<PoolId, Amount>,
+    pub staking_balance: BTreeMap<PoolId, (PoolData, Amount)>,
     pub delegations_balance: BTreeMap<DelegationId, (PoolId, Amount)>,
     pub transaction_list: TransactionList,
 }
@@ -204,7 +204,7 @@ pub enum BackendEvent {
 
     WalletBestBlock(WalletId, (Id<GenBlock>, BlockHeight)),
     Balance(WalletId, AccountId, BTreeMap<Currency, Amount>),
-    StakingBalance(WalletId, AccountId, BTreeMap<PoolId, Amount>),
+    StakingBalance(WalletId, AccountId, BTreeMap<PoolId, (PoolData, Amount)>),
     DelegationsBalance(
         WalletId,
         AccountId,
