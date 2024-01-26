@@ -76,6 +76,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         }
     }
 
+    pub async fn closed(&self) {
+        self.wallet.closed().await
+    }
+
     pub fn chain_config(&self) -> &ChainConfig {
         &self.chain_config
     }

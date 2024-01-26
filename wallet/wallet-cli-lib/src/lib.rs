@@ -36,6 +36,7 @@ use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 use wallet_controller::NodeInterface;
+use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig};
 
 enum Mode {
     Interactive {
@@ -136,10 +137,18 @@ async fn start_hot_wallet(
         cli_args.rpc_address.clone().unwrap_or_else(default_addr)
     };
 
-    let repl_handle = setup_events_and_repl(cli_args, mode, output, input, event_tx);
+    let (repl_handle, wallet_rpc_config) =
+        setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
     let node_rpc = wallet_controller::make_rpc_client(rpc_address, rpc_auth).await?;
-    cli_event_loop::run(&chain_config.clone(), event_rx, in_top_x_mb, node_rpc).await?;
+    cli_event_loop::run(
+        &chain_config.clone(),
+        event_rx,
+        in_top_x_mb,
+        node_rpc,
+        wallet_rpc_config,
+    )
+    .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
 }
 
@@ -153,25 +162,41 @@ async fn start_cold_wallet(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
-    let repl_handle = setup_events_and_repl(cli_args, mode, output, input, event_tx);
+    let (repl_handle, wallet_rpc_config) = setup_events_and_repl(
+        cli_args,
+        mode,
+        output,
+        input,
+        event_tx,
+        *chain_config.chain_type(),
+    )?;
 
     cli_event_loop::run(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
         wallet_controller::make_cold_wallet_rpc_client(chain_config),
+        wallet_rpc_config,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
 }
 
+#[allow(clippy::type_complexity)]
 fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
     args: CliArgs,
     mode: Mode,
     output: impl ConsoleOutput,
     input: impl ConsoleInput,
     event_tx: mpsc::UnboundedSender<Event<N>>,
-) -> std::thread::JoinHandle<Result<(), WalletCliError<N>>> {
+    chain_type: ChainType,
+) -> Result<
+    (
+        std::thread::JoinHandle<Result<(), WalletCliError<N>>>,
+        Option<WalletRpcConfig>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     let mut startup_command_futures = vec![];
     if let Some(wallet_path) = args.wallet_file {
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
@@ -198,8 +223,21 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
         startup_command_futures.push(res_rx);
     }
 
+    let wallet_rpc_config = if args.enable_wallet_rpc_interface {
+        Some(make_wallet_config(
+            args.wallet_rpc_cookie_file,
+            args.wallet_rpc_username,
+            args.wallet_rpc_password,
+            args.wallet_rpc_no_authentication,
+            args.wallet_rpc_address,
+            chain_type,
+        )?)
+    } else {
+        None
+    };
+
     // Run a blocking loop in a separate thread
-    std::thread::spawn(move || match mode {
+    let repl = std::thread::spawn(move || match mode {
         Mode::Interactive { logger } => repl::interactive::run(
             output,
             event_tx,
@@ -226,5 +264,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
             args.cold_wallet,
             startup_command_futures,
         ),
-    })
+    });
+
+    Ok((repl, wallet_rpc_config))
 }

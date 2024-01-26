@@ -88,8 +88,10 @@ fn run_command_blocking<N: NodeInterface>(
     command: WalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError<N>> {
     let (res_tx, res_rx) = tokio::sync::oneshot::channel();
-    event_tx
-        .send(Event::HandleCommand { command, res_tx })
-        .expect("Channel must be open");
+    // channel is closed so exit
+    if event_tx.send(Event::HandleCommand { command, res_tx }).is_err() {
+        return Ok(ConsoleCommand::Exit);
+    }
+
     res_rx.blocking_recv().expect("Channel must be open")
 }

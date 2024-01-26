@@ -15,7 +15,12 @@
 
 mod helper_types;
 
-use std::{fmt::Write, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    fmt::{Debug, Write},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 
 use clap::Parser;
 use common::{
@@ -33,7 +38,10 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
 use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
 use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
-use wallet_rpc_lib::{types::NewTransaction, CreatedWallet, WalletRpc, WalletService};
+use wallet_rpc_lib::{
+    config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
+    WalletService,
+};
 
 use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
 
@@ -637,16 +645,18 @@ pub struct CommandHandler<N: Clone> {
     state: Option<CliWalletState>,
     config: ControllerConfig,
     wallet_rpc: WalletRpc<N>,
+    server_rpc: Option<rpc::Rpc>,
 }
 
 impl<N> CommandHandler<N>
 where
-    N: NodeInterface + Clone + Send + Sync + 'static,
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
         node_rpc: N,
+        wallet_rpc_config: Option<WalletRpcConfig>,
     ) -> Result<Self, WalletCliError<N>> {
         let wallet_service = WalletService::start(chain_config, None, node_rpc)
             .await
@@ -655,13 +665,32 @@ where
         let wallet_handle = wallet_service.handle();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
+
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
+
+        let server_rpc = if let Some(rpc_config) = wallet_rpc_config {
+            Some(
+                rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
+                    .with_method_list("list_methods")
+                    .register(wallet_rpc.clone().into_rpc())
+                    .build()
+                    .await
+                    .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
+            )
+        } else {
+            None
+        };
 
         Ok(CommandHandler {
             state: None,
             config,
             wallet_rpc,
+            server_rpc,
         })
+    }
+
+    pub async fn rpc_completed(&self) {
+        self.wallet_rpc.closed().await
     }
 
     async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError<N>> {
@@ -982,7 +1011,12 @@ where
             }
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
-            ColdWalletCommand::Exit => Ok(ConsoleCommand::Exit),
+            ColdWalletCommand::Exit => {
+                if let Some(rpc) = self.server_rpc.take() {
+                    rpc.shutdown().await;
+                }
+                Ok(ConsoleCommand::Exit)
+            }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
             ColdWalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
             ColdWalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
