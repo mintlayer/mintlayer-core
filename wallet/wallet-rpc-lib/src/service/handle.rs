@@ -17,15 +17,15 @@
 
 use futures::future::{BoxFuture, Future};
 
-use tokio::sync::mpsc;
 use utils::shallow_clone::ShallowClone;
 use wallet_controller::NodeInterface;
 
 use crate::{
     service::worker::{self, WalletCommand, WalletController, WalletWorker},
     types::RpcError,
-    Event,
 };
+
+pub use crate::service::worker::EventStream;
 
 /// Wallet handle allows the user to control the wallet service, perform queries etc.
 #[derive(Clone)]
@@ -66,14 +66,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
         })
     }
 
-    pub fn manage_async<R: Send + 'static, E: Into<RpcError<N>> + Send + 'static>(
+    pub fn manage_async<R: Send + 'static>(
         &self,
-        action_fn: impl FnOnce(&mut WalletWorker<N>) -> BoxFuture<Result<R, E>> + Send + 'static,
-    ) -> impl Future<Output = Result<Result<R, RpcError<N>>, SubmitError>> {
+        action_fn: impl FnOnce(&mut WalletWorker<N>) -> BoxFuture<R> + Send + 'static,
+    ) -> impl Future<Output = Result<R, SubmitError>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let command = WalletCommand::Manage(Box::new(move |wallet_manager| {
             Box::pin(async move {
-                let _ = tx.send(action_fn(wallet_manager).await.map_err(|e| e.into()));
+                let _ = tx.send(action_fn(wallet_manager).await);
             })
         }));
 
@@ -86,10 +86,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
     }
 
     /// Subscribe to wallet events
-    pub fn subscribe(&self) -> Result<EventStream, SubmitError> {
-        let (tx, rx) = mpsc::unbounded_channel();
-        self.send_raw(WalletCommand::Subscribe(tx))?;
-        Ok(EventStream(rx))
+    pub async fn subscribe(&self) -> Result<EventStream, SubmitError> {
+        self.manage_async(move |worker| Box::pin(async move { worker.subscribe() }))
+            .await
     }
 
     /// Stop the wallet service
@@ -119,16 +118,6 @@ pub fn create<N: Clone>(sender: worker::CommandSender<N>) -> WalletHandle<N> {
 impl<N: Clone> ShallowClone for WalletHandle<N> {
     fn shallow_clone(&self) -> Self {
         Self(worker::CommandSender::clone(&self.0))
-    }
-}
-
-/// A stream of wallet events
-pub struct EventStream(mpsc::UnboundedReceiver<Event>);
-
-impl EventStream {
-    /// Receive an event
-    pub async fn recv(&mut self) -> Option<Event> {
-        self.0.recv().await
     }
 }
 

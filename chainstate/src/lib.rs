@@ -47,7 +47,7 @@ pub use detail::tx_verification_strategy::*;
 pub use interface::{chainstate_interface, chainstate_interface_impl_delegation};
 pub use tx_verifier;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ChainstateEvent {
     NewTip(Id<Block>, BlockHeight),
 }

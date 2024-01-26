@@ -18,6 +18,8 @@
 
 use jsonrpsee::{PendingSubscriptionAcceptError, SubscriptionMessage};
 
+use utils_tokio::broadcaster;
+
 /// Pending subscription. Use [accept] to get subscription sink.
 pub type Pending = jsonrpsee::PendingSubscriptionSink;
 
@@ -69,6 +71,40 @@ impl<T: serde::Serialize> Sink<T> {
 /// Accept subscription request
 pub async fn accept<T>(pending: Pending) -> Result<Sink<T>, Error> {
     Sink::accept(pending).await
+}
+
+/// Connect a broadcaster to event sink, transforming and filtering the events on the go
+pub async fn connect_broadcast_filter_map<T, U: serde::Serialize>(
+    mut event_receiver: broadcaster::Receiver<T>,
+    pending: Pending,
+    mut filter_map_fn: impl FnMut(T) -> Option<U>,
+) -> Reply {
+    let subscription = accept::<U>(pending).await?;
+
+    while let Some(event) = event_receiver.recv().await {
+        if let Some(event) = filter_map_fn(event) {
+            subscription.send(&event).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Connect a broadcaster to event sink, transforming and filtering the events on the go
+pub async fn connect_broadcast_map<T, U: serde::Serialize>(
+    event_receiver: broadcaster::Receiver<T>,
+    pending: Pending,
+    mut map_fn: impl FnMut(T) -> U,
+) -> Reply {
+    connect_broadcast_filter_map(event_receiver, pending, |x| Some(map_fn(x))).await
+}
+
+/// Connect a broadcaster to event sink
+pub async fn connect_broadcast<T: serde::Serialize>(
+    event_receiver: broadcaster::Receiver<T>,
+    pending: Pending,
+) -> Reply {
+    connect_broadcast_filter_map(event_receiver, pending, Some).await
 }
 
 /// Subscription processing error

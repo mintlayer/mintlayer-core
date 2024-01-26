@@ -257,7 +257,10 @@ mod produce_block {
             let mut mock_chainstate = MockChainstateInterface::new();
             mock_chainstate.expect_is_initial_block_download().returning(|| true);
 
-            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate
+                .expect_subscribe_to_subsystem_events()
+                .times(..=1)
+                .returning(|_| ());
 
             manager.add_subsystem("mock-chainstate", mock_chainstate)
         };
@@ -353,7 +356,10 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterface::new());
-            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate
+                .expect_subscribe_to_subsystem_events()
+                .times(..=1)
+                .returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             mock_chainstate.expect_get_best_block_index().times(1).returning(|| {
@@ -719,7 +725,10 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = MockChainstateInterface::new();
-            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate
+                .expect_subscribe_to_subsystem_events()
+                .times(..=1)
+                .returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![
@@ -786,7 +795,10 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = MockChainstateInterface::new();
-            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate
+                .expect_subscribe_to_subsystem_events()
+                .times(..=1)
+                .returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![

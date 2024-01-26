@@ -20,6 +20,7 @@ use futures::{future::BoxFuture, never::Never};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
+use utils_tokio::broadcaster::Broadcaster;
 use wallet::wallet::Mnemonic;
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::seed_phrase::StoreSeedPhrase;
@@ -34,6 +35,7 @@ pub type WalletController<N> = wallet_controller::RpcController<N, super::Wallet
 pub type WalletControllerError<N> = wallet_controller::ControllerError<N>;
 pub type CommandReceiver<N> = mpsc::UnboundedReceiver<WalletCommand<N>>;
 pub type CommandSender<N> = mpsc::UnboundedSender<WalletCommand<N>>;
+pub type EventStream = utils_tokio::broadcaster::Receiver<Event>;
 
 type CommandFn<N> = dyn Send + FnOnce(&mut Option<WalletController<N>>) -> BoxFuture<()>;
 type ManageFn<N> = dyn Send + FnOnce(&mut WalletWorker<N>) -> BoxFuture<()>;
@@ -45,9 +47,6 @@ pub enum WalletCommand<N> {
 
     /// Manage the Wallet itself, i.e. Create/Open/Close
     Manage(Box<ManageFn<N>>),
-
-    /// Subscribe to events
-    Subscribe(mpsc::UnboundedSender<Event>),
 
     /// Shutdown the wallet service task
     Stop,
@@ -64,7 +63,7 @@ pub struct WalletWorker<N> {
     command_rx: CommandReceiver<N>,
     chain_config: Arc<ChainConfig>,
     node_rpc: N,
-    subscribers: Vec<mpsc::UnboundedSender<Event>>,
+    events_bcast: Broadcaster<Event>,
     events_rx: mpsc::UnboundedReceiver<Event>,
     wallet_events: WalletServiceEvents,
 }
@@ -78,13 +77,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         events_rx: mpsc::UnboundedReceiver<Event>,
         wallet_events: WalletServiceEvents,
     ) -> Self {
-        let subscribers = Vec::new();
+        let events_bcast = Broadcaster::new();
         Self {
             controller,
             command_rx,
             chain_config,
             node_rpc,
-            subscribers,
+            events_bcast,
             events_rx,
             wallet_events,
         }
@@ -126,7 +125,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 // Forward events to subscribers
                 event = self.events_rx.recv() => {
                     match event {
-                        Some(event) => self.broadcast(&event),
+                        Some(event) => self.events_bcast.broadcast(&event),
                         None => log::warn!("Events channel closed unexpectedly"),
                     }
                 }
@@ -150,10 +149,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
             }
             Some(WalletCommand::Manage(call)) => {
                 call(self).await;
-                ControlFlow::Continue(())
-            }
-            Some(WalletCommand::Subscribe(sender)) => {
-                self.subscribers.push(sender);
                 ControlFlow::Continue(())
             }
             Some(WalletCommand::Stop) => {
@@ -247,8 +242,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         Ok(result)
     }
 
-    fn broadcast(&mut self, event: &Event) {
-        self.subscribers.retain(|sub| sub.send(event.clone()).is_ok())
+    pub fn subscribe(&mut self) -> EventStream {
+        self.events_bcast.subscribe()
     }
 
     async fn background_task(

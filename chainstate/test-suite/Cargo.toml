@@ -33,6 +33,7 @@ itertools.workspace = true
 criterion.workspace = true
 expect-test.workspace = true
 rstest.workspace = true
+tokio = { workspace = true, features = ['rt', 'time'] }
 
 [[bench]]
 name = "benches"

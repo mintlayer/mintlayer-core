@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,6 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod event;
-pub mod signed_transaction;
+//! Various utils for working with async / tokio.
+
+pub mod broadcaster;

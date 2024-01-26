@@ -15,7 +15,6 @@
 
 mod utils;
 
-use jsonrpsee::core::client::Subscription;
 use logging::log;
 use rstest::*;
 
@@ -24,7 +23,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use utils::{
-    make_seedable_rng, ClientT, JsonValue, Seed, SubscriptionClientT, ACCOUNT0_ARG, ACCOUNT1_ARG,
+    make_seedable_rng, ClientT, JsonValue, Seed, Subscription, SubscriptionClientT, ACCOUNT0_ARG,
+    ACCOUNT1_ARG,
 };
 use wallet_rpc_lib::{
     types::{

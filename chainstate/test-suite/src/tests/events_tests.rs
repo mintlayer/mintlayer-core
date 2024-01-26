@@ -225,7 +225,7 @@ fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
                 events_.lock().unwrap().push((block_id, block_height));
             }
         });
-        chainstate.subscribe_to_events(handler);
+        chainstate.subscribe_to_subsystem_events(handler);
     }
 
     events
@@ -238,4 +238,52 @@ fn orphan_error_hook() -> (Arc<OrphanErrorHandler>, ErrorList) {
         errors_.lock().unwrap().push(error.clone());
     });
     (handler, errors)
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn several_subscribers_several_events_broadcaster(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut tf = TestFramework::builder(&mut rng).build();
+
+    let subscribers = rng.gen_range(4..16);
+    let blocks = rng.gen_range(8..128);
+
+    let mut receivers: Vec<_> =
+        (0..subscribers).map(|_| tf.chainstate.subscribe_to_rpc_events()).collect();
+
+    let event_processor = tokio::spawn(async move {
+        let mut events = vec![Vec::new(); receivers.len()];
+        for _ in 0..blocks {
+            for (idx, receiver) in receivers.iter_mut().enumerate() {
+                events[idx].push(receiver.recv().await.unwrap());
+            }
+        }
+        for receiver in receivers.iter_mut() {
+            assert!(receiver.recv().await.is_none());
+        }
+        events
+    });
+
+    let mut expected_events = Vec::new();
+    for _ in 0..blocks {
+        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+        let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
+        expected_events.push(ChainstateEvent::NewTip(
+            *index.block_id(),
+            index.block_height(),
+        ));
+    }
+
+    std::mem::drop(tf);
+
+    let event_traces = tokio::time::timeout(std::time::Duration::from_secs(5), event_processor)
+        .await
+        .expect("timeout")
+        .expect("event processor panicked");
+
+    // All receivers get the same sequence of events
+    assert!(event_traces.into_iter().all(|t| t == expected_events));
 }

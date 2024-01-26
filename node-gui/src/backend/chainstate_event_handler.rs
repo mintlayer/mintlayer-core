@@ -36,11 +36,13 @@ impl ChainstateEventHandler {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
         chainstate
             .call_mut(|this| {
-                this.subscribe_to_events(Arc::new(move |chainstate_event: ChainstateEvent| {
-                    _ = chainstate_event_tx
-                        .send(chainstate_event)
-                        .log_err_pfx("Chainstate subscriber failed to send new tip");
-                }));
+                this.subscribe_to_subsystem_events(Arc::new(
+                    move |chainstate_event: ChainstateEvent| {
+                        _ = chainstate_event_tx
+                            .send(chainstate_event)
+                            .log_err_pfx("Chainstate subscriber failed to send new tip");
+                    },
+                ));
             })
             .await
             .expect("Failed to subscribe to chainstate");

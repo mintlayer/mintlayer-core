@@ -32,6 +32,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
+use utils_tokio::broadcaster;
 use utxo::Utxo;
 
 use crate::{
@@ -43,8 +44,15 @@ impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
 where
     T::Target: ChainstateInterface,
 {
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>) {
-        self.deref_mut().subscribe_to_events(handler)
+    fn subscribe_to_subsystem_events(
+        &mut self,
+        handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>,
+    ) {
+        self.deref_mut().subscribe_to_subsystem_events(handler)
+    }
+
+    fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
+        self.deref_mut().subscribe_to_rpc_events()
     }
 
     fn process_block(
@@ -176,7 +184,7 @@ where
         self.deref().wait_for_all_events()
     }
 
-    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
+    fn subscribers(&self) -> &[EventHandler<ChainstateEvent>] {
         self.deref().subscribers()
     }
 
