@@ -161,6 +161,8 @@ pub enum ColdWalletCommand {
     /// Issue a new staking VRF (Verifiable Random Function) key for this account.
     /// VRF keys are used as a trustless mechanism to ensure the randomness of the staking process,
     /// where no one can control the possible outcomes, to ensure decentralization.
+    /// NOTE: Under normal circumstances you don't need to generate VRF keys manually.
+    /// Creating a new staking pool will do it for you. This is available for specialized use-cases.
     #[clap(name = "staking-new-vrf-public-key")]
     NewVrfPublicKey,
 
