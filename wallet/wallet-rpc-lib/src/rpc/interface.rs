@@ -168,8 +168,8 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
-    #[method(name = "delegation_send_to_address")]
-    async fn send_from_delegation_to_address(
+    #[method(name = "delegation_withdraw")]
+    async fn withdraw_from_delegation(
         &self,
         account_index: AccountIndexArg,
         address: String,

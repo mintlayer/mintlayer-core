@@ -282,7 +282,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
-    async fn send_from_delegation_to_address(
+    async fn withdraw_from_delegation(
         &self,
         account_index: AccountIndexArg,
         address: String,
@@ -294,7 +294,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.send_from_delegation_to_address(
+            self.withdraw_from_delegation(
                 account_index.index::<N>()?,
                 address,
                 amount,
