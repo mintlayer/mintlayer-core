@@ -1920,3 +1920,67 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
     })
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_token_id_mismatch(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let invalid_token_id =
+            make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 100)]).unwrap();
+        let valid_token_id =
+            make_token_id(&[TxInput::from_utxo(outpoint_source_id.clone(), 0)]).unwrap();
+
+        let token_min_issuance_fee =
+            tf.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
+
+        let nft_issuance = random_nft_issuance(tf.chain_config(), &mut rng);
+
+        let invalid_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(outpoint_source_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::IssueNft(
+                invalid_token_id,
+                Box::new(nft_issuance.clone().into()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let invalid_tx_id = invalid_tx.transaction().get_id();
+
+        let res = tf.make_block_builder().add_transaction(invalid_tx).build_and_process();
+
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::IssueError(
+                    TokenIssuanceError::TokenIdMismatch(invalid_token_id, valid_token_id),
+                    invalid_tx_id
+                ))
+            ))
+        );
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(outpoint_source_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::IssueNft(
+                        valid_token_id,
+                        Box::new(nft_issuance.into()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    })
+}

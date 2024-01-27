@@ -22,6 +22,9 @@ use common::{
     },
     primitives::{Id, Idable, H256},
 };
+use utils::ensure;
+
+use crate::error::TokenIssuanceError;
 
 use super::{
     error::{ConnectTransactionError, TokensError},
@@ -72,8 +75,8 @@ impl TokenIssuanceCache {
     where
         ConnectTransactionError: From<E>,
     {
-        if has_tokens_issuance_to_cache(tx.outputs()) {
-            self.precache_token_issuance(token_data_getter, tx)?;
+        if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
+            self.precache_token_issuance(token_data_getter, tx, token_id)?;
 
             self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
         }
@@ -88,8 +91,8 @@ impl TokenIssuanceCache {
     where
         ConnectTransactionError: From<E>,
     {
-        if has_tokens_issuance_to_cache(tx.outputs()) {
-            self.precache_token_issuance(token_data_getter, tx)?;
+        if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
+            self.precache_token_issuance(token_data_getter, tx, token_id)?;
 
             self.write_undo_issuance(tx)?;
         }
@@ -152,11 +155,20 @@ impl TokenIssuanceCache {
         &mut self,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
         tx: &Transaction,
+        expected_token_id: TokenId,
     ) -> Result<(), ConnectTransactionError>
     where
         ConnectTransactionError: From<E>,
     {
         let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        ensure!(
+            token_id == expected_token_id,
+            ConnectTransactionError::TokensError(TokensError::IssueError(
+                TokenIssuanceError::TokenIdMismatch(expected_token_id, token_id),
+                tx.get_id()
+            ))
+        );
+
         match self.data.entry(token_id) {
             Entry::Vacant(e) => {
                 let current_token_data = token_data_getter(&token_id)?;
@@ -216,8 +228,8 @@ impl TokenIssuanceCache {
     }
 }
 
-fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
-    outputs.iter().any(|output| match output {
+fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> Option<TokenId> {
+    outputs.iter().find_map(|output| match output {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
@@ -226,8 +238,8 @@ fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::DataDeposit(_) => false,
-        TxOutput::IssueNft(_, _, _) => true,
+        | TxOutput::DataDeposit(_) => None,
+        TxOutput::IssueNft(id, _, _) => Some(*id),
     })
 }
 // TODO: write tests for operations
