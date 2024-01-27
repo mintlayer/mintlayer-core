@@ -171,8 +171,11 @@ class WalletCliController:
         addr = await self.new_address()
         public_key = await self._write_command(f"address-reveal-public-key {addr}\n")
 
+        self.log.info(f'pub key output: {public_key}')
+        public_key = public_key.split('\n')[1]
+        self.log.info(f'pub key hex: {public_key}')
         # remove the pub key enum value, the first one byte
-        pub_key_bytes = bytes.fromhex(public_key.split('\n')[1])[1:]
+        pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
     async def new_address(self) -> str:
