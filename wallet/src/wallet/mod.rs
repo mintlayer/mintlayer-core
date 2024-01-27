@@ -928,6 +928,15 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn get_vrf_key(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.get_new_vrf_key(db_tx)
+        })
+    }
+
     pub fn find_public_key(
         &mut self,
         account_index: U31,

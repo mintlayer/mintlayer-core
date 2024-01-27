@@ -206,6 +206,12 @@ trait WalletRpc {
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<BlockInfo>>;
 
+    #[method(name = "staking_new_vrf_public_key")]
+    async fn new_vrf_public_key(
+        &self,
+        account_index: AccountIndexArg,
+    ) -> rpc::RpcResult<VrfPublicKeyInfo>;
+
     #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(
         &self,

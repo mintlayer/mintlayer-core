@@ -548,6 +548,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn new_vrf_public_key(
+        &self,
+        account_index: AccountIndexArg,
+    ) -> rpc::RpcResult<VrfPublicKeyInfo> {
+        rpc::handle_result(self.issue_vrf_key(account_index.index::<N>()?).await)
+    }
+
     async fn get_vrf_public_key(
         &self,
         account_index: AccountIndexArg,

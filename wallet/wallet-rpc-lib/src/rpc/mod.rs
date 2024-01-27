@@ -239,6 +239,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             })
     }
 
+    pub async fn issue_vrf_key(&self, account_index: U31) -> WRpcResult<VrfPublicKeyInfo, N> {
+        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(
+                    async move { w.synced_controller(account_index, config).await?.new_vrf_key() },
+                )
+            })
+            .await?
+            .map(|(child_number, vrf_key)| VrfPublicKeyInfo::new(vrf_key, child_number, false))
+    }
+
     pub async fn get_vrf_key_usage(
         &self,
         account_index: U31,

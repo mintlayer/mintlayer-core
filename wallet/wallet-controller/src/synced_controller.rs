@@ -27,9 +27,12 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
-use crypto::key::{
-    hdkd::{child_number::ChildNumber, u31::U31},
-    PublicKey,
+use crypto::{
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PublicKey,
+    },
+    vrf::VRFPublicKey,
 };
 use futures::{stream::FuturesUnordered, TryStreamExt};
 use logging::log;
@@ -148,6 +151,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<PublicKey, ControllerError<T>> {
         self.wallet
             .find_public_key(self.account_index, address)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn new_vrf_key(
+        &mut self,
+    ) -> Result<(ChildNumber, Address<VRFPublicKey>), ControllerError<T>> {
+        self.wallet
+            .get_vrf_key(self.account_index)
             .map_err(ControllerError::WalletError)
     }
 
