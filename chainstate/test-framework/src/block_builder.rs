@@ -37,7 +37,7 @@ use common::{
 use crypto::key::PrivateKey;
 use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
-use pos_accounting::InMemoryPoSAccounting;
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 
@@ -138,21 +138,24 @@ impl<'f> BlockBuilder<'f> {
             })
         });
 
-        let (tx, new_tokens_delta) = super::random_tx_maker::RandomTxMaker::new(
-            &self.framework.chainstate,
-            &utxo_set,
-            &self.tokens_accounting_store,
-            &self.pos_accounting_store,
-            account_nonce_getter,
-        )
-        .make(rng);
-
-        // FIXME: flush pos data into store
+        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+            super::random_tx_maker::RandomTxMaker::new(
+                &self.framework.chainstate,
+                &utxo_set,
+                &self.tokens_accounting_store,
+                &self.pos_accounting_store,
+                account_nonce_getter,
+            )
+            .make(rng);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in memory store
             let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
             tokens_db.merge_with_delta(new_tokens_delta).unwrap();
+
+            // flush new pos accounting info to the in memory store
+            let mut pos_db = PoSAccountingDB::new(&mut self.pos_accounting_store);
+            pos_db.merge_with_delta(new_pos_accounting_delta).unwrap();
 
             // update used utxo set because this function can be called multiple times without flushing data to storage
             tx.inputs().iter().for_each(|input| {
