@@ -101,7 +101,7 @@ impl ChainType {
 
     const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
-            ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
+            ChainType::Mainnet => [0xB0, 0x07, 0x5F, 0xA0],
             ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf8],
             ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
             ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
@@ -673,7 +673,7 @@ const TOKEN_MAX_HASH_LEN: usize = 32;
 const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
-const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
+const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 32;
 const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * CoinUnit::ATOMS_PER_COIN);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
@@ -683,7 +683,11 @@ fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
 }
 
 fn create_mainnet_genesis() -> Genesis {
-    let genesis_message = "TestnetStartTwo".to_string();
+    let genesis_message = "In a free-market economy, every individual should be free to produce, \
+        store, exchange assets and access financial markets without any constraints;
+        6777eb86f0564cae116428628fa806617f665c8779cd871f5026794b8161989e; \
+        "
+    .to_string();
 
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
