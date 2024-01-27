@@ -644,14 +644,15 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         tx: SignedTransaction,
     ) -> Result<Id<Transaction>, ControllerError<T>> {
         let tx_id = tx.transaction().get_id();
-        self.rpc_client
-            .submit_transaction(tx.clone(), Default::default())
-            .await
-            .map_err(ControllerError::NodeCallError)?;
 
         self.wallet
-            .add_unconfirmed_tx(tx, self.wallet_events)
+            .add_unconfirmed_tx(tx.clone(), self.wallet_events)
             .map_err(ControllerError::WalletError)?;
+
+        self.rpc_client
+            .submit_transaction(tx, Default::default())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
 
         Ok(tx_id)
     }
