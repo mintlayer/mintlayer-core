@@ -131,7 +131,10 @@ impl ChainType {
             ChainType::Mainnet => {
                 vec![
                     "51.159.232.144:3031".parse().expect("Cannot fail"),
+                    "51.159.179.229:3031".parse().expect("Cannot fail"),
+                    "151.115.35.206:3031".parse().expect("Cannot fail"),
                     "172.232.50.132:3031".parse().expect("Cannot fail"),
+                    "103.3.61.21:3031".parse().expect("Cannot fail"),
                 ]
             }
             ChainType::Testnet => {
