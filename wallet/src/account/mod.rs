@@ -676,7 +676,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<VRFPublicKey> {
-        Ok(self.key_chain.issue_vrf_key(db_tx)?.into_public_key())
+        Ok(self.key_chain.issue_vrf_key(db_tx)?.1.into_public_key())
     }
 
     pub fn get_pool_ids(
@@ -1268,6 +1268,21 @@ impl Account {
         purpose: KeyPurpose,
     ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
+    }
+
+    /// Get a new vrf key that hasn't been used before
+    pub fn get_new_vrf_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
+        Ok(
+            self.key_chain.issue_vrf_key(db_tx).map(|(child_number, vrf_key)| {
+                (
+                    child_number,
+                    Address::new(&self.chain_config, vrf_key.public_key()).expect("addressable"),
+                )
+            })?,
+        )
     }
 
     /// Get the corresponding public key for a given public key hash

@@ -237,10 +237,9 @@ impl AccountKeyChain {
     pub fn issue_vrf_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> KeyChainResult<ExtendedVRFPublicKey> {
+    ) -> KeyChainResult<(ChildNumber, ExtendedVRFPublicKey)> {
         let lookahead_size = self.lookahead_size();
-        let (_index, key) = self.vrf_chain.issue_new(db_tx, lookahead_size)?;
-        Ok(key)
+        self.vrf_chain.issue_new(db_tx, lookahead_size)
     }
 
     /// Reload the sub chain keys from DB to restore the cache
