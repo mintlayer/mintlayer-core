@@ -1,3 +1,4 @@
+# For mainnet, change every testnet instance to mainnet
 [Unit]
 Description=Mintlayer Testnet Daemon
 After=syslog.target network-online.target
@@ -28,6 +29,9 @@ Environment="RUSTFLAGS=-g"
 # always restart when server is killed for any reason, and wait 60 seconds before retrying
 Restart=always
 RestartSec=60s
+
+# Make the timeout too long if you're using cargo run above, to give the service time to build
+TimeoutSec=900
 
 # Log files stored in /var/log/
 StandardOutput=append:/var/log/mintlayer-node-testnet-stdout.log
