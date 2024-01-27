@@ -151,6 +151,11 @@ fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
     }
 }
 
+fn assert_unauthorized(result: anyhow::Result<()>) {
+    let error = result.expect_err("Expected error, got success");
+    assert!(error.to_string().contains("status code: 401"));
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -196,26 +201,28 @@ async fn rpc_server_auth_http(#[case] seed: Seed) {
     .unwrap();
 
     // Invalid requests
-    http_request(&rpc, RpcAuthData::None).await.unwrap_err();
+    assert_unauthorized(http_request(&rpc, RpcAuthData::None).await);
 
-    http_request(
-        &rpc,
-        RpcAuthData::Basic {
-            username: good_username.clone(),
-            password: bad_password.clone(),
-        },
-    )
-    .await
-    .unwrap_err();
-    http_request(
-        &rpc,
-        RpcAuthData::Basic {
-            username: bad_username.clone(),
-            password: good_password.clone(),
-        },
-    )
-    .await
-    .unwrap_err();
+    assert_unauthorized(
+        http_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: bad_password.clone(),
+            },
+        )
+        .await,
+    );
+    assert_unauthorized(
+        http_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: bad_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await,
+    );
 
     subsystem::Subsystem::shutdown(rpc).await;
 }
@@ -273,26 +280,28 @@ async fn rpc_server_auth_ws(#[case] seed: Seed) {
     .unwrap();
 
     // Invalid requests
-    ws_request(&rpc, RpcAuthData::None).await.unwrap_err();
+    assert_unauthorized(ws_request(&rpc, RpcAuthData::None).await);
 
-    ws_request(
-        &rpc,
-        RpcAuthData::Basic {
-            username: good_username.clone(),
-            password: bad_password.clone(),
-        },
-    )
-    .await
-    .unwrap_err();
-    ws_request(
-        &rpc,
-        RpcAuthData::Basic {
-            username: bad_username.clone(),
-            password: good_password.clone(),
-        },
-    )
-    .await
-    .unwrap_err();
+    assert_unauthorized(
+        ws_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: bad_password.clone(),
+            },
+        )
+        .await,
+    );
+    assert_unauthorized(
+        ws_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: bad_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await,
+    );
 
     subsystem::Subsystem::shutdown(rpc).await;
 }

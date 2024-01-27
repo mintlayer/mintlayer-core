@@ -112,15 +112,28 @@ impl<B> ValidateRequest<B> for RpcAuth {
     type ResponseBody = Body;
 
     fn validate(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+        use jsonrpsee::types;
+
         let res = self.check_auth(request);
         match res {
             Ok(true) => Ok(()),
             Ok(false) => {
                 log::error!("Unauthorized RPC request {:?}", request.uri());
+                let status = http::StatusCode::UNAUTHORIZED;
+                let err_obj = types::ErrorObject::owned(
+                    status.as_u16().into(),
+                    status.canonical_reason().unwrap_or_default(),
+                    None::<()>,
+                );
+                let payload = types::ResponsePayload::error(err_obj);
+                let response = types::Response::new(payload, types::Id::Null);
+                let body = serde_json::to_string(&response).expect("constant object");
+
                 Err(Response::builder()
-                    .status(http::StatusCode::UNAUTHORIZED)
+                    .status(status)
                     .header(http::header::WWW_AUTHENTICATE, "Basic")
-                    .body(Body::empty())
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(body.into())
                     .expect("must be valid"))
             }
             Err(e) => {
