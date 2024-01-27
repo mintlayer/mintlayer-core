@@ -583,7 +583,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn send_from_delegation_to_address(
+    pub async fn withdraw_from_delegation(
         &self,
         account_index: U31,
         address: String,

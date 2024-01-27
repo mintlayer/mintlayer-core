@@ -30,8 +30,8 @@ Restart=always
 RestartSec=60s
 
 # Log files stored in /var/log/
-StandardOutput=append:/var/log/mintlayer-core-testnet-stdout.log
-StandardError=append:/var/log/mintlayer-core-testnet-stderr.log
+StandardOutput=append:/var/log/mintlayer-node-testnet-stdout.log
+StandardError=append:/var/log/mintlayer-node-testnet-stderr.log
 
 [Install]
 WantedBy=multi-user.target

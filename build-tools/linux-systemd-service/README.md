@@ -39,7 +39,7 @@ Consider checking out these stories:
 ## How to create a system service that runs mintlayer daemon automatically for you
 
 1. Choose whether you want to clone the source code, or download the release executable
-2. Pick the appropriate service file from this directory for the node you need (testnet, mainnet, etc), one of the files ending with ".service". Let's say you picked `mintlayer-core-testnet.service`
+2. Pick the appropriate service file from this directory for the node you need (testnet, mainnet, etc), one of the files ending with ".service". Let's say you picked `mintlayer-node-testnet.service`
 3. Edit the following in the service file:
 
     A. The `user` to whatever user should run mintlayer daemon. NEVER use root or a user with root access.
@@ -48,10 +48,10 @@ Consider checking out these stories:
 
     C. The `ExecStart`; If you want to run the executable manually, write the path of the executable of mintlayer daemon
 
-4. Copy that file to the directory `/etc/systemd/system/` (you need root access for that). The file will end up being in: `/etc/systemd/system/mintlayer-core-testnet.service`
-5. Make sure the file is owned by root by running: `chown root:root /etc/systemd/system/mintlayer-core-testnet.service`
+4. Copy that file to the directory `/etc/systemd/system/` (you need root access for that). The file will end up being in: `/etc/systemd/system/mintlayer-node-testnet.service`
+5. Make sure the file is owned by root by running: `chown root:root /etc/systemd/system/mintlayer-node-testnet.service`
 5. Reload systemd services with: `sudo systemctl daemon-reload`
-6. Enable the mintlayer daemon service with: `sudo systemctl enable mintlayer-core-testnet`
-7. Start the service with: `sudo systemctl start mintlayer-core-testnet`
-8. Now the service is continuously running. You can find the logs in `/var/log/`. To Ensure the service has started, run: `sudo journalctl -u mintlayer-core-testnet`, and you'll see at the end something like "Started mintlayer-core-testnet.service - Mintlayer Testnet Daemon"
+6. Enable the mintlayer daemon service with: `sudo systemctl enable mintlayer-node-testnet`
+7. Start the service with: `sudo systemctl start mintlayer-node-testnet`
+8. Now the service is continuously running. You can find the logs in `/var/log/`. To Ensure the service has started, run: `sudo journalctl -u mintlayer-node-testnet`, and you'll see at the end something like "Started mintlayer-node-testnet.service - Mintlayer Testnet Daemon"
 

@@ -391,8 +391,8 @@ pub enum WalletCommand {
 
     /// Send coins from a delegation id (that you own) to stop staking them.
     /// Note that stopping the delegation requires a lock period.
-    #[clap(name = "delegation-send-to-address")]
-    SendFromDelegationToAddress {
+    #[clap(name = "delegation-withdraw")]
+    WithdrawFromDelegation {
         /// The address that will be receiving the coins
         address: String,
         /// The amount that will be taken away from the delegation
@@ -1460,14 +1460,14 @@ where
                 ))
             }
 
-            WalletCommand::SendFromDelegationToAddress {
+            WalletCommand::WithdrawFromDelegation {
                 address,
                 amount,
                 delegation_id,
             } => {
                 let selected_account = self.get_selected_acc()?;
                 self.wallet_rpc
-                    .send_from_delegation_to_address(
+                    .withdraw_from_delegation(
                         selected_account,
                         address,
                         amount,
