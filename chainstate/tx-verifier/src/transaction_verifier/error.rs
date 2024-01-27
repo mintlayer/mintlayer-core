@@ -192,6 +192,8 @@ pub enum TokenIssuanceError {
     MediaHashTooShort,
     #[error("The media hash is too long")]
     MediaHashTooLong,
+    #[error("Token id {0} from issuance does not match calculated token id {1}")]
+    TokenIdMismatch(TokenId, TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

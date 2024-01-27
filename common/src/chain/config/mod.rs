@@ -44,6 +44,7 @@ use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
+use super::NftIdMismatchCheck;
 use super::TokensTickerMaxLengthVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{ChainstateUpgrade, ConsensusUpgrade};
@@ -812,6 +813,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     RewardDistributionVersion::V1,
                     TokensFeeVersion::V1,
                     TokensTickerMaxLengthVersion::V1,
+                    NftIdMismatchCheck::Yes,
                 ),
             )])
             .expect("cannot fail"),

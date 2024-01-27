@@ -22,7 +22,7 @@ use super::*;
 use chainstate_test_framework::{empty_witness, TestFramework, TestStore, TransactionBuilder};
 use common::chain::config::create_unit_test_config;
 use common::chain::{
-    AccountCommand, AccountNonce, AccountSpending, RewardDistributionVersion,
+    AccountCommand, AccountNonce, AccountSpending, NftIdMismatchCheck, RewardDistributionVersion,
     TokensTickerMaxLengthVersion,
 };
 use common::{
@@ -580,6 +580,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
+                                NftIdMismatchCheck::Yes,
                             ),
                         )])
                         .unwrap(),
