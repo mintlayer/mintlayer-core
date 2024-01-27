@@ -704,7 +704,7 @@ fn create_mainnet_genesis() -> Genesis {
         "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f",
     );
 
-    let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
+    let initial_pool_amount = CoinUnit::from_coins(100_000).to_amount_atoms();
     let mint_output_amount = (DEFAULT_INITIAL_MINT - initial_pool_amount).expect("must be valid");
 
     // TODO: replace this with our mint key
