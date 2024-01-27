@@ -18,9 +18,9 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{
     chain::{
         tokens::{make_token_id, TokenAuxiliaryData, TokenId},
-        Block, Transaction, TxOutput,
+        Block, ChainConfig, NftIdMismatchCheck, Transaction, TxOutput,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{BlockHeight, Id, Idable, H256},
 };
 use utils::ensure;
 
@@ -68,6 +68,8 @@ impl TokenIssuanceCache {
     // This helps in finding the relevant information of the token at any time in the future.
     pub fn register<E>(
         &mut self,
+        chain_config: &ChainConfig,
+        block_height: BlockHeight,
         block_id: Option<Id<Block>>,
         tx: &Transaction,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
@@ -76,7 +78,25 @@ impl TokenIssuanceCache {
         ConnectTransactionError: From<E>,
     {
         if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
-            self.precache_token_issuance(token_data_getter, tx, token_id)?;
+            let expected_token_id =
+                make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+
+            if let NftIdMismatchCheck::Yes = chain_config
+                .chainstate_upgrades()
+                .version_at_height(block_height)
+                .1
+                .nft_id_mismatch_check()
+            {
+                ensure!(
+                    token_id == expected_token_id,
+                    ConnectTransactionError::TokensError(TokensError::IssueError(
+                        TokenIssuanceError::TokenIdMismatch(token_id, expected_token_id),
+                        tx.get_id()
+                    ))
+                );
+            }
+
+            self.precache_token_issuance(token_data_getter, token_id)?;
 
             self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
         }
@@ -92,7 +112,7 @@ impl TokenIssuanceCache {
         ConnectTransactionError: From<E>,
     {
         if let Some(token_id) = has_tokens_issuance_to_cache(tx.outputs()) {
-            self.precache_token_issuance(token_data_getter, tx, token_id)?;
+            self.precache_token_issuance(token_data_getter, token_id)?;
 
             self.write_undo_issuance(tx)?;
         }
@@ -154,21 +174,11 @@ impl TokenIssuanceCache {
     fn precache_token_issuance<E>(
         &mut self,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
-        tx: &Transaction,
-        expected_token_id: TokenId,
+        token_id: TokenId,
     ) -> Result<(), ConnectTransactionError>
     where
         ConnectTransactionError: From<E>,
     {
-        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
-        ensure!(
-            token_id == expected_token_id,
-            ConnectTransactionError::TokensError(TokensError::IssueError(
-                TokenIssuanceError::TokenIdMismatch(expected_token_id, token_id),
-                tx.get_id()
-            ))
-        );
-
         match self.data.entry(token_id) {
             Entry::Vacant(e) => {
                 let current_token_data = token_data_getter(&token_id)?;
