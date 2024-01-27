@@ -20,7 +20,7 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
     Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, PoolData,
-    UnconfirmedTokenInfo, UtxoSelectorError,
+    TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
@@ -199,6 +199,8 @@ pub enum WalletError {
     FullySignedTransactionInDecommissionReq,
     #[error("Input cannot be signed")]
     InputCannotBeSigned,
+    #[error("Input cannot be spent {0:?}")]
+    InputCannotBeSpent(TxOutput),
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
@@ -1340,10 +1342,11 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,
-        tx: PartiallySignedTransaction,
+        tx: TransactionToSign,
     ) -> WalletResult<PartiallySignedTransaction> {
+        let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
-            account.sign_raw_transaction(tx, db_tx)
+            account.sign_raw_transaction(tx, latest_median_time, db_tx)
         })
     }
 

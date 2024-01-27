@@ -7606,6 +7606,7 @@ dependencies = [
  "consensus",
  "crypto",
  "futures",
+ "hex",
  "jsonrpsee",
  "logging",
  "mempool",

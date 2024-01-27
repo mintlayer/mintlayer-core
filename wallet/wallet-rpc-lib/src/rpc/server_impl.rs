@@ -117,8 +117,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.lock_private_keys().await)
     }
 
-    async fn best_block(&self, empty_args: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
-        rpc::handle_result(self.best_block(empty_args).await)
+    async fn best_block(&self, _empty_args: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
+        rpc::handle_result(self.best_block().await)
     }
 
     async fn create_account(

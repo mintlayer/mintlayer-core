@@ -17,18 +17,18 @@ mod interface;
 mod server_impl;
 pub mod types;
 
-use chainstate::{ChainInfo, TokenIssuanceError};
+use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
 use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
 };
-use serialization::hex_encoded::HexEncoded;
+use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc};
 use utils::{ensure, shallow_clone::ShallowClone};
 use wallet::{
-    account::{PartiallySignedTransaction, PoolData},
+    account::{PartiallySignedTransaction, PoolData, TransactionToSign},
     WalletError,
 };
 
@@ -53,9 +53,9 @@ use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, DelegationInfo, EmptyArgs, LegacyVrfPublicKeyInfo,
-    NewAccountInfo, NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcTokenId,
-    StakingStatus, VrfPublicKeyInfo,
+    AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
+    NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcTokenId, StakingStatus,
+    VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -151,7 +151,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet.call(|w| w.lock_wallet()).await?
     }
 
-    async fn best_block(&self, _: EmptyArgs) -> WRpcResult<BlockInfo, N> {
+    async fn best_block(&self) -> WRpcResult<BlockInfo, N> {
         let res = self.wallet.call(|w| Ok::<_, RpcError<N>>(w.best_block())).await??;
         Ok(BlockInfo::from_tuple(res))
     }
@@ -342,25 +342,41 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
     ) -> WRpcResult<(), N> {
-        self.node
-            .submit_transaction(tx.take(), options)
-            .await
-            .map_err(RpcError::RpcError)
+        let tx = tx.take();
+        let block_height = self.best_block().await?.height;
+        check_transaction(&self.chain_config, block_height, &tx).map_err(|err| {
+            RpcError::Controller(ControllerError::WalletError(
+                WalletError::InvalidTransaction(err),
+            ))
+        })?;
+        self.node.submit_transaction(tx, options).await.map_err(RpcError::RpcError)
     }
 
     pub async fn sign_raw_transaction(
         &self,
         account_index: U31,
-        tx: HexEncoded<PartiallySignedTransaction>,
+        raw_tx: String,
         config: ControllerConfig,
     ) -> WRpcResult<PartiallySignedTransaction, N> {
+        let hex_bytes = hex::decode(raw_tx).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let mut bytes = hex_bytes.as_slice();
+        let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let tx_to_sign = if bytes.is_empty() {
+            TransactionToSign::Tx(tx)
+        } else {
+            let mut bytes = hex_bytes.as_slice();
+            let ptx = PartiallySignedTransaction::decode_all(&mut bytes)
+                .map_err(|_| RpcError::InvalidPartialTransaction)?;
+            TransactionToSign::Partial(ptx)
+        };
+
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .sign_raw_transaction(tx.take())
+                        .sign_raw_transaction(tx_to_sign)
                         .map_err(RpcError::Controller)
                 })
             })

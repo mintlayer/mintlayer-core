@@ -140,8 +140,14 @@ pub enum ColdWalletCommand {
     #[clap(name = "address-new")]
     NewAddress,
 
-    /// Generate a new unused public key
-    #[clap(name = "address-reveal-public-key")]
+    /// Reveal the public key behind this address in hex encoding
+    #[clap(name = "address-reveal-public-key-as-hex")]
+    RevealPublicKeyHex { public_key_hash: String },
+
+    /// Reveal the public key behind this address in address encoding.
+    /// Note that this isn't a normal address to be used in transactions.
+    /// It's preferred to take the address from address-show command
+    #[clap(name = "address-reveal-public-key-as-address")]
     RevealPublicKey { public_key_hash: String },
 
     /// Show receive-addresses with their usage state.
@@ -170,8 +176,8 @@ pub enum ColdWalletCommand {
     /// to the network.
     #[clap(name = "account-sign-raw-transaction")]
     SignRawTransaction {
-        /// Hex encoded transaction.
-        transaction: HexEncoded<PartiallySignedTransaction>,
+        /// Hex encoded transaction or PartiallySignedTransaction.
+        transaction: String,
     },
 
     /// Print command history in the wallet for this execution
@@ -907,10 +913,14 @@ where
                 let selected_account = self.get_selected_acc()?;
                 let public_key =
                     self.wallet_rpc.find_public_key(selected_account, public_key_hash).await?;
-                Ok(ConsoleCommand::Print(format!(
-                    "Public key as hex and as address:\n{}\n{}",
-                    public_key.public_key_hex, public_key.public_key_address
-                )))
+                Ok(ConsoleCommand::Print(public_key.public_key_address))
+            }
+
+            ColdWalletCommand::RevealPublicKeyHex { public_key_hash } => {
+                let selected_account = self.get_selected_acc()?;
+                let public_key =
+                    self.wallet_rpc.find_public_key(selected_account, public_key_hash).await?;
+                Ok(ConsoleCommand::Print(public_key.public_key_hex))
             }
 
             ColdWalletCommand::ShowReceiveAddresses => {

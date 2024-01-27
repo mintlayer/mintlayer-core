@@ -1035,7 +1035,7 @@ impl OutputCache {
         })
     }
 
-    fn find_unspent_unlocked_utxo(
+    pub fn find_unspent_unlocked_utxo(
         &self,
         utxo: &UtxoOutPoint,
         current_block_info: BlockInfo,
