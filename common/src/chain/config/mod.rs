@@ -692,23 +692,20 @@ fn create_mainnet_genesis() -> Genesis {
         827800 00000000000000000003b3f40a3c6f52dfdd60c0fb092acb97d30658b25f053c"
         .to_string();
 
-    let decommission_pub_key = decode_hex::<PublicKey>(
-        "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
-    );
+    let decommission_dest = decode_hex::<Destination>("01add92ee6e5b953e13c112260a7daf7f8f1c4ffd2");
 
     let staker_pub_key = decode_hex::<PublicKey>(
-        "0002ddd59a9187481582c160794a20dfe194087f2dcd1faee18d023fc0cce7904e79",
+        "00026c8621e9b0cbe2a9fd6ed86a45969191e45dd8c59b8e1a55bf0983f56a0ecc6c",
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f",
+        "006ed44aeacbc2e2a87edd4862863b0c3dec29a33cf6e3edd2049545d547dedb76",
     );
 
     let initial_pool_amount = CoinUnit::from_coins(100_000).to_amount_atoms();
     let mint_output_amount = (DEFAULT_INITIAL_MINT - initial_pool_amount).expect("must be valid");
 
-    // TODO: replace this with our mint key
-    let genesis_mint_pubkeyhash_hex_encoded = "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f";
+    let genesis_mint_pubkeyhash_hex_encoded = "017b5de99b602eeaae0fe02615eb624169edec1f92";
     let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
     let mint_output = TxOutput::Transfer(
@@ -722,7 +719,7 @@ fn create_mainnet_genesis() -> Genesis {
             initial_pool_amount,
             Destination::PublicKey(staker_pub_key),
             vrf_pub_key,
-            Destination::PublicKey(decommission_pub_key),
+            decommission_dest,
             PerThousand::new(50).expect("must be valid"),
             Amount::ZERO,
         )),
@@ -730,7 +727,7 @@ fn create_mainnet_genesis() -> Genesis {
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1705576200),
+        BlockTimestamp::from_int_seconds(1706468400),
         vec![mint_output, initial_pool],
     )
 }
