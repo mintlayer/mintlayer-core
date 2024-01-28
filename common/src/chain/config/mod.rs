@@ -689,8 +689,8 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_message = "In a free-market economy, every individual should be free to produce, \
         store, exchange assets and access financial markets without any constraints;
         6777eb86f0564cae116428628fa806617f665c8779cd871f5026794b8161989e; \
-        "
-    .to_string();
+        827800 00000000000000000003b3f40a3c6f52dfdd60c0fb092acb97d30658b25f053c"
+        .to_string();
 
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000208debb7094b552937efcc1a3afed61c003b6fafe3f77846fd73dae3e7214964a",
