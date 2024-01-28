@@ -32,9 +32,9 @@ pub struct Genesis {
 }
 
 impl Genesis {
-    pub fn new(fun_message: String, timestamp: BlockTimestamp, utxos: Vec<TxOutput>) -> Self {
+    pub fn new(genesis_message: String, timestamp: BlockTimestamp, utxos: Vec<TxOutput>) -> Self {
         Self {
-            genesis_message: fun_message,
+            genesis_message,
             timestamp,
             utxos,
         }
