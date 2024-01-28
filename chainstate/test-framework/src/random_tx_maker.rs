@@ -28,9 +28,9 @@ use common::{
             TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::{
     random::{CryptoRng, Rng, SliceRandom},
@@ -82,9 +82,9 @@ pub struct RandomTxMaker<'a> {
 
     // Transaction is composed of multiple inputs and outputs
     // but pools, delegations and tokens can be created only using input0 so following flags are required
-    token_can_be_issued: Option<TokenId>,
-    stake_pool_can_be_created: Option<PoolId>,
-    delegation_can_be_created: Option<UtxoOutPoint>,
+    token_can_be_issued: bool,
+    stake_pool_can_be_created: bool,
+    delegation_can_be_created: bool,
 
     account_command_used: bool,
 
@@ -110,10 +110,10 @@ impl<'a> RandomTxMaker<'a> {
             pos_accounting_store,
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
-            token_can_be_issued: None,
-            stake_pool_can_be_created: None,
-            delegation_can_be_created: None,
-            account_command_used: false,
+            token_can_be_issued: false,
+            stake_pool_can_be_created: true,
+            delegation_can_be_created: true,
+            account_command_used: true,
             unmint_for: None,
             total_tokens_burned: BTreeMap::new(),
         }
@@ -278,7 +278,7 @@ impl<'a> RandomTxMaker<'a> {
                         );
 
                         if !inputs.is_empty() {
-                            // no inputs were created meaning fee input was not used and ca be put back
+                            // no inputs were created meaning fee input was not used and can be put back
                             fee_inputs.push(fee_input)
 
                             // TODO: transfer the change from fee inputs
@@ -424,18 +424,12 @@ impl<'a> RandomTxMaker<'a> {
         let mut result_outputs = Vec::new();
         let mut fee_input_to_change_supply: Option<TxInput> = None;
 
-        for (i, (outpoint, input_utxo)) in inputs.iter().enumerate() {
-            if i == 0 {
-                self.token_can_be_issued = Some(make_token_id(&[outpoint.clone().into()]).unwrap());
-                self.stake_pool_can_be_created = Some(make_pool_id(&outpoint));
-                self.delegation_can_be_created = Some(outpoint.clone());
-            }
-
+        for (outpoint, input_utxo) in inputs.iter() {
             match input_utxo {
                 TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => {
                     match v {
                         OutputValue::Coin(coins) => {
-                            // save output for potential unmint fee
+                            // save utxo for a potential token supply change fee
                             if *coins
                                 >= self
                                     .chainstate
@@ -524,6 +518,38 @@ impl<'a> RandomTxMaker<'a> {
             }
         }
 
+        // now that the inputs are in place calculate the ids and replace dummy values
+        result_outputs.iter_mut().for_each(|output| match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::DataDeposit(_) => { /* do nothing */ }
+            TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
+                let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
+                *dummy_pool_id = pool_id;
+                let _ = pos_accounting_cache
+                    .create_pool(pool_id, pool_data.as_ref().clone().into())
+                    .unwrap();
+            }
+            TxOutput::CreateDelegationId(destination, pool_id) => {
+                let _ = pos_accounting_cache
+                    .create_delegation_id(
+                        *pool_id,
+                        destination.clone(),
+                        result_inputs[0].utxo_outpoint().unwrap(),
+                    )
+                    .unwrap();
+            }
+            TxOutput::IssueNft(dummy_token_id, _, _) => {
+                *dummy_token_id =
+                    make_token_id(&[result_inputs[0].utxo_outpoint().unwrap().clone().into()])
+                        .unwrap();
+            }
+        });
+
         (result_inputs, result_outputs)
     }
 
@@ -535,11 +561,11 @@ impl<'a> RandomTxMaker<'a> {
     ) -> Vec<TxOutput> {
         let num_outputs = rng.gen_range(1..5);
         let switch = rng.gen_range(0..3);
-        if switch == 0 && self.token_can_be_issued.is_some() {
+        if switch == 0 && self.token_can_be_issued {
             // issue token v1
             let min_tx_fee = self.chainstate.get_chain_config().fungible_token_issuance_fee();
             if coins >= min_tx_fee {
-                self.token_can_be_issued = None;
+                self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();
                 // Coin output is created intentionally besides issuance output in order to not waste utxo
                 // (e.g. single genesis output on issuance)
@@ -552,19 +578,24 @@ impl<'a> RandomTxMaker<'a> {
             } else {
                 Vec::new()
             }
-        } else if switch == 1 && self.token_can_be_issued.is_some() {
+        } else if switch == 1 && self.token_can_be_issued {
             // issue nft v1
             let min_tx_fee =
                 self.chainstate.get_chain_config().nft_issuance_fee(BlockHeight::zero());
             if coins >= min_tx_fee {
-                let token_id = self.token_can_be_issued.unwrap();
-                self.token_can_be_issued = None;
+                self.token_can_be_issued = false;
                 let change = (coins - min_tx_fee).unwrap();
+
+                let dummy_inputs = vec![TxInput::from_utxo(
+                    OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
+                    0,
+                )];
+                let dummy_token_id = make_token_id(&dummy_inputs).unwrap();
                 // Coin output is created intentionally besides issuance output in order to not waste utxo
                 // (e.g. single genesis output on issuance)
                 vec![
                     TxOutput::IssueNft(
-                        token_id,
+                        dummy_token_id,
                         Box::new(NftIssuance::V0(random_nft_issuance(
                             self.chainstate.get_chain_config(),
                             rng,
@@ -584,11 +615,11 @@ impl<'a> RandomTxMaker<'a> {
                     debug_assert!(new_value >= Amount::from_atoms(1));
 
                     if new_value >= self.chainstate.get_chain_config().min_stake_pool_pledge()
-                        && self.stake_pool_can_be_created.is_some()
+                        && self.stake_pool_can_be_created
                     {
                         // If enough coins for pledge - create a pool
-                        let pool_id = self.stake_pool_can_be_created.unwrap();
-                        self.stake_pool_can_be_created = None;
+                        let dummy_pool_id = PoolId::new(H256::zero());
+                        self.stake_pool_can_be_created = false;
                         let pool_data = StakePoolData::new(
                             new_value,
                             Destination::AnyoneCanSpend,
@@ -597,10 +628,7 @@ impl<'a> RandomTxMaker<'a> {
                             PerThousand::new_from_rng(rng),
                             Amount::from_atoms(rng.gen_range(0..1000)),
                         );
-                        let _ = pos_accounting_cache
-                            .create_pool(pool_id, pool_data.clone().into())
-                            .unwrap();
-                        TxOutput::CreateStakePool(pool_id, Box::new(pool_data))
+                        TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
                     } else {
                         if rng.gen_bool(0.3) {
                             // Send coins to random delegation
@@ -623,18 +651,10 @@ impl<'a> RandomTxMaker<'a> {
                 .collect::<Vec<_>>();
 
             // Occasionally create new delegation id
-
-            if rng.gen_bool(0.3) && self.delegation_can_be_created.is_some() {
+            if rng.gen_bool(0.3) && self.delegation_can_be_created {
                 if let Some((pool_id, _)) = get_random_pool_data(rng, &self.pos_accounting_store) {
-                    let input0_outpoint = self.delegation_can_be_created.clone().unwrap();
-                    self.delegation_can_be_created = None;
-                    let _ = pos_accounting_cache
-                        .create_delegation_id(
-                            *pool_id,
-                            Destination::AnyoneCanSpend,
-                            &input0_outpoint,
-                        )
-                        .unwrap();
+                    self.delegation_can_be_created = false;
+
                     new_outputs.push(TxOutput::CreateDelegationId(
                         Destination::AnyoneCanSpend,
                         *pool_id,
