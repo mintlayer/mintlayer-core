@@ -3888,6 +3888,8 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         1,
     );
 
+    assert_eq!(get_coin_balance(&wallet), Amount::ZERO);
+
     let pool_ids = wallet.get_pool_ids(acc_0_index, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
 
@@ -3921,20 +3923,11 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .into_signed_tx()
         .unwrap();
 
-    let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 1);
+    let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 2);
 
-    let currency_balances = wallet
-        .get_balance(
-            acc_1_index,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        pool_amount,
-    );
+    // the pool amount is back after decommission
+    assert_eq!(get_coin_balance(&wallet), pool_amount);
+    assert_eq!(get_coin_balance_for_acc(&wallet, acc_1_index), Amount::ZERO);
 }
 
 #[rstest]
@@ -4020,7 +4013,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         &mut hot_wallet,
         vec![signed_tx],
         Amount::ZERO,
-        1,
+        2,
     );
 
     let currency_balances = hot_wallet
