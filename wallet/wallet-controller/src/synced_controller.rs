@@ -563,6 +563,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn decommission_stake_pool(
         &mut self,
         pool_id: PoolId,
+        output_address: Option<Destination>,
     ) -> Result<Id<Transaction>, ControllerError<T>> {
         let staker_balance = self
             .rpc_client
@@ -582,6 +583,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     account_index,
                     pool_id,
                     staker_balance,
+                    output_address,
                     current_fee_rate,
                 )
             },
@@ -592,6 +594,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn decommission_stake_pool_request(
         &mut self,
         pool_id: PoolId,
+        output_address: Option<Destination>,
     ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
         let staker_balance = self
             .rpc_client
@@ -609,6 +612,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 self.account_index,
                 pool_id,
                 staker_balance,
+                output_address,
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)

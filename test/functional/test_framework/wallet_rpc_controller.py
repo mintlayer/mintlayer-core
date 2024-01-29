@@ -245,7 +245,7 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
-        self._write_command("staking_decommission_pool", [self.account, pool_id, {'in_top_x_mb': 5}])['result']
+        self._write_command("staking_decommission_pool", [self.account, pool_id, None, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:

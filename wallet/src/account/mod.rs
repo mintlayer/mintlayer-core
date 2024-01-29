@@ -536,8 +536,18 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         pool_id: PoolId,
         pool_balance: Amount,
+        output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
+        let output_destination = if let Some(dest) = output_address {
+            dest
+        } else {
+            self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?
+                .1
+                .decode_object(&self.chain_config)
+                .expect("already checked")
+        };
+
         let pool_data = self.output_cache.pool_data(pool_id)?;
         let best_block_height = self.best_block().1;
         let tx_input = TxInput::Utxo(pool_data.utxo_outpoint.clone());
@@ -545,7 +555,7 @@ impl Account {
         let network_fee: Amount = {
             let output = make_decommission_stake_pool_output(
                 self.chain_config.as_ref(),
-                pool_data.decommission_key.clone(),
+                output_destination.clone(),
                 pool_balance,
                 best_block_height,
             )?;
@@ -563,7 +573,7 @@ impl Account {
 
         let output = make_decommission_stake_pool_output(
             self.chain_config.as_ref(),
-            pool_data.decommission_key.clone(),
+            output_destination,
             (pool_balance - network_fee)
                 .ok_or(WalletError::NotEnoughUtxo(network_fee, pool_balance))?,
             best_block_height,
@@ -580,10 +590,16 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         pool_id: PoolId,
         pool_balance: Amount,
+        output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let result =
-            self.decommission_stake_pool_impl(db_tx, pool_id, pool_balance, current_fee_rate)?;
+        let result = self.decommission_stake_pool_impl(
+            db_tx,
+            pool_id,
+            pool_balance,
+            output_address,
+            current_fee_rate,
+        )?;
         result
             .into_signed_tx()
             .map_err(|_| WalletError::PartiallySignedTransactionInDecommissionCommand)
@@ -594,10 +610,16 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         pool_id: PoolId,
         pool_balance: Amount,
+        output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
-        let result =
-            self.decommission_stake_pool_impl(db_tx, pool_id, pool_balance, current_fee_rate)?;
+        let result = self.decommission_stake_pool_impl(
+            db_tx,
+            pool_id,
+            pool_balance,
+            output_address,
+            current_fee_rate,
+        )?;
         if result.is_fully_signed() {
             return Err(WalletError::FullySignedTransactionInDecommissionReq);
         }

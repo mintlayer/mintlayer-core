@@ -1329,10 +1329,17 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         pool_id: PoolId,
         pool_balance: Amount,
+        output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)
+            account.decommission_stake_pool(
+                db_tx,
+                pool_id,
+                pool_balance,
+                output_address,
+                current_fee_rate,
+            )
         })
     }
 
@@ -1341,10 +1348,17 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         pool_id: PoolId,
         pool_balance: Amount,
+        output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
-            account.decommission_stake_pool_request(db_tx, pool_id, pool_balance, current_fee_rate)
+            account.decommission_stake_pool_request(
+                db_tx,
+                pool_id,
+                pool_balance,
+                output_address,
+                current_fee_rate,
+            )
         })
     }
 
