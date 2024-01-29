@@ -147,6 +147,7 @@ trait WalletRpc {
         &self,
         account_index: AccountIndexArg,
         pool_id: String,
+        output_address: Option<String>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 

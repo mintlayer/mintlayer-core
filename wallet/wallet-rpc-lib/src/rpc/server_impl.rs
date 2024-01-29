@@ -240,13 +240,20 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_index: AccountIndexArg,
         pool_id: String,
+        output_address: Option<String>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
-            self.decommission_stake_pool(account_index.index::<N>()?, pool_id, config).await,
+            self.decommission_stake_pool(
+                account_index.index::<N>()?,
+                pool_id,
+                output_address,
+                config,
+            )
+            .await,
         )
     }
 

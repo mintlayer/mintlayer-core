@@ -36,8 +36,8 @@ use common::{
     address::Address,
     chain::{
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, DecimalAmount, Id},
 };
@@ -502,11 +502,20 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         pool_id: String,
+        output_address: Option<String>,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
+
+        let output_address = output_address
+            .map(|addr| {
+                Address::<Destination>::from_str(&self.chain_config, &addr)
+                    .and_then(|addr| addr.decode_object(&self.chain_config))
+                    .map_err(|_| RpcError::InvalidPoolId)
+            })
+            .transpose()?;
 
         self.wallet
             .call_async(move |controller| {
@@ -514,7 +523,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .decommission_stake_pool(pool_id)
+                        .decommission_stake_pool(pool_id, output_address)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
@@ -527,11 +536,20 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         pool_id: String,
+        output_address: Option<String>,
         config: ControllerConfig,
     ) -> WRpcResult<PartiallySignedTransaction, N> {
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidPoolId)?;
+
+        let output_address = output_address
+            .map(|addr| {
+                Address::<Destination>::from_str(&self.chain_config, &addr)
+                    .and_then(|addr| addr.decode_object(&self.chain_config))
+                    .map_err(|_| RpcError::InvalidPoolId)
+            })
+            .transpose()?;
 
         self.wallet
             .call_async(move |controller| {
@@ -539,7 +557,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .decommission_stake_pool_request(pool_id)
+                        .decommission_stake_pool_request(pool_id, output_address)
                         .await
                         .map_err(RpcError::Controller)
                 })

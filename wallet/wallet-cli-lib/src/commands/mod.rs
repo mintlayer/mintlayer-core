@@ -478,6 +478,9 @@ pub enum WalletCommand {
         /// The pool id of the pool to be decommissioned.
         /// Notice that this only works if the selected account in this wallet owns the decommission key.
         pool_id: String,
+        /// Output address for the pool's balance, if not specified a new receiving address will be
+        /// created by this wallet's selected account
+        output_address: Option<String>,
     },
 
     /// Create a request to decommission a pool. This assumes that the decommission key is owned
@@ -488,6 +491,9 @@ pub enum WalletCommand {
     DecommissionStakePoolRequest {
         /// The pool id of the pool to be decommissioned.
         pool_id: String,
+        /// Output address for the pool's balance, if not specified a new receiving address will be
+        /// created by this wallet's selected account
+        output_address: Option<String>,
     },
 
     /// Rescan the blockchain and re-detect all operations related to the selected account in this wallet
@@ -1529,20 +1535,31 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
-            WalletCommand::DecommissionStakePool { pool_id } => {
+            WalletCommand::DecommissionStakePool {
+                pool_id,
+                output_address,
+            } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
                     .wallet_rpc
-                    .decommission_stake_pool(selected_account, pool_id, self.config)
+                    .decommission_stake_pool(selected_account, pool_id, output_address, self.config)
                     .await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
-            WalletCommand::DecommissionStakePoolRequest { pool_id } => {
+            WalletCommand::DecommissionStakePoolRequest {
+                pool_id,
+                output_address,
+            } => {
                 let selected_account = self.get_selected_acc()?;
                 let result = self
                     .wallet_rpc
-                    .decommission_stake_pool_request(selected_account, pool_id, self.config)
+                    .decommission_stake_pool_request(
+                        selected_account,
+                        pool_id,
+                        output_address,
+                        self.config,
+                    )
                     .await?;
                 let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
 

@@ -53,6 +53,11 @@ pub const MNEMONIC: &str = concat!(
     "prison submit rescue pool panic unable enact oven trap lava floor toward",
 );
 
+pub const COLD_WALLET_MENEMONIC: &str = concat!(
+    "milk idle bicycle taxi pear gold teach left broom pill close alcohol ",
+    "mule medal morning shine famous like spare buzz fatigue same drift wall",
+);
+
 pub fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
     <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
@@ -71,7 +76,8 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
         "00027a9771bbb58170a0df36ed43e56490530f0f2f45b100c42f6f405af3ef21f54e",
     );
     let decommission_pub_key = decode_hex::<PublicKey>(
-        "0002ea30f3bb179c58022dcf2f4fd2c88685695f9532d6a9dd071da8d7ac1fe91a7d",
+        // "0002ea30f3bb179c58022dcf2f4fd2c88685695f9532d6a9dd071da8d7ac1fe91a7d",
+        "00035ca9a5797bb62e9adaec0911b6c431aefa1fb4628a206cfed1da04c0a55ba364",
     );
     let staker_pub_key = decode_hex::<PublicKey>(
         "0002884adf48b0b32ab3d66e1a8b46576dfacca5dd25b66603650de792de4dd2e483",

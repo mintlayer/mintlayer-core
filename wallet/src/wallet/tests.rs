@@ -1403,6 +1403,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             *pool_id,
             pool_amount,
+            None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
@@ -3698,6 +3699,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
         acc_0_index,
         pool_id,
         pool_amount,
+        None,
         FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
     );
     assert_eq!(
@@ -3711,6 +3713,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
             acc_1_index,
             pool_id,
             pool_amount,
+            None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
@@ -3799,6 +3802,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
         acc_1_index,
         pool_id,
         pool_amount,
+        None,
         FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
     );
     assert_eq!(
@@ -3811,6 +3815,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
             acc_0_index,
             pool_id,
             pool_amount,
+            None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
@@ -3892,6 +3897,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             acc_0_index,
             pool_id,
             pool_amount,
+            None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
@@ -3994,6 +4000,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             pool_id,
             pool_amount,
+            None,
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();

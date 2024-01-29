@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::ChainConfig;
 use crypto::random::Rng;
 use tokio::task::JoinHandle;
 use wallet_controller::NodeInterface;
@@ -30,7 +31,8 @@ use wallet_cli_lib::{
     errors::WalletCliError,
 };
 use wallet_test_node::{
-    create_chain_config, default_chain_config_options, start_node, RPC_PASSWORD, RPC_USERNAME,
+    create_chain_config, default_chain_config_options, start_node, COLD_WALLET_MENEMONIC,
+    RPC_PASSWORD, RPC_USERNAME,
 };
 
 pub use wallet_test_node::MNEMONIC;
@@ -70,6 +72,7 @@ pub struct CliTestFramework {
     pub shutdown_trigger: ShutdownTrigger,
     pub manager_task: ManagerJoinHandle,
     pub test_root: TestRoot,
+    pub chain_config: Arc<ChainConfig>,
 }
 
 impl CliTestFramework {
@@ -142,10 +145,11 @@ impl CliTestFramework {
 
         let output = MockConsoleOutput { output_tx };
 
+        let wallet_chain_config = chain_config.clone();
         let wallet_task = tokio::spawn(async move {
             tokio::time::timeout(
                 Duration::from_secs(120),
-                wallet_cli_lib::run(input, output, wallet_options, Some(chain_config)),
+                wallet_cli_lib::run(input, output, wallet_options, Some(wallet_chain_config)),
             )
             .await
             .unwrap()
@@ -159,6 +163,7 @@ impl CliTestFramework {
             test_root,
             input_tx,
             output_rx,
+            chain_config,
         }
     }
 
@@ -180,6 +185,24 @@ impl CliTestFramework {
         let cmd = format!(
             "wallet-create \"{}\" store-seed-phrase \"{}\"",
             file_name, MNEMONIC
+        );
+        assert_eq!(self.exec(&cmd), "New wallet created successfully");
+    }
+
+    #[allow(dead_code)]
+    pub fn create_genesis_cold_wallet(&self) {
+        // Use dir name with spaces to make sure quoting works as expected
+        let file_name = self
+            .test_root
+            .fresh_test_dir("wallet dir")
+            .as_ref()
+            .join("genesis_cold_wallet")
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let cmd = format!(
+            "wallet-create \"{}\" store-seed-phrase \"{}\"",
+            file_name, COLD_WALLET_MENEMONIC,
         );
         assert_eq!(self.exec(&cmd), "New wallet created successfully");
     }
