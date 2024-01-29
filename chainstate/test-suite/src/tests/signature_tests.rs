@@ -18,6 +18,9 @@ use common::chain;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
 use common::chain::signed_transaction::SignedTransaction;
+use common::chain::ConsensusUpgrade;
+use common::chain::NetUpgrades;
+use common::primitives::BlockHeight;
 use common::primitives::Idable;
 use common::{
     chain::{
@@ -30,7 +33,7 @@ use common::{
 use crypto::key::{KeyKind, PrivateKey};
 
 use chainstate_test_framework::TransactionBuilder;
-use chainstate_test_framework::{anyonecanspend_address, TestFramework};
+use chainstate_test_framework::{anyonecanspend_address, empty_witness, TestFramework};
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::sighash::signature_hash;
 use crypto::random::{Rng, SliceRandom};
@@ -424,13 +427,15 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), true)]
-#[case(Seed::from_entropy(), false)]
-fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
-    use common::chain::ConsensusUpgrade;
-    use common::chain::NetUpgrades;
-    use common::primitives::BlockHeight;
-
+#[case(Seed::from_entropy(), true, true)]
+#[case(Seed::from_entropy(), true, false)]
+#[case(Seed::from_entropy(), false, true)]
+#[case(Seed::from_entropy(), false, false)]
+fn no_sig_data_not_allowed(
+    #[case] seed: Seed,
+    #[case] data_allowed: bool,
+    #[case] data_provided: bool,
+) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = chain::config::Builder::new(chain::config::ChainType::Testnet)
@@ -452,53 +457,135 @@ fn no_sig_data_not_allowed(#[case] seed: Seed, #[case] data_allowed: bool) {
         let max_no_sig_data_size =
             tf.chainstate.get_chain_config().data_in_no_signature_witness_max_size();
 
-        {
-            // Valid case
-            let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.gen::<u8>()).collect();
+        let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.gen::<u8>()).collect();
+        let data = if data_provided { Some(data) } else { None };
 
-            let data = if data_allowed { Some(data) } else { None };
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                    0,
+                ),
+                InputWitness::NoSignature(data),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                anyonecanspend_address(),
+            ))
+            .build();
 
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::from_utxo(
-                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                        0,
-                    ),
-                    InputWitness::NoSignature(data),
-                )
-                .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(Amount::from_atoms(100)),
-                    anyonecanspend_address(),
-                ))
-                .build();
+        let block = tf.make_block_builder().with_transactions(vec![tx.clone()]).build();
+        let process_result = tf.process_block(block, chainstate::BlockSource::Local);
 
-            if data_allowed {
-                let block = tf.make_block_builder().with_transactions(vec![tx.clone()]).build();
-
-                if data_allowed {
-                    let process_result = tf.process_block(block, chainstate::BlockSource::Local);
-
-                    process_result.unwrap().unwrap();
-                } else {
-                    let process_result =
-                        tf.process_block(block.clone(), chainstate::BlockSource::Local);
-
-                    assert_eq!(
-                        process_result.unwrap_err(),
-                        chainstate::ChainstateError::ProcessBlockError(
-                            chainstate::BlockError::CheckBlockFailed(
-                                chainstate::CheckBlockError::CheckTransactionFailed(
-                                    chainstate::CheckBlockTransactionsError::CheckTransactionError(
-                                        tx_verifier::CheckTransactionError::NoSignatureDataNotAllowed(
-                                            tx.transaction().get_id(),
-                                        )
+        match (data_allowed, data_provided) {
+            (true, true | false) | (false, false) => {
+                assert!(process_result.is_ok())
+            }
+            (false, true) => {
+                // it's only an error if data is not allowed but was actually provided
+                assert_eq!(
+                    process_result.unwrap_err(),
+                    chainstate::ChainstateError::ProcessBlockError(
+                        chainstate::BlockError::CheckBlockFailed(
+                            chainstate::CheckBlockError::CheckTransactionFailed(
+                                chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                    tx_verifier::CheckTransactionError::NoSignatureDataNotAllowed(
+                                        tx.transaction().get_id(),
                                     )
                                 )
                             )
                         )
-                    );
-                }
+                    )
+                );
             }
-        }
+        };
+    });
+}
+
+// Genesis on Mainnet is signed. Try to spend it with no signature.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let chain_config = chain::config::Builder::new(chain::config::ChainType::Mainnet)
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ConsensusUpgrade::IgnoreConsensus,
+                )])
+                .unwrap(),
+            )
+            .build();
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+        let chain_config = tf.chainstate.get_chain_config().clone().clone();
+
+        // no signature
+        let block = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(Amount::from_atoms(100)),
+                        anyonecanspend_address(),
+                    ))
+                    .build(),
+            )
+            .build();
+
+        let process_result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
+
+        assert_eq!(
+            process_result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                        chain::signature::TransactionSigError::SignatureNotFound
+                    )
+                )
+            )
+        );
+
+        // no signature with data
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                anyonecanspend_address(),
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let block = tf.make_block_builder().add_transaction(tx).build();
+
+        let process_result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
+
+        assert_eq!(
+            process_result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::CheckBlockFailed(
+                    chainstate::CheckBlockError::CheckTransactionFailed(
+                        chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                            tx_verifier::CheckTransactionError::NoSignatureDataNotAllowed(tx_id)
+                        )
+                    )
+                )
+            )
+        );
     });
 }
