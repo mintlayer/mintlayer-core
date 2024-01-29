@@ -478,8 +478,8 @@ pub enum WalletCommand {
         /// The pool id of the pool to be decommissioned.
         /// Notice that this only works if the selected account in this wallet owns the decommission key.
         pool_id: String,
-        /// Output address for the pool's balance, if not specified a new receiving address will be
-        /// created by this wallet's selected account
+        /// The address that will be receiving the staker's balance (both pledge and proceeds from staking).
+        /// If not specified, a new receiving address will be created by this wallet's selected account
         output_address: Option<String>,
     },
 
@@ -491,8 +491,8 @@ pub enum WalletCommand {
     DecommissionStakePoolRequest {
         /// The pool id of the pool to be decommissioned.
         pool_id: String,
-        /// Output address for the pool's balance, if not specified a new receiving address will be
-        /// created by this wallet's selected account
+        /// The address that will be receiving the staker's balance (both pledge and proceeds from staking).
+        /// If not specified, a new receiving address will be created by this wallet's selected account
         output_address: Option<String>,
     },
 
