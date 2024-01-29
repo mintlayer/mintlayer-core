@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::amount_to_json;
 use common::{
     chain::{PoolId, UtxoOutPoint},
     primitives::H256,
@@ -212,7 +213,7 @@ async fn ok(#[case] seed: Seed) {
         );
         assert_eq!(
             body.get("staker_balance").unwrap(),
-            &serde_json::json!(pool_data.value())
+            &serde_json::json!(amount_to_json(pool_data.value()))
         );
 
         assert_eq!(
@@ -222,12 +223,13 @@ async fn ok(#[case] seed: Seed) {
 
         assert_eq!(
             body.get("cost_per_block").unwrap(),
-            &serde_json::json!(pool_data.cost_per_block())
+            &serde_json::json!(amount_to_json(pool_data.cost_per_block()))
         );
 
+        let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
         assert_eq!(
             body.get("vrf_public_key").unwrap(),
-            &serde_json::json!(pool_data.vrf_public_key())
+            &serde_json::json!(vrf_key.get())
         );
 
         let url = format!("/api/v1/pool/{pool_id}/delegations");
@@ -258,7 +260,7 @@ async fn ok(#[case] seed: Seed) {
 
             assert_eq!(
                 resp.get("balance").unwrap(),
-                &serde_json::json!(delegation.1)
+                &serde_json::json!(amount_to_json(delegation.1))
             );
 
             let destination = Address::new(&chain_config, &delegation.2).unwrap();
@@ -282,7 +284,10 @@ async fn ok(#[case] seed: Seed) {
                 body.get("pool_id").unwrap(),
                 &serde_json::json!(pool_id.get())
             );
-            assert_eq!(body.get("balance").unwrap(), &serde_json::json!(balance));
+            assert_eq!(
+                body.get("balance").unwrap(),
+                &serde_json::json!(amount_to_json(balance))
+            );
             let destination = Address::new(&chain_config, &destination).unwrap();
             assert_eq!(body.get("spend_destination").unwrap(), destination.get());
         }

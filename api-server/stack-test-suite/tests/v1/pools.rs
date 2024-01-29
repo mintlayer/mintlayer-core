@@ -15,6 +15,7 @@
 
 use std::cmp::Reverse;
 
+use api_web_server::api::json_helpers::amount_to_json;
 use common::chain::UtxoOutPoint;
 
 use super::{
@@ -230,7 +231,7 @@ async fn ok(#[case] seed: Seed) {
             );
             assert_eq!(
                 json.get("staker_balance").unwrap(),
-                &serde_json::json!(pool_data.value())
+                &serde_json::json!(amount_to_json(pool_data.value()))
             );
 
             assert_eq!(
@@ -240,12 +241,13 @@ async fn ok(#[case] seed: Seed) {
 
             assert_eq!(
                 json.get("cost_per_block").unwrap(),
-                &serde_json::json!(pool_data.cost_per_block())
+                &serde_json::json!(amount_to_json(pool_data.cost_per_block()))
             );
 
+            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
             assert_eq!(
                 json.get("vrf_public_key").unwrap(),
-                &serde_json::json!(pool_data.vrf_public_key())
+                &serde_json::json!(vrf_key.get())
             );
         }
     }
@@ -281,7 +283,7 @@ async fn ok(#[case] seed: Seed) {
             );
             assert_eq!(
                 json.get("staker_balance").unwrap(),
-                &serde_json::json!(pool_data.value())
+                &serde_json::json!(amount_to_json(pool_data.value()))
             );
 
             assert_eq!(
@@ -291,12 +293,13 @@ async fn ok(#[case] seed: Seed) {
 
             assert_eq!(
                 json.get("cost_per_block").unwrap(),
-                &serde_json::json!(pool_data.cost_per_block())
+                &serde_json::json!(amount_to_json(pool_data.cost_per_block()))
             );
 
+            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
             assert_eq!(
                 json.get("vrf_public_key").unwrap(),
-                &serde_json::json!(pool_data.vrf_public_key())
+                &serde_json::json!(vrf_key.get())
             );
         }
     }

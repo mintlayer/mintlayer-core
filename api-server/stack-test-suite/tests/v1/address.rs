@@ -15,7 +15,7 @@
 
 use std::sync::RwLock;
 
-use api_web_server::CachedValues;
+use api_web_server::{api::json_helpers::amount_to_json, CachedValues};
 use common::primitives::time::get_time;
 
 use crate::DummyRPC;
@@ -210,14 +210,14 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     (
                         alice_address.get().to_string(),
                         json!({
-                        "coin_balance": alice_balance.into_atoms(),
+                        "coin_balance": amount_to_json(alice_balance),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": bob_balance.into_atoms(),
+                        "coin_balance": amount_to_json(bob_balance),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),
@@ -431,14 +431,14 @@ async fn ok(#[case] seed: Seed) {
                     (
                         alice_address.get().to_string(),
                         json!({
-                        "coin_balance": alice_balance.into_atoms(),
+                        "coin_balance": amount_to_json(alice_balance),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": bob_balance.into_atoms(),
+                        "coin_balance": amount_to_json(bob_balance),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),

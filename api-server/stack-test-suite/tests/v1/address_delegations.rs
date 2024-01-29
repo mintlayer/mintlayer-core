@@ -15,7 +15,7 @@
 
 use std::sync::RwLock;
 
-use api_web_server::CachedValues;
+use api_web_server::{api::json_helpers::amount_to_json, CachedValues};
 use common::{
     chain::{AccountNonce, UtxoOutPoint},
     primitives::time::get_time,
@@ -173,7 +173,7 @@ async fn ok(#[case] seed: Seed) {
                                 ).get(),
                                 "next_nonce": AccountNonce::new(0),
                                 "spend_destination": alice_address.get(),
-                                "balance": amount,
+                                "balance": amount_to_json(amount),
                             })})
                             .collect::<Vec<_>>()
                             .into(),
