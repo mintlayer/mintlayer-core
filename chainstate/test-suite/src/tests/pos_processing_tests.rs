@@ -49,7 +49,7 @@ use common::{
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
         GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
+        RequiredConsensus, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Id, Idable, H256,
@@ -62,7 +62,7 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
-use pos_accounting::PoSAccountingStorageRead;
+use pos_accounting::{make_pool_id, PoSAccountingStorageRead};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -1928,4 +1928,220 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     )
     .unwrap();
     assert_eq!(None, res_pool_balance);
+}
+
+// Create custom genesis with a staking pool.
+// Produce a block that creates another staking pool.
+// Produce another block using new staking pool and decommission genesis pool.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_decommission_genesis_pool(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (genesis_staking_sk, genesis_staking_pk) =
+        PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (genesis_vrf_sk, genesis_vrf_pk) =
+        VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let upgrades = vec![(
+        BlockHeight::new(0),
+        ConsensusUpgrade::PoS {
+            initial_difficulty: Some(MIN_DIFFICULTY.into()),
+            config: PoSChainConfigBuilder::new_for_unit_test().build(),
+        },
+    )];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let genesis =
+        create_custom_genesis_with_stake_pool(genesis_staking_pk.clone(), genesis_vrf_pk.clone());
+    let chain_config = ConfigBuilder::test_chain()
+        .consensus_upgrades(net_upgrades)
+        .genesis_custom(genesis)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(1);
+
+    let genesis_outpoint_0 = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let genesis_outpoint_1 = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        1,
+    );
+    let genesis_pool_id: PoolId = H256::zero().into();
+
+    let staking_destination = Destination::PublicKey(genesis_staking_pk.clone());
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), genesis_pool_id)];
+
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &genesis_staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        tf.best_block_id(),
+        genesis_outpoint_1.clone(),
+    );
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
+    // create a block with new pool
+    let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage.transaction_ro().unwrap(),
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
+        BlockTimestamp::from_time(tf.current_time()),
+        genesis_outpoint_1.clone(),
+        InputWitness::Standard(kernel_sig),
+        &genesis_vrf_sk,
+        PoSRandomness::new(initial_randomness),
+        genesis_pool_id,
+        final_supply,
+        0,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
+
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
+        &mut rng,
+        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+        vrf_pk,
+    );
+    let new_pool_id = make_pool_id(&genesis_outpoint_0);
+
+    let create_new_pool_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint_0.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            new_pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .build();
+    let create_new_pool_tx_id = create_new_pool_tx.transaction().get_id();
+
+    tf.make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_block_signing_key(genesis_staking_sk.clone())
+        .with_timestamp(block_timestamp)
+        .with_reward(reward_outputs)
+        .add_transaction(create_new_pool_tx)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(1);
+
+    let genesis_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, genesis_pool_id)
+            .unwrap()
+            .unwrap();
+    assert!(
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, new_pool_id)
+            .unwrap()
+            .is_some()
+    );
+
+    // decommission genesis pool
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), new_pool_id)];
+
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination,
+        tf.best_block_id(),
+        UtxoOutPoint::new(create_new_pool_tx_id.into(), 0),
+    );
+
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+
+    // create a block with new pool
+    let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage.transaction_ro().unwrap(),
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
+        BlockTimestamp::from_time(tf.current_time()),
+        UtxoOutPoint::new(create_new_pool_tx_id.into(), 0),
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        PoSRandomness::new(initial_randomness),
+        new_pool_id,
+        final_supply,
+        0,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
+
+    let decommission_genesis_pool_tx = {
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tf.best_block_id().into(), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(genesis_pool_balance),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(2000),
+            ))
+            .build()
+            .transaction()
+            .clone();
+
+        let input_utxo = tf
+            .chainstate
+            .utxo(&UtxoOutPoint::new(tf.best_block_id().into(), 0))
+            .unwrap()
+            .unwrap();
+
+        let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
+            &genesis_staking_sk,
+            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            Destination::PublicKey(genesis_staking_pk),
+            &tx,
+            &[Some(input_utxo.output())],
+            0,
+        )
+        .unwrap();
+        SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
+            .expect("invalid witness count")
+    };
+    let decommission_genesis_pool_tx_id = decommission_genesis_pool_tx.transaction().get_id();
+
+    tf.make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_block_signing_key(staking_sk)
+        .with_timestamp(block_timestamp)
+        .with_reward(reward_outputs)
+        .add_transaction(decommission_genesis_pool_tx)
+        .build_and_process()
+        .unwrap();
+
+    let decommissioned_genesis_utxo = tf
+        .chainstate
+        .utxo(&UtxoOutPoint::new(
+            decommission_genesis_pool_tx_id.into(),
+            0,
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        chainstate_test_framework::get_output_value(decommissioned_genesis_utxo.output()).unwrap(),
+        OutputValue::Coin(genesis_pool_balance)
+    );
+
+    assert!(PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(
+        &tf.storage,
+        genesis_pool_id
+    )
+    .unwrap()
+    .is_none());
+    assert!(
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, new_pool_id)
+            .unwrap()
+            .is_some()
+    );
 }
