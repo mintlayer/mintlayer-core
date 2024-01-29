@@ -140,6 +140,7 @@ BASE_SCRIPTS = [
     'wallet_tokens_change_authority.py',
     'wallet_tokens_change_supply.py',
     'wallet_nfts.py',
+    'wallet_decommission_genesis.py',
     'wallet_decommission_request.py',
     'wallet_delegations.py',
     'wallet_delegations_rpc.py',
