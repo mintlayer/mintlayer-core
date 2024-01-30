@@ -42,7 +42,7 @@ pub struct TestFrameworkBuilder {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     time_getter: Option<TimeGetter>,
     time_value: Option<Arc<SeqCstAtomicU64>>,
-    tx_verification_strategy: TxVerificationStrategy,
+    tx_verification_strategy: TxVerificationStrategy, // FIXME: make it option: if none then chose strategy randomly
     initial_time_since_genesis: u64,
 }
 

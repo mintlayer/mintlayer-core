@@ -313,6 +313,7 @@ where
     ) -> Result<(), ConnectTransactionError> {
         // TODO: this should also collect all the delegations after the pool decommissioning;
         // see mintlayer/mintlayer-core/issues/909
+        // FIXME: what if multiple spending???
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
         // Process tx inputs in terms of pos accounting.
