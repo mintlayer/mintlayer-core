@@ -27,7 +27,7 @@ use common::{
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
-use wallet::account::{transaction_list::TransactionList, Currency, PoolData};
+use wallet::account::{currency_grouper::Currency, transaction_list::TransactionList, PoolData};
 
 use super::BackendError;
 

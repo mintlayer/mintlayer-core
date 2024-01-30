@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
 use crate::account::{
-    Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction, PoolData,
-    TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
+    currency_grouper::Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction,
+    PoolData, TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,

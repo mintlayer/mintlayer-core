@@ -16,13 +16,13 @@
 use crypto::key::PublicKey;
 use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum NftIssuance {
     #[codec(index = 0)]
     V0(NftIssuanceV0),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct NftIssuanceV0 {
     pub metadata: Metadata,
     // TODO: Implement after additional research payout, royalty and refund.
@@ -35,7 +35,18 @@ impl From<NftIssuanceV0> for NftIssuance {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct TokenCreator {
     pub public_key: PublicKey,
 }
@@ -46,7 +57,7 @@ impl From<PublicKey> for TokenCreator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct Metadata {
     pub creator: Option<TokenCreator>,
     pub name: Vec<u8>,

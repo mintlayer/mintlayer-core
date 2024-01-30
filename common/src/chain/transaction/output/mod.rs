@@ -85,7 +85,7 @@ impl Addressable for Destination {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum TxOutput {
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),

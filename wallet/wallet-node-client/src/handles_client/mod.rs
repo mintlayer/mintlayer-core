@@ -250,6 +250,18 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
+    async fn get_utxo(
+        &self,
+        outpoint: common::chain::UtxoOutPoint,
+    ) -> Result<Option<common::chain::TxOutput>, Self::Error> {
+        let output = self
+            .chainstate
+            .call_mut(move |this| this.utxo(&outpoint))
+            .await??
+            .map(|utxo| utxo.take_output());
+        Ok(output)
+    }
+
     async fn submit_transaction(
         &self,
         tx: SignedTransaction,

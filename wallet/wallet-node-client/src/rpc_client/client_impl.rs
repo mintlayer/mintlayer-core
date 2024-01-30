@@ -18,7 +18,8 @@ use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -267,6 +268,12 @@ impl NodeInterface for NodeRpcClient {
 
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         MempoolRpcClient::get_fee_rate_points(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error> {
+        ChainstateRpcClient::utxo(&self.http_client, outpoint)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

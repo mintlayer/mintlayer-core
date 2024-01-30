@@ -27,7 +27,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator},
-        Block, ChainConfig, Destination, SignedTransaction, Transaction, UtxoOutPoint,
+        Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, H256},
 };
@@ -43,7 +43,10 @@ use wallet_rpc_lib::{
     WalletService,
 };
 
-use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
+use crate::{
+    commands::helper_types::{parse_output, parse_token_supply},
+    errors::WalletCliError,
+};
 
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_utxo_outpoint, CliForceReduce, CliIsFreezable,
@@ -607,6 +610,20 @@ pub enum WalletCommand {
     #[clap(name = "node-generate-blocks")]
     #[clap(hide = true)]
     GenerateBlocks { block_count: u32 },
+
+    /// Send a given coin amount to a given address. The wallet will automatically calculate the required information
+    /// Optionally, one can also mention the utxos to be used.
+    #[clap(name = "transaction-compose")]
+    TransactionCompose {
+        /// The transaction outputs, in the format `transfer(address,amount)`
+        /// e.g. transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
+        outputs: Vec<String>,
+        /// You can choose what utxos to spend (space separated as additional arguments). A utxo can be from a transaction output or a block reward output:
+        /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
+        /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
+        #[arg(long="utxos", default_values_t = Vec::<String>::new())]
+        utxos: Vec<String>,
+    },
 
     /// Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again
     /// Note that this doesn't necessarily mean that the network will agree. This assumes the transaction is either still
@@ -1184,6 +1201,41 @@ where
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
                 Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::TransactionCompose { outputs, utxos } => {
+                let outputs: Vec<TxOutput> = outputs
+                    .into_iter()
+                    .map(|input| parse_output(input, chain_config))
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>()?;
+
+                let input_utxos: Vec<UtxoOutPoint> = utxos
+                    .into_iter()
+                    .map(parse_utxo_outpoint)
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                )?;
+
+                let (tx, fees) = self.wallet_rpc.compose_transaction(input_utxos, outputs).await?;
+                let (coins, tokens) = fees.into_coins_and_tokens();
+
+                let mut output =
+                    format!("The hex encoded transaction is:\n{}\n", HexEncoded::new(tx));
+
+                writeln!(
+                    &mut output,
+                    "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
+                )
+                .expect("Writing to a memory buffer should not fail");
+
+                for (token_id, amount) in tokens {
+                    let token_id = Address::new(chain_config, &token_id)
+                        .expect("Encoding token id should never fail");
+                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                        .expect("Writing to a memory buffer should not fail");
+                }
+                output.pop();
+
+                Ok(ConsoleCommand::Print(output))
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {

@@ -28,7 +28,7 @@ use tokio::{
     task::JoinHandle,
 };
 use wallet::{
-    account::{transaction_list::TransactionList, Currency},
+    account::{currency_grouper::Currency, transaction_list::TransactionList},
     DefaultWallet,
 };
 use wallet_controller::{

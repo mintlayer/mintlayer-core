@@ -37,6 +37,14 @@ class UtxoOutpoint:
         return f'tx({self.id},{self.index})'
 
 @dataclass
+class TxOutput:
+    address: str
+    amount: str
+
+    def __str__(self):
+        return f'transfer({self.address},{self.amount})'
+
+@dataclass
 class PoolData:
     pool_id: str
     balance: str
@@ -195,6 +203,9 @@ class WalletCliController:
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
+
+    async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint]) -> str:
+        return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} --utxos {' '.join(map(str, selected_utxos))}\n")
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")

@@ -63,6 +63,15 @@ impl serde::Serialize for PublicKey {
     }
 }
 
+impl<'d> serde::Deserialize<'d> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        HexEncoded::<PublicKey>::deserialize(deserializer).map(|hex| hex.take())
+    }
+}
+
 impl PrivateKey {
     pub fn new_from_entropy(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         Self::new_from_rng(&mut make_true_rng(), key_kind)

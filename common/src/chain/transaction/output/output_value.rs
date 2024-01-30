@@ -20,7 +20,7 @@ use crate::{
     primitives::Amount,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum OutputValue {
     Coin(Amount),
     TokenV0(Box<TokenData>),

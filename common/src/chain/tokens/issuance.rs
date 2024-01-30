@@ -17,7 +17,19 @@ use super::Destination;
 use crate::primitives::Amount;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum TokenTotalSupply {
     #[codec(index = 0)]
     Fixed(Amount), // fixed to a certain amount
@@ -28,7 +40,19 @@ pub enum TokenTotalSupply {
 }
 
 // Indicates whether a token an be frozen
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum IsTokenFreezable {
     #[codec(index = 0)]
     No,
@@ -37,7 +61,19 @@ pub enum IsTokenFreezable {
 }
 
 // Indicates whether a token an be unfrozen after being frozen
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum IsTokenUnfreezable {
     #[codec(index = 0)]
     No,
@@ -48,7 +84,19 @@ pub enum IsTokenUnfreezable {
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum IsTokenFrozen {
     #[codec(index = 0)]
     No(IsTokenFreezable),
@@ -56,13 +104,35 @@ pub enum IsTokenFrozen {
     Yes(IsTokenUnfreezable),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum TokenIssuance {
     #[codec(index = 1)]
     V1(TokenIssuanceV1),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct TokenIssuanceV1 {
     pub token_ticker: Vec<u8>,
     pub number_of_decimals: u8,

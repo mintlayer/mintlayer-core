@@ -26,7 +26,7 @@ use wallet_types::{
 
 use crate::{key_chain::AccountKeyChain, WalletError, WalletResult};
 
-use super::{group_outputs, output_cache::OutputCache};
+use super::{currency_grouper::group_outputs, output_cache::OutputCache};
 
 // TODO: Show send/recv addresses and amounts
 // TODO: Show token amounts
@@ -182,9 +182,12 @@ fn get_transaction(
         Amount::ZERO,
     )?;
 
-    let recv_amount = *own_output_amounts.get(&super::Currency::Coin).unwrap_or(&Amount::ZERO);
-    let non_own_recv_amount =
-        *non_own_output_amounts.get(&super::Currency::Coin).unwrap_or(&Amount::ZERO);
+    let recv_amount = *own_output_amounts
+        .get(&super::currency_grouper::Currency::Coin)
+        .unwrap_or(&Amount::ZERO);
+    let non_own_recv_amount = *non_own_output_amounts
+        .get(&super::currency_grouper::Currency::Coin)
+        .unwrap_or(&Amount::ZERO);
 
     let tx_type = if own_inputs.len() == all_inputs.len() && own_outputs.len() == all_outputs.len()
     {

@@ -691,6 +691,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn compose_transaction(
+        &self,
+        inputs: Vec<UtxoOutPoint>,
+        outputs: Vec<TxOutput>,
+    ) -> WRpcResult<(Transaction, Balances), N> {
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move { w.compose_transaction(inputs, outputs).await })
+            })
+            .await?
+    }
+
     pub async fn abandon_transaction(
         &self,
         account_index: U31,
