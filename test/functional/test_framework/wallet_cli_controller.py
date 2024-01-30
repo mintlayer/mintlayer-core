@@ -116,9 +116,10 @@ class WalletCliController:
         await self.process.stdin.drain()
         return await self._read_available_output()
 
-    async def create_wallet(self, name: str = "wallet") -> str:
+    async def create_wallet(self, name: str = "wallet", mnemonic: Optional[str] = None) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase\n")
+        mnemonic_str = "" if mnemonic is None else f'"{mnemonic}"'
+        return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase {mnemonic_str}\n")
 
     async def open_wallet(self, name: str) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
@@ -254,7 +255,7 @@ class WalletCliController:
                                 amount: int,
                                 cost_per_block: int,
                                 margin_ratio_per_thousand: float,
-                                decommission_addr: Optional[str] = '') -> str:
+                                decommission_addr: str) -> str:
         return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr}\n")
 
     async def decommission_stake_pool(self, pool_id: str) -> str:
@@ -272,7 +273,7 @@ class WalletCliController:
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n")
         self.log.info(f"pools: {output}");
-        pattern = r"Pool Id: ([a-zA-Z0-9]+), Balance: (\d+), Creation Block heigh: (\d+), timestamp: (\d+), staker ([a-zA-Z0-9]+), decommission_key ([a-zA-Z0-9]+), vrf_public_key ([a-zA-Z0-9]+)"
+        pattern = r"Pool Id: ([a-zA-Z0-9]+), Balance: (\d+[.]?\d+), Creation Block heigh: (\d+), timestamp: (\d+), staker ([a-zA-Z0-9]+), decommission_key ([a-zA-Z0-9]+), vrf_public_key ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
         return [PoolData(pool_id, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
 
