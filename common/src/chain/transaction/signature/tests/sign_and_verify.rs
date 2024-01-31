@@ -27,7 +27,7 @@ use crate::{
         config::create_mainnet,
         signature::{
             sighash::sighashtype::{OutputsMode, SigHashType},
-            TransactionSigError,
+            DestinationSigError,
         },
         Destination,
     },
@@ -67,11 +67,11 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
         if destination == Destination::AnyoneCanSpend && inputs > 0 {
             assert_eq!(
                 signed_tx,
-                Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend)
+                Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend)
             );
         } else if matches!(destination, Destination::ScriptHash(_)) && inputs > 0 {
             // This should be updated after ScriptHash support is implemented.
-            assert_eq!(signed_tx, Err(TransactionSigError::Unsupported));
+            assert_eq!(signed_tx, Err(DestinationSigError::Unsupported));
         } else {
             let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
             verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
@@ -105,14 +105,14 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             31,
             0,
-            Err(TransactionSigError::InvalidInputIndex(0, 0)),
+            Err(DestinationSigError::InvalidInputIndex(0, 0)),
         ),
         (
             Destination::PublicKey(public_key.clone()),
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             3,
-            Err(TransactionSigError::InvalidInputIndex(3, 3)),
+            Err(DestinationSigError::InvalidInputIndex(3, 3)),
         ),
         (
             Destination::PublicKey(public_key.clone()),
@@ -134,7 +134,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             0,
-            Err(TransactionSigError::InvalidInputIndex(0, 0)),
+            Err(DestinationSigError::InvalidInputIndex(0, 0)),
         ),
         (
             Destination::PublicKey(public_key.clone()),
@@ -148,7 +148,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             7,
-            Err(TransactionSigError::InvalidInputIndex(7, 7)),
+            Err(DestinationSigError::InvalidInputIndex(7, 7)),
         ),
         // SigHashType::SINGLE. Destination = Address.
         (
@@ -163,7 +163,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             0,
-            Err(TransactionSigError::InvalidInputIndex(0, 0)),
+            Err(DestinationSigError::InvalidInputIndex(0, 0)),
         ),
         (
             Destination::PublicKeyHash(PublicKeyHash::from(&public_key)),
@@ -177,7 +177,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             7,
-            Err(TransactionSigError::InvalidInputIndex(7, 7)),
+            Err(DestinationSigError::InvalidInputIndex(7, 7)),
         ),
         // SigHashType::SINGLE | SigHashType::ANYONECANPAY. Destination = Address.
         (
@@ -192,7 +192,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             0,
-            Err(TransactionSigError::InvalidInputIndex(0, 0)),
+            Err(DestinationSigError::InvalidInputIndex(0, 0)),
         ),
         (
             Destination::PublicKeyHash(PublicKeyHash::from(&public_key)),
@@ -206,7 +206,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             7,
-            Err(TransactionSigError::InvalidInputIndex(7, 7)),
+            Err(DestinationSigError::InvalidInputIndex(7, 7)),
         ),
         // SigHashType::SINGLE. Destination = AnyoneCanSpend.
         (
@@ -214,7 +214,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             33,
-            Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend),
+            Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend),
         ),
         // SigHashType::SINGLE | SigHashType::ANYONECANPAY. Destination = AnyoneCanSpend.
         (
@@ -222,7 +222,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             33,
-            Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend),
+            Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend),
         ),
         // SigHashType::SINGLE. Destination = ScriptHash.
         // This is currently unsupported, so test should be updated in the future.
@@ -231,7 +231,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             33,
-            Err(TransactionSigError::Unsupported),
+            Err(DestinationSigError::Unsupported),
         ),
         // SigHashType::SINGLE | SigHashType::ANYONECANPAY. Destination = ScriptHash
         // This is currently unsupported, so test should be updated in the future.
@@ -240,7 +240,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             33,
-            Err(TransactionSigError::Unsupported),
+            Err(DestinationSigError::Unsupported),
         ),
     ];
 

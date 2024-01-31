@@ -33,7 +33,7 @@ use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::signature::TransactionSigError;
+use common::chain::signature::DestinationSigError;
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
@@ -129,7 +129,7 @@ pub enum WalletError {
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
-    TransactionSig(#[from] TransactionSigError),
+    TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
     DelegationNotFound(DelegationId),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]

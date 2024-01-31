@@ -15,7 +15,7 @@
 
 use crate::{
     chain::{
-        signature::{sighash::sighashtype, TransactionSigError},
+        signature::{sighash::sighashtype, DestinationSigError},
         TxInput, TxOutput,
     },
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
@@ -28,7 +28,7 @@ pub trait SignatureHashableElement {
         mode: sighashtype::SigHashType,
         target_input: &TxInput,
         target_input_num: usize,
-    ) -> Result<(), TransactionSigError>;
+    ) -> Result<(), DestinationSigError>;
 }
 
 impl SignatureHashableElement for &[TxOutput] {
@@ -38,7 +38,7 @@ impl SignatureHashableElement for &[TxOutput] {
         mode: sighashtype::SigHashType,
         _target_input: &TxInput,
         target_input_num: usize,
-    ) -> Result<(), TransactionSigError> {
+    ) -> Result<(), DestinationSigError> {
         match mode.outputs_mode() {
             sighashtype::OutputsMode::All => {
                 hash_encoded_to(self, stream);
@@ -46,7 +46,7 @@ impl SignatureHashableElement for &[TxOutput] {
             sighashtype::OutputsMode::None => (),
             sighashtype::OutputsMode::Single => {
                 let output = self.get(target_input_num).ok_or({
-                    TransactionSigError::InvalidInputIndex(target_input_num, self.len())
+                    DestinationSigError::InvalidInputIndex(target_input_num, self.len())
                 })?;
                 hash_encoded_to(&output, stream);
             }
@@ -67,9 +67,9 @@ impl<'a> SignatureHashableInputs<'a> {
     pub fn new(
         inputs: &'a [TxInput],
         inputs_utxos: &'a [Option<&'a TxOutput>],
-    ) -> Result<Self, TransactionSigError> {
+    ) -> Result<Self, DestinationSigError> {
         if inputs.len() != inputs_utxos.len() {
-            return Err(TransactionSigError::InvalidUtxoCountVsInputs(
+            return Err(DestinationSigError::InvalidUtxoCountVsInputs(
                 inputs_utxos.len(),
                 inputs.len(),
             ));
@@ -91,9 +91,9 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
         mode: sighashtype::SigHashType,
         target_input: &TxInput,
         target_input_num: usize,
-    ) -> Result<(), TransactionSigError> {
+    ) -> Result<(), DestinationSigError> {
         if target_input_num >= self.inputs.len() {
-            return Err(TransactionSigError::InvalidInputIndex(
+            return Err(DestinationSigError::InvalidInputIndex(
                 target_input_num,
                 self.inputs.len(),
             ));
@@ -192,7 +192,7 @@ mod tests {
         if inputs_count != inputs_utxos_count {
             assert_eq!(
                 hashable_inputs_result.unwrap_err(),
-                TransactionSigError::InvalidUtxoCountVsInputs(inputs_utxos.len(), inputs.len(),)
+                DestinationSigError::InvalidUtxoCountVsInputs(inputs_utxos.len(), inputs.len(),)
             );
         } else {
             assert!(hashable_inputs_result.is_ok());
@@ -221,7 +221,7 @@ mod tests {
                     &inputs[index_to_hash],
                     inputs_count,
                 ),
-                Err(TransactionSigError::InvalidInputIndex(
+                Err(DestinationSigError::InvalidInputIndex(
                     inputs_count,
                     inputs.len(),
                 ))

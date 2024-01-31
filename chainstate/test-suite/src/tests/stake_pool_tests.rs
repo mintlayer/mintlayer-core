@@ -27,7 +27,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            TransactionSigError,
+            DestinationSigError,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -744,7 +744,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 result,
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::SignatureVerificationFailed(
-                        TransactionSigError::SignatureVerificationFailed
+                        DestinationSigError::SignatureVerificationFailed
                     )
                 ))
             );

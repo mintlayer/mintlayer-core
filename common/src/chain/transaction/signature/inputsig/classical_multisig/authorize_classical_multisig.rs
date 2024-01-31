@@ -24,7 +24,7 @@ use crate::{
         classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
         signature::{
             inputsig::classical_multisig::multisig_partial_signature::PartiallySignedMultisigChallenge,
-            TransactionSigError,
+            DestinationSigError,
         },
         ChainConfig,
     },
@@ -101,9 +101,9 @@ impl AuthorizedClassicalMultisigSpend {
         self.signatures.iter().map(|(k, v)| (*k, v))
     }
 
-    pub fn from_data(data: &[u8]) -> Result<Self, TransactionSigError> {
+    pub fn from_data(data: &[u8]) -> Result<Self, DestinationSigError> {
         let decoded = AuthorizedClassicalMultisigSpend::decode_all(&mut &data[..])
-            .map_err(|_| TransactionSigError::InvalidSignatureEncoding)?;
+            .map_err(|_| DestinationSigError::InvalidSignatureEncoding)?;
         Ok(decoded)
     }
 
@@ -120,12 +120,12 @@ pub fn verify_classical_multisig_spending(
     challenge_hash: &PublicKeyHash,
     spender_signature: &AuthorizedClassicalMultisigSpend,
     sighash: &H256,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     let msg = sighash.encode();
 
     let expected_hash: PublicKeyHash = spender_signature.challenge().into();
     if expected_hash != *challenge_hash {
-        return Err(TransactionSigError::ClassicalMultisigWitnessHashMismatch);
+        return Err(DestinationSigError::ClassicalMultisigWitnessHashMismatch);
     }
 
     let verifier =
@@ -134,10 +134,10 @@ pub fn verify_classical_multisig_spending(
     match verifier.verify_signatures(chain_config)? {
         super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => Ok(()),
         super::multisig_partial_signature::SigsVerifyResult::Incomplete => {
-            Err(TransactionSigError::IncompleteClassicalMultisigSignature)
+            Err(DestinationSigError::IncompleteClassicalMultisigSignature)
         }
         super::multisig_partial_signature::SigsVerifyResult::Invalid => {
-            Err(TransactionSigError::InvalidClassicalMultisigSignature)
+            Err(DestinationSigError::InvalidClassicalMultisigSignature)
         }
     }
 }
@@ -333,7 +333,7 @@ mod tests {
                                 &sigs,
                                 &sighash,
                             )
-                            .unwrap_err(), TransactionSigError::IncompleteClassicalMultisigSignature);
+                            .unwrap_err(), DestinationSigError::IncompleteClassicalMultisigSignature);
                         }
                         sigs
                     },
@@ -522,7 +522,7 @@ mod tests {
                     &sighash,
                 )
                 .unwrap_err(),
-                TransactionSigError::InvalidClassicalMultisigSignature
+                DestinationSigError::InvalidClassicalMultisigSignature
             );
 
             // Original authorization without the impersonation should still be valid
@@ -601,7 +601,7 @@ mod tests {
                                 &sighash,
                             )
                             .unwrap_err(),
-                            TransactionSigError::IncompleteClassicalMultisigSignature
+                            DestinationSigError::IncompleteClassicalMultisigSignature
                         );
                     }
                 }
@@ -653,7 +653,7 @@ mod tests {
                     &sighash,
                 )
                 .unwrap_err(),
-                TransactionSigError::ClassicalMultisigWitnessHashMismatch
+                DestinationSigError::ClassicalMultisigWitnessHashMismatch
             );
         }
 
@@ -688,7 +688,7 @@ mod tests {
                     &sighash,
                 )
                 .unwrap_err(),
-                TransactionSigError::InvalidClassicalMultisigSignature
+                DestinationSigError::InvalidClassicalMultisigSignature
             );
         }
     }

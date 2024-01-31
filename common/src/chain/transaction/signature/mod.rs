@@ -35,7 +35,7 @@ use thiserror::Error;
 use super::{Destination, Transaction, TxOutput};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum TransactionSigError {
+pub enum DestinationSigError {
     #[error("Invalid sighash value provided")]
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`)")]
@@ -73,7 +73,7 @@ pub enum TransactionSigError {
     #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
     AttemptedToProduceSignatureForAnyoneCanSpend,
     #[error("Classical multisig signature attempted in uni-party function")]
-    AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
+    AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
     #[error("Number of signatures does not match number of inputs")]
     InvalidWitnessCount,
     #[error("Invalid classical multisig challenge")]
@@ -153,10 +153,10 @@ pub fn verify_signature<T: Transactable>(
     tx: &T,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
-) -> Result<(), TransactionSigError> {
-    let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
-    let sigs = tx.signatures().ok_or(TransactionSigError::SignatureVerificationWithoutSigs)?;
-    let input_witness = sigs.get(input_num).ok_or(TransactionSigError::InvalidSignatureIndex(
+) -> Result<(), DestinationSigError> {
+    let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
+    let sigs = tx.signatures().ok_or(DestinationSigError::SignatureVerificationWithoutSigs)?;
+    let input_witness = sigs.get(input_num).ok_or(DestinationSigError::InvalidSignatureIndex(
         input_num,
         inputs.len(),
     ))?;
@@ -167,7 +167,7 @@ pub fn verify_signature<T: Transactable>(
             | Destination::PublicKey(_)
             | Destination::ScriptHash(_)
             | Destination::ClassicMultisig(_) => {
-                return Err(TransactionSigError::SignatureNotFound)
+                return Err(DestinationSigError::SignatureNotFound)
             }
             Destination::AnyoneCanSpend => {}
         },
@@ -190,7 +190,7 @@ fn verify_standard_input_signature<T: Transactable>(
     tx: &T,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num)?;
     witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
     Ok(())
