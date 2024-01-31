@@ -120,7 +120,10 @@ where
         // Create a test framework and blocks
 
         let genesis_id = chain_config.genesis_block_id();
-        test_framework.create_chain(&genesis_id, 10, &mut rng).unwrap();
+        let num_blocks = rng.gen_range(10..20);
+        test_framework
+            .create_chain_return_ids_with_advancing_time(&genesis_id, num_blocks, &mut rng)
+            .unwrap();
 
         let block_id1 =
             test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
@@ -153,6 +156,65 @@ where
             // but the block is still there just not on main chain
             let block = db_tx.get_block(block_id1).await.unwrap();
             assert_eq!(block.unwrap(), block1);
+        }
+
+        {
+            for block_height in 1..num_blocks {
+                let block_height = block_height as u64;
+                let block_id = test_framework
+                    .block_id(block_height)
+                    .classify(&chain_config)
+                    .chain_block_id()
+                    .unwrap();
+                let block = test_framework.block(block_id);
+                db_tx
+                    .set_mainchain_block(block_id, BlockHeight::new(block_height), &block)
+                    .await
+                    .unwrap();
+                db_tx
+                    .set_block_aux_data(
+                        block_id,
+                        &BlockAuxData::new(
+                            block_id,
+                            BlockHeight::new(block_height),
+                            block.timestamp(),
+                        ),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            let random_height = rng.gen_range(1..3);
+            let block_id = test_framework
+                .block_id(random_height)
+                .classify(&chain_config)
+                .chain_block_id()
+                .unwrap();
+            let block1 = test_framework.block(block_id);
+            let random_height2 = rng.gen_range(3..10);
+            let block_id2 = test_framework
+                .block_id(random_height2)
+                .classify(&chain_config)
+                .chain_block_id()
+                .unwrap();
+            let block2 = test_framework.block(block_id2);
+
+            let block1_timestamp = block1.timestamp();
+            let block2_timestamp = block2.timestamp();
+
+            let (h1, h2) = db_tx
+                .get_block_range_from_time_range((block1_timestamp, block2_timestamp))
+                .await
+                .unwrap();
+
+            assert_eq!(h1, BlockHeight::new(random_height));
+            assert_eq!(h2, BlockHeight::new(random_height2));
+
+            // delete the main chain block
+            db_tx
+                .del_main_chain_blocks_above_height(block_height.prev_height().unwrap())
+                .await
+                .unwrap();
         }
 
         db_tx.commit().await.unwrap();
