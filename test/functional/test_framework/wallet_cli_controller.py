@@ -24,7 +24,7 @@ from tempfile import NamedTemporaryFile
 
 from typing import Optional, List, Tuple, Union
 
-TEN_MB = 100*2**20
+TEN_MB = 10*2**20
 READ_TIMEOUT_SEC = 3
 DEFAULT_ACCOUNT_INDEX = 0
 
@@ -97,18 +97,23 @@ class WalletCliController:
 
     async def _read_available_output(self) -> str:
         result = ''
-        output = ''
+        output_buf = bytes([])
         num_tries = 0
         try:
-            while not result and num_tries < 3:
+            while not result and num_tries < 5:
                 output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=READ_TIMEOUT_SEC)
                 self.wallet_commands_file.write(output)
-                self.log.info(f"read result '{output}' {not output} {output == ''}")
+                output_buf = output_buf + output
                 num_tries = num_tries + 1
-                if not output:
+                if not output_buf:
                     continue
-                result = output.decode().strip()
-                self.log.info(f"read result '{result}' {not result} {result == ''}")
+                # try to decode, sometimes the read can split a utf-8 symbol in half and the decode can fail
+                # in that case try to read the rest of the output and try to parse again
+                try:
+                    result = output_buf.decode().strip()
+                except:
+                    pass
+
 
             try:
                 while True:
@@ -122,7 +127,7 @@ class WalletCliController:
 
             return result
         except Exception as e:
-            self.log.error(f"read tiemout '{e}' {output} {output == ''}")
+            self.log.error(f"read tiemout '{e}'")
             self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''
 
