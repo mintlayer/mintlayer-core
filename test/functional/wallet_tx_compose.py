@@ -128,14 +128,14 @@ class WalletComposeTransaction(BitcoinTestFramework):
             # transfer all except 1 coin to the new acc, and add 0.1 fee
             outputs = [ TxOutput(acc1_address, str(coins_to_send - 1)), TxOutput(change_address, "0.9") ]
 
-            # check we have 1 unsepnt utxo
+            # check we have 1 unspent utxo
             utxos = await wallet.list_utxos()
             assert_equal(len(utxos), 1)
 
             # compose a transaction with that utxo and 2 outputs
             output = await wallet.compose_transaction(outputs, utxos)
             assert_in("The hex encoded transaction is", output)
-            # check the fees incude the 0.1
+            # check the fees include the 0.1
             assert_in(f"Coins amount: 0.1", output)
             encoded_tx = output.split('\n')[1]
 
