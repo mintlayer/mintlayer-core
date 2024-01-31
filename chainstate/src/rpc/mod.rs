@@ -65,7 +65,7 @@ trait ChainstateRpc {
 
     /// Returns the TxOutput for a specified UtxoOutPoint.
     #[method(name = "get_utxo")]
-    async fn utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
+    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -191,7 +191,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         Ok(blocks.into_iter().map(HexEncoded::new).collect())
     }
 
-    async fn utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>> {
+    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>> {
         rpc::handle_result(
             self.call_mut(move |this| {
                 this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))

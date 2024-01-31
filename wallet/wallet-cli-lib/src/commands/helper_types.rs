@@ -222,10 +222,14 @@ pub fn parse_output<N: NodeInterface>(
 
     let dest = Address::from_str(chain_config, parts[1])
         .and_then(|addr| addr.decode_object(chain_config))
-        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?;
+        .map_err(|err| {
+            WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
+        })?;
 
     let amount = DecimalAmount::from_str(parts[2])
-        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?
+        .map_err(|err| {
+            WalletCliError::<N>::InvalidInput(format!("invalid amount {} {err}", parts[2]))
+        })?
         .to_amount(chain_config.coin_decimals())
         .ok_or(WalletCliError::<N>::InvalidInput(
             "invalid coins amount".to_string(),
@@ -235,7 +239,7 @@ pub fn parse_output<N: NodeInterface>(
         "transfer" => TxOutput::Transfer(OutputValue::Coin(amount), dest),
         _ => {
             return Err(WalletCliError::<N>::InvalidInput(
-                "Invalid input: unknown ID type".into(),
+                "Invalid output: unknown type".into(),
             ));
         }
     };

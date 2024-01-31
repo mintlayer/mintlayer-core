@@ -611,8 +611,13 @@ pub enum WalletCommand {
     #[clap(hide = true)]
     GenerateBlocks { block_count: u32 },
 
-    /// Send a given coin amount to a given address. The wallet will automatically calculate the required information
-    /// Optionally, one can also mention the utxos to be used.
+    /// Compose a new transaction from the specified outputs and selected utxos
+    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
+    /// and also prints the fees that will be paied by the transaction
+    /// example usage:
+    /// transaction-compose transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9) --utxos
+    ///   tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)
+    /// which creates a transaction with 1 output and 1 input
     #[clap(name = "transaction-compose")]
     TransactionCompose {
         /// The transaction outputs, in the format `transfer(address,amount)`
@@ -1027,16 +1032,23 @@ where
                     Ok(signed_tx) => {
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map_err(WalletCliError::QrCodeEncoding)?;
-                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                        let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map(|qr_code| qr_code.encode_to_console_string_with_defaults(1));
 
-                        format!(
+                        match qr_code_string {
+                            Ok(qr_code_string) => format!(
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
-                        )
+                        ),
+                            Err(_) => format!(
+                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
+                             Transaction is too long to be put into a Qr code"
+                        ),
+                        }
                     }
                     Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
@@ -1204,6 +1216,8 @@ where
             }
 
             WalletCommand::TransactionCompose { outputs, utxos } => {
+                eprintln!("outputs: {outputs:?}");
+                eprintln!("utxos: {utxos:?}");
                 let outputs: Vec<TxOutput> = outputs
                     .into_iter()
                     .map(|input| parse_output(input, chain_config))

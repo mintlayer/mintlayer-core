@@ -87,21 +87,25 @@ class WalletComposeTransaction(BitcoinTestFramework):
             self.log.info(f"best block height = {best_block_height}")
             assert_equal(best_block_height, '0')
 
-            # new address
-            pub_key_bytes = await wallet.new_public_key()
-            assert_equal(len(pub_key_bytes), 33)
-
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
-            genesis_block_id = tip_id
             self.log.debug(f'Tip: {tip_id}')
 
+            coins_to_send = random.randint(2, 10)
+            # new address
+            addresses = []
+            num_utxos = random.randint(1, 3)
+            for _ in range(num_utxos):
+                pub_key_bytes = await wallet.new_public_key()
+                assert_equal(len(pub_key_bytes), 33)
+                addresses.append(pub_key_bytes)
+
             # Submit a valid transaction
-            coins_to_send = random.randint(2, 100)
-            output = {
-                    'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
-            }
-            encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
+            def make_output(pub_key_bytes):
+                return {
+                        'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                }
+            encoded_tx, tx_id = make_tx([reward_input(tip_id)], [make_output(pk) for pk in addresses], 0)
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
@@ -116,7 +120,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             # sync the wallet
             assert_in("Success", await wallet.sync())
 
-            assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
+            assert_in(f"Coins amount: {coins_to_send * len(addresses)}", await wallet.get_balance())
 
             ## create a new account and get an address
             await wallet.create_new_account()
@@ -126,20 +130,23 @@ class WalletComposeTransaction(BitcoinTestFramework):
 
             change_address = await wallet.new_address()
             # transfer all except 1 coin to the new acc, and add 0.1 fee
-            outputs = [ TxOutput(acc1_address, str(coins_to_send - 1)), TxOutput(change_address, "0.9") ]
+            num_outputs = random.randint(0, len(addresses) - 1)
+            outputs = [TxOutput(acc1_address, str(coins_to_send)) for _ in range(num_outputs)] + [ TxOutput(acc1_address, str(coins_to_send - 1)), TxOutput(change_address, "0.9") ]
 
-            # check we have 1 unspent utxo
+            # check we have unspent utxos
             utxos = await wallet.list_utxos()
-            assert_equal(len(utxos), 1)
+            assert_equal(len(utxos), len(addresses))
 
-            # compose a transaction with that utxo and 2 outputs
+            # compose a transaction with all our utxos and n outputs to the other acc and 1 as change
             output = await wallet.compose_transaction(outputs, utxos)
+            self.log.info(f"compose output: '{output}'")
             assert_in("The hex encoded transaction is", output)
-            # check the fees include the 0.1
-            assert_in(f"Coins amount: 0.1", output)
+            # check the fees include the 0.1 + any extra utxos
+            assert_in(f"Coins amount: {((len(addresses) - (num_outputs + 1))*coins_to_send)}.1", output)
             encoded_tx = output.split('\n')[1]
 
             output = await wallet.sign_raw_transaction(encoded_tx)
+            self.log.info(f"sign output: '{output}'")
             assert_in("The transaction has been fully signed signed", output)
             signed_tx = output.split('\n')[2]
 
@@ -150,9 +157,14 @@ class WalletComposeTransaction(BitcoinTestFramework):
             self.generate_block()
 
             assert_in("Success", await wallet.sync())
+            # check we have the change
             assert_in(f"Coins amount: 0.9", await wallet.get_balance())
+            # and 1 new utxo
+            assert_equal(1, len(await wallet.list_utxos()))
+
             await wallet.select_account(1)
-            assert_in(f"Coins amount: {coins_to_send-1}", await wallet.get_balance())
+            assert_in(f"Coins amount: {num_outputs * coins_to_send + coins_to_send-1}", await wallet.get_balance())
+            assert_equal(num_outputs + 1, len(await wallet.list_utxos()))
 
 
 if __name__ == '__main__':

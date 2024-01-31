@@ -273,7 +273,7 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> Result<Option<TxOutput>, Self::Error> {
-        ChainstateRpcClient::utxo(&self.http_client, outpoint)
+        ChainstateRpcClient::get_utxo(&self.http_client, outpoint)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

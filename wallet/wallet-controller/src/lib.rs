@@ -65,7 +65,11 @@ pub use node_comm::{
     rpc_client::NodeRpcClient,
 };
 use wallet::{
-    account::currency_grouper::{self, Currency},
+    account::{
+        currency_grouper::{self, Currency},
+        PartiallySignedTransaction,
+    },
+    get_tx_output_destination,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -613,24 +617,43 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
-    ) -> Result<(Transaction, Balances), ControllerError<T>> {
-        let fees = self.get_fees(&inputs, &outputs).await?;
+    ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
+        let input_utxos = self.fetch_utxos(&inputs).await?;
+        let fees = self.get_fees(&input_utxos, &outputs)?;
         let fees = into_balances(&self.rpc_client, &self.chain_config, fees).await?;
 
+        let num_inputs = inputs.len();
         let inputs = inputs.into_iter().map(TxInput::Utxo).collect();
 
         let tx = Transaction::new(0, inputs, outputs)
             .map_err(|err| ControllerError::WalletError(WalletError::TransactionCreation(err)))?;
 
+        let destinations = input_utxos
+            .iter()
+            .map(|txo| {
+                get_tx_output_destination(txo, &|_| None)
+                    .ok_or_else(|| WalletError::UnsupportedTransactionOutput(Box::new(txo.clone())))
+            })
+            .collect::<Result<Vec<_>, WalletError>>()
+            .map_err(ControllerError::WalletError)?;
+
+        let tx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            input_utxos.into_iter().map(Option::Some).collect(),
+            destinations.into_iter().map(Option::Some).collect(),
+        )
+        .map_err(ControllerError::WalletError)?;
+
         Ok((tx, fees))
     }
 
-    async fn get_fees(
+    fn get_fees(
         &self,
-        inputs: &[UtxoOutPoint],
+        inputs: &[TxOutput],
         outputs: &[TxOutput],
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
-        let mut inputs = self.fetch_and_group_inputs(inputs).await?;
+        let mut inputs = self.group_inputs(inputs)?;
         let outputs = self.group_outpus(outputs)?;
 
         let mut fees = BTreeMap::new();
@@ -646,7 +669,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             fees.insert(currency, fee);
         }
         // add any leftover inputs
-        fees.extend(inputs.into_iter());
+        fees.extend(inputs);
         Ok(fees)
     }
 
@@ -669,15 +692,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         .map_err(|err| ControllerError::WalletError(err))
     }
 
-    async fn fetch_and_group_inputs(
+    fn group_inputs(
         &self,
-        inputs: &[UtxoOutPoint],
+        input_utxos: &[TxOutput],
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
-        let tasks: FuturesUnordered<_> =
-            inputs.iter().map(|input| self.fetch_utxo(input)).collect();
-        let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
         currency_grouper::group_utxos_for_input(
-            input_utxos.into_iter(),
+            input_utxos.iter(),
             |tx_output| tx_output,
             |total: &mut Amount, _, amount| -> Result<(), WalletError> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -686,6 +706,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             Amount::ZERO,
         )
         .map_err(|err| ControllerError::WalletError(err))
+    }
+
+    async fn fetch_utxos(
+        &self,
+        inputs: &[UtxoOutPoint],
+    ) -> Result<Vec<TxOutput>, ControllerError<T>> {
+        let tasks: FuturesUnordered<_> =
+            inputs.iter().map(|input| self.fetch_utxo(input)).collect();
+        let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
+        Ok(input_utxos)
     }
 
     async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {

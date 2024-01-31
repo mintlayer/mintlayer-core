@@ -24,8 +24,8 @@ from tempfile import NamedTemporaryFile
 
 from typing import Optional, List, Tuple, Union
 
-ONE_MB = 2**20
-READ_TIMEOUT_SEC = 30
+TEN_MB = 100*2**20
+READ_TIMEOUT_SEC = 3
 DEFAULT_ACCOUNT_INDEX = 0
 
 @dataclass
@@ -96,14 +96,23 @@ class WalletCliController:
         self.wallet_commands_file.close()
 
     async def _read_available_output(self) -> str:
+        result = ''
+        output = ''
+        num_tries = 0
         try:
-            output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=READ_TIMEOUT_SEC)
-            self.wallet_commands_file.write(output)
-            result = output.decode().strip()
+            while not result and num_tries < 3:
+                output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=READ_TIMEOUT_SEC)
+                self.wallet_commands_file.write(output)
+                self.log.info(f"read result '{output}' {not output} {output == ''}")
+                num_tries = num_tries + 1
+                if not output:
+                    continue
+                result = output.decode().strip()
+                self.log.info(f"read result '{result}' {not result} {result == ''}")
 
             try:
                 while True:
-                    output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=0.1)
+                    output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=0.1)
                     if not output:
                         break
                     self.wallet_commands_file.write(output)
@@ -112,7 +121,8 @@ class WalletCliController:
                 pass
 
             return result
-        except:
+        except Exception as e:
+            self.log.error(f"read tiemout '{e}' {output} {output == ''}")
             self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''
 
@@ -205,7 +215,7 @@ class WalletCliController:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint]) -> str:
-        return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} --utxos {' '.join(map(str, selected_utxos))}\n")
+        return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} --utxos {' --utxos '.join(map(str, selected_utxos))}\n")
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")
