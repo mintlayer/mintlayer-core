@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -12,6 +12,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use thiserror::Error;
 
 use serialization::Encode;
 
@@ -32,7 +34,7 @@ use super::{
     },
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum SignArbitraryMessageError {
     #[error("Destination signature error: {0}")]
     DestinationSigError(#[from] DestinationSigError),
@@ -44,17 +46,19 @@ pub enum SignArbitraryMessageError {
     Unsupported,
 }
 
+#[derive(Debug)]
 pub struct SignedArbitraryMessage {
     raw_signature: Vec<u8>,
 }
 
-fn produce_message_challenge(message: Vec<u8>) -> H256 {
+pub fn produce_message_challenge(message: &[u8]) -> H256 {
     let hashed_message = default_hash(&message);
 
     // Concatenate the message with its hash to prevent abusing signatures to trick users into signing transactions
     let message = message
-        .into_iter()
-        .chain(hashed_message.as_bytes().to_vec())
+        .iter()
+        .chain(hashed_message.as_bytes().iter())
+        .copied()
         .collect::<Vec<_>>();
 
     // Harden it further by hashing that twice. Now it's impossible to make this useful for a transaction
@@ -83,7 +87,7 @@ impl SignedArbitraryMessage {
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
             Destination::AnyoneCanSpend => {
-                // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
+                // AnyoneCanSpend makes no sense for signing and verification.
                 return Err(
                     DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
@@ -99,24 +103,24 @@ impl SignedArbitraryMessage {
 
     pub fn produce_uniparty_signature(
         private_key: &crypto::key::PrivateKey,
-        outpoint_destination: Destination,
-        message: Vec<u8>,
+        outpoint_destination: &Destination,
+        message: &[u8],
     ) -> Result<Self, SignArbitraryMessageError> {
         let challenge = produce_message_challenge(message);
         let signature =
             match outpoint_destination {
-                Destination::Address(ref addr) => {
+                Destination::Address(addr) => {
                     let sig = sign_address_spending(private_key, addr, &challenge)?;
                     sig.encode()
                 }
-                Destination::PublicKey(ref pubkey) => {
+                Destination::PublicKey(pubkey) => {
                     let sig = sign_pubkey_spending(private_key, pubkey, &challenge)?;
                     sig.encode()
                 }
                 Destination::ScriptHash(_) => return Err(SignArbitraryMessageError::Unsupported),
 
                 Destination::AnyoneCanSpend => {
-                    // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
+                    // AnyoneCanSpend makes no sense for signing and verification.
                     return Err(SignArbitraryMessageError::AttemptedToProduceSignatureForAnyoneCanSpend);
                 }
                 Destination::ClassicMultisig(_) => return Err(
@@ -129,3 +133,7 @@ impl SignedArbitraryMessage {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "arbitrary_message_tests.rs"]
+mod tests;

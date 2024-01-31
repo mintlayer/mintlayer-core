@@ -37,7 +37,9 @@ use crate::{
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
-fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> (TxOutput, crypto::key::PrivateKey) {
+pub fn generate_input_utxo(
+    rng: &mut (impl Rng + CryptoRng),
+) -> (TxOutput, crypto::key::PrivateKey) {
     let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
