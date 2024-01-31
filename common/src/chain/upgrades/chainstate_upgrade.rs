@@ -53,6 +53,12 @@ pub enum NftIdMismatchCheck {
     No,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ConstraintsAccumulatorVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -60,6 +66,7 @@ pub struct ChainstateUpgrade {
     tokens_fee_version: TokensFeeVersion,
     tokens_ticker_length_version: TokensTickerMaxLengthVersion,
     nft_id_mismatch_check: NftIdMismatchCheck,
+    constraints_accumulator_version: ConstraintsAccumulatorVersion,
 }
 
 impl ChainstateUpgrade {
@@ -69,6 +76,7 @@ impl ChainstateUpgrade {
         tokens_fee_version: TokensFeeVersion,
         tokens_ticker_length_version: TokensTickerMaxLengthVersion,
         nft_id_mismatch_check: NftIdMismatchCheck,
+        constraints_accumulator_version: ConstraintsAccumulatorVersion,
     ) -> Self {
         Self {
             token_issuance_version,
@@ -76,6 +84,7 @@ impl ChainstateUpgrade {
             tokens_fee_version,
             tokens_ticker_length_version,
             nft_id_mismatch_check,
+            constraints_accumulator_version,
         }
     }
 
@@ -97,6 +106,10 @@ impl ChainstateUpgrade {
 
     pub fn nft_id_mismatch_check(&self) -> NftIdMismatchCheck {
         self.nft_id_mismatch_check
+    }
+
+    pub fn constraints_accumulator_version(&self) -> ConstraintsAccumulatorVersion {
+        self.constraints_accumulator_version
     }
 }
 

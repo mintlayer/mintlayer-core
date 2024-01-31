@@ -17,8 +17,9 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError, TokensErr
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
-    ChainstateUpgrade, Destination, NftIdMismatchCheck, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
+    ChainstateUpgrade, ConstraintsAccumulatorVersion, Destination, NftIdMismatchCheck,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    TokensTickerMaxLengthVersion, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
@@ -217,6 +218,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
+                                ConstraintsAccumulatorVersion::V1,
                             ),
                         )])
                         .unwrap(),

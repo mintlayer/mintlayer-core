@@ -21,7 +21,8 @@ use std::{
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        AccountType, ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountType, ChainConfig, ConstraintsAccumulatorVersion, DelegationId, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
@@ -270,15 +271,25 @@ impl ConstrainedValueAccumulator {
     {
         match account {
             AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
-                // FIXME: fork it
-                //let delegation_balance = delegation_balance_getter(*delegation_id)?
-                //    .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
-                //ensure!(
-                //    *spend_amount <= delegation_balance,
-                //    Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
-                //);
-
-                account_tracker.spend_from_account(account.clone().into(), *spend_amount)?;
+                match chain_config
+                    .chainstate_upgrades()
+                    .version_at_height(block_height)
+                    .1
+                    .constraints_accumulator_version()
+                {
+                    ConstraintsAccumulatorVersion::V0 => {
+                        let delegation_balance = delegation_balance_getter(*delegation_id)?
+                            .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
+                        ensure!(
+                            *spend_amount <= delegation_balance,
+                            Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
+                        );
+                    }
+                    ConstraintsAccumulatorVersion::V1 => {
+                        account_tracker
+                            .spend_from_account(account.clone().into(), *spend_amount)?;
+                    }
+                }
 
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
