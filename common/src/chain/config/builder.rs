@@ -28,7 +28,7 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ChainstateUpgrade, CoinUnit, ConsensusUpgrade, ConstraintsAccumulatorVersion, Destination,
+        AccountsBalancesCheckVersion, ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination,
         GenBlock, Genesis, NetUpgrades, NftIdMismatchCheck, PoSChainConfig, PoSConsensusVersion,
         PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
         TokensTickerMaxLengthVersion,
@@ -162,7 +162,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                             NftIdMismatchCheck::Yes,
-                            ConstraintsAccumulatorVersion::V0,
+                            AccountsBalancesCheckVersion::V0,
                         ),
                     ),
                     (
@@ -173,7 +173,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                             NftIdMismatchCheck::Yes,
-                            ConstraintsAccumulatorVersion::V1,
+                            AccountsBalancesCheckVersion::V1,
                         ),
                     ),
                 ];
@@ -188,7 +188,7 @@ impl ChainType {
                         TokensFeeVersion::V1,
                         TokensTickerMaxLengthVersion::V1,
                         NftIdMismatchCheck::Yes,
-                        ConstraintsAccumulatorVersion::V1,
+                        AccountsBalancesCheckVersion::V1,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -203,7 +203,7 @@ impl ChainType {
                             TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
                             NftIdMismatchCheck::No,
-                            ConstraintsAccumulatorVersion::V0,
+                            AccountsBalancesCheckVersion::V0,
                         ),
                     ),
                     (
@@ -214,7 +214,7 @@ impl ChainType {
                             TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
                             NftIdMismatchCheck::No,
-                            ConstraintsAccumulatorVersion::V0,
+                            AccountsBalancesCheckVersion::V0,
                         ),
                     ),
                     (
@@ -225,7 +225,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                             NftIdMismatchCheck::Yes,
-                            ConstraintsAccumulatorVersion::V1,
+                            AccountsBalancesCheckVersion::V1,
                         ),
                     ),
                 ];

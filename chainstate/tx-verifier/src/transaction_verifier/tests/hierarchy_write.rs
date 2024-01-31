@@ -22,6 +22,7 @@ use super::*;
 use common::chain::{
     config::Builder as ConfigBuilder,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
+    DelegationId,
 };
 use mockall::predicate::eq;
 use pos_accounting::{AccountingTxUndo, DeltaMergeUndo};

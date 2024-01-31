@@ -23,6 +23,7 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder,
         tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
+        DelegationId,
     },
     primitives::H256,
 };

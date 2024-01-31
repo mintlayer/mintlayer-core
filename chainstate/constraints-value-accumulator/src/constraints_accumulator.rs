@@ -13,85 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    num::NonZeroU64,
-};
+use std::{collections::BTreeMap, num::NonZeroU64};
 
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        AccountType, ChainConfig, ConstraintsAccumulatorVersion, DelegationId, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountsBalancesCheckVersion, ChainConfig, DelegationId, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
 use utils::ensure;
 
 use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
-
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-enum GenericAccountId {
-    Delegation(DelegationId),
-}
-
-impl From<AccountSpending> for GenericAccountId {
-    fn from(account: AccountSpending) -> Self {
-        match account {
-            AccountSpending::DelegationBalance(id, _) => Self::Delegation(id),
-        }
-    }
-}
-
-impl From<GenericAccountId> for AccountType {
-    fn from(value: GenericAccountId) -> Self {
-        match value {
-            GenericAccountId::Delegation(id) => AccountType::Delegation(id),
-        }
-    }
-}
-
-struct AccountTracker<'a, DelegationBalanceGetterFn> {
-    balances: BTreeMap<GenericAccountId, Amount>,
-
-    delegation_balance_getter: &'a DelegationBalanceGetterFn,
-}
-
-impl<'a, DelegationBalanceGetterFn> AccountTracker<'a, DelegationBalanceGetterFn>
-where
-    DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-{
-    fn new(delegation_balance_getter: &'a DelegationBalanceGetterFn) -> Self {
-        Self {
-            balances: BTreeMap::new(),
-            delegation_balance_getter,
-        }
-    }
-
-    fn spend_from_account(
-        &mut self,
-        account: GenericAccountId,
-        amount: Amount,
-    ) -> Result<(), Error> {
-        match self.balances.entry(account) {
-            Entry::Vacant(e) => {
-                let balance = match account {
-                    GenericAccountId::Delegation(id) => (self.delegation_balance_getter)(id)?,
-                }
-                .ok_or(Error::AccountBalanceNotFound(account.into()))?;
-                let new_balance =
-                    (balance - amount).ok_or(Error::NegativeAccountBalance(account.into()))?;
-                e.insert(new_balance);
-            }
-            Entry::Occupied(mut e) => {
-                let balance = e.get_mut();
-                *balance =
-                    (*balance - amount).ok_or(Error::NegativeAccountBalance(account.into()))?;
-            }
-        };
-        Ok(())
-    }
-}
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
 /// providing a set of properties that should be satisfied. For example instead of checking that
@@ -139,7 +73,6 @@ impl ConstrainedValueAccumulator {
 
         let mut accumulator = Self::new();
         let mut total_fee_deducted = Amount::ZERO;
-        let mut account_tracker = AccountTracker::new(&delegation_balance_getter);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -159,7 +92,6 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         outpoint.account(),
-                        &mut account_tracker,
                         &delegation_balance_getter,
                     )?;
                 }
@@ -263,7 +195,6 @@ impl ConstrainedValueAccumulator {
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
-        account_tracker: &mut AccountTracker<DelegationBalanceGetterFn>,
         delegation_balance_getter: &DelegationBalanceGetterFn,
     ) -> Result<(), Error>
     where
@@ -275,9 +206,9 @@ impl ConstrainedValueAccumulator {
                     .chainstate_upgrades()
                     .version_at_height(block_height)
                     .1
-                    .constraints_accumulator_version()
+                    .accounts_balances_version()
                 {
-                    ConstraintsAccumulatorVersion::V0 => {
+                    AccountsBalancesCheckVersion::V0 => {
                         let delegation_balance = delegation_balance_getter(*delegation_id)?
                             .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
                         ensure!(
@@ -285,10 +216,7 @@ impl ConstrainedValueAccumulator {
                             Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
                         );
                     }
-                    ConstraintsAccumulatorVersion::V1 => {
-                        account_tracker
-                            .spend_from_account(account.clone().into(), *spend_amount)?;
-                    }
+                    AccountsBalancesCheckVersion::V1 => {}
                 }
 
                 let maturity_distance =

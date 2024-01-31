@@ -24,7 +24,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
-        ChainstateUpgrade, ConstraintsAccumulatorVersion, Destination, NetUpgrades,
+        AccountsBalancesCheckVersion, ChainstateUpgrade, Destination, NetUpgrades,
         NftIdMismatchCheck, OutPointSourceId, RewardDistributionVersion, TokenIssuanceVersion,
         TokensFeeVersion, TokensTickerMaxLengthVersion, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
@@ -122,7 +122,7 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
-                                ConstraintsAccumulatorVersion::V1,
+                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -203,7 +203,7 @@ fn store_nft_v0(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
-                                ConstraintsAccumulatorVersion::V1,
+                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -389,7 +389,7 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
-                                ConstraintsAccumulatorVersion::V1,
+                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),

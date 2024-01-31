@@ -477,6 +477,7 @@ impl BanScore for EpochSealError {
 impl BanScore for IOPolicyError {
     fn ban_score(&self) -> u32 {
         match self {
+            IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::InvalidInputTypeInReward => 100,
             IOPolicyError::InvalidOutputTypeInReward => 100,
             IOPolicyError::InvalidInputTypeInTx => 100,
@@ -485,6 +486,9 @@ impl BanScore for IOPolicyError {
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
+            IOPolicyError::AccountBalanceNotFound(_) => 0,
+            IOPolicyError::NegativeAccountBalance(_) => 100,
+            IOPolicyError::AccountBalanceOverflow(_) => 100,
         }
     }
 }
@@ -503,8 +507,6 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::SpendingNonSpendableOutput(_) => 100,
             constraints_value_accumulator::Error::AttemptToViolateFeeRequirements => 100,
             constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,
-            constraints_value_accumulator::Error::AccountBalanceNotFound(_) => 0,
-            constraints_value_accumulator::Error::NegativeAccountBalance(_) => 100,
         }
     }
 }
