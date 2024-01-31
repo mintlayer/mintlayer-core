@@ -67,7 +67,7 @@ pub use node_comm::{
 use wallet::{
     account::{
         currency_grouper::{self, Currency},
-        PartiallySignedTransaction,
+        PartiallySignedTransaction, TransactionToSign,
     },
     get_tx_output_destination,
     wallet::WalletPoolsFilter,
@@ -617,7 +617,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
-    ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
+        only_transaction: bool,
+    ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
         let fees = self.get_fees(&input_utxos, &outputs)?;
         let fees = into_balances(&self.rpc_client, &self.chain_config, fees).await?;
@@ -628,22 +629,29 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let tx = Transaction::new(0, inputs, outputs)
             .map_err(|err| ControllerError::WalletError(WalletError::TransactionCreation(err)))?;
 
-        let destinations = input_utxos
-            .iter()
-            .map(|txo| {
-                get_tx_output_destination(txo, &|_| None)
-                    .ok_or_else(|| WalletError::UnsupportedTransactionOutput(Box::new(txo.clone())))
-            })
-            .collect::<Result<Vec<_>, WalletError>>()
+        let tx = if only_transaction {
+            TransactionToSign::Tx(tx)
+        } else {
+            let destinations = input_utxos
+                .iter()
+                .map(|txo| {
+                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                    })
+                })
+                .collect::<Result<Vec<_>, WalletError>>()
+                .map_err(ControllerError::WalletError)?;
+
+            let tx = PartiallySignedTransaction::new(
+                tx,
+                vec![None; num_inputs],
+                input_utxos.into_iter().map(Option::Some).collect(),
+                destinations.into_iter().map(Option::Some).collect(),
+            )
             .map_err(ControllerError::WalletError)?;
 
-        let tx = PartiallySignedTransaction::new(
-            tx,
-            vec![None; num_inputs],
-            input_utxos.into_iter().map(Option::Some).collect(),
-            destinations.into_iter().map(Option::Some).collect(),
-        )
-        .map_err(ControllerError::WalletError)?;
+            TransactionToSign::Partial(tx)
+        };
 
         Ok((tx, fees))
     }

@@ -39,7 +39,9 @@ use common::{
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, DecimalAmount, Id},
+    primitives::{
+        id::WithId, per_thousand::PerThousand, Amount, BlockHeight, DecimalAmount, Id, Idable,
+    },
 };
 pub use interface::WalletRpcServer;
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
@@ -353,7 +355,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
-    ) -> WRpcResult<(), N> {
+    ) -> WRpcResult<NewTransaction, N> {
         let tx = tx.take();
         let block_height = self.best_block().await?.height;
         check_transaction(&self.chain_config, block_height, &tx).map_err(|err| {
@@ -361,7 +363,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 WalletError::InvalidTransaction(err),
             ))
         })?;
-        self.node.submit_transaction(tx, options).await.map_err(RpcError::RpcError)
+        let tx_id = tx.transaction().get_id();
+        self.node.submit_transaction(tx, options).await.map_err(RpcError::RpcError)?;
+        Ok(NewTransaction { tx_id })
     }
 
     pub async fn sign_raw_transaction(
@@ -695,10 +699,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
-    ) -> WRpcResult<(PartiallySignedTransaction, Balances), N> {
+        only_transaction: bool,
+    ) -> WRpcResult<(TransactionToSign, Balances), N> {
         self.wallet
             .call_async(move |w| {
-                Box::pin(async move { w.compose_transaction(inputs, outputs).await })
+                Box::pin(
+                    async move { w.compose_transaction(inputs, outputs, only_transaction).await },
+                )
             })
             .await?
     }

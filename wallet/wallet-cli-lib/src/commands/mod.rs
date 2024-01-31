@@ -36,7 +36,11 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
-use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
+use wallet::{
+    account::{PartiallySignedTransaction, TransactionToSign},
+    version::get_version,
+    WalletError,
+};
 use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{
     config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
@@ -628,6 +632,9 @@ pub enum WalletCommand {
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
         #[arg(long="utxos", default_values_t = Vec::<String>::new())]
         utxos: Vec<String>,
+
+        #[arg(long = "only-transaction", default_value_t = false)]
+        only_transaction: bool,
     },
 
     /// Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again
@@ -771,11 +778,6 @@ where
             .as_mut()
             .map(|state| state.selected_account)
             .ok_or(WalletCliError::NoWallet)
-    }
-
-    pub fn tx_submitted_command() -> ConsoleCommand {
-        let status_text = "The transaction was submitted successfully";
-        ConsoleCommand::Print(status_text.to_owned())
     }
 
     pub fn new_tx_submitted_command(new_tx: NewTransaction) -> ConsoleCommand {
@@ -1209,13 +1211,18 @@ where
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
             }
 
-            WalletCommand::TransactionCompose { outputs, utxos } => {
+            WalletCommand::TransactionCompose {
+                outputs,
+                utxos,
+                only_transaction,
+            } => {
                 eprintln!("outputs: {outputs:?}");
                 eprintln!("utxos: {utxos:?}");
                 let outputs: Vec<TxOutput> = outputs
@@ -1229,11 +1236,16 @@ where
                     .collect::<Result<Vec<_>, WalletCliError<N>>>(
                 )?;
 
-                let (tx, fees) = self.wallet_rpc.compose_transaction(input_utxos, outputs).await?;
+                let (tx, fees) = self
+                    .wallet_rpc
+                    .compose_transaction(input_utxos, outputs, only_transaction)
+                    .await?;
                 let (coins, tokens) = fees.into_coins_and_tokens();
-
-                let mut output =
-                    format!("The hex encoded transaction is:\n{}\n", HexEncoded::new(tx));
+                let encoded_tx = match tx {
+                    TransactionToSign::Tx(tx) => HexEncoded::new(tx).to_string(),
+                    TransactionToSign::Partial(tx) => HexEncoded::new(tx).to_string(),
+                };
+                let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
 
                 writeln!(
                     &mut output,
