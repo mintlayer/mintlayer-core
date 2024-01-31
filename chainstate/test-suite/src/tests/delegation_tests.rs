@@ -475,7 +475,7 @@ fn delegate_staking(#[case] seed: Seed) {
 // Delegate some coins. Check the balance.
 // Decommission the pool. Check that delegation balance and data exist.
 // Spend a part of delegated coins. Check the balance.
-// Spend the rest of delegation coins. Check that the delegation is removed entirely.
+// Spend the rest of delegation coins. Check that the delegation is was not removed.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -603,7 +603,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             delegation_id,
         )
         .unwrap();
-        assert!(delegation_data.is_none());
+        assert!(delegation_data.is_some());
     });
 }
 

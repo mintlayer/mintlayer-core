@@ -311,11 +311,6 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // TODO: this should also collect all the delegations after the pool decommissioning;
-        // see mintlayer/mintlayer-core/issues/909
-        // FIXME: what if multiple spending???
-        let mut check_for_delegation_cleanup: Option<DelegationId> = None;
-
         // Process tx inputs in terms of pos accounting.
         // Spending `CreateStakePool`, `ProduceBlockFromStake` utxos or an account input
         // should result in either decommissioning a pool or spending share in accounting
@@ -329,7 +324,6 @@ where
                 TxInput::Account(outpoint) => {
                     match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
-                            check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self
                                 .spend_input_from_account(
                                     outpoint.nonce(),
@@ -426,45 +420,9 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // delete delegation if the balance is 0 and the pool has been decommissioned
-        let delete_delegation_undo = match check_for_delegation_cleanup {
-            Some(delegation_id) => {
-                let accounting_view = self.pos_accounting_adapter.accounting_delta();
-                let delegation_balance =
-                    accounting_view.get_delegation_balance(delegation_id)?.ok_or(
-                        ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                    )?;
-                if delegation_balance == Amount::ZERO {
-                    let delegation_data =
-                        accounting_view.get_delegation_data(delegation_id)?.ok_or(
-                            ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                        )?;
-                    if !accounting_view.pool_exists(*delegation_data.source_pool())? {
-                        // When deleting a delegation nonce value is preserved in the db
-                        // in case reorg happens so we don't have to restore it
-                        Some(
-                            self.pos_accounting_adapter
-                                .operations(tx_source)
-                                .delete_delegation_id(delegation_id)?,
-                        )
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
         // Store pos accounting operations undos
-        if !inputs_undos.is_empty() || !outputs_undos.is_empty() || delete_delegation_undo.is_some()
-        {
-            let tx_undos = inputs_undos
-                .into_iter()
-                .chain(outputs_undos)
-                .chain(delete_delegation_undo)
-                .collect();
+        if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
+            let tx_undos = inputs_undos.into_iter().chain(outputs_undos).collect();
             self.pos_accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
