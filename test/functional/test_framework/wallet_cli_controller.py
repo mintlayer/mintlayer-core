@@ -25,7 +25,7 @@ from tempfile import NamedTemporaryFile
 from typing import Optional, List, Tuple, Union
 
 TEN_MB = 10*2**20
-READ_TIMEOUT_SEC = 3
+READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
 
 @dataclass

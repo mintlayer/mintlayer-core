@@ -159,10 +159,9 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     // submit the tx
     test.create_genesis_wallet();
     assert_eq!(test.exec("wallet-sync"), "Success");
-    assert_eq!(
-        test.exec(&format!("node-submit-transaction {signed_tx}")),
-        "The transaction was submitted successfully"
-    );
+    assert!(test
+        .exec(&format!("node-submit-transaction {signed_tx}"))
+        .starts_with("The transaction was submitted successfully with ID"));
 
     // stake with the other acc
     assert_eq!(test.exec("account-select 1"), "Success");
