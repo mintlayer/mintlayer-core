@@ -28,6 +28,7 @@ import {
   SignatureHashType,
   encode_input_for_account_outpoint,
   estimate_transaction_size,
+  staking_pool_spend_maturity_block_count,
 } from "../pkg/wasm_crypto.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -168,6 +169,14 @@ export async function run_test() {
     console.log(`address = ${address}`);
     if (address != "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n") {
       throw new Error("Incorrect address generated");
+    }
+  }
+
+  {
+    const lock_for_blocks = staking_pool_spend_maturity_block_count(BigInt(1000));
+    console.log(`lock for blocks ${lock_for_blocks}`)
+    if (lock_for_blocks != 7200) {
+      throw new Error("Incorrect lock for blocks");
     }
   }
 

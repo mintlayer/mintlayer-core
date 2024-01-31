@@ -281,6 +281,14 @@ pub fn encode_output_transfer(
 }
 
 #[wasm_bindgen]
+pub fn staking_pool_spend_maturity_block_count(current_block_height: u64, network: Network) -> u64 {
+    let chain_config = Builder::new(network.into()).build();
+    chain_config
+        .staking_pool_spend_maturity_block_count(BlockHeight::new(current_block_height))
+        .to_int()
+}
+
+#[wasm_bindgen]
 pub fn encode_lock_for_block_count(num: u64) -> Vec<u8> {
     let output = OutputTimeLock::ForBlockCount(num);
     output.encode()
