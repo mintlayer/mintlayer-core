@@ -32,6 +32,7 @@ use utils::tap_error_log::LogError;
 use wallet::{
     account::{
         currency_grouper::Currency, transaction_list::TransactionList, DelegationData, PoolData,
+        TxInfo,
     },
     wallet::WalletPoolsFilter,
     DefaultWallet,
@@ -115,6 +116,16 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub fn pending_transactions(&self) -> Result<Vec<WithId<&'a Transaction>>, ControllerError<T>> {
         self.wallet
             .pending_transactions(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn mainchain_transactions(
+        &self,
+        destination: Option<Destination>,
+        limit: usize,
+    ) -> Result<Vec<TxInfo>, ControllerError<T>> {
+        self.wallet
+            .mainchain_transactions(self.account_index, destination, limit)
             .map_err(ControllerError::WalletError)
     }
 

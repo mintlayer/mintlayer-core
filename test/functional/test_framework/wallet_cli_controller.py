@@ -367,5 +367,10 @@ class WalletCliController:
         pattern = r'id: Id<Transaction>\{0x([^}]*)\}'
         return re.findall(pattern, output)
 
+    async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:
+        address = address if address else ''
+        output = await self._write_command(f"transaction-list-by-address {address} --limit {limit}\n")
+        return output.split('\n')[3:][::2]
+
     async def abandon_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-abandon {tx_id}\n")

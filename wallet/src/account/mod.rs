@@ -80,7 +80,7 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, PoolData, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -1802,6 +1802,14 @@ impl Account {
 
     pub fn pending_transactions(&self) -> Vec<WithId<&Transaction>> {
         self.output_cache.pending_transactions()
+    }
+
+    pub fn mainchain_transactions(
+        &self,
+        destination: Option<Destination>,
+        limit: usize,
+    ) -> Vec<TxInfo> {
+        self.output_cache.mainchain_transactions(destination, limit)
     }
 
     pub fn abandon_transaction(

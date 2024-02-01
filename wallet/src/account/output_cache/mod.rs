@@ -14,12 +14,14 @@
 // limitations under the License.
 
 use std::{
+    cmp::Reverse,
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     ops::Add,
 };
 
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
@@ -30,7 +32,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id},
+    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -44,9 +46,25 @@ use wallet_types::{
     AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{WalletError, WalletResult};
+use crate::{get_tx_output_destination, WalletError, WalletResult};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
+
+pub struct TxInfo {
+    pub id: Id<Transaction>,
+    pub height: BlockHeight,
+    pub timestamp: BlockTimestamp,
+}
+
+impl TxInfo {
+    fn new(id: Id<Transaction>, height: BlockHeight, timestamp: BlockTimestamp) -> Self {
+        Self {
+            id,
+            height,
+            timestamp,
+        }
+    }
+}
 
 pub struct DelegationData {
     pub pool_id: PoolId,
@@ -1171,6 +1189,59 @@ impl OutputCache {
                 },
             })
             .collect()
+    }
+
+    pub fn mainchain_transactions(
+        &self,
+        destination: Option<Destination>,
+        limit: usize,
+    ) -> Vec<TxInfo> {
+        let mut txs: Vec<&WalletTx> = self.txs.values().collect();
+        txs.sort_by_key(|tx| Reverse((tx.state().block_height(), tx.state().block_order_index())));
+
+        txs.iter()
+            .filter_map(|tx| match tx {
+                WalletTx::Block(_) => None,
+                WalletTx::Tx(tx) => match tx.state() {
+                    TxState::Confirmed(block_height, timestamp, _) => {
+                        let tx_with_id = tx.get_transaction_with_id();
+                        if let Some(dest) = &destination {
+                            (self.destination_in_tx_outputs(&tx_with_id, dest)
+                                || self.destination_in_tx_inputs(&tx_with_id, dest))
+                            .then_some(TxInfo::new(tx_with_id.get_id(), *block_height, *timestamp))
+                        } else {
+                            Some(TxInfo::new(tx_with_id.get_id(), *block_height, *timestamp))
+                        }
+                    }
+                    TxState::Inactive(_)
+                    | TxState::Conflicted(_)
+                    | TxState::InMempool(_)
+                    | TxState::Abandoned => None,
+                },
+            })
+            .take(limit)
+            .collect()
+    }
+
+    /// Returns true if the destination is found in the transaction's inputs
+    fn destination_in_tx_inputs(&self, tx: &WithId<&Transaction>, dest: &Destination) -> bool {
+        tx.inputs().iter().any(|inp| match inp {
+            TxInput::Utxo(utxo) => self
+                .txs
+                .get(&utxo.source_id())
+                .and_then(|tx| tx.outputs().get(utxo.output_index() as usize))
+                .and_then(|txo| get_tx_output_destination(txo, &|pool_id| self.pools.get(pool_id)))
+                .map_or(false, |output_dest| &output_dest == dest),
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+        })
+    }
+
+    /// Returns true if the destination is found in the transaction's outputs
+    fn destination_in_tx_outputs(&self, tx: &WithId<&Transaction>, dest: &Destination) -> bool {
+        tx.outputs().iter().any(|txo| {
+            get_tx_output_destination(txo, &|pool_id| self.pools.get(pool_id))
+                .map_or(false, |output_dest| &output_dest == dest)
+        })
     }
 
     /// Mark a transaction and its descendants as abandoned
