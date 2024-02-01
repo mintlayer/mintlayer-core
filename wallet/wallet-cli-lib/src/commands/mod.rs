@@ -26,10 +26,11 @@ use clap::Parser;
 use common::{
     address::Address,
     chain::{
+        output_value::OutputValue,
         tokens::{Metadata, TokenCreator},
         Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{BlockHeight, DecimalAmount, Id, H256},
+    primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
@@ -1032,6 +1033,10 @@ where
 
                 let output_str = match result.into_signed_tx() {
                     Ok(signed_tx) => {
+                        let summary = transaction_summary(
+                            signed_tx.transaction(),
+                            self.wallet_rpc.chain_config(),
+                        );
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
                         let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())
@@ -1042,13 +1047,13 @@ where
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                             Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
                         ),
                             Err(_) => format!(
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Transaction is too long to be put into a Qr code"
+                             Transaction is too long to be put into a Qr code\n\n{summary}"
                         ),
                         }
                     }
@@ -1769,4 +1774,48 @@ where
 fn id_to_hex_string(id: H256) -> String {
     let hex_string = format!("{:?}", id);
     hex_string.strip_prefix("0x").unwrap_or(&hex_string).to_string()
+}
+
+fn transaction_summary(tx: &Transaction, chain_config: &ChainConfig) -> String {
+    let mut result = format!(
+        "Transaction summary:\n\
+        Transaction id: {}\n\
+        --- BEGIN OF INPUTS ---\n\
+        ",
+        id_to_hex_string(tx.get_id().to_hash())
+    );
+
+    for input in tx.inputs() {
+        writeln!(&mut result, "{input:?}").expect("Writing to a memory buffer should not fail");
+    }
+
+    writeln!(
+        &mut result,
+        "--- END OF INPUTS ---\n--- BEGIN OF OUTPUTS ---"
+    )
+    .expect("Writing to a memory buffer should not fail");
+
+    for output in tx.outputs() {
+        match output {
+            TxOutput::Transfer(val, address) => {
+                let amount_str = match val {
+                    OutputValue::Coin(amount) => {
+                        amount.into_fixedpoint_str(chain_config.coin_decimals())
+                    }
+                    _ => format!("{val:?}"),
+                };
+                writeln!(
+                    &mut result,
+                    "transfer({}, {amount_str})",
+                    Address::new(chain_config, address).expect("addressable")
+                )
+            }
+            _ => writeln!(&mut result, "{:?}", output),
+        }
+        .expect("Writing to a memory buffer should not fail");
+    }
+    writeln!(&mut result, "--- END OF OUTPUTS ---")
+        .expect("Writing to a memory buffer should not fail");
+
+    result
 }
