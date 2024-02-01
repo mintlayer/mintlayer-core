@@ -56,7 +56,7 @@ use self::{
     tokens_accounting_undo_cache::{
         TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
     },
-    utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
+    utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
 pub use reward_distribution::{distribute_pos_reward, RewardDistributionError};
@@ -85,7 +85,7 @@ use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 #[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     utxo_cache: ConsumedUtxoCache,
-    utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
+    utxo_block_undo: BTreeMap<TransactionSource, CachedUtxoBlockUndoOp>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
     accounting_delta: PoSAccountingDeltaData,
     pos_accounting_delta_undo: BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry>,
@@ -125,6 +125,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
     TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
 {
     pub fn new(storage: S, chain_config: C) -> Self {
+        println!("new verifier");
         let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
@@ -166,6 +167,7 @@ where
         // TODO: both "expect"s in this function may fire when exiting the node-gui app;
         // get rid of them and return a proper Result.
         // See https://github.com/mintlayer/mintlayer-core/issues/1221
+        println!("new generic verifier");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block");
@@ -203,6 +205,7 @@ where
         &PoSAccountingDelta<A>,
         &TokensAccountingCache<T>,
     > {
+        println!("deriving verifier");
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -769,6 +772,8 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
+        println!("connect_transaction {:?}", tx.transaction().get_id());
+
         check_transaction::check_transaction(
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
@@ -832,9 +837,17 @@ where
             .map_err(ConnectTransactionError::from)?;
 
         // save spent utxos for undo
-        self.utxo_block_undo
-            .get_or_create_block_undo(&TransactionSource::from(tx_source))
-            .insert_tx_undo(tx.transaction().get_id(), tx_undo)?;
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
+        self.utxo_block_undo.add_tx_undo(
+            TransactionSource::from(tx_source),
+            block_undo_fetcher,
+            tx.transaction().get_id(),
+            tx_undo,
+        )?;
 
         Ok(fee)
     }
@@ -845,6 +858,8 @@ where
         reward_transactable: BlockRewardTransactable,
         total_fees: Fee,
     ) -> Result<(), ConnectTransactionError> {
+        println!("connect_block_reward {:?}", block_index.block_id());
+
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(_inputs) = reward_transactable.inputs() {
             // verify input signatures
@@ -871,9 +886,16 @@ where
 
         if let Some(reward_undo) = reward_undo {
             // save spent utxos for undo
-            self.utxo_block_undo
-                .get_or_create_block_undo(&TransactionSource::Chain(block_id))
-                .set_block_reward_undo(reward_undo);
+            let block_undo_fetcher = |id: Id<Block>| {
+                self.storage
+                    .get_undo_data(id)
+                    .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+            };
+            self.utxo_block_undo.add_reward_undo(
+                TransactionSource::Chain(block_id),
+                block_undo_fetcher,
+                reward_undo,
+            )?;
         }
 
         match block_index.block_header().consensus_data() {
@@ -922,6 +944,7 @@ where
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
+        println!("can_disconnect_transaction {:?}", tx_id);
         let block_undo_fetcher = |id: Id<Block>| {
             self.storage
                 .get_undo_data(id)
@@ -949,14 +972,14 @@ where
                 } else {
                     Ok(!self
                         .utxo_block_undo
-                        .read_block_undo(tx_source, block_undo_fetcher)?
-                        .has_children_of(tx_id))
+                        .get_block_undo(tx_source, block_undo_fetcher)?
+                        .map_or(false, |undo| undo.has_children_of(tx_id)))
                 }
             }
             TransactionSource::Mempool => Ok(!self
                 .utxo_block_undo
-                .read_block_undo(tx_source, block_undo_fetcher)?
-                .has_children_of(tx_id)),
+                .get_block_undo(tx_source, block_undo_fetcher)?
+                .map_or(false, |undo| undo.has_children_of(tx_id))),
         }
     }
 
@@ -965,6 +988,8 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
+        println!("disconnect_transaction {:?}", tx.transaction().get_id());
+
         let block_undo_fetcher = |id: Id<Block>| {
             self.storage
                 .get_undo_data(id)

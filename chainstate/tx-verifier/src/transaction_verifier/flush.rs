@@ -76,20 +76,11 @@ where
     storage.batch_write(consumed.utxo_cache)?;
 
     // flush utxo block undo
-    for (tx_source, entry) in consumed.utxo_block_undo {
-        if entry.is_fresh {
-            storage.set_utxo_undo_data(tx_source, &entry.undo)?;
-        } else if entry.undo.is_empty() {
-            storage.del_utxo_undo_data(tx_source)?;
-        } else {
-            match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    panic!("BlockUndo utxo entries were not used up completely while disconnecting a block {}", block_id)
-                }
-                TransactionSource::Mempool => {
-                    /* it's ok for the mempool to use tx undos partially */
-                }
-            }
+    for (tx_source, op) in consumed.utxo_block_undo {
+        match op {
+            CachedOperation::Write(undo) => storage.set_utxo_undo_data(tx_source, &undo)?,
+            CachedOperation::Read(_) => (),
+            CachedOperation::Erase => storage.del_utxo_undo_data(tx_source)?,
         }
     }
 

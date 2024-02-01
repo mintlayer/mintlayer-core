@@ -33,6 +33,8 @@ use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
+// FIXME: tests that emulates Disposable strategy
+
 // Create the following hierarchy:
 //
 // TransactionVerifier -> TransactionVerifier -> MockStore
@@ -104,10 +106,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        UtxosBlockUndoEntry {
-            undo: block_1_undo,
-            is_fresh: true,
-        },
+        CachedUtxoBlockUndoOp::Write(block_1_undo),
     )]));
 
     let verifier2 = {
@@ -115,10 +114,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            UtxosBlockUndoEntry {
-                undo: block_2_undo,
-                is_fresh: true,
-            },
+            CachedUtxoBlockUndoOp::Write(block_2_undo),
         )]));
         verifier
     };
@@ -234,11 +230,9 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
 
     let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
     let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let block_1_undo: UtxosBlockUndo = Default::default();
 
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
     let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let block_2_undo: UtxosBlockUndo = Default::default();
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -277,10 +271,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
     verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        UtxosBlockUndoEntry {
-            undo: block_1_undo,
-            is_fresh: false,
-        },
+        CachedUtxoBlockUndoOp::Erase,
     )]));
 
     let verifier2 = {
@@ -288,10 +279,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         verifier.utxo_cache.spend_utxo(&outpoint2).unwrap();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            UtxosBlockUndoEntry {
-                undo: block_2_undo,
-                is_fresh: false,
-            },
+            CachedUtxoBlockUndoOp::Erase,
         )]));
         verifier
     };
@@ -494,20 +482,14 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
-        UtxosBlockUndoEntry {
-            undo: block_undo_1,
-            is_fresh: true,
-        },
+        CachedUtxoBlockUndoOp::Write(block_undo_1),
     )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_id),
-            UtxosBlockUndoEntry {
-                undo: block_undo_2,
-                is_fresh: true,
-            },
+            CachedUtxoBlockUndoOp::Write(block_undo_2),
         )]));
         verifier
     };
@@ -1389,4 +1371,137 @@ fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_set_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
+    let tx_1_undo = UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]);
+
+    let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
+    let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
+    let tx_2_undo = UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]);
+
+    let reward_undo = UtxosBlockRewardUndo::new(vec![create_utxo(&mut rng, 100).1]);
+
+    let expected_block_undo = UtxosBlockUndo::new(
+        Some(reward_undo.clone()),
+        BTreeMap::from([(tx_1_id, tx_1_undo.clone()), (tx_2_id, tx_2_undo.clone())]),
+    )
+    .unwrap();
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+    store
+        .expect_set_utxo_undo_data()
+        .with(
+            eq(TransactionSource::Chain(block_id)),
+            eq(expected_block_undo),
+        )
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier_base = TransactionVerifier::new(&store, &chain_config);
+
+    let mut verifier_tx_1 = verifier_base.derive_child();
+    verifier_tx_1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
+    verifier_tx_1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Write(
+            UtxosBlockUndo::new(None, BTreeMap::from([(tx_1_id, tx_1_undo)])).unwrap(),
+        ),
+    )]));
+    let consumed_verifier = verifier_tx_1.consume().unwrap();
+    flush::flush_to_storage(&mut verifier_base, consumed_verifier).unwrap();
+
+    let mut verifier_tx_2 = verifier_base.derive_child();
+    verifier_tx_2.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
+    verifier_tx_2.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Write(
+            UtxosBlockUndo::new(None, BTreeMap::from([(tx_2_id, tx_2_undo)])).unwrap(),
+        ),
+    )]));
+    let consumed_verifier = verifier_tx_2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier_base, consumed_verifier).unwrap();
+
+    let mut verifier_reward = verifier_base.derive_child();
+    verifier_reward.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Write(
+            UtxosBlockUndo::new(Some(reward_undo), BTreeMap::new()).unwrap(),
+        ),
+    )]));
+    let consumed_verifier = verifier_reward.consume().unwrap();
+    flush::flush_to_storage(&mut verifier_base, consumed_verifier).unwrap();
+
+    let consumed_verifier = verifier_base.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_del_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_del_utxo_undo_data().times(1).return_const(Ok(()));
+
+    let mut verifier_base = TransactionVerifier::new(&store, &chain_config);
+
+    let mut verifier_tx_1 = verifier_base.derive_child();
+    verifier_tx_1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
+    verifier_tx_1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Erase,
+    )]));
+    let consumed_verifier = verifier_tx_1.consume().unwrap();
+    flush::flush_to_storage(&mut verifier_base, consumed_verifier).unwrap();
+
+    let mut verifier_tx_2 = verifier_base.derive_child();
+    verifier_tx_2.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
+    verifier_tx_2.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Erase,
+    )]));
+    let consumed_verifier = verifier_tx_2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier_base, consumed_verifier).unwrap();
+
+    let consumed_verifier = verifier_base.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier).unwrap();
 }

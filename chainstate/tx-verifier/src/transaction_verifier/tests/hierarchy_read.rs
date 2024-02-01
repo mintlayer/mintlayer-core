@@ -162,10 +162,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
-            UtxosBlockUndoEntry {
-                undo: block_undo_1.clone(),
-                is_fresh: true,
-            },
+            CachedUtxoBlockUndoOp::Write(block_undo_1.clone()),
         )]));
         verifier
     };
@@ -174,10 +171,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_2),
-            UtxosBlockUndoEntry {
-                undo: block_undo_2.clone(),
-                is_fresh: true,
-            },
+            CachedUtxoBlockUndoOp::Write(block_undo_2.clone()),
         )]));
         verifier
     };

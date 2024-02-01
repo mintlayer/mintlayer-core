@@ -204,8 +204,8 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-            Err(ConnectTransactionError::TxUndoWithDependency(
-                tx1.transaction().get_id()
+            Err(ConnectTransactionError::UtxoBlockUndoError(
+                utxo::UtxosBlockUndoError::TxUndoWithDependency(tx1.transaction().get_id())
             ))
         );
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();

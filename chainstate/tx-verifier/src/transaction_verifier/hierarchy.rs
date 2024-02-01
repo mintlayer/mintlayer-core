@@ -142,7 +142,12 @@ where
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
+            Some(op) => match op {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    Ok(Some(undo.clone()))
+                }
+                CachedOperation::Erase => Ok(None),
+            },
             None => self.storage.get_undo_data(id),
         }
     }

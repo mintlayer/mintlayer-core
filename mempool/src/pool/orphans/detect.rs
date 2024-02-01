@@ -44,7 +44,6 @@ impl OrphanType {
             | CTE::MissingBlockUndo(_)
             | CTE::MissingBlockRewardUndo(_)
             | CTE::MissingMempoolTxsUndo
-            | CTE::TxUndoWithDependency(_)
             | CTE::AttemptToPrintMoney(_, _)
             | CTE::BlockRewardInputOutputMismatch(_, _)
             | CTE::TxFeeTotalCalcFailed(_, _)

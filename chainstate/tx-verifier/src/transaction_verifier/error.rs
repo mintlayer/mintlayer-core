@@ -56,8 +56,6 @@ pub enum ConnectTransactionError {
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("While disconnecting a mempool tx, undo info is missing")]
     MissingMempoolTxsUndo,
-    #[error("Trying to take TxUndo for a tx `{0}` with a dependency")]
-    TxUndoWithDependency(Id<Transaction>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Block reward inputs and outputs value mismatch (total inputs: `{0:?}` vs total outputs `{1:?}`")]

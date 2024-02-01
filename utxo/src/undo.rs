@@ -30,6 +30,8 @@ use thiserror::Error;
 pub enum UtxosBlockUndoError {
     #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
     UndoAlreadyExists(Id<Transaction>),
+    #[error("Trying to take TxUndo for a tx `{0}` with a dependency")]
+    TxUndoWithDependency(Id<Transaction>),
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
@@ -174,7 +176,10 @@ impl UtxosBlockUndo {
             .collect()
     }
 
-    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<UtxosTxUndo> {
+    pub fn take_tx_undo(
+        &mut self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<UtxosTxUndo>, UtxosBlockUndoError> {
         if !self.has_children_of(tx_id) {
             // If not this tx can be taken and returned.
             // But first, remove itself as a dependency of others.
@@ -185,9 +190,9 @@ impl UtxosBlockUndo {
                 self.parent_child_dependencies.remove(&(*id2, *id1));
             });
 
-            self.tx_undos.remove(tx_id)
+            Ok(self.tx_undos.remove(tx_id))
         } else {
-            None
+            Err(UtxosBlockUndoError::TxUndoWithDependency(*tx_id))
         }
     }
 
@@ -202,44 +207,6 @@ impl UtxosBlockUndo {
 
     pub fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
         self.reward_undo.take()
-    }
-
-    pub fn combine(&mut self, other: UtxosBlockUndo) -> Result<(), UtxosBlockUndoError> {
-        // combine reward
-        if let Some(reward_undo) = other.reward_undo {
-            if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
-                self.reward_undo = Some(Default::default());
-            }
-            reward_undo.0.into_iter().for_each(|u| {
-                self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
-            })
-        }
-
-        // combine utxo
-        other
-            .tx_undos
-            .into_iter()
-            .try_for_each(|(id, u)| match self.tx_undos.entry(id) {
-                Entry::Vacant(e) => {
-                    e.insert(u);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(UtxosBlockUndoError::UndoAlreadyExists(id)),
-            })?;
-
-        // combine dependencies
-        other.child_parent_dependencies.into_iter().try_for_each(|v| {
-            if !self.child_parent_dependencies.insert(v) {
-                return Err(UtxosBlockUndoError::UndoAlreadyExists(v.0));
-            }
-            Ok(())
-        })?;
-        other.parent_child_dependencies.into_iter().try_for_each(|v| {
-            if !self.parent_child_dependencies.insert(v) {
-                return Err(UtxosBlockUndoError::UndoAlreadyExists(v.0));
-            }
-            Ok(())
-        })
     }
 }
 
@@ -340,69 +307,21 @@ pub mod test {
         blockundo.insert_tx_undo(tx_0_id, tx_undo0).unwrap();
         blockundo.insert_tx_undo(tx_1_id, tx_undo1).unwrap();
 
-        assert!(blockundo.take_tx_undo(&tx_0_id).is_none());
-        assert_eq!(blockundo.take_tx_undo(&tx_1_id).unwrap(), expected_tx_undo1);
-        assert_eq!(blockundo.take_tx_undo(&tx_0_id).unwrap(), expected_tx_undo0);
+        assert_eq!(
+            blockundo.take_tx_undo(&tx_0_id).unwrap_err(),
+            UtxosBlockUndoError::TxUndoWithDependency(tx_0_id)
+        );
+        assert_eq!(
+            blockundo.take_tx_undo(&tx_1_id).unwrap(),
+            Some(expected_tx_undo1)
+        );
+        assert_eq!(
+            blockundo.take_tx_undo(&tx_0_id).unwrap(),
+            Some(expected_tx_undo0)
+        );
 
         assert!(blockundo.tx_undos.is_empty());
         assert!(blockundo.child_parent_dependencies.is_empty());
         assert!(blockundo.parent_child_dependencies.is_empty());
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn combine_test(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let (reward_utxo1, _) = create_utxo(&mut rng, 1);
-        let (reward_utxo2, _) = create_utxo(&mut rng, 2);
-
-        let (utxo1, _) = create_utxo(&mut rng, 3);
-        let tx_id_1: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let (utxo2, _) = create_utxo(&mut rng, 4);
-        let tx_id_2: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-
-        let dep_tx_id_1 = Id::<Transaction>::new(H256::random_using(&mut rng));
-        let source_id_1 = OutPointSourceId::Transaction(dep_tx_id_1);
-        let dep_tx_id_2 = Id::<Transaction>::new(H256::random_using(&mut rng));
-        let source_id_2 = OutPointSourceId::Transaction(dep_tx_id_2);
-
-        let mut block_undo_1 = UtxosBlockUndo::new(
-            Some(UtxosBlockRewardUndo::new(vec![reward_utxo1.clone()])),
-            BTreeMap::from([(
-                tx_id_1,
-                UtxosTxUndoWithSources::new(vec![Some(utxo1.clone())], vec![source_id_1]),
-            )]),
-        )
-        .unwrap();
-
-        let block_undo_2 = UtxosBlockUndo::new(
-            Some(UtxosBlockRewardUndo::new(vec![reward_utxo2.clone()])),
-            BTreeMap::from([(
-                tx_id_2,
-                UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![source_id_2]),
-            )]),
-        )
-        .unwrap();
-
-        let expected_block_undo = UtxosBlockUndo {
-            reward_undo: Some(UtxosBlockRewardUndo::new(vec![reward_utxo1, reward_utxo2])),
-            tx_undos: BTreeMap::from([
-                (tx_id_1, UtxosTxUndo(vec![Some(utxo1)])),
-                (tx_id_2, UtxosTxUndo(vec![Some(utxo2)])),
-            ]),
-            parent_child_dependencies: BTreeSet::from([
-                (dep_tx_id_1, tx_id_1),
-                (dep_tx_id_2, tx_id_2),
-            ]),
-            child_parent_dependencies: BTreeSet::from([
-                (tx_id_1, dep_tx_id_1),
-                (tx_id_2, dep_tx_id_2),
-            ]),
-        };
-
-        block_undo_1.combine(block_undo_2).unwrap();
-        assert_eq!(block_undo_1, expected_block_undo);
     }
 }

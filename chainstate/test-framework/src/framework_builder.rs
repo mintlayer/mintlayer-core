@@ -70,6 +70,7 @@ impl TestFrameworkBuilder {
             2 => TxVerificationStrategy::Randomized(Seed::from_u64(rng.next_u64())),
             _ => unreachable!(),
         };
+        let tx_verification_strategy = TxVerificationStrategy::Default;
 
         TestFrameworkBuilder {
             chain_config,

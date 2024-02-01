@@ -370,6 +370,127 @@ fn reorg_store_coin(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn r2eorg_store_coin_2(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let storage = Store::new_empty().unwrap();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_tx_verification_strategy(
+                chainstate_test_framework::TxVerificationStrategy::Disposable,
+            )
+            .build();
+        let genesis_id = tf.genesis().get_id();
+
+        // create block
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(300)),
+                anyonecanspend_address(),
+            ))
+            .build();
+        let tx_1_utxo_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+            0,
+        );
+
+        let tx_1_2 = TransactionBuilder::new()
+            .add_input(tx_1_utxo_outpoint.clone().into(), empty_witness(&mut rng))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(300)),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        let block_1 = tf.make_block_builder().with_transactions(vec![tx_1, tx_1_2]).build();
+        let block_1_id = block_1.get_id();
+        tf.process_block(block_1, BlockSource::Local).unwrap();
+
+        // create parallel chain
+        let tx_2_output = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(200)),
+            anyonecanspend_address(),
+        );
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(tx_2_output)
+            .build();
+        let tx_2_id = tx_2.transaction().get_id();
+        let tx_2_utxo_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
+
+        let block_2 = tf
+            .make_block_builder()
+            .add_transaction(tx_2)
+            .with_parent(genesis_id.into())
+            .build();
+        let block_2_id = block_2.get_id();
+        tf.process_block(block_2, BlockSource::Local).unwrap();
+
+        // produce one more block to cause reorg
+        let tx_3_output = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            anyonecanspend_address(),
+        );
+        let tx_3 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_2_id), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(tx_3_output.clone())
+            .build();
+        let tx_3_id = tx_3.transaction().get_id();
+        let tx_3_utxo_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
+
+        let block_3 = tf
+            .make_block_builder()
+            .add_transaction(tx_3)
+            .with_parent(block_2_id.into())
+            .build();
+        let block_3_id = block_3.get_id();
+        tf.process_block(block_3, BlockSource::Local).unwrap();
+
+        // best block has changed
+        let db_tx = storage.transaction_ro().unwrap();
+        assert_eq!(
+            db_tx.get_best_block_for_utxos().expect("ok"),
+            Id::<GenBlock>::from(block_3_id)
+        );
+        assert_eq!(
+            db_tx.get_best_block_id().expect("ok").expect("some"),
+            Id::<GenBlock>::from(block_3_id)
+        );
+
+        // utxo from block_1 was deleted
+        assert_eq!(db_tx.get_utxo(&tx_1_utxo_outpoint).expect("ok"), None);
+        assert_eq!(db_tx.get_undo_data(block_1_id).expect("ok"), None);
+        // utxo from block_2 was deleted
+        assert_eq!(db_tx.get_utxo(&tx_2_utxo_outpoint).expect("ok"), None);
+        assert_eq!(
+            db_tx.get_undo_data(block_2_id).expect("ok").expect("some").tx_undos().len(),
+            1
+        );
+        // utxo from block_3 is stored
+        assert_eq!(
+            db_tx.get_utxo(&tx_3_utxo_outpoint).expect("ok").expect("some").output(),
+            &tx_3_output
+        );
+        assert_eq!(
+            db_tx.get_undo_data(block_3_id).expect("ok").expect("some").tx_undos().len(),
+            1
+        );
+    });
+}
+
 // Process a tx with a nft issuance. Check that new token and tx index are stored, best block is updated.
 #[rstest]
 #[trace]
