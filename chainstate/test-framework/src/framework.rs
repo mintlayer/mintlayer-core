@@ -178,6 +178,39 @@ impl TestFramework {
         result
     }
 
+    /// Create and process a given amount of blocks. Return the ids of the produced blocks.
+    ///
+    /// Each block contains a single transaction that spends a random amount from the previous
+    /// block outputs. Each block has an incremented timestamp
+    pub fn create_chain_return_ids_with_advancing_time(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks_count: usize,
+        rng: &mut impl Rng,
+    ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+        let mut prev_block_id = *parent_block;
+        let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+            let mut ids = Vec::new();
+            let target_block_time = self.chain_config().target_block_spacing();
+            for _ in 0..blocks_count {
+                self.progress_time_seconds_since_epoch(target_block_time.as_secs());
+                let block = self
+                    .make_block_builder()
+                    .add_test_transaction_with_parent(prev_block_id, rng)
+                    .with_parent(prev_block_id)
+                    .build();
+                prev_block_id = block.get_id().into();
+                ids.push(prev_block_id);
+                self.do_process_block(block, BlockSource::Local)?;
+            }
+
+            Ok(ids)
+        }();
+
+        self.refresh_block_indices()?;
+        result
+    }
+
     /// Same as `create_chain_return_ids`, but only return the id of the last produced block.
     pub fn create_chain(
         &mut self,

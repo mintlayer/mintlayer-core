@@ -631,7 +631,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r"
                 SELECT COALESCE(MIN(block_height), 0), COALESCE(MAX(block_height), 0)
                 FROM ml_blocks
-                WHERE block_timestamp BETWEEN $1 AND $2 AND block_height != NULL
+                WHERE block_timestamp BETWEEN $1 AND $2 AND block_height IS NOT NULL
                 ;",
                 &[&from, &to],
             )
