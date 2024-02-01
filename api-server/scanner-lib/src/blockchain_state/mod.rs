@@ -1003,7 +1003,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 increase_address_amount(
                     db_tx,
                     &address,
-                    &stake_pool_data.value(),
+                    &stake_pool_data.pledge(),
                     CoinOrTokenId::Coin,
                     block_height,
                 )

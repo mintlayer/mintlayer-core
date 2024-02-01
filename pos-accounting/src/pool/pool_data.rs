@@ -99,7 +99,7 @@ impl From<StakePoolData> for PoolData {
     fn from(stake_data: StakePoolData) -> Self {
         Self {
             decommission_destination: stake_data.decommission_key().clone(),
-            pledge_amount: stake_data.value(),
+            pledge_amount: stake_data.pledge(),
             staker_rewards: Amount::ZERO,
             vrf_public_key: stake_data.vrf_public_key().clone(),
             margin_ratio_per_thousand: stake_data.margin_ratio_per_thousand(),

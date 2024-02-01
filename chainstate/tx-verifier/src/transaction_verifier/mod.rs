@@ -363,7 +363,7 @@ where
                     Some(input_utxo_outpoint) => {
                         let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
                         let res = if expected_pool_id == *pool_id {
-                            if data.value() >= self.chain_config.as_ref().min_stake_pool_pledge() {
+                            if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter
                                     .operations(tx_source)
                                     .create_pool(*pool_id, data.as_ref().clone().into())
@@ -371,7 +371,7 @@ where
                             } else {
                                 Err(ConnectTransactionError::NotEnoughPledgeToCreateStakePool(
                                     tx.get_id(),
-                                    data.value(),
+                                    data.pledge(),
                                     self.chain_config.as_ref().min_stake_pool_pledge(),
                                 ))
                             }

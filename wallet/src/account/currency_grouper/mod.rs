@@ -44,7 +44,7 @@ pub(crate) fn group_outputs<T, Grouped: Clone>(
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 v.clone()
             }
-            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::CreateDelegationId(_, _)
             | TxOutput::IssueFungibleToken(_)
@@ -93,7 +93,7 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 v.clone()
             }
-            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::IssueFungibleToken(_) => {
                 OutputValue::Coin(chain_config.fungible_token_issuance_fee())
@@ -142,7 +142,7 @@ pub fn group_utxos_for_input<T, Grouped: Clone>(
         // Get the supported output value
         let output_value = match get_tx_output(&output) {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
-            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
             TxOutput::IssueNft(token_id, _, _) => {
                 OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
             }

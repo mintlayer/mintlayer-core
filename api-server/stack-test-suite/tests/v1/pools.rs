@@ -231,7 +231,7 @@ async fn ok(#[case] seed: Seed) {
             );
             assert_eq!(
                 json.get("staker_balance").unwrap(),
-                &serde_json::json!(amount_to_json(pool_data.value()))
+                &serde_json::json!(amount_to_json(pool_data.pledge()))
             );
 
             assert_eq!(
@@ -253,7 +253,7 @@ async fn ok(#[case] seed: Seed) {
     }
 
     {
-        pools.sort_by_key(|x| Reverse(x.1.value()));
+        pools.sort_by_key(|x| Reverse(x.1.pledge()));
         let items = pools.len();
         let url = format!("/api/v1/pool?sort=by_pledge&items={items}&offset=0");
         // Given that the listener port is open, this will block until a
@@ -283,7 +283,7 @@ async fn ok(#[case] seed: Seed) {
             );
             assert_eq!(
                 json.get("staker_balance").unwrap(),
-                &serde_json::json!(amount_to_json(pool_data.value()))
+                &serde_json::json!(amount_to_json(pool_data.pledge()))
             );
 
             assert_eq!(

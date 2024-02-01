@@ -213,7 +213,7 @@ async fn ok(#[case] seed: Seed) {
         );
         assert_eq!(
             body.get("staker_balance").unwrap(),
-            &serde_json::json!(amount_to_json(pool_data.value()))
+            &serde_json::json!(amount_to_json(pool_data.pledge()))
         );
 
         assert_eq!(
