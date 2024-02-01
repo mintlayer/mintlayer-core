@@ -216,7 +216,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidAddress)?;
 
-        let publick_key = self
+        let public_key = self
             .wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -224,7 +224,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await??;
-        Ok(PublicKeyInfo::new(publick_key, &self.chain_config))
+        Ok(PublicKeyInfo::new(public_key, &self.chain_config))
     }
 
     pub async fn get_legacy_vrf_public_key(

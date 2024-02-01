@@ -77,7 +77,7 @@ impl SignedArbitraryMessage {
         challenge: &H256,
     ) -> Result<(), DestinationSigError> {
         match outpoint_destination {
-            Destination::Address(addr) => {
+            Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
                 verify_address_spending(addr, &sig_components, challenge)?
             }
@@ -109,7 +109,7 @@ impl SignedArbitraryMessage {
         let challenge = produce_message_challenge(message);
         let signature =
             match outpoint_destination {
-                Destination::Address(addr) => {
+                Destination::PublicKeyHash(addr) => {
                     let sig = sign_address_spending(private_key, addr, &challenge)?;
                     sig.encode()
                 }

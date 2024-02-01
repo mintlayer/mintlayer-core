@@ -1069,13 +1069,13 @@ where
 
                         match qr_code_string {
                             Ok(qr_code_string) => format!(
-                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                            "The transaction has been fully signed and is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
                         ),
                             Err(_) => format!(
-                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                            "The transaction has been fully signed and is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
                              Transaction is too long to be put into a Qr code\n\n{summary}"

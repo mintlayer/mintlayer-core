@@ -53,8 +53,8 @@ fn sign_verify(#[case] seed: Seed) {
         raw_signature: random_raw_sig,
     };
 
-    // Destination::Address
-    let destination = Destination::Address(PublicKeyHash::from(&public_key));
+    // Destination::PublicKeyHash
+    let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
     let sig =
         SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
             .unwrap();
