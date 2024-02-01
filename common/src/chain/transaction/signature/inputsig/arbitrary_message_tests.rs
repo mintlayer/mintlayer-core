@@ -26,7 +26,10 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     random::Rng,
 };
-use test_utils::random::Seed;
+use test_utils::{
+    assert_matches,
+    random::{flip_random_bit, with_random_bit_flipped, Seed},
+};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
@@ -36,10 +39,36 @@ use crate::{
 
 use super::*;
 
+// Sign and verify a message using supported destinations.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_verify(#[case] seed: Seed) {
+fn sign_verify_supported_destinations(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_testnet();
+
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message_challenge = produce_message_challenge(&message);
+
+    let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    let destination_pub_key = Destination::PublicKey(public_key);
+
+    for dest in [&destination_addr, &destination_pub_key] {
+        let sig = SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
+            .unwrap();
+        let ver_result = sig.verify_signature(&chain_config, dest, &message_challenge);
+        assert_eq!(ver_result, Ok(()));
+    }
+}
+
+// Try to sign and verify using a destination that is unsupported for signing and/or verification.
+// Specific errors should be produced in each case.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_verify_unsupported_destination(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = chain::config::create_testnet();
@@ -52,20 +81,6 @@ fn sign_verify(#[case] seed: Seed) {
     let random_sig = SignedArbitraryMessage {
         raw_signature: random_raw_sig,
     };
-
-    // Destination::PublicKeyHash
-    let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
-    let sig =
-        SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
-            .unwrap();
-    sig.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
-
-    // Destination::PublicKey
-    let destination = Destination::PublicKey(public_key.clone());
-    let sig =
-        SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
-            .unwrap();
-    sig.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
 
     // Destination::ClassicMultisig can't be used by produce_uniparty_signature.
     let destination = Destination::ClassicMultisig(PublicKeyHash::from(&public_key));
@@ -89,8 +104,7 @@ fn sign_verify(#[case] seed: Seed) {
         .unwrap_err();
     assert_eq!(ver_err, DestinationSigError::Unsupported);
 
-    // Destination::AnyoneCanSpend makes no sense for this functionality and should produce
-    // a specific error.
+    // Destination::AnyoneCanSpend makes no sense for this functionality.
     let destination = Destination::AnyoneCanSpend;
     let sig_err =
         SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
@@ -99,7 +113,7 @@ fn sign_verify(#[case] seed: Seed) {
         sig_err,
         SignArbitraryMessageError::AttemptedToProduceSignatureForAnyoneCanSpend
     );
-    // Same for the verification.
+    // Verifying a random signature should also produce an "Unsupported" error.
     let ver_err = random_sig
         .verify_signature(&chain_config, &destination, &message_challenge)
         .unwrap_err();
@@ -109,7 +123,158 @@ fn sign_verify(#[case] seed: Seed) {
     );
 }
 
-// Basic test that checks that SignedArbitraryMessage can't be used to sign a transaction.
+// Sign a message using one of the supported destinations, but use a different one for verification.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_wrong_destination(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_testnet();
+
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_, public_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message_challenge = produce_message_challenge(&message);
+
+    let dest_multisig = Destination::ClassicMultisig(PublicKeyHash::from(&public_key));
+    let dest_scripthash = Destination::ScriptHash(Id::<_>::new(H256::random_using(&mut rng)));
+    let dest_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    let dest_addr2 = Destination::PublicKeyHash(PublicKeyHash::from(&public_key2));
+    let dest_pub_key = Destination::PublicKey(public_key);
+    let dest_pub_key2 = Destination::PublicKey(public_key2);
+
+    let assert_result = |expected_res| move |res| assert_eq!(res, expected_res);
+
+    #[allow(clippy::type_complexity)]
+    let test_data: &[(
+        &Destination,
+        &Destination,
+        &dyn Fn(Result<(), DestinationSigError>),
+    )] = &[
+        (
+            &dest_addr,
+            &dest_addr2,
+            &assert_result(Err(DestinationSigError::PublicKeyToAddressMismatch)),
+        ),
+        (
+            &dest_addr,
+            &dest_pub_key,
+            &assert_result(Err(DestinationSigError::InvalidSignatureEncoding)),
+        ),
+        (
+            &dest_addr,
+            &dest_multisig,
+            &assert_result(Err(DestinationSigError::InvalidSignatureEncoding)),
+        ),
+        (
+            &dest_addr,
+            &dest_scripthash,
+            &assert_result(Err(DestinationSigError::Unsupported)),
+        ),
+        (
+            &dest_addr,
+            &Destination::AnyoneCanSpend,
+            &assert_result(Err(
+                DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+            )),
+        ),
+        (
+            &dest_pub_key,
+            &dest_pub_key2,
+            &assert_result(Err(DestinationSigError::SignatureVerificationFailed)),
+        ),
+        (&dest_pub_key, &dest_addr, &|res| {
+            assert_matches!(res, Err(DestinationSigError::AddressAuthDecodingFailed(_)))
+        }),
+        (
+            &dest_pub_key,
+            &dest_multisig,
+            &assert_result(Err(DestinationSigError::InvalidSignatureEncoding)),
+        ),
+        (
+            &dest_pub_key,
+            &dest_scripthash,
+            &assert_result(Err(DestinationSigError::Unsupported)),
+        ),
+        (
+            &dest_pub_key,
+            &Destination::AnyoneCanSpend,
+            &assert_result(Err(
+                DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+            )),
+        ),
+    ];
+
+    for (sign_dest, verify_dest, check_func) in test_data {
+        let sig =
+            SignedArbitraryMessage::produce_uniparty_signature(&private_key, sign_dest, &message)
+                .unwrap();
+        let ver_result = sig.verify_signature(&chain_config, verify_dest, &message_challenge);
+        check_func(ver_result);
+    }
+}
+
+// Sign a message using a supported destination and use it to verify a corrupted message
+// (one bit of which was flipped). The verification should fail.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_corrupted_message(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_testnet();
+
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+
+    let corrupted_message = with_random_bit_flipped(&message, &mut rng);
+    let corrupted_message_challenge = produce_message_challenge(&corrupted_message);
+
+    let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    let destination_pub_key = Destination::PublicKey(public_key);
+
+    for dest in [&destination_addr, &destination_pub_key] {
+        let sig = SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
+            .unwrap();
+        let ver_result = sig.verify_signature(&chain_config, dest, &corrupted_message_challenge);
+        assert_eq!(
+            ver_result,
+            Err(DestinationSigError::SignatureVerificationFailed)
+        );
+    }
+}
+
+// Sign a message using a supported destination and corrupt the signature by flipping one of
+// its bits. The verification should fail.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_corrupted_signature(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_testnet();
+
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message_challenge = produce_message_challenge(&message);
+
+    let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    let destination_pub_key = Destination::PublicKey(public_key);
+
+    for dest in [&destination_addr, &destination_pub_key] {
+        let mut sig =
+            SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
+                .unwrap();
+        flip_random_bit(&mut sig.raw_signature, &mut rng);
+
+        let ver_result = sig.verify_signature(&chain_config, dest, &message_challenge);
+        // The actual error will depend on which bit gets flipped.
+        assert!(ver_result.is_err());
+    }
+}
+
+// A test that checks that SignedArbitraryMessage can't be used to sign a transaction.
 // 1) Construct a message containing tx data that would normally be hashed when signing
 // a transaction.
 // 2) As a sanity check, hash the message and use one of the "standard" functions
@@ -177,15 +342,19 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         .unwrap();
     }
 
-    let raw_sig = SignedArbitraryMessage::produce_uniparty_signature(
+    // Now try the "arbitrary message" signature.
+    let msg_sig = SignedArbitraryMessage::produce_uniparty_signature(
         &private_key,
         &destination,
         &unhashed_tx_data_to_sign,
     )
-    .unwrap()
-    .raw_signature;
+    .unwrap();
+    // Sanity check - ensure that the signature itself is correct.
+    let msg_challenge = produce_message_challenge(&unhashed_tx_data_to_sign);
+    msg_sig.verify_signature(&chain_config, &destination, &msg_challenge).unwrap();
 
-    let sig = StandardInputSignature::new(sighash_type, raw_sig);
+    // Now try to use it as a "transaction signature" - the verification should fail.
+    let sig = StandardInputSignature::new(sighash_type, msg_sig.raw_signature);
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::Standard(sig)]).unwrap();
 
     let ver_err = verify_signature(

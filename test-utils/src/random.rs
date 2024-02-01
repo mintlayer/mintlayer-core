@@ -85,6 +85,23 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut impl Rng) {
     panic!("Can't shuffle the slice");
 }
 
+pub fn flip_random_bit(data: &mut [u8], rng: &mut impl Rng) {
+    assert!(!data.is_empty());
+
+    let byte_idx = rng.gen_range(0..data.len());
+    let bit_idx = rng.gen_range(0..8);
+    let bit_mask = (1 << bit_idx) as u8;
+
+    let byte = &mut data[byte_idx];
+    *byte = (*byte & !bit_mask) | (!*byte & bit_mask);
+}
+
+pub fn with_random_bit_flipped(data: &[u8], rng: &mut impl Rng) -> Vec<u8> {
+    let mut data = data.to_vec();
+    flip_random_bit(&mut data, rng);
+    data
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -106,5 +123,23 @@ mod tests {
         let mut shuffled_vec = vec.clone();
         shuffle_until_different(&mut shuffled_vec, &mut rng);
         assert_ne!(vec, shuffled_vec);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn flip_random_bit_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let data: Vec<u8> = (1..20).map(|_| rng.gen()).collect();
+        let data_with_flipped_bit = with_random_bit_flipped(&data, &mut rng);
+        assert_eq!(data.len(), data_with_flipped_bit.len());
+        assert_ne!(data, data_with_flipped_bit);
+
+        let different_bits_count = data
+            .iter()
+            .zip(data_with_flipped_bit.iter())
+            .fold(0, |acc, (byte1, byte2)| acc + (byte1 ^ byte2).count_ones());
+        assert_eq!(different_bits_count, 1);
     }
 }
