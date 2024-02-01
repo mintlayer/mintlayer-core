@@ -24,14 +24,16 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
-use futures::never::Never;
+use futures::{never::Never, stream::FuturesUnordered, TryStreamExt};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    ops::Add,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
+use types::Balances;
 
 use read::ReadOnlyController;
 use sync::InSync;
@@ -41,11 +43,12 @@ use common::{
     address::AddressError,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         time::{get_time, Time},
-        Amount, BlockHeight, Id, Idable,
+        Amount, BlockHeight, DecimalAmount, Id, Idable,
     },
 };
 use consensus::GenerateBlockInputData;
@@ -62,8 +65,14 @@ pub use node_comm::{
     rpc_client::NodeRpcClient,
 };
 use wallet::{
-    wallet::WalletPoolsFilter, wallet_events::WalletEvents, DefaultWallet, WalletError,
-    WalletResult,
+    account::{
+        currency_grouper::{self, Currency},
+        PartiallySignedTransaction, TransactionToSign,
+    },
+    get_tx_output_destination,
+    wallet::WalletPoolsFilter,
+    wallet_events::WalletEvents,
+    DefaultWallet, WalletError, WalletResult,
 };
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -604,6 +613,131 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         )
     }
 
+    pub async fn compose_transaction(
+        &self,
+        inputs: Vec<UtxoOutPoint>,
+        outputs: Vec<TxOutput>,
+        only_transaction: bool,
+    ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
+        let input_utxos = self.fetch_utxos(&inputs).await?;
+        let fees = self.get_fees(&input_utxos, &outputs)?;
+        let fees = into_balances(&self.rpc_client, &self.chain_config, fees).await?;
+
+        let num_inputs = inputs.len();
+        let inputs = inputs.into_iter().map(TxInput::Utxo).collect();
+
+        let tx = Transaction::new(0, inputs, outputs)
+            .map_err(|err| ControllerError::WalletError(WalletError::TransactionCreation(err)))?;
+
+        let tx = if only_transaction {
+            TransactionToSign::Tx(tx)
+        } else {
+            let destinations = input_utxos
+                .iter()
+                .map(|txo| {
+                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                    })
+                })
+                .collect::<Result<Vec<_>, WalletError>>()
+                .map_err(ControllerError::WalletError)?;
+
+            let tx = PartiallySignedTransaction::new(
+                tx,
+                vec![None; num_inputs],
+                input_utxos.into_iter().map(Option::Some).collect(),
+                destinations.into_iter().map(Option::Some).collect(),
+            )
+            .map_err(ControllerError::WalletError)?;
+
+            TransactionToSign::Partial(tx)
+        };
+
+        Ok((tx, fees))
+    }
+
+    fn get_fees(
+        &self,
+        inputs: &[TxOutput],
+        outputs: &[TxOutput],
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+        let mut inputs = self.group_inputs(inputs)?;
+        let outputs = self.group_outpus(outputs)?;
+
+        let mut fees = BTreeMap::new();
+
+        for (currency, output) in outputs {
+            let input_amount = inputs.remove(&currency).ok_or(
+                ControllerError::<T>::WalletError(WalletError::NotEnoughUtxo(Amount::ZERO, output)),
+            )?;
+
+            let fee = (input_amount - output).ok_or(ControllerError::<T>::WalletError(
+                WalletError::NotEnoughUtxo(input_amount, output),
+            ))?;
+            fees.insert(currency, fee);
+        }
+        // add any leftover inputs
+        fees.extend(inputs);
+        Ok(fees)
+    }
+
+    fn group_outpus(
+        &self,
+        outputs: &[TxOutput],
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+        let best_block_height = self.best_block().1;
+        currency_grouper::group_outputs_with_issuance_fee(
+            outputs.iter(),
+            |&output| output,
+            |grouped: &mut Amount, _, new_amount| -> Result<(), WalletError> {
+                *grouped = grouped.add(new_amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            Amount::ZERO,
+            &self.chain_config,
+            best_block_height,
+        )
+        .map_err(|err| ControllerError::WalletError(err))
+    }
+
+    fn group_inputs(
+        &self,
+        input_utxos: &[TxOutput],
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+        currency_grouper::group_utxos_for_input(
+            input_utxos.iter(),
+            |tx_output| tx_output,
+            |total: &mut Amount, _, amount| -> Result<(), WalletError> {
+                *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            Amount::ZERO,
+        )
+        .map_err(|err| ControllerError::WalletError(err))
+    }
+
+    async fn fetch_utxos(
+        &self,
+        inputs: &[UtxoOutPoint],
+    ) -> Result<Vec<TxOutput>, ControllerError<T>> {
+        let tasks: FuturesUnordered<_> =
+            inputs.iter().map(|input| self.fetch_utxo(input)).collect();
+        let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
+        Ok(input_utxos)
+    }
+
+    async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
+        let utxo = self
+            .rpc_client
+            .get_utxo(input.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        utxo.ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+            input.clone(),
+        )))
+    }
+
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) -> Result<Never, ControllerError<T>> {
@@ -689,4 +823,31 @@ pub async fn fetch_token_info<T: NodeInterface>(
         .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
             token_id,
         )))
+}
+
+pub async fn into_balances<T: NodeInterface>(
+    rpc_client: &T,
+    chain_config: &ChainConfig,
+    mut balances: BTreeMap<Currency, Amount>,
+) -> Result<Balances, ControllerError<T>> {
+    let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
+    let coins = DecimalAmount::from_amount_minimal(coins, chain_config.coin_decimals());
+
+    let tasks: FuturesUnordered<_> = balances
+        .into_iter()
+        .map(|(currency, amount)| async move {
+            let token_id = match currency {
+                Currency::Coin => panic!("Removed just above"),
+                Currency::Token(token_id) => token_id,
+            };
+
+            fetch_token_info(rpc_client, token_id).await.map(|info| {
+                let decimals = info.token_number_of_decimals();
+                let amount = DecimalAmount::from_amount_minimal(amount, decimals);
+                (token_id, amount)
+            })
+        })
+        .collect();
+
+    Ok(Balances::new(coins, tasks.try_collect().await?))
 }

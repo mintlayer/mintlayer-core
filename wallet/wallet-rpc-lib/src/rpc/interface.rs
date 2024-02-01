@@ -120,7 +120,7 @@ trait WalletRpc {
         &self,
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
-    ) -> rpc::RpcResult<()>;
+    ) -> rpc::RpcResult<NewTransaction>;
 
     #[method(name = "address_send")]
     async fn send_coins(

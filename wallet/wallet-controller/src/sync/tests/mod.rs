@@ -286,6 +286,13 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn get_utxo(
+        &self,
+        _outpoint: common::chain::UtxoOutPoint,
+    ) -> Result<Option<common::chain::TxOutput>, Self::Error> {
+        unreachable!()
+    }
+
     async fn generate_block(
         &self,
         _input_data: GenerateBlockInputData,

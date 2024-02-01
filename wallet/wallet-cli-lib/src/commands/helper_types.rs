@@ -19,11 +19,13 @@ use clap::ValueEnum;
 use wallet_controller::{NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
+    address::Address,
     chain::{
+        output_value::OutputValue,
         tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenTotalSupply},
-        OutPointSourceId, UtxoOutPoint,
+        ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Id, H256},
+    primitives::{Amount, DecimalAmount, Id, H256},
 };
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
@@ -188,6 +190,61 @@ pub fn parse_utxo_outpoint<N: NodeInterface>(
     };
 
     Ok(UtxoOutPoint::new(source_id, output_index))
+}
+
+/// Parses a string into UtxoOutPoint
+/// The string format is expected to be
+/// transfer(address,amount)
+///
+/// e.g transfer(tmt1qy7y8ra99sgmt97lu2kn249yds23pnp7xsv62p77,10.1)
+pub fn parse_output<N: NodeInterface>(
+    mut input: String,
+    chain_config: &ChainConfig,
+) -> Result<TxOutput, WalletCliError<N>> {
+    if !input.ends_with(')') {
+        return Err(WalletCliError::<N>::InvalidInput(
+            "Invalid output format".into(),
+        ));
+    }
+    input.pop();
+
+    let mut parts: Vec<&str> = input.split('(').collect();
+    let last = parts.pop().ok_or(WalletCliError::<N>::InvalidInput(
+        "Invalid output format".to_owned(),
+    ))?;
+    parts.extend(last.split(','));
+
+    if parts.len() != 3 {
+        return Err(WalletCliError::<N>::InvalidInput(
+            "Invalid output format".into(),
+        ));
+    }
+
+    let dest = Address::from_str(chain_config, parts[1])
+        .and_then(|addr| addr.decode_object(chain_config))
+        .map_err(|err| {
+            WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
+        })?;
+
+    let amount = DecimalAmount::from_str(parts[2])
+        .map_err(|err| {
+            WalletCliError::<N>::InvalidInput(format!("invalid amount {} {err}", parts[2]))
+        })?
+        .to_amount(chain_config.coin_decimals())
+        .ok_or(WalletCliError::<N>::InvalidInput(
+            "invalid coins amount".to_string(),
+        ))?;
+
+    let output = match parts[0] {
+        "transfer" => TxOutput::Transfer(OutputValue::Coin(amount), dest),
+        _ => {
+            return Err(WalletCliError::<N>::InvalidInput(
+                "Invalid output: unknown type".into(),
+            ));
+        }
+    };
+
+    Ok(output)
 }
 
 /// Try to parse a total token supply from a string

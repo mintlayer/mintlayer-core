@@ -206,4 +206,11 @@ impl NodeInterface for ColdWalletClient {
     async fn mempool_get_fee_rate_points(&self) -> Result<Vec<(usize, FeeRate)>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
+
+    async fn get_utxo(
+        &self,
+        _outpoint: common::chain::UtxoOutPoint,
+    ) -> Result<Option<common::chain::TxOutput>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
 }

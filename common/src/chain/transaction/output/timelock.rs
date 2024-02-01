@@ -17,7 +17,18 @@ use serialization::{Decode, Encode};
 
 use crate::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(BlockHeight),

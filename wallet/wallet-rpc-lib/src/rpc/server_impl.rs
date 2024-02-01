@@ -185,7 +185,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<NewTransaction> {
         rpc::handle_result(self.submit_raw_transaction(tx, options).await)
     }
 

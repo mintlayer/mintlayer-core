@@ -27,7 +27,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator},
-        Block, ChainConfig, Destination, SignedTransaction, Transaction, UtxoOutPoint,
+        Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, H256},
 };
@@ -36,14 +36,21 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::QrCode;
-use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
+use wallet::{
+    account::{PartiallySignedTransaction, TransactionToSign},
+    version::get_version,
+    WalletError,
+};
 use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
 use wallet_rpc_lib::{
     config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
     WalletService,
 };
 
-use crate::{commands::helper_types::parse_token_supply, errors::WalletCliError};
+use crate::{
+    commands::helper_types::{parse_output, parse_token_supply},
+    errors::WalletCliError,
+};
 
 use self::helper_types::{
     format_delegation_info, format_pool_info, parse_utxo_outpoint, CliForceReduce, CliIsFreezable,
@@ -608,6 +615,28 @@ pub enum WalletCommand {
     #[clap(hide = true)]
     GenerateBlocks { block_count: u32 },
 
+    /// Compose a new transaction from the specified outputs and selected utxos
+    /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
+    /// and also prints the fees that will be paid by the transaction
+    /// example usage:
+    /// transaction-compose transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9) transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,50)
+    ///  --utxos tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,0)
+    /// which creates a transaction with 2 outputs and 2 input
+    #[clap(name = "transaction-compose")]
+    TransactionCompose {
+        /// The transaction outputs, in the format `transfer(address,amount)`
+        /// e.g. transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
+        outputs: Vec<String>,
+        /// You can choose what utxos to spend (space separated as additional arguments). A utxo can be from a transaction output or a block reward output:
+        /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
+        /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
+        #[arg(long="utxos", default_values_t = Vec::<String>::new())]
+        utxos: Vec<String>,
+
+        #[arg(long = "only-transaction", default_value_t = false)]
+        only_transaction: bool,
+    },
+
     /// Abandon an unconfirmed transaction in the wallet database, and make the consumed inputs available to be used again
     /// Note that this doesn't necessarily mean that the network will agree. This assumes the transaction is either still
     /// not confirmed in the network or somehow invalid.
@@ -749,11 +778,6 @@ where
             .as_mut()
             .map(|state| state.selected_account)
             .ok_or(WalletCliError::NoWallet)
-    }
-
-    pub fn tx_submitted_command() -> ConsoleCommand {
-        let status_text = "The transaction was submitted successfully";
-        ConsoleCommand::Print(status_text.to_owned())
     }
 
     pub fn new_tx_submitted_command(new_tx: NewTransaction) -> ConsoleCommand {
@@ -1010,16 +1034,23 @@ where
                     Ok(signed_tx) => {
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map_err(WalletCliError::QrCodeEncoding)?;
-                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                        let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())
+                            .map(|qr_code| qr_code.encode_to_console_string_with_defaults(1));
 
-                        format!(
+                        match qr_code_string {
+                            Ok(qr_code_string) => format!(
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
-                        )
+                        ),
+                            Err(_) => format!(
+                            "The transaction has been fully signed signed as is ready to be broadcast to network. \
+                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
+                             Transaction is too long to be put into a Qr code"
+                        ),
+                        }
                     }
                     Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
@@ -1180,10 +1211,57 @@ where
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                self.wallet_rpc
+                let new_tx = self
+                    .wallet_rpc
                     .submit_raw_transaction(transaction, TxOptionsOverrides::default())
                     .await?;
-                Ok(Self::tx_submitted_command())
+                Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
+            WalletCommand::TransactionCompose {
+                outputs,
+                utxos,
+                only_transaction,
+            } => {
+                eprintln!("outputs: {outputs:?}");
+                eprintln!("utxos: {utxos:?}");
+                let outputs: Vec<TxOutput> = outputs
+                    .into_iter()
+                    .map(|input| parse_output(input, chain_config))
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>()?;
+
+                let input_utxos: Vec<UtxoOutPoint> = utxos
+                    .into_iter()
+                    .map(parse_utxo_outpoint)
+                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                )?;
+
+                let (tx, fees) = self
+                    .wallet_rpc
+                    .compose_transaction(input_utxos, outputs, only_transaction)
+                    .await?;
+                let (coins, tokens) = fees.into_coins_and_tokens();
+                let encoded_tx = match tx {
+                    TransactionToSign::Tx(tx) => HexEncoded::new(tx).to_string(),
+                    TransactionToSign::Partial(tx) => HexEncoded::new(tx).to_string(),
+                };
+                let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
+
+                writeln!(
+                    &mut output,
+                    "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
+                )
+                .expect("Writing to a memory buffer should not fail");
+
+                for (token_id, amount) in tokens {
+                    let token_id = Address::new(chain_config, &token_id)
+                        .expect("Encoding token id should never fail");
+                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                        .expect("Writing to a memory buffer should not fail");
+                }
+                output.pop();
+
+                Ok(ConsoleCommand::Print(output))
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {

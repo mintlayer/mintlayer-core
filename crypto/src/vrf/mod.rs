@@ -76,6 +76,15 @@ impl serde::Serialize for VRFPublicKey {
     }
 }
 
+impl<'d> serde::Deserialize<'d> for VRFPublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        HexEncoded::<VRFPublicKey>::deserialize(deserializer).map(|hex| hex.take())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum VRFPublicKeyHolder {
     #[codec(index = 0)]

@@ -20,7 +20,9 @@ use super::Amount;
 
 const DENOMINATOR: u16 = 1000;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug, serde::Serialize)]
+#[derive(
+    PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug, serde::Serialize, serde::Deserialize,
+)]
 pub struct PerThousand(u16);
 
 impl PerThousand {

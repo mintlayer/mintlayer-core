@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use common::{
     address::Address,
     chain::{ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint},
-    primitives::{id::WithId, Amount, DecimalAmount, Id},
+    primitives::{id::WithId, Amount, Id},
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, u31::U31},
@@ -30,7 +30,9 @@ use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_error_log::LogError;
 use wallet::{
-    account::{transaction_list::TransactionList, Currency, DelegationData, PoolData},
+    account::{
+        currency_grouper::Currency, transaction_list::TransactionList, DelegationData, PoolData,
+    },
     wallet::WalletPoolsFilter,
     DefaultWallet,
 };
@@ -95,28 +97,8 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Result<Balances, ControllerError<T>> {
-        let mut balances = self.get_balance(utxo_states, with_locked)?;
-
-        let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-        let coins = DecimalAmount::from_amount_minimal(coins, self.chain_config.coin_decimals());
-
-        let tasks: FuturesUnordered<_> = balances
-            .into_iter()
-            .map(|(currency, amount)| async move {
-                let token_id = match currency {
-                    Currency::Coin => panic!("Removed just above"),
-                    Currency::Token(token_id) => token_id,
-                };
-
-                super::fetch_token_info(&self.rpc_client, token_id).await.map(|info| {
-                    let decimals = info.token_number_of_decimals();
-                    let amount = DecimalAmount::from_amount_minimal(amount, decimals);
-                    (token_id, amount)
-                })
-            })
-            .collect();
-
-        Ok(Balances::new(coins, tasks.try_collect().await?))
+        let balances = self.get_balance(utxo_states, with_locked)?;
+        super::into_balances(&self.rpc_client, self.chain_config, balances).await
     }
 
     pub fn get_utxos(

@@ -30,7 +30,7 @@ use common::{
     address::dehexify::to_dehexified_json,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, PoolId,
+        ChainConfig, DelegationId, PoolId, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -62,6 +62,10 @@ trait ChainstateRpc {
         from: BlockHeight,
         max_count: usize,
     ) -> RpcResult<Vec<HexEncoded<Block>>>;
+
+    /// Returns the TxOutput for a specified UtxoOutPoint.
+    #[method(name = "get_utxo")]
+    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -185,6 +189,15 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| this.get_mainchain_blocks(from, max_count)).await,
         )?;
         Ok(blocks.into_iter().map(HexEncoded::new).collect())
+    }
+
+    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>> {
+        rpc::handle_result(
+            self.call_mut(move |this| {
+                this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))
+            })
+            .await,
+        )
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::{
+    account::currency_grouper::Currency,
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
     wallet_events::WalletEventsNoOp,

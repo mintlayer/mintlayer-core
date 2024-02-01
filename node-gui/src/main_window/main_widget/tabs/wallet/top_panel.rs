@@ -18,7 +18,7 @@ use iced::{
     widget::{button, row, tooltip, Row, Text},
     Alignment, Element, Length,
 };
-use wallet::account::Currency;
+use wallet::account::currency_grouper::Currency;
 
 use crate::{
     backend::messages::{AccountInfo, EncryptionState, WalletInfo},
