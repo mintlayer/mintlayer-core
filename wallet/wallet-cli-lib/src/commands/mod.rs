@@ -617,11 +617,11 @@ pub enum WalletCommand {
 
     /// Compose a new transaction from the specified outputs and selected utxos
     /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
-    /// and also prints the fees that will be paied by the transaction
+    /// and also prints the fees that will be paid by the transaction
     /// example usage:
-    /// transaction-compose transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9) --utxos
-    ///   tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)
-    /// which creates a transaction with 1 output and 1 input
+    /// transaction-compose transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9) transfer(tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,50)
+    ///  --utxos tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,0)
+    /// which creates a transaction with 2 outputs and 2 input
     #[clap(name = "transaction-compose")]
     TransactionCompose {
         /// The transaction outputs, in the format `transfer(address,amount)`
