@@ -90,7 +90,7 @@ pub fn transaction_summary(tx: &Transaction, chain_config: &ChainConfig) -> Stri
             fmt_dest(p.staker()),
             fmt_vrf(p.vrf_public_key()),
             fmt_dest(p.decommission_key()),
-            p.margin_ratio_per_thousand().into_decimal_str(),
+            p.margin_ratio_per_thousand().into_percentage_str(),
             fmt_ml(&p.cost_per_block())
         )
     };
