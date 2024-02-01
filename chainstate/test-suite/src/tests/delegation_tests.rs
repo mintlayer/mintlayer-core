@@ -1350,8 +1350,8 @@ fn try_overspend_delegation(
             AccountsBalancesCheckVersion::V0 => {
                 assert_eq!(
                     res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::TransactionVerifierError(
-                        tx_verifier::TransactionVerifierStorageError::PoSAccountingError(
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::PoSAccountingError(
                             pos_accounting::Error::AccountingError(
                                 accounting::Error::ArithmeticErrorSumToUnsignedFailed
                             )
