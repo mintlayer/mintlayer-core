@@ -344,7 +344,6 @@ impl MempoolBanScore for accounting::Error {
 impl MempoolBanScore for IOPolicyError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
-            IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
             IOPolicyError::InvalidInputTypeInReward => 100,
             IOPolicyError::InvalidOutputTypeInReward => 100,
             IOPolicyError::InvalidInputTypeInTx => 100,
@@ -353,9 +352,6 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,
-            IOPolicyError::AccountBalanceOverflow(_) => 100,
-            IOPolicyError::AccountBalanceNotFound(_) => 0,
-            IOPolicyError::NegativeAccountBalance(_) => 0,
         }
     }
 }

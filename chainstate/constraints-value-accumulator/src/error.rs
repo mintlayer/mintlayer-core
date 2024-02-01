@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, PoolId, UtxoOutPoint},
+    chain::{AccountType, DelegationId, PoolId, UtxoOutPoint},
     primitives::CoinOrTokenId,
 };
 
@@ -44,4 +44,8 @@ pub enum Error {
     SpendingNonSpendableOutput(UtxoOutPoint),
     #[error("Balance not found for delegation `{0}`")]
     DelegationBalanceNotFound(DelegationId),
+    #[error("Account balance not found for `{0:?}`")]
+    AccountBalanceNotFound(AccountType),
+    #[error("Negative account balance for `{0:?}`")]
+    NegativeAccountBalance(AccountType),
 }

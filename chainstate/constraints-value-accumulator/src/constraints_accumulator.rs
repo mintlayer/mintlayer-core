@@ -25,6 +25,8 @@ use common::{
 };
 use utils::ensure;
 
+use crate::accounts_balances_tracker::AccountsBalancesTracker;
+
 use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
@@ -73,6 +75,8 @@ impl ConstrainedValueAccumulator {
 
         let mut accumulator = Self::new();
         let mut total_fee_deducted = Amount::ZERO;
+        let mut accounts_balances_tracker =
+            AccountsBalancesTracker::new(&delegation_balance_getter);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -92,6 +96,7 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         outpoint.account(),
+                        &mut accounts_balances_tracker,
                         &delegation_balance_getter,
                     )?;
                 }
@@ -195,6 +200,7 @@ impl ConstrainedValueAccumulator {
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
+        accounts_balances_tracker: &mut AccountsBalancesTracker<DelegationBalanceGetterFn>,
         delegation_balance_getter: &DelegationBalanceGetterFn,
     ) -> Result<(), Error>
     where
@@ -216,7 +222,9 @@ impl ConstrainedValueAccumulator {
                             Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
                         );
                     }
-                    AccountsBalancesCheckVersion::V1 => {}
+                    AccountsBalancesCheckVersion::V1 => {
+                        accounts_balances_tracker.spend_from_account(account.clone())?;
+                    }
                 }
 
                 let maturity_distance =

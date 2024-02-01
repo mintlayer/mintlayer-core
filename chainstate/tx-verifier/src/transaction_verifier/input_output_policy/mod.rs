@@ -19,8 +19,8 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountType, AccountsBalancesCheckVersion, Block, ChainConfig, DelegationId, PoolId,
-        TokenIssuanceVersion, Transaction, TxInput, TxOutput,
+        Block, ChainConfig, DelegationId, PoolId, TokenIssuanceVersion, Transaction, TxInput,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
@@ -33,13 +33,10 @@ use crate::error::{SpendStakeError, TokensError};
 
 use super::error::ConnectTransactionError;
 
-mod accounts_balances_check;
 mod purposes_check;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum IOPolicyError {
-    #[error("PoS accounting error: `{0}`")]
-    PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Attempted to use a invalid input type in block reward")]
     InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
@@ -56,12 +53,6 @@ pub enum IOPolicyError {
     MultipleAccountCommands,
     #[error("Attempt to use account input in block reward")]
     AttemptToUseAccountInputInReward,
-    #[error("Account balance not found for `{0:?}`")]
-    AccountBalanceNotFound(AccountType),
-    #[error("Negative account balance for `{0:?}`")]
-    NegativeAccountBalance(AccountType),
-    #[error("Account balance overflow `{0:?}`")]
-    AccountBalanceOverflow(AccountType),
 }
 
 pub fn calculate_tokens_burned_in_outputs(
@@ -203,20 +194,6 @@ pub fn check_tx_inputs_outputs_policy(
             .get_delegation_balance(delegation_id)
             .map_err(|_| pos_accounting::Error::ViewFail)?)
     };
-
-    // check if account inputs/outputs do not overspend account balances
-    match chain_config
-        .chainstate_upgrades()
-        .version_at_height(block_height)
-        .1
-        .accounts_balances_version()
-    {
-        AccountsBalancesCheckVersion::V0 => { /* skip */ }
-        AccountsBalancesCheckVersion::V1 => {
-            accounts_balances_check::check_accounts_balances_overspend(tx, pos_accounting_view)
-                .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
-        }
-    }
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,

@@ -225,6 +225,17 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                             NftIdMismatchCheck::Yes,
+                            AccountsBalancesCheckVersion::V0,
+                        ),
+                    ),
+                    (
+                        CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            TokensTickerMaxLengthVersion::V1,
+                            NftIdMismatchCheck::Yes,
                             AccountsBalancesCheckVersion::V1,
                         ),
                     ),

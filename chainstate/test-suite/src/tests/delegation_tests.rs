@@ -1007,7 +1007,17 @@ fn delegate_and_spend_share_same_tx(
                 );
             }
             AccountsBalancesCheckVersion::V1 => {
-                res.unwrap();
+                assert_eq!(
+                    res.unwrap_err(),
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::NegativeAccountBalance(
+                                AccountType::Delegation(delegation_id)
+                            ),
+                            tx_id.into()
+                        )
+                    ))
+                );
             }
         }
     });
@@ -1114,8 +1124,28 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(
             ))
             .add_output(TxOutput::DelegateStaking(change, delegation_id))
             .build();
+        let tx_id = tx.transaction().get_id();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        match accumulator_version {
+            AccountsBalancesCheckVersion::V0 => {
+                res.unwrap();
+            }
+            AccountsBalancesCheckVersion::V1 => {
+                assert_eq!(
+                    res.unwrap_err(),
+                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::NegativeAccountBalance(
+                                AccountType::Delegation(delegation_id)
+                            ),
+                            tx_id.into()
+                        )
+                    ))
+                );
+            }
+        }
     });
 }
 
@@ -1234,10 +1264,10 @@ fn delegate_and_spend_share_same_block(
                 assert_eq!(
                     res.unwrap_err(),
                     ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::IOPolicyError(
-                            IOPolicyError::NegativeAccountBalance(AccountType::Delegation(
-                                delegation_id
-                            )),
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::NegativeAccountBalance(
+                                AccountType::Delegation(delegation_id)
+                            ),
                             tx1_id.into()
                         )
                     ))
@@ -1363,10 +1393,10 @@ fn try_overspend_delegation(
                 assert_eq!(
                     res.unwrap_err(),
                     ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::IOPolicyError(
-                            IOPolicyError::NegativeAccountBalance(AccountType::Delegation(
-                                delegation_id
-                            )),
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::NegativeAccountBalance(
+                                AccountType::Delegation(delegation_id)
+                            ),
                             tx_id.into()
                         )
                     ))
@@ -1531,10 +1561,10 @@ fn delegate_and_spend_share_same_block_multiple_delegations(
                 assert_eq!(
                     res.unwrap_err(),
                     ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::IOPolicyError(
-                            IOPolicyError::NegativeAccountBalance(AccountType::Delegation(
-                                delegation_id_1
-                            )),
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::NegativeAccountBalance(
+                                AccountType::Delegation(delegation_id_1)
+                            ),
                             tx_id_1.into()
                         )
                     ))

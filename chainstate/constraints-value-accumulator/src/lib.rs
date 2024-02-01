@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use common::primitives::Amount;
 
+mod accounts_balances_tracker;
 mod accumulated_fee;
 mod constraints_accumulator;
 mod error;
