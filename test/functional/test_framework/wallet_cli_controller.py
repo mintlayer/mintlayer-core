@@ -127,7 +127,7 @@ class WalletCliController:
 
             return result
         except Exception as e:
-            self.log.error(f"read tiemout '{e}'")
+            self.log.error(f"read timeout '{e}'")
             self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''
 
