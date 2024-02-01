@@ -1017,6 +1017,7 @@ dependencies = [
  "tx-verifier",
  "utils",
  "utxo",
+ "variant_count",
 ]
 
 [[package]]
