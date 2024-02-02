@@ -163,7 +163,7 @@ pub fn transaction_summary(tx: &Transaction, chain_config: &ChainConfig) -> Stri
                     fmt_timelock(timelock)
                 )
             }
-            TxOutput::Burn(val) => fmt_val(val),
+            TxOutput::Burn(val) => format!("Burn({})", fmt_val(val)),
             TxOutput::CreateStakePool(id, data) => {
                 format!(
                     "CreateStakePool(Id({}), {})",
