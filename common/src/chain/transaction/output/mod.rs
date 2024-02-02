@@ -15,15 +15,18 @@
 
 use crate::{
     address::{
-        hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
+        hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
+        AddressError,
     },
     chain::{
         output_value::OutputValue,
-        tokens::{NftIssuance, TokenId, TokenIssuance},
+        tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
         ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
+    text_summary::TextSummary,
 };
+use crypto::vrf::VRFPublicKey;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
 use variant_count::VariantCount;
@@ -125,6 +128,164 @@ impl TxOutput {
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
+        }
+    }
+}
+
+impl TextSummary for TxOutput {
+    fn text_summary(&self, chain_config: &ChainConfig) -> String {
+        let fmt_ml = |v: &Amount| v.into_fixedpoint_str(chain_config.coin_decimals());
+        let fmt_val = |val: &OutputValue| {
+            match val {
+                OutputValue::Coin(amount) => fmt_ml(amount),
+                OutputValue::TokenV0(token_data) => format!("{token_data:?}"), // Not important since it's deprecated
+                OutputValue::TokenV1(id, amount) => {
+                    format!(
+                        "TokenV1({}, {amount:?})",
+                        Address::new(chain_config, id)
+                            .expect("Cannot fail due to TokenId being fixed size")
+                    )
+                }
+            }
+        };
+        let fmt_timelock = |tl: &OutputTimeLock| match tl {
+            OutputTimeLock::UntilHeight(h) => format!("OutputTimeLock::UntilHeight({h})"),
+            OutputTimeLock::UntilTime(t) => format!("OutputTimeLock::UntilTime({})", t.into_time()),
+            OutputTimeLock::ForBlockCount(n) => {
+                format!("OutputTimeLock::ForBlockCount({n} blocks)")
+            }
+            OutputTimeLock::ForSeconds(secs) => {
+                format!("OutputTimeLock::ForSeconds({secs} seconds)")
+            }
+        };
+        let fmt_dest =
+            |d: &Destination| format!("{}", Address::new(chain_config, d).expect("addressable"));
+        let fmt_vrf =
+            |k: &VRFPublicKey| format!("{}", Address::new(chain_config, k).expect("addressable"));
+        let fmt_poolid = |id: &PoolId| {
+            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+        };
+        let fmt_tknid = |id: &TokenId| {
+            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+        };
+        let fmt_delid = |id: &DelegationId| {
+            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+        };
+        let fmt_stakepooldata = |p: &StakePoolData| {
+            let pledge = fmt_ml(&p.pledge());
+            format!(
+                "Pledge({pledge}), Staker({}), VRFPubKey({}), DecommissionKey({}), MarginRatio({}), CostPerBlock({})",
+                fmt_dest(p.staker()),
+                fmt_vrf(p.vrf_public_key()),
+                fmt_dest(p.decommission_key()),
+                p.margin_ratio_per_thousand().into_percentage_str(),
+                fmt_ml(&p.cost_per_block())
+            )
+        };
+        let fmt_tkn_supply = |s: &TokenTotalSupply, d: u8| match s {
+            TokenTotalSupply::Fixed(v) => format!("Fixed({})", v.into_fixedpoint_str(d)),
+            TokenTotalSupply::Lockable => "Lockable".to_string(),
+            TokenTotalSupply::Unlimited => "Unlimited".to_string(),
+        };
+        let fmt_tkn_frzble = |f: &IsTokenFreezable| match f {
+            IsTokenFreezable::No => "Yes".to_string(),
+            IsTokenFreezable::Yes => "No".to_string(),
+        };
+        let fmt_tkn_iss = |iss: &TokenIssuance| {
+            match iss {
+            TokenIssuance::V1(iss1) => format!(
+                "TokenIssuance(Ticker({}), Decimals({}), MetadataUri({}), TotalSupply({}), Authority({}), IsFreezable({}))",
+                String::from_utf8_lossy(&iss1.token_ticker),
+                iss1.number_of_decimals,
+                String::from_utf8_lossy(&iss1.metadata_uri),
+                fmt_tkn_supply(&iss1.total_supply, iss1.number_of_decimals),
+                fmt_dest(&iss1.authority),
+                fmt_tkn_frzble(&iss1.is_freezable)
+            ),
+        }
+        };
+        let fmt_nft_iss = |iss: &NftIssuance| match iss {
+            NftIssuance::V0(iss1) => {
+                let md = &iss1.metadata;
+                let creator = match &md.creator {
+                    Some(c) => hex::encode(c.public_key.encode()).to_string(),
+                    None => "Unspecified".to_string(),
+                };
+                format!(
+                    "Create({}), Name({}), Description({}), Ticker({}), IconUri({}), AdditionalMetaData({}), MediaUri({}), MediaHash(0x{})",
+                    creator,
+                    String::from_utf8_lossy(&md.name),
+                    String::from_utf8_lossy(&md.description),
+                    String::from_utf8_lossy(&md.ticker),
+                    String::from_utf8_lossy(md.icon_uri.as_ref().as_ref().unwrap_or(&vec![])),
+                    String::from_utf8_lossy(
+                        md.additional_metadata_uri.as_ref().as_ref().unwrap_or(&vec![])
+                    ),
+                    String::from_utf8_lossy(
+                        md.media_uri.as_ref().as_ref().unwrap_or(&vec![])
+                    ),
+                    hex::encode(&md.media_hash),
+
+                )
+            }
+        };
+
+        match self {
+            TxOutput::Transfer(val, dest) => {
+                let val_str = fmt_val(val);
+                format!("Transfer({}, {val_str})", fmt_dest(dest))
+            }
+            TxOutput::LockThenTransfer(val, dest, timelock) => {
+                let val_str = fmt_val(val);
+                format!(
+                    "LockThenTransfer({}, {val_str}, {})",
+                    fmt_dest(dest),
+                    fmt_timelock(timelock)
+                )
+            }
+            TxOutput::Burn(val) => format!("Burn({})", fmt_val(val)),
+            TxOutput::CreateStakePool(id, data) => {
+                format!(
+                    "CreateStakePool(Id({}), {})",
+                    fmt_poolid(id),
+                    fmt_stakepooldata(data)
+                )
+            }
+            TxOutput::ProduceBlockFromStake(dest, pool_id) => {
+                format!(
+                    "ProduceBlockFromStake({}, {})",
+                    fmt_dest(dest),
+                    fmt_poolid(pool_id)
+                )
+            }
+            TxOutput::CreateDelegationId(owner, pool_id) => {
+                format!(
+                    "CreateDelegationId(Owner({}), StakingPool({}))",
+                    fmt_dest(owner),
+                    fmt_poolid(pool_id)
+                )
+            }
+            TxOutput::DelegateStaking(amount, del_ig) => {
+                format!(
+                    "DelegateStaking(Owner({}), StakingPool({}))",
+                    fmt_ml(amount),
+                    fmt_delid(del_ig)
+                )
+            }
+            TxOutput::IssueFungibleToken(issuance) => {
+                format!("IssueFungibleToken({})", fmt_tkn_iss(issuance))
+            }
+            TxOutput::IssueNft(token_id, iss, receiver) => {
+                format!(
+                    "IssueNft(Id({}), NftIssuance({}), Receiver({}))",
+                    fmt_tknid(token_id),
+                    fmt_nft_iss(iss),
+                    fmt_dest(receiver)
+                )
+            }
+            TxOutput::DataDeposit(data) => {
+                format!("DataDeposit(0x{})", hex::encode(data))
+            }
         }
     }
 }

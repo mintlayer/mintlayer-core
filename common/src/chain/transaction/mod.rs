@@ -19,6 +19,7 @@ use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 
 use crate::primitives::{id::WithId, Id, Idable, H256};
+use crate::text_summary::TextSummary;
 
 pub mod input;
 pub use input::*;
@@ -143,8 +144,10 @@ impl Transaction {
         }
         SignedTransaction::new(self, witnesses)
     }
+}
 
-    pub fn printable(&self, chain_config: &ChainConfig) -> String {
+impl TextSummary for Transaction {
+    fn text_summary(&self, chain_config: &ChainConfig) -> String {
         printout::transaction_summary(self, chain_config)
     }
 }
