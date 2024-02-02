@@ -34,8 +34,8 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
-        PoolBlockStats, TransactionInfo, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, BlockInfo, Delegation,
+        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 
@@ -592,22 +592,24 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_block(
         &mut self,
         block_id: Id<Block>,
-    ) -> Result<Option<Block>, ApiServerStorageError> {
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_data FROM ml_blocks WHERE block_id = $1;",
+                "SELECT block_data, block_height FROM ml_blocks WHERE block_id = $1;",
                 &[&block_id.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        let data = match row {
+        let row = match row {
             Some(d) => d,
             None => return Ok(None),
         };
 
-        let data: Vec<u8> = data.get(0);
+        let data: Vec<u8> = row.get(0);
+        let height: Option<i64> = row.get(1);
+        let height = height.map(|h| BlockHeight::new(h as u64));
 
         let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
@@ -616,7 +618,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             ))
         })?;
 
-        Ok(Some(block))
+        Ok(Some(BlockInfo { block, height }))
     }
 
     pub async fn get_block_range_from_time_range(

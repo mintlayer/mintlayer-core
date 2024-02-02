@@ -193,10 +193,17 @@ impl FungibleTokenData {
 pub struct TransactionInfo {
     pub tx: SignedTransaction,
     pub fee: Amount,
+    pub input_utxos: Vec<Option<TxOutput>>,
 }
 
 pub struct PoolBlockStats {
     pub block_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockInfo {
+    pub block: Block,
+    pub height: Option<BlockHeight>,
 }
 
 #[async_trait::async_trait]
@@ -218,7 +225,10 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
-    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
+    async fn get_block(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError>;
 
     async fn get_block_aux_data(
         &self,

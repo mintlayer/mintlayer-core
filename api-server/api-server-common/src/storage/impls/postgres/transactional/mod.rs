@@ -28,7 +28,7 @@ use tokio_postgres::NoTls;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo,
-    ApiServerTransactionRw, TransactionInfo, Transactional,
+    ApiServerTransactionRw, BlockInfo, TransactionInfo, Transactional,
 };
 
 use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
@@ -110,7 +110,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
     pub async fn get_block(
         &mut self,
         block_id: Id<Block>,
-    ) -> Result<Option<Block>, ApiServerStorageError> {
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
 

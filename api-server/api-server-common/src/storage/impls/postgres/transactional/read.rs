@@ -25,8 +25,8 @@ use common::{
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, Delegation,
-        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
+        Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 use std::collections::BTreeMap;
@@ -83,7 +83,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_block(
         &self,
         block_id: Id<common::chain::Block>,
-    ) -> Result<Option<common::chain::Block>, ApiServerStorageError> {
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
 

@@ -143,6 +143,7 @@ async fn ok(#[case] seed: Seed) {
                 .unwrap();
 
             let old_expected_block = json!({
+                "height": None::<BlockHeight>,
                 "header": block_header_to_json(&block),
                 "body": {
                     "reward": block.block_reward()
@@ -192,6 +193,7 @@ async fn ok(#[case] seed: Seed) {
                 .unwrap();
 
             let new_expected_block = json!({
+                "height": block_height,
                 "header": block_header_to_json(&block),
                 "body": {
                     "reward": block.block_reward()

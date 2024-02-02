@@ -16,7 +16,7 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, Delegation, FungibleTokenData,
+    block_aux_data::BlockAuxData, ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData,
     PoolBlockStats, TransactionInfo, Utxo,
 };
 use common::{
@@ -108,13 +108,18 @@ impl ApiServerInMemoryStorage {
             }))
     }
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
+    fn get_block(&self, block_id: Id<Block>) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let block_result = self.block_table.get(&block_id);
         let block = match block_result {
             Some(blk) => blk,
             None => return Ok(None),
         };
-        Ok(Some(block.clone()))
+        let height = self.block_aux_data_table.get(&block_id).map(|data| data.block_height());
+
+        Ok(Some(BlockInfo {
+            block: block.clone(),
+            height,
+        }))
     }
 
     #[allow(clippy::type_complexity)]
@@ -503,6 +508,10 @@ impl ApiServerInMemoryStorage {
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
         self.block_table.insert(block_id, block.clone());
+        self.block_aux_data_table.insert(
+            block_id,
+            BlockAuxData::new(block_id, block_height, block.timestamp()),
+        );
         self.main_chain_blocks_table.insert(block_height, block_id);
         self.best_block = (block_height, block_id.into());
         Ok(())
@@ -545,7 +554,14 @@ impl ApiServerInMemoryStorage {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.main_chain_blocks_table.retain(|k, _| k <= &block_height);
+        self.main_chain_blocks_table.retain(|k, id| {
+            if k <= &block_height {
+                true
+            } else {
+                self.block_aux_data_table.remove(id);
+                false
+            }
+        });
         Ok(())
     }
 

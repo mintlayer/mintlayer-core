@@ -61,7 +61,7 @@ async fn ok(#[case] seed: Seed) {
     let task = tokio::spawn(async move {
         let web_server_state = {
             let mut rng = make_seedable_rng(seed);
-            let block_height = rng.gen_range(1..50);
+            let block_height = rng.gen_range(2..50);
             let n_blocks = rng.gen_range(block_height..100);
 
             let chain_config = create_unit_test_config();
@@ -78,10 +78,20 @@ async fn ok(#[case] seed: Seed) {
                 // Need the "- 1" to account for the genesis block not in the vec
                 let block_id = chainstate_block_ids[block_height - 1];
                 let block = tf.block(tf.to_chain_block_id(&block_id));
+                let prev_block =
+                    tf.block(tf.to_chain_block_id(&chainstate_block_ids[block_height - 2]));
+                let prev_tx = &prev_block.transactions()[0];
 
                 let transaction_index = rng.gen_range(0..block.transactions().len());
                 let transaction = block.transactions()[transaction_index].transaction();
                 let transaction_id = transaction.get_id();
+
+                let utxos = transaction.inputs().iter().map(|inp| match inp {
+                    TxInput::Utxo(outpoint) => {
+                        Some(prev_tx.outputs()[outpoint.output_index() as usize].clone())
+                    }
+                    TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+                });
 
                 let expected_transaction = json!({
                 "block_id": block_id.to_hash().encode_hex::<String>(),
@@ -90,7 +100,10 @@ async fn ok(#[case] seed: Seed) {
                 "version_byte": transaction.version_byte(),
                 "is_replaceable": transaction.is_replaceable(),
                 "flags": transaction.flags(),
-                "inputs": transaction.inputs(),
+                "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
+                    "input": inp,
+                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config)),
+                    })).collect::<Vec<_>>(),
                 "outputs": transaction.outputs()
                             .iter()
                             .map(|out| txoutput_to_json(out, &chain_config))

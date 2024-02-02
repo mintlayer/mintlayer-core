@@ -30,8 +30,8 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo,
-        Utxo,
+        ApiServerStorageWrite, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
+        TransactionInfo, Utxo,
     },
 };
 
@@ -309,7 +309,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
-    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
+    async fn get_block(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
 

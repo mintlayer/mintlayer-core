@@ -241,6 +241,7 @@ dependencies = [
  "common",
  "constraints-value-accumulator",
  "crypto",
+ "futures",
  "logging",
  "mempool",
  "node-comm",
