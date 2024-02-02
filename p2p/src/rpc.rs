@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::SignedTransaction;
+use std::time::Duration;
+
+use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
@@ -36,13 +38,16 @@ trait P2pRpc {
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
     #[method(name = "list_banned")]
-    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>>;
+    async fn list_banned(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
 
     #[method(name = "ban")]
-    async fn ban(&self, address: BannableAddress) -> RpcResult<()>;
+    async fn ban(&self, address: BannableAddress, duration: Duration) -> RpcResult<()>;
 
     #[method(name = "unban")]
     async fn unban(&self, address: BannableAddress) -> RpcResult<()>;
+
+    #[method(name = "list_discouraged")]
+    async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
@@ -55,6 +60,10 @@ trait P2pRpc {
     /// Get details of connected peers
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>>;
+
+    /// Get addresses of reserved nodes.
+    #[method(name = "get_reserved_nodes")]
+    async fn get_reserved_nodes(&self) -> RpcResult<Vec<SocketAddress>>;
 
     /// Add the address to the reserved nodes list.
     /// The node will try to keep connections open to all reserved peers.
@@ -87,18 +96,23 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>> {
-        let res = self.call_async_mut(|this| this.list_banned()).await;
+    async fn list_banned(&self) -> RpcResult<Vec<(BannableAddress, Time)>> {
+        let res = self.call_async(|this| this.list_banned()).await;
         rpc::handle_result(res)
     }
 
-    async fn ban(&self, address: BannableAddress) -> RpcResult<()> {
-        let res = self.call_async_mut(move |this| this.ban(address)).await;
+    async fn ban(&self, address: BannableAddress, duration: Duration) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.ban(address, duration)).await;
         rpc::handle_result(res)
     }
 
     async fn unban(&self, address: BannableAddress) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.unban(address)).await;
+        rpc::handle_result(res)
+    }
+
+    async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>> {
+        let res = self.call_async(|this| this.list_discouraged()).await;
         rpc::handle_result(res)
     }
 
@@ -114,6 +128,11 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>> {
         let res = self.call_async(|this| this.get_connected_peers()).await;
+        rpc::handle_result(res)
+    }
+
+    async fn get_reserved_nodes(&self) -> RpcResult<Vec<SocketAddress>> {
+        let res = self.call_async(|this| this.get_reserved_nodes()).await;
         rpc::handle_result(res)
     }
 

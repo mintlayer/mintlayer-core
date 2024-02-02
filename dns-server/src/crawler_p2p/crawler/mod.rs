@@ -39,13 +39,13 @@ use common::{chain::ChainConfig, primitives::time::Time};
 use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
 use p2p::{
-    config::{BanDuration, BanThreshold},
     error::P2pError,
     net::types::PeerInfo,
     peer_manager::{ADDR_RATE_BUCKET_SIZE, ADDR_RATE_INITIAL_SIZE, MAX_ADDR_RATE_PER_SECOND},
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
     utils::rate_limiter::RateLimiter,
 };
+use utils::make_config_setting;
 
 use crate::crawler_p2p::crawler::address_data::AddressStateTransitionTo;
 
@@ -53,22 +53,14 @@ use self::address_data::{AddressData, AddressState};
 
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
-const DEFAULT_BAN_THRESHOLD: u32 = 100;
-const DEFAULT_BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
 
-#[derive(Clone)]
+make_config_setting!(BanThreshold, u32, 100);
+make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
+
+#[derive(Default, Clone)]
 pub struct CrawlerConfig {
     pub ban_threshold: BanThreshold,
     pub ban_duration: BanDuration,
-}
-
-impl Default for CrawlerConfig {
-    fn default() -> Self {
-        Self {
-            ban_threshold: BanThreshold::from(DEFAULT_BAN_THRESHOLD),
-            ban_duration: BanDuration::from(DEFAULT_BAN_DURATION),
-        }
-    }
 }
 
 /// The `Crawler` is the component that communicates with Mintlayer peers using p2p,

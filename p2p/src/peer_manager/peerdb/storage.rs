@@ -47,6 +47,8 @@ pub trait PeerDbStorageRead {
 
     fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
 
+    fn get_discouraged_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
+
     fn get_anchor_addresses(&self) -> crate::Result<Vec<SocketAddress>>;
 }
 
@@ -66,6 +68,13 @@ pub trait PeerDbStorageWrite {
 
     fn add_banned_address(&mut self, address: &BannableAddress, time: Time) -> crate::Result<()>;
     fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()>;
+
+    fn add_discouraged_address(
+        &mut self,
+        address: &BannableAddress,
+        time: Time,
+    ) -> crate::Result<()>;
+    fn del_discouraged_address(&mut self, address: &BannableAddress) -> crate::Result<()>;
 
     fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
     fn del_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()>;

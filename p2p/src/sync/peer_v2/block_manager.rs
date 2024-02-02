@@ -804,8 +804,8 @@ where
 
     /// Sends a block list request.
     ///
-    /// The number of blocks requested equals `P2pConfig::requested_blocks_limit`, the remaining
-    /// headers are stored in the peer context.
+    /// The number of blocks requested equals `ProtocolConfig::max_request_blocks_count`,
+    /// the remaining headers are stored in the peer context.
     fn request_blocks(&mut self, mut headers: Vec<SignedBlockHeader>) -> Result<()> {
         debug_assert!(self.incoming.pending_headers.is_empty());
         debug_assert!(self.incoming.requested_blocks.is_empty());

@@ -16,9 +16,10 @@
 use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
+    time::Duration,
 };
 
-use common::chain::SignedTransaction;
+use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
@@ -41,14 +42,20 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().disconnect(peer_id).await
     }
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>> {
-        self.deref_mut().list_banned().await
+    async fn list_banned(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
+        self.deref().list_banned().await
     }
-    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()> {
-        self.deref_mut().ban(addr).await
+
+    async fn ban(&mut self, addr: BannableAddress, duration: Duration) -> crate::Result<()> {
+        self.deref_mut().ban(addr, duration).await
     }
+
     async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         self.deref_mut().unban(addr).await
+    }
+
+    async fn list_discouraged(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
+        self.deref().list_discouraged().await
     }
 
     async fn get_peer_count(&self) -> crate::Result<usize> {
@@ -61,6 +68,10 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
 
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         self.deref().get_connected_peers().await
+    }
+
+    async fn get_reserved_nodes(&self) -> crate::Result<Vec<SocketAddress>> {
+        self.deref().get_reserved_nodes().await
     }
 
     async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {

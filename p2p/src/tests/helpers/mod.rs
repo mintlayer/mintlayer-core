@@ -48,6 +48,9 @@ pub enum PeerManagerNotification {
     Ban {
         address: BannableAddress,
     },
+    Discourage {
+        address: BannableAddress,
+    },
     Heartbeat,
     ConnectionAccepted {
         address: SocketAddress,
@@ -82,6 +85,10 @@ impl peer_manager::Observer for PeerManagerObserver {
 
     fn on_peer_ban(&mut self, address: BannableAddress) {
         self.send_notification(PeerManagerNotification::Ban { address });
+    }
+
+    fn on_peer_discouragement(&mut self, address: BannableAddress) {
+        self.send_notification(PeerManagerNotification::Discourage { address });
     }
 
     fn on_heartbeat(&mut self) {

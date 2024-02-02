@@ -19,8 +19,9 @@ use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
 
 use p2p::{
+    ban_config::BanConfig,
     config::{NodeType, P2pConfig},
-    peer_manager::PeerManagerConfig,
+    peer_manager::config::PeerManagerConfig,
     types::ip_or_socket_address::IpOrSocketAddress,
 };
 
@@ -72,10 +73,10 @@ pub struct P2pConfigFile {
     pub whitelisted_addresses: Option<Vec<IpAddr>>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: Option<usize>,
-    /// The score threshold after which a peer is banned.
-    pub ban_threshold: Option<u32>,
-    /// Duration of bans in seconds.
-    pub ban_duration: Option<u64>,
+    /// The score threshold after which a peer becomes discouraged.
+    pub discouragement_threshold: Option<u32>,
+    /// Duration of discouragement in seconds.
+    pub discouragement_duration: Option<u64>,
     /// Maximum acceptable time difference between this node and the remote peer (in seconds).
     /// If a large difference is detected, the peer will be disconnected.
     pub max_clock_diff: Option<u64>,
@@ -104,8 +105,8 @@ impl From<P2pConfigFile> for P2pConfig {
             reserved_nodes,
             whitelisted_addresses,
             max_inbound_connections,
-            ban_threshold,
-            ban_duration,
+            discouragement_threshold,
+            discouragement_duration,
             max_clock_diff,
             outbound_connection_timeout,
             ping_check_period,
@@ -122,8 +123,10 @@ impl From<P2pConfigFile> for P2pConfig {
             boot_nodes: boot_nodes.unwrap_or_default(),
             reserved_nodes: reserved_nodes.unwrap_or_default(),
             whitelisted_addresses: whitelisted_addresses.unwrap_or_default(),
-            ban_threshold: ban_threshold.into(),
-            ban_duration: ban_duration.map(Duration::from_secs).into(),
+            ban_config: BanConfig {
+                discouragement_threshold: discouragement_threshold.into(),
+                discouragement_duration: discouragement_duration.map(Duration::from_secs).into(),
+            },
             max_clock_diff: max_clock_diff.map(Duration::from_secs).into(),
             outbound_connection_timeout: outbound_connection_timeout
                 .map(|t| Duration::from_secs(t.into()))

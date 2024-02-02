@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use common::chain::SignedTransaction;
+use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::{
     tx_options::{TxOptions, TxOptionsOverrides},
     tx_origin::LocalTxOrigin,
@@ -61,7 +61,7 @@ where
         response_receiver.await?
     }
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>> {
+    async fn list_banned(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
         let (response_sender, response_receiver) = oneshot_nofail::channel();
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::ListBanned(response_sender))
@@ -69,19 +69,30 @@ where
         let list = response_receiver.await?;
         Ok(list)
     }
-    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()> {
+
+    async fn ban(&mut self, addr: BannableAddress, duration: Duration) -> crate::Result<()> {
         let (response_sender, response_receiver) = oneshot_nofail::channel();
         self.peer_mgr_event_sender
-            .send(PeerManagerEvent::Ban(addr, response_sender))
+            .send(PeerManagerEvent::Ban(addr, duration, response_sender))
             .map_err(|_| P2pError::ChannelClosed)?;
         response_receiver.await?
     }
+
     async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         let (response_sender, response_receiver) = oneshot_nofail::channel();
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::Unban(addr, response_sender))
             .map_err(|_| P2pError::ChannelClosed)?;
         response_receiver.await?
+    }
+
+    async fn list_discouraged(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::ListDiscouraged(response_sender))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        let list = response_receiver.await?;
+        Ok(list)
     }
 
     async fn get_peer_count(&self) -> crate::Result<usize> {
@@ -103,6 +114,15 @@ where
         self.peer_mgr_event_sender
             .send(PeerManagerEvent::GetConnectedPeers(response_sender))?;
         Ok(response_receiver.await?)
+    }
+
+    async fn get_reserved_nodes(&self) -> crate::Result<Vec<SocketAddress>> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::GetReserved(response_sender))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        let list = response_receiver.await?;
+        Ok(list)
     }
 
     async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {

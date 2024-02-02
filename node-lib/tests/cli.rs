@@ -63,7 +63,14 @@ fn create_default_config() {
         .bind_addresses
         .unwrap_or_default()
         .is_empty());
-    assert_eq!(config.p2p.clone().unwrap_or_default().ban_threshold, None);
+    assert_eq!(
+        config.p2p.clone().unwrap_or_default().discouragement_threshold,
+        None
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap_or_default().discouragement_duration,
+        None
+    );
     assert_eq!(
         config.p2p.clone().unwrap_or_default().outbound_connection_timeout,
         None
@@ -97,7 +104,8 @@ fn read_config_override_values() {
     let p2p_boot_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
     let p2p_reserved_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
     let p2p_max_inbound_connections = 123;
-    let p2p_ban_threshold = 3;
+    let p2p_discouragement_threshold = 3;
+    let p2p_discouragement_duration = 234;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let p2p_ping_check_period = 30;
     let p2p_ping_timeout = NonZeroU64::new(60).unwrap();
@@ -127,7 +135,8 @@ fn read_config_override_values() {
         p2p_boot_node: Some(vec![p2p_boot_node.clone()]),
         p2p_reserved_node: Some(vec![p2p_reserved_node.clone()]),
         p2p_max_inbound_connections: Some(p2p_max_inbound_connections),
-        p2p_ban_threshold: Some(p2p_ban_threshold),
+        p2p_discouragement_threshold: Some(p2p_discouragement_threshold),
+        p2p_discouragement_duration: Some(p2p_discouragement_duration),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         p2p_ping_check_period: Some(p2p_ping_check_period),
         p2p_ping_timeout: Some(p2p_ping_timeout),
@@ -201,8 +210,12 @@ fn read_config_override_values() {
         Some(p2p_max_inbound_connections)
     );
     assert_eq!(
-        config.p2p.clone().unwrap().ban_threshold,
-        Some(p2p_ban_threshold)
+        config.p2p.clone().unwrap().discouragement_threshold,
+        Some(p2p_discouragement_threshold)
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().discouragement_duration,
+        Some(p2p_discouragement_duration)
     );
     assert_eq!(
         config.p2p.clone().unwrap().outbound_connection_timeout,

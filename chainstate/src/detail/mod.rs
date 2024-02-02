@@ -537,7 +537,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 bi.block_id(),
                 bi.block_height(),
                 bi.block_timestamp(),
-                bi.block_timestamp().into_time().as_standard_printable_time(),
+                bi.block_timestamp().into_time(),
             );
 
             self.update_initial_block_download_flag()

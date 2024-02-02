@@ -13,8 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Display};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
+
+use chrono::TimeZone;
+use serde::{Deserialize, Serialize};
 
 pub fn duration_to_int(d: &Duration) -> Result<u64, std::num::TryFromIntError> {
     let r = d.as_millis().try_into()?;
@@ -61,7 +65,7 @@ pub fn get_time() -> Time {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Time {
     /// Time, stored as duration since SystemTime::UNIX_EPOCH
     time: Duration,
@@ -102,13 +106,13 @@ impl Time {
         self.time.saturating_sub(t.time)
     }
 
-    pub fn as_absolute_time(&self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + self.time
-    }
-
-    pub fn as_standard_printable_time(&self) -> String {
-        let datetime: chrono::DateTime<chrono::Utc> = self.as_absolute_time().into();
-        format!("{}", datetime.format("%Y-%m-%d %H:%M:%S"))
+    pub fn as_absolute_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        TryInto::<i64>::try_into(self.time.as_secs()).ok().and_then(|secs| {
+            // Note: chrono::DateTime supports time values up to about 262,000 years away
+            // from the common era, which is still way below i64::MAX; i.e. timestamp_opt
+            // may still return None here.
+            chrono::Utc.timestamp_opt(secs, self.time.subsec_nanos()).single()
+        })
     }
 }
 
@@ -133,6 +137,33 @@ impl std::ops::Sub<Time> for Time {
 
     fn sub(self, other: Time) -> Option<Duration> {
         self.time.checked_sub(other.as_duration_since_epoch())
+    }
+}
+
+impl Debug for Time {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let utc_time = self.as_absolute_time();
+
+        if let Some(time) = utc_time {
+            write!(f, "{time:?}")
+        } else {
+            write!(f, "Time({:?})", self.time)
+        }
+    }
+}
+
+impl Display for Time {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let utc_time = self.as_absolute_time();
+
+        if let Some(time) = utc_time {
+            write!(f, "{time}")
+        } else {
+            // Note: we could use humantime::format_duration here, but the output won't be
+            // very nice, e.g. for Duration::MAX it'll be:
+            // "584542046090years 7months 15days 17h 5m 3s 999ms 999us 999ns"
+            write!(f, "{:?} since Unix epoch", self.time)
+        }
     }
 }
 
@@ -189,9 +220,23 @@ mod tests {
     }
 
     #[test]
-    fn format_absolute_time() {
+    fn debug_display() {
         let t = Time::from_secs_since_epoch(1705064092);
-        let s = t.as_standard_printable_time().to_string();
-        assert_eq!(&s, "2024-01-12 12:54:52");
+        let s = format!("{t:?}");
+        assert_eq!(s, "2024-01-12T12:54:52Z");
+        let s = format!("{t}");
+        assert_eq!(s, "2024-01-12 12:54:52 UTC");
+
+        let t = Time::from_duration_since_epoch(Duration::from_millis(1705064092123));
+        let s = format!("{t:?}");
+        assert_eq!(s, "2024-01-12T12:54:52.123Z");
+        let s = format!("{t}");
+        assert_eq!(s, "2024-01-12 12:54:52.123 UTC");
+
+        let t = Time::from_duration_since_epoch(Duration::MAX);
+        let s = format!("{t:?}");
+        assert_eq!(s, "Time(18446744073709551615.999999999s)");
+        let s = format!("{t}");
+        assert_eq!(s, "18446744073709551615.999999999s since Unix epoch");
     }
 }

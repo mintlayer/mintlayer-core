@@ -29,6 +29,7 @@ use p2p_types::socket_address::SocketAddress;
 use tokio::time::timeout;
 
 use crate::{
+    ban_config::BanConfig,
     config::P2pConfig,
     net::{
         default_backend::transport::{
@@ -39,8 +40,8 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
+        config::PeerManagerConfig,
         peerdb::{config::PeerDbConfig, storage_impl::PeerDbStorageImpl},
-        PeerManagerConfig,
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
 };
@@ -136,7 +137,7 @@ impl TestTransportMaker for TestTransportNoise {
 pub struct TestAddressMaker {}
 
 impl TestAddressMaker {
-    pub fn new_random_ipv6_addr_with_rng(rng: &mut impl Rng) -> Ipv6Addr {
+    pub fn new_random_ipv6_addr(rng: &mut impl Rng) -> Ipv6Addr {
         Ipv6Addr::new(
             rng.gen(),
             rng.gen(),
@@ -149,15 +150,17 @@ impl TestAddressMaker {
         )
     }
 
-    pub fn new_random_ipv4_addr_with_rng(rng: &mut impl Rng) -> Ipv4Addr {
+    pub fn new_random_ipv4_addr(rng: &mut impl Rng) -> Ipv4Addr {
         Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())
     }
 
     pub fn new_random_address_with_rng(rng: &mut impl Rng) -> SocketAddress {
-        let ip = Self::new_random_ipv6_addr_with_rng(rng);
+        let ip = Self::new_random_ipv6_addr(rng);
         SocketAddress::new(SocketAddr::new(IpAddr::V6(ip), rng.gen()))
     }
 
+    // TODO: remove this function; rename new_random_address_with_rng to new_random_address and
+    // use it in all the tests.
     pub fn new_random_address() -> SocketAddress {
         let mut rng = make_pseudo_rng();
         Self::new_random_address_with_rng(&mut rng)
@@ -275,8 +278,7 @@ pub fn test_p2p_config() -> P2pConfig {
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -301,8 +303,7 @@ pub fn test_p2p_config_with_peer_mgr_config(peer_manager_config: PeerManagerConf
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         whitelisted_addresses: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
+        ban_config: Default::default(),
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
@@ -338,6 +339,54 @@ pub fn test_p2p_config_with_peer_db_config(peerdb_config: PeerDbConfig) -> P2pCo
         force_dns_query_if_no_global_addresses_known: Default::default(),
         allow_same_ip_connections: Default::default(),
     })
+}
+
+pub fn test_p2p_config_with_ban_config(ban_config: BanConfig) -> P2pConfig {
+    P2pConfig {
+        ban_config,
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        whitelisted_addresses: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        peer_handshake_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        sync_stalling_timeout: Default::default(),
+        peer_manager_config: Default::default(),
+        protocol_config: Default::default(),
+    }
+}
+
+pub fn test_peer_mgr_config_with_no_auto_outbound_connections() -> PeerManagerConfig {
+    PeerManagerConfig {
+        outbound_block_relay_count: 0.into(),
+        outbound_block_relay_extra_count: 0.into(),
+        outbound_full_relay_count: 0.into(),
+        outbound_full_relay_extra_count: 0.into(),
+        enable_feeler_connections: false.into(),
+
+        outbound_block_relay_connection_min_age: Default::default(),
+        peerdb_config: Default::default(),
+        preserved_inbound_count_address_group: Default::default(),
+        preserved_inbound_count_ping: Default::default(),
+        preserved_inbound_count_new_blocks: Default::default(),
+        preserved_inbound_count_new_transactions: Default::default(),
+        max_inbound_connections: Default::default(),
+        outbound_full_relay_connection_min_age: Default::default(),
+        stale_tip_time_diff: Default::default(),
+        main_loop_tick_interval: Default::default(),
+        feeler_connections_interval: Default::default(),
+        allow_same_ip_connections: Default::default(),
+        force_dns_query_if_no_global_addresses_known: Default::default(),
+    }
 }
 
 pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)

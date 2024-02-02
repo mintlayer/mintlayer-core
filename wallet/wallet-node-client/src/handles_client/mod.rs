@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, time::Duration};
 
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
@@ -22,7 +22,7 @@ use common::{
         tokens::{RPCTokenInfo, TokenId},
         Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
@@ -33,7 +33,8 @@ use p2p::{
     error::P2pError,
     interface::types::ConnectedPeer,
     types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+        peer_id::PeerId, socket_address::SocketAddress,
     },
     P2pHandle,
 };
@@ -289,16 +290,20 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
-        let count = self.p2p.call_async_mut(move |this| this.get_peer_count()).await??;
+        let count = self.p2p.call_async(move |this| this.get_peer_count()).await??;
         Ok(count)
     }
 
-    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
-        let list = self.p2p.call_async_mut(move |this| this.list_banned()).await??;
+    async fn p2p_list_banned(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
+        let list = self.p2p.call_async(move |this| this.list_banned()).await??;
         Ok(list)
     }
-    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
-        self.p2p.call_async_mut(move |this| this.ban(address)).await??;
+    async fn p2p_ban(
+        &self,
+        address: BannableAddress,
+        duration: Duration,
+    ) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.ban(address, duration)).await??;
         Ok(())
     }
     async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
@@ -306,8 +311,17 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
+    async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
+        let list = self.p2p.call_async(move |this| this.list_discouraged()).await??;
+        Ok(list)
+    }
+
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
-        let peers = self.p2p.call_async_mut(move |this| this.get_connected_peers()).await??;
+        let peers = self.p2p.call_async(move |this| this.get_connected_peers()).await??;
+        Ok(peers)
+    }
+    async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error> {
+        let peers = self.p2p.call_async(move |this| this.get_reserved_nodes()).await??;
         Ok(peers)
     }
     async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {

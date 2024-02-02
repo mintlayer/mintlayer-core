@@ -22,10 +22,11 @@ use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress, PeerId,
 };
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 use utils::{ensure, shallow_clone::ShallowClone};
 use wallet::{
     account::{PartiallySignedTransaction, PoolData, TransactionToSign},
@@ -40,7 +41,8 @@ use common::{
         Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, Amount, BlockHeight, DecimalAmount, Id, Idable,
+        id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, DecimalAmount, Id,
+        Idable,
     },
 };
 pub use interface::WalletRpcServer;
@@ -1106,16 +1108,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.node.p2p_disconnect(peer_id).await.map_err(RpcError::RpcError)
     }
 
-    pub async fn list_banned(&self) -> WRpcResult<Vec<BannableAddress>, N> {
+    pub async fn list_banned(&self) -> WRpcResult<Vec<(BannableAddress, Time)>, N> {
         self.node.p2p_list_banned().await.map_err(RpcError::RpcError)
     }
 
-    pub async fn ban_address(&self, address: BannableAddress) -> WRpcResult<(), N> {
-        self.node.p2p_ban(address).await.map_err(RpcError::RpcError)
+    pub async fn ban_address(
+        &self,
+        address: BannableAddress,
+        duration: Duration,
+    ) -> WRpcResult<(), N> {
+        self.node.p2p_ban(address, duration).await.map_err(RpcError::RpcError)
     }
 
     pub async fn unban_address(&self, address: BannableAddress) -> WRpcResult<(), N> {
         self.node.p2p_unban(address).await.map_err(RpcError::RpcError)
+    }
+
+    pub async fn list_discouraged(&self) -> WRpcResult<Vec<(BannableAddress, Time)>, N> {
+        self.node.p2p_list_discouraged().await.map_err(RpcError::RpcError)
     }
 
     pub async fn peer_count(&self) -> WRpcResult<usize, N> {
@@ -1124,6 +1134,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
     pub async fn connected_peers(&self) -> WRpcResult<Vec<ConnectedPeer>, N> {
         self.node.p2p_get_connected_peers().await.map_err(RpcError::RpcError)
+    }
+
+    pub async fn reserved_peers(&self) -> WRpcResult<Vec<SocketAddress>, N> {
+        self.node.p2p_get_reserved_nodes().await.map_err(RpcError::RpcError)
     }
 
     pub async fn add_reserved_peer(&self, address: IpOrSocketAddress) -> WRpcResult<(), N> {

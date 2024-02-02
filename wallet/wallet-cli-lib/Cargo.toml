@@ -28,7 +28,9 @@ wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true
 directories.workspace = true
+humantime.workspace = true
 hex.workspace = true
+itertools.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
 serde_json.workspace = true
 shlex.workspace = true

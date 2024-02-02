@@ -42,8 +42,13 @@ storage::decl_schema! {
         /// Table for known addresses
         pub DBKnownAddresses: Map<String, KnownAddressState>,
 
-        /// Table for banned addresses vs when they can be unbanned (Duration is timestamp since UNIX Epoch)
+        /// Table for banned addresses vs the time when they should be unbanned
+        /// (Duration is a timestamp since UNIX Epoch)
         pub DBBannedAddresses: Map<String, Duration>,
+
+        /// Table for discouraged addresses vs the time when the discouragement should expire
+        /// (Duration is a timestamp since UNIX Epoch)
+        pub DBDiscouragedAddresses: Map<String, Duration>,
 
         /// Table for anchor peers addresses
         pub DBAnchorAddresses: Map<String, ()>,
@@ -93,6 +98,21 @@ impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
 
     fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()> {
         Ok(self.storage().get_mut::<DBBannedAddresses, _>().del(address.to_string())?)
+    }
+
+    fn add_discouraged_address(
+        &mut self,
+        address: &BannableAddress,
+        time: Time,
+    ) -> crate::Result<()> {
+        Ok(self
+            .storage()
+            .get_mut::<DBDiscouragedAddresses, _>()
+            .put(address.to_string(), time.as_duration_since_epoch())?)
+    }
+
+    fn del_discouraged_address(&mut self, address: &BannableAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBDiscouragedAddresses, _>().del(address.to_string())?)
     }
 
     fn add_anchor_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
@@ -148,6 +168,19 @@ impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
 
     fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
         let map = self.storage().get::<DBBannedAddresses, _>();
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, dur)| {
+            let addr = addr_str.parse::<BannableAddress>().map_err(|err| {
+                P2pError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })?;
+            Ok((addr, Time::from_duration_since_epoch(dur)))
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
+    }
+
+    fn get_discouraged_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
+        let map = self.storage().get::<DBDiscouragedAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, dur)| {
             let addr = addr_str.parse::<BannableAddress>().map_err(|err| {
                 P2pError::InvalidStorageState(format!(

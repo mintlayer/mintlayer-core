@@ -17,6 +17,7 @@
 
 mod addr_list_response_cache;
 pub mod address_groups;
+pub mod config;
 pub mod dns_seed;
 pub mod peer_context;
 pub mod peerdb;
@@ -45,10 +46,7 @@ use common::{
 };
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
-use utils::{
-    bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, make_config_setting,
-    set_flag::SetFlag,
-};
+use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 
 use crate::{
     config::P2pConfig,
@@ -81,121 +79,8 @@ use self::{
     address_groups::AddressGroup,
     dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
-    peerdb::{config::PeerDbConfig, storage::PeerDbStorage},
-    peers_eviction::{
-        OutboundBlockRelayConnectionMinAge, OutboundFullRelayConnectionMinAge,
-        PreservedInboundCountAddressGroup, PreservedInboundCountNewBlocks,
-        PreservedInboundCountNewTransactions, PreservedInboundCountPing,
-    },
+    peerdb::storage::PeerDbStorage,
 };
-
-#[derive(Default, Debug, Clone)]
-pub struct PeerManagerConfig {
-    /// Maximum allowed number of inbound connections.
-    pub max_inbound_connections: MaxInboundConnections,
-
-    /// The number of inbound peers to preserve based on the address group.
-    pub preserved_inbound_count_address_group: PreservedInboundCountAddressGroup,
-    /// The number of inbound peers to preserve based on ping.
-    pub preserved_inbound_count_ping: PreservedInboundCountPing,
-    /// The number of inbound peers to preserve based on the last time they sent us new blocks.
-    pub preserved_inbound_count_new_blocks: PreservedInboundCountNewBlocks,
-    /// The number of inbound peers to preserve based on the last time they sent us new transactions.
-    pub preserved_inbound_count_new_transactions: PreservedInboundCountNewTransactions,
-
-    /// The desired maximum number of full relay outbound connections.
-    /// Note that this limit may be exceeded temporarily by up to outbound_full_relay_extra_count
-    /// connections.
-    pub outbound_full_relay_count: OutboundFullRelayCount,
-    /// The number of extra full relay connections that we may establish when a stale tip
-    /// is detected.
-    pub outbound_full_relay_extra_count: OutboundFullRelayExtraCount,
-
-    /// The desired maximum number of block relay outbound connections.
-    /// Note that this limit may be exceeded temporarily by up to outbound_block_relay_extra_count
-    /// connections.
-    pub outbound_block_relay_count: OutboundBlockRelayCount,
-    /// The number of extra block relay connections that we will establish and evict regularly.
-    pub outbound_block_relay_extra_count: OutboundBlockRelayExtraCount,
-
-    /// Outbound block relay connections younger than this age will not be taken into account
-    /// during eviction.
-    /// Note that extra block relay connections are established and evicted on a regular basis
-    /// during normal operation. So, this interval basically determines how often those extra
-    /// connections will come and go.
-    pub outbound_block_relay_connection_min_age: OutboundBlockRelayConnectionMinAge,
-    /// Outbound full relay connections younger than this age will not be taken into account
-    /// during eviction.
-    /// Note that extra full relay connections are established if the current tip becomes stale.
-    pub outbound_full_relay_connection_min_age: OutboundFullRelayConnectionMinAge,
-
-    /// The time after which the tip will be considered stale.
-    pub stale_tip_time_diff: StaleTipTimeDiff,
-
-    /// How often the main loop should be woken up when no other events occur.
-    pub main_loop_tick_interval: MainLoopTickInterval,
-
-    /// Whether feeler connections should be enabled.
-    pub enable_feeler_connections: EnableFeelerConnections,
-    /// The minimum interval between feeler connections.
-    pub feeler_connections_interval: FeelerConnectionsInterval,
-
-    /// If true, the node will perform an early dns query if the peer db doesn't contain
-    /// any global addresses at startup (more precisely, the ones for which is_global_unicast_ip
-    /// returns true).
-    ///
-    /// Note that this is mainly needed to speed up the startup of the test
-    /// nodes in build-tools/p2p-test. Those nodes always start with a boot_nodes
-    /// list that contains addresses of their siblings, which are always some private ips;
-    /// therefore, they all will have peers from the beginning, which will prevent normal
-    /// dns queries, but will be unable to obtain blocks until stale_tip_time_diff has elapsed,
-    /// which is 30 min by default. Setting this option to true will force the peer manager
-    /// to perform an early dns query in such a situation.
-    pub force_dns_query_if_no_global_addresses_known: ForceDnsQueryIfNoGlobalAddressesKnown,
-
-    /// If true, multiple connections to the same ip address (but using a different port) will
-    /// always be allowed.
-    ///
-    /// Normally, the peer manager won't always allow connecting to the same ip using a different
-    /// port; e.g. if an inbound connection exists, a new outbound connection to the same ip
-    /// will only be allowed if it's manual. This may be inconvenient for some (legacy) unit tests,
-    /// so they can set this option to true to override this behavior.
-    /// TODO: consider rewriting tests that need this option and remove it.
-    pub allow_same_ip_connections: AllowSameIpConnections,
-
-    /// Peer db configuration.
-    pub peerdb_config: PeerDbConfig,
-}
-
-impl PeerManagerConfig {
-    pub fn total_preserved_inbound_count(&self) -> usize {
-        *self.preserved_inbound_count_address_group
-            + *self.preserved_inbound_count_ping
-            + *self.preserved_inbound_count_new_blocks
-            + *self.preserved_inbound_count_new_transactions
-    }
-
-    /// The desired maximum number of automatic outbound connections.
-    pub fn outbound_full_and_block_relay_count(&self) -> usize {
-        *self.outbound_full_relay_count + *self.outbound_block_relay_count
-    }
-}
-
-make_config_setting!(MaxInboundConnections, usize, 128);
-make_config_setting!(OutboundFullRelayCount, usize, 8);
-make_config_setting!(OutboundFullRelayExtraCount, usize, 1);
-make_config_setting!(OutboundBlockRelayCount, usize, 2);
-make_config_setting!(OutboundBlockRelayExtraCount, usize, 1);
-make_config_setting!(StaleTipTimeDiff, Duration, Duration::from_secs(30 * 60));
-make_config_setting!(MainLoopTickInterval, Duration, Duration::from_secs(1));
-make_config_setting!(
-    FeelerConnectionsInterval,
-    Duration,
-    Duration::from_secs(2 * 60)
-);
-make_config_setting!(EnableFeelerConnections, bool, true);
-make_config_setting!(ForceDnsQueryIfNoGlobalAddressesKnown, bool, false);
-make_config_setting!(AllowSameIpConnections, bool, false);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 pub const HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -544,12 +429,7 @@ where
 
     /// Adjust peer score
     ///
-    /// If the peer is known, update its existing peer score and report
-    /// if it should be disconnected when score reached the threshold.
-    /// Unknown peers are reported as to be disconnected.
-    ///
-    /// If peer is banned, it is removed from the connected peers
-    /// and its address is marked as banned.
+    /// Discourage the peer if the score reaches the corresponding threshold.
     fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) {
         let peer = match self.peers.get(&peer_id) {
             Some(peer) => peer,
@@ -579,16 +459,16 @@ where
             o.on_peer_ban_score_adjustment(peer.peer_address, peer.score)
         }
 
-        if peer.score >= *self.p2p_config.ban_threshold {
+        if peer.score >= *self.p2p_config.ban_config.discouragement_threshold {
             let address = peer.peer_address.as_bannable();
-            self.ban(address);
+            self.discourage(address);
         }
     }
 
     /// Adjust peer score after a failed handshake.
     ///
     /// Note that currently intermediate scores are not stored in the peer db, so this call will
-    /// only make any effect if the passed score is bigger than the ban threshold.
+    /// only make any effect if the passed score is bigger than the threshold.
     fn adjust_peer_score_on_failed_handshake(&mut self, peer_address: SocketAddress, score: u32) {
         let whitelisted_node =
             self.pending_outbound_connects
@@ -610,15 +490,14 @@ where
             o.on_peer_ban_score_adjustment(peer_address, score);
         }
 
-        if score >= *self.p2p_config.ban_threshold {
+        if score >= *self.p2p_config.ban_config.discouragement_threshold {
             let address = peer_address.as_bannable();
-            self.ban(address);
+            self.discourage(address);
         }
     }
 
-    fn ban(&mut self, address: BannableAddress) {
-        let to_disconnect = self
-            .peers
+    fn bannable_peers_for_addr(&self, address: BannableAddress) -> Vec<PeerId> {
+        self.peers
             .values()
             .filter_map(|peer| {
                 if peer.peer_address.as_bannable() == address {
@@ -627,14 +506,42 @@ where
                     None
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
 
-        log::info!("Ban {:?}, disconnect peers: {:?}", address, to_disconnect);
+    fn ban(&mut self, address: BannableAddress, duration: Duration) {
+        let to_disconnect = self.bannable_peers_for_addr(address);
 
-        self.peerdb.ban(address);
+        log::info!(
+            "Banning {:?}, the following peers will be disconnected: {:?}",
+            address,
+            to_disconnect
+        );
+
+        self.peerdb.ban(address, duration);
 
         if let Some(o) = self.observer.as_mut() {
             o.on_peer_ban(address);
+        }
+
+        for peer_id in to_disconnect {
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+        }
+    }
+
+    fn discourage(&mut self, address: BannableAddress) {
+        let to_disconnect = self.bannable_peers_for_addr(address);
+
+        log::info!(
+            "Discouraging {:?}, the following peers will be disconnected: {:?}",
+            address,
+            to_disconnect
+        );
+
+        self.peerdb.discourage(address);
+
+        if let Some(o) = self.observer.as_mut() {
+            o.on_peer_discouragement(address);
         }
 
         for peer_id in to_disconnect {
@@ -661,10 +568,16 @@ where
         self.maybe_reject_because_already_connected(&address, peer_role)?;
 
         let bannable_address = address.as_bannable();
+        let is_reserved = self.peerdb.is_reserved_node(&address);
+        let is_banned = self.peerdb.is_address_banned(&bannable_address);
+        let is_discouraged = self.peerdb.is_address_discouraged(&bannable_address);
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address)
-                || self.peerdb.is_reserved_node(&address),
+            !is_banned || is_reserved,
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
+        );
+        ensure!(
+            !is_discouraged || is_reserved,
+            P2pError::PeerError(PeerError::DiscouragedAddress(address.to_string())),
         );
 
         self.peer_connectivity_handle.connect(address, local_services_override)?;
@@ -790,6 +703,10 @@ where
         // might have appeared since try_connect was called, so the call below is not redundant.
         self.maybe_reject_because_already_connected(address, peer_role)?;
 
+        // Note: for outbound connections, ban and discouragement statuses have already been
+        // checked in try_connect, so when we do the checks here, they'll only work for
+        // inbound connections. And since inbound connections from discouraged addresses are
+        // allowed, we only check the banned status here.
         ensure!(
             !self.peerdb.is_address_banned(&address.as_bannable()),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
@@ -809,10 +726,16 @@ where
                 // TODO: Always allow connections from the whitelisted IPs
                 if self.inbound_peer_count()
                     >= *self.p2p_config.peer_manager_config.max_inbound_connections
-                    && !self.try_evict_random_inbound_connection()
                 {
-                    log::info!("no peer is selected for eviction, new connection is dropped");
-                    return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    if self.peerdb.is_address_discouraged(&address.as_bannable()) {
+                        log::info!("Rejecting inbound connection from a discouraged address - too many peers");
+                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    }
+
+                    if !self.try_evict_random_inbound_connection() {
+                        log::info!("Rejecting inbound connection - too many peers and none of them can be evicted");
+                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                    }
                 }
             }
 
@@ -853,7 +776,13 @@ where
                     && !self.pending_disconnects.contains_key(&peer.info.peer_id)
             })
             .map(|peer| {
-                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state, now)
+                let addr = peer.peer_address.as_bannable();
+                peers_eviction::EvictionCandidate::new(
+                    peer,
+                    &self.peer_eviction_random_state,
+                    now,
+                    self.peerdb.is_address_banned_or_discouraged(&addr),
+                )
             })
             .collect()
     }
@@ -865,6 +794,7 @@ where
         if let Some(peer_id) = peers_eviction::select_for_eviction_inbound(
             self.eviction_candidates(PeerRole::Inbound),
             &self.p2p_config.peer_manager_config,
+            &mut make_pseudo_rng(),
         ) {
             log::info!("inbound peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -880,6 +810,7 @@ where
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
+            &mut make_pseudo_rng(),
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -892,6 +823,7 @@ where
             self.eviction_candidates(PeerRole::OutboundFullRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
+            &mut make_pseudo_rng(),
         ) {
             log::info!("full relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -1227,7 +1159,7 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     fn heartbeat(&mut self) {
-        // Expired banned addresses are dropped here, keep this call!
+        // Expired banned and discouraged addresses are dropped here.
         self.peerdb.heartbeat();
 
         self.establish_new_connections();
@@ -1248,6 +1180,7 @@ where
         let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
         let mut cur_conn_ip_port_to_role_map = BTreeMap::new();
+
         for (addr, role) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
@@ -1360,7 +1293,9 @@ where
             && cur_feeler_conn_count == 0
             && now >= self.next_feeler_connection_time
         {
-            if let Some(address) = self.peerdb.select_non_reserved_address_from_new_addr_table() {
+            if let Some(address) =
+                self.peerdb.select_non_reserved_outbound_address_from_new_addr_table()
+            {
                 self.connect(address, OutboundConnectType::Feeler);
                 self.next_feeler_connection_time =
                     Self::choose_next_feeler_connection_time(&self.p2p_config, now);
@@ -1399,13 +1334,15 @@ where
 
             self.peerdb.peer_discovered(address);
 
-            let peer_ids = self
-                .subscribed_to_peer_addresses
-                .iter()
-                .cloned()
-                .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
-            for new_peer_id in peer_ids {
-                self.announce_address(new_peer_id, address);
+            if !self.peerdb.is_address_banned_or_discouraged(&address.as_bannable()) {
+                let peer_ids = self
+                    .subscribed_to_peer_addresses
+                    .iter()
+                    .cloned()
+                    .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
+                for new_peer_id in peer_ids {
+                    self.announce_address(new_peer_id, address);
+                }
             }
         }
     }
@@ -1428,10 +1365,23 @@ where
             .get_or_create(peer, now, || {
                 self.peerdb
                     .known_addresses()
-                    .map(SocketAddress::as_peer_address)
-                    .filter(|address| Self::is_peer_address_valid(address, &self.p2p_config))
+                    .filter_map(|address| {
+                        let peer_addr = address.as_peer_address();
+                        let bannable_addr = address.as_bannable();
+                        if Self::is_peer_address_valid(&peer_addr, &self.p2p_config)
+                            && !self.peerdb.is_address_banned_or_discouraged(&bannable_addr)
+                        {
+                            Some(peer_addr)
+                        } else {
+                            None
+                        }
+                    })
                     .choose_multiple(&mut make_pseudo_rng(), max_addr_count)
             })
+            // Note: some of the addresses may have become banned or discouraged after they've been
+            // cached. It's not clear whether it's better to filter them out here, which will
+            // reveal to peers what addresses we've banned or discouraged, or keep them as is.
+            // But it's probably not that important.
             .clone();
 
         assert!(addresses.len() <= max_addr_count);
@@ -1576,6 +1526,9 @@ where
                 let peers = self.get_connected_peers();
                 response_sender.send(peers);
             }
+            PeerManagerEvent::GetReserved(response_sender) => {
+                response_sender.send(self.peerdb.get_reserved_nodes().collect())
+            }
             PeerManagerEvent::AddReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.peerdb.add_reserved_node(address);
@@ -1589,15 +1542,18 @@ where
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::ListBanned(response_sender) => {
-                response_sender.send(self.peerdb.list_banned().cloned().collect())
+                response_sender.send(self.peerdb.list_banned().collect())
             }
-            PeerManagerEvent::Ban(address, response_sender) => {
-                self.ban(address);
+            PeerManagerEvent::Ban(address, duration, response_sender) => {
+                self.ban(address, duration);
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::Unban(address, response_sender) => {
                 self.peerdb.unban(&address);
                 response_sender.send(Ok(()));
+            }
+            PeerManagerEvent::ListDiscouraged(response_sender) => {
+                response_sender.send(self.peerdb.list_discouraged().collect())
             }
             PeerManagerEvent::GenericQuery(query_func) => {
                 query_func(self);
@@ -2122,6 +2078,7 @@ where
 pub trait Observer {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
     fn on_peer_ban(&mut self, address: BannableAddress);
+    fn on_peer_discouragement(&mut self, address: BannableAddress);
     // This will be called at the end of "heartbeat" function.
     fn on_heartbeat(&mut self);
     // This will be called for both incoming and outgoing connections.
@@ -2133,10 +2090,10 @@ pub trait PeerManagerInterface {
     fn peers(&self) -> &BTreeMap<PeerId, PeerContext>;
 
     #[cfg(test)]
-    fn peerdb(&self) -> &dyn peerdb::PeerDbInterface;
+    fn peer_db(&self) -> &dyn peerdb::PeerDbInterface;
 
     #[cfg(test)]
-    fn peerdb_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface;
+    fn peer_db_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface;
 }
 
 impl<T, S> PeerManagerInterface for PeerManager<T, S>
@@ -2151,12 +2108,12 @@ where
     }
 
     #[cfg(test)]
-    fn peerdb(&self) -> &dyn peerdb::PeerDbInterface {
+    fn peer_db(&self) -> &dyn peerdb::PeerDbInterface {
         &self.peerdb
     }
 
     #[cfg(test)]
-    fn peerdb_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface {
+    fn peer_db_mut(&mut self) -> &mut dyn peerdb::PeerDbInterface {
         &mut self.peerdb
     }
 }

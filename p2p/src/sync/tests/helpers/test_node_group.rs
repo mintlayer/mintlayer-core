@@ -317,11 +317,13 @@ impl TestNodeGroup {
                         | PeerManagerEvent::GetBindAddresses(_)
                         | PeerManagerEvent::GetConnectedPeers(_)
                         | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                        | PeerManagerEvent::GetReserved(_)
                         | PeerManagerEvent::AddReserved(_, _)
                         | PeerManagerEvent::RemoveReserved(_, _)
                         | PeerManagerEvent::ListBanned(_)
-                        | PeerManagerEvent::Ban(_, _)
+                        | PeerManagerEvent::Ban(_, _, _)
                         | PeerManagerEvent::Unban(_, _)
+                        | PeerManagerEvent::ListDiscouraged(_)
                         | PeerManagerEvent::GenericQuery(_)
                         | PeerManagerEvent::GenericMut(_) => {
                             panic!("Unexpected peer manager event: {peer_event:?}");

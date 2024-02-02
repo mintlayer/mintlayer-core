@@ -32,11 +32,12 @@ use super::{
     storage_impl::PeerDbStorageImpl,
 };
 
-const CURRENT_STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+pub const CURRENT_STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub struct LoadedStorage {
     pub known_addresses: BTreeMap<SocketAddress, KnownAddressState>,
     pub banned_addresses: BTreeMap<BannableAddress, Time>,
+    pub discouraged_addresses: BTreeMap<BannableAddress, Time>,
     pub anchor_addresses: BTreeSet<SocketAddress>,
     pub salt: Salt,
 }
@@ -52,7 +53,7 @@ impl LoadedStorage {
 
         match version {
             None => Self::init_storage(storage, peerdb_config),
-            Some(CURRENT_STORAGE_VERSION) => Self::load_storage_v2(storage),
+            Some(CURRENT_STORAGE_VERSION) => Self::load_storage_v3(storage),
             Some(version) => Err(P2pError::PeerDbStorageVersionMismatch {
                 expected_version: CURRENT_STORAGE_VERSION,
                 actual_version: version,
@@ -74,18 +75,22 @@ impl LoadedStorage {
         Ok(LoadedStorage {
             known_addresses: BTreeMap::new(),
             banned_addresses: BTreeMap::new(),
+            discouraged_addresses: BTreeMap::new(),
             anchor_addresses: BTreeSet::new(),
             salt,
         })
     }
 
-    fn load_storage_v2<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
+    fn load_storage_v3<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
 
         let known_addresses = tx.get_known_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
 
         let banned_addresses =
             tx.get_banned_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
+
+        let discouraged_addresses =
+            tx.get_discouraged_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
 
         let anchor_addresses = tx.get_anchor_addresses()?.iter().copied().collect::<BTreeSet<_>>();
 
@@ -96,6 +101,7 @@ impl LoadedStorage {
         Ok(LoadedStorage {
             known_addresses,
             banned_addresses,
+            discouraged_addresses,
             anchor_addresses,
             salt,
         })

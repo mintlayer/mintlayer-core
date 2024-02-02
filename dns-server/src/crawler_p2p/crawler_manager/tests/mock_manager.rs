@@ -35,7 +35,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use p2p::{
-    config::{BanDuration, BanThreshold, NodeType, P2pConfig},
+    config::{NodeType, P2pConfig},
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
@@ -295,8 +295,8 @@ pub fn test_crawler(
         default_p2p_port: 3031,
     };
     let crawler_config = CrawlerConfig {
-        ban_duration: BanDuration::default(),
-        ban_threshold: BanThreshold::default(),
+        ban_duration: Default::default(),
+        ban_threshold: Default::default(),
     };
 
     let state = MockStateRef {

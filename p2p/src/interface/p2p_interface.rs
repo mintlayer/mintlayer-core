@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use common::chain::SignedTransaction;
+use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
@@ -29,14 +29,17 @@ pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>>;
-    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()>;
+    async fn list_banned(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
+    async fn ban(&mut self, addr: BannableAddress, duration: Duration) -> crate::Result<()>;
     async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()>;
+
+    async fn list_discouraged(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
     async fn get_bind_addresses(&self) -> crate::Result<Vec<SocketAddress>>;
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;
 
+    async fn get_reserved_nodes(&self) -> crate::Result<Vec<SocketAddress>>;
     async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
 

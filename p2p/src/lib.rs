@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod ban_config;
 pub mod config;
 pub mod error;
 pub mod interface;
