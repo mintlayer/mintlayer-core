@@ -291,7 +291,7 @@ impl ConstrainedValueAccumulator {
                 TxOutput::CreateStakePool(_, data) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    data.value(),
+                    data.pledge(),
                 )?,
                 TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => {
                     /* do nothing as these outputs cannot produce values */

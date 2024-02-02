@@ -33,7 +33,7 @@ use super::Destination;
     serde::Deserialize,
 )]
 pub struct StakePoolData {
-    value: Amount,
+    pledge: Amount,
     staker: Destination,
     vrf_public_key: VRFPublicKey,
     decommission_key: Destination,
@@ -43,7 +43,7 @@ pub struct StakePoolData {
 
 impl StakePoolData {
     pub fn new(
-        value: Amount,
+        pledge: Amount,
         staker: Destination,
         vrf_public_key: VRFPublicKey,
         decommission_key: Destination,
@@ -51,7 +51,7 @@ impl StakePoolData {
         cost_per_block: Amount,
     ) -> Self {
         Self {
-            value,
+            pledge,
             staker,
             vrf_public_key,
             decommission_key,
@@ -80,7 +80,7 @@ impl StakePoolData {
         self.cost_per_block
     }
 
-    pub fn value(&self) -> Amount {
-        self.value
+    pub fn pledge(&self) -> Amount {
+        self.pledge
     }
 }

@@ -39,11 +39,15 @@ pub use output::*;
 
 pub mod signature;
 
+mod printout;
+
 use self::signature::inputsig::InputWitness;
 use self::signed_transaction::SignedTransaction;
 
 mod transaction_v1;
 use transaction_v1::TransactionV1;
+
+use super::ChainConfig;
 
 /// In case multiple types of transactions are developed, the size of that transaction can be described here along with its type
 pub enum TransactionSize {
@@ -138,6 +142,10 @@ impl Transaction {
             return Err(TransactionCreationError::InvalidWitnessCount);
         }
         SignedTransaction::new(self, witnesses)
+    }
+
+    pub fn printable(&self, chain_config: &ChainConfig) -> String {
+        printout::transaction_summary(self, chain_config)
     }
 }
 

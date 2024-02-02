@@ -1032,6 +1032,8 @@ where
 
                 let output_str = match result.into_signed_tx() {
                     Ok(signed_tx) => {
+                        let summary =
+                            signed_tx.transaction().printable(self.wallet_rpc.chain_config());
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
                         let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())
@@ -1042,13 +1044,13 @@ where
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}"
+                             Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
                         ),
                             Err(_) => format!(
                             "The transaction has been fully signed signed as is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Transaction is too long to be put into a Qr code"
+                             Transaction is too long to be put into a Qr code\n\n{summary}"
                         ),
                         }
                     }

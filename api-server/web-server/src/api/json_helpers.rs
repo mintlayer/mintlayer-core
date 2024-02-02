@@ -79,7 +79,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
                 "type": "CreateStakePool",
                 "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
                 "data": {
-                    "amount": amount_to_json(data.value()),
+                    "amount": amount_to_json(data.pledge()),
                     "staker": Address::new(chain_config, data.staker()).expect("no error").get(),
                     "vrf_public_key": Address::new(chain_config, data.vrf_public_key()).expect("no error").get(),
                     "decommission_key": Address::new(chain_config, data.decommission_key()).expect("no error").get(),

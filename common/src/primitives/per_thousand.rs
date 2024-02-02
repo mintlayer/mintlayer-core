@@ -60,7 +60,7 @@ impl PerThousand {
         Some(result)
     }
 
-    pub fn into_decimal_str(&self) -> String {
+    pub fn into_percentage_str(&self) -> String {
         format!(
             "{}%",
             Amount::from_atoms(self.0.into()).into_fixedpoint_str(1)
@@ -120,18 +120,30 @@ mod tests {
 
     #[test]
     fn test_into_decimal_str() {
-        assert_eq!(PerThousand::new(1).unwrap().into_decimal_str(), "0.1%");
-        assert_eq!(PerThousand::new(10).unwrap().into_decimal_str(), "1%");
-        assert_eq!(PerThousand::new(100).unwrap().into_decimal_str(), "10%");
-        assert_eq!(PerThousand::new(1000).unwrap().into_decimal_str(), "100%");
+        assert_eq!(PerThousand::new(1).unwrap().into_percentage_str(), "0.1%");
+        assert_eq!(PerThousand::new(10).unwrap().into_percentage_str(), "1%");
+        assert_eq!(PerThousand::new(100).unwrap().into_percentage_str(), "10%");
+        assert_eq!(
+            PerThousand::new(1000).unwrap().into_percentage_str(),
+            "100%"
+        );
 
-        assert_eq!(PerThousand::new(11).unwrap().into_decimal_str(), "1.1%");
-        assert_eq!(PerThousand::new(23).unwrap().into_decimal_str(), "2.3%");
-        assert_eq!(PerThousand::new(98).unwrap().into_decimal_str(), "9.8%");
+        assert_eq!(PerThousand::new(11).unwrap().into_percentage_str(), "1.1%");
+        assert_eq!(PerThousand::new(23).unwrap().into_percentage_str(), "2.3%");
+        assert_eq!(PerThousand::new(98).unwrap().into_percentage_str(), "9.8%");
 
-        assert_eq!(PerThousand::new(311).unwrap().into_decimal_str(), "31.1%");
-        assert_eq!(PerThousand::new(564).unwrap().into_decimal_str(), "56.4%");
-        assert_eq!(PerThousand::new(827).unwrap().into_decimal_str(), "82.7%");
+        assert_eq!(
+            PerThousand::new(311).unwrap().into_percentage_str(),
+            "31.1%"
+        );
+        assert_eq!(
+            PerThousand::new(564).unwrap().into_percentage_str(),
+            "56.4%"
+        );
+        assert_eq!(
+            PerThousand::new(827).unwrap().into_percentage_str(),
+            "82.7%"
+        );
     }
 
     #[rstest]
