@@ -335,7 +335,7 @@ where
 
         let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let bob_destination = Destination::Address(PublicKeyHash::from(&bob_pk));
+        let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
         let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
 
         let tx = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
@@ -850,7 +850,7 @@ where
 
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let random_destination = Destination::Address(PublicKeyHash::from(&pk));
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
 
         let token_data = FungibleTokenData {
             token_ticker: "XXXX".as_bytes().to_vec(),

@@ -944,7 +944,7 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<PublicKey> {
         let account = self.get_account(account_index)?;
         match address {
-            Destination::Address(addr) => account.find_corresponding_pub_key(&addr),
+            Destination::PublicKeyHash(addr) => account.find_corresponding_pub_key(&addr),
             Destination::PublicKey(pk) => Ok(pk),
             Destination::ScriptHash(_)
             | Destination::AnyoneCanSpend

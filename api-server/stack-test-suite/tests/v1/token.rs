@@ -88,7 +88,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let (_, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-                let alice_destination = Destination::Address(PublicKeyHash::from(&alice_pk));
+                let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
 
                 let token_issuance = TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),

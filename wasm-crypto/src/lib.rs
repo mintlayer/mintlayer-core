@@ -210,7 +210,7 @@ pub fn pubkey_to_string(public_key_bytes: &[u8], network: Network) -> Result<Str
     let public_key_hash = PublicKeyHash::from(&public_key);
 
     Ok(
-        Address::new(&chain_config, &Destination::Address(public_key_hash))
+        Address::new(&chain_config, &Destination::PublicKeyHash(public_key_hash))
             .expect("Should not fail to create address")
             .get()
             .to_owned(),

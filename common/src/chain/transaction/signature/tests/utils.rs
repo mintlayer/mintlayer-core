@@ -236,7 +236,7 @@ pub fn destinations(
 ) -> impl Iterator<Item = Destination> {
     // TODO: find a way to write this such that it loops over all possible arms instead of doing this manually
     [
-        Destination::Address(PublicKeyHash::from(&public_key)),
+        Destination::PublicKeyHash(PublicKeyHash::from(&public_key)),
         Destination::PublicKey(public_key),
         Destination::AnyoneCanSpend,
         Destination::ScriptHash(Id::<Script>::from(H256::random_using(rng))),

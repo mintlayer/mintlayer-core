@@ -157,7 +157,7 @@ mod tests {
         let cfg = create_mainnet();
         let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
-        let public_key_hash_dest = Destination::Address(public_key_hash);
+        let public_key_hash_dest = Destination::PublicKeyHash(public_key_hash);
         let address = Address::<Destination>::new(&cfg, &public_key_hash_dest)
             .expect("Address from pubkeyhash failed");
         let public_key_hash_restored_dest = address

@@ -102,7 +102,7 @@ mod test {
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let destination = Destination::Address(pubkey_hash);
+        let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
@@ -167,7 +167,7 @@ mod test {
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let destination = Destination::Address(pubkey_hash);
+        let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
@@ -210,7 +210,7 @@ mod test {
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let destination = Destination::Address(pubkey_hash);
+        let destination = Destination::PublicKeyHash(pubkey_hash);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

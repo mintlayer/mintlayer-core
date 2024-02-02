@@ -1370,7 +1370,7 @@ impl Account {
     /// Return true if this destination can be spent by this account or if it is being watched.
     fn is_mine_or_watched_destination(&self, destination: &Destination) -> bool {
         match destination {
-            Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+            Destination::PublicKeyHash(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
@@ -1399,7 +1399,7 @@ impl Account {
 
         for destination in self.collect_output_destinations(output) {
             match destination {
-                Destination::Address(pkh) => {
+                Destination::PublicKeyHash(pkh) => {
                     let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
                     if found {
                         return Ok(true);
@@ -1429,7 +1429,7 @@ impl Account {
         if let TxOutput::CreateStakePool(_, data) = output {
             self.key_chain.mark_vrf_public_key_as_used(db_tx, data.vrf_public_key())?;
             match data.decommission_key() {
-                Destination::Address(pkh) => {
+                Destination::PublicKeyHash(pkh) => {
                     self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
                 }
                 Destination::PublicKey(pk) => {
@@ -1935,7 +1935,7 @@ fn group_preselected_inputs(
 fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<(Amount, Amount)> {
     let pub_key_hash = PublicKeyHash::from_low_u64_ne(0);
 
-    let destination = Destination::Address(pub_key_hash);
+    let destination = Destination::PublicKeyHash(pub_key_hash);
 
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
