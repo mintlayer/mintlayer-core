@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
     address::Address,
@@ -40,10 +40,14 @@ use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
-    account::{PartiallySignedTransaction, TransactionToSign, UnconfirmedTokenInfo},
+    account::{
+        currency_grouper::Currency, PartiallySignedTransaction, TransactionToSign,
+        UnconfirmedTokenInfo,
+    },
+    get_tx_output_destination,
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, StakePoolDataArguments,
+        make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
@@ -383,7 +387,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     outputs,
-                    vec![],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -410,13 +415,54 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
-                    selected_utxos,
+                    SelectedInputs::Utxos(selected_utxos),
+                    BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
             },
         )
         .await
+    }
+
+    pub async fn request_send_to_address(
+        &mut self,
+        address: Address<Destination>,
+        amount: Amount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<Address<Destination>>,
+    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
+        let output = make_address_output(self.chain_config, address, amount)
+            .map_err(ControllerError::WalletError)?;
+
+        let utxo_output = self.fetch_utxo(&selected_utxo).await?;
+        let change_address = if let Some(change_address) = change_address {
+            change_address
+        } else {
+            let utxo_dest =
+                get_tx_output_destination(&utxo_output, &|_| None).ok_or_else(|| {
+                    ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(
+                        Box::new(utxo_output.clone()),
+                    ))
+                })?;
+            Address::new(self.chain_config, &utxo_dest).expect("addressable")
+        };
+
+        let selected_inputs = SelectedInputs::Inputs(vec![(selected_utxo, utxo_output)]);
+
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        self.wallet
+            .create_unsigned_transaction_to_addresses(
+                self.account_index,
+                [output],
+                selected_inputs,
+                [(Currency::Coin, change_address)].into(),
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn create_delegation(
@@ -456,7 +502,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
-                    vec![],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -524,7 +571,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 wallet.create_transaction_to_addresses(
                     account_index,
                     [output],
-                    vec![],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
@@ -767,5 +815,17 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
         let tx_id = self.broadcast_to_mempool(tx).await?;
         Ok((tx_id, id))
+    }
+
+    async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
+        let utxo = self
+            .rpc_client
+            .get_utxo(input.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        utxo.ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+            input.clone(),
+        )))
     }
 }

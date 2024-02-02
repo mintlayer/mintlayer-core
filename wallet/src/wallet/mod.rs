@@ -27,7 +27,9 @@ use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
     VRF_INDEX,
 };
-use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
+use crate::send_request::{
+    make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
+};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -1033,6 +1035,8 @@ impl<B: storage::Backend> Wallet<B> {
     /// * `&mut self` - A mutable reference to the wallet instance.
     /// * `account_index: U31` - The index of the account from which funds will be sent.
     /// * `outputs: impl IntoIterator<Item = TxOutput>` - An iterator over `TxOutput` items representing the addresses and amounts to which funds will be sent.
+    /// * `inputs`: SelectedInputs - if not empty will try to select inputs from those inestead of the avalable ones
+    /// * `change_addresses`: if present will use those change_addresses instead of generating new ones
     /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
     /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
     /// current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
@@ -1046,17 +1050,45 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
-        inputs: Vec<UtxoOutPoint>,
+        inputs: SelectedInputs,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.process_send_request_and_sign(
+                db_tx,
+                request,
+                inputs,
+                change_addresses,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn create_unsigned_transaction_to_addresses(
+        &mut self,
+        account_index: U31,
+        outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: SelectedInputs,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<PartiallySignedTransaction> {
+        let request = SendRequest::new().with_outputs(outputs);
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw(account_index, |account, db_tx| {
             account.process_send_request(
                 db_tx,
                 request,
                 inputs,
+                change_addresses,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
@@ -1250,7 +1282,8 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            vec![],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -1281,7 +1314,8 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
-            vec![],
+            SelectedInputs::Utxos(vec![]),
+            BTreeMap::new(),
             current_fee_rate,
             consolidate_fee_rate,
         )?;

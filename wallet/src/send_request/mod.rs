@@ -20,6 +20,7 @@ use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
@@ -304,5 +305,19 @@ where
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_) => None,
+    }
+}
+
+pub enum SelectedInputs {
+    Utxos(Vec<UtxoOutPoint>),
+    Inputs(Vec<(UtxoOutPoint, TxOutput)>),
+}
+
+impl SelectedInputs {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Utxos(utxos) => utxos.is_empty(),
+            Self::Inputs(inputs) => inputs.is_empty(),
+        }
     }
 }

@@ -494,6 +494,38 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn request_send_coins(
+        &self,
+        account_index: U31,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        config: ControllerConfig,
+    ) -> WRpcResult<PartiallySignedTransaction, N> {
+        let decimals = self.chain_config.coin_decimals();
+        let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
+        let address = Address::from_str(&self.chain_config, &address)
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let change_address = change_address
+            .map(|change| Address::<Destination>::from_str(&self.chain_config, &change))
+            .transpose()
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .request_send_to_address(address, amount, selected_utxo, change_address)
+                        .await
+                        .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
     pub async fn send_tokens(
         &self,
         account_index: U31,

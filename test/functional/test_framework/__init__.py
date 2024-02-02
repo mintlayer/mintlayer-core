@@ -43,6 +43,8 @@ def init_mintlayer_types():
                 ],
             },
 
+            "PublicKeyHash": "[u8; 20]",
+
             "PublicKey": {
                 "type": "struct",
                 "type_mapping": [

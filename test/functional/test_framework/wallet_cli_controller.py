@@ -191,9 +191,10 @@ class WalletCliController:
         i_know_what_i_am_doing = "i-know-what-i-am-doing" if force_reduce else ""
         return await self._write_command(f"wallet-set-lookahead-size {size} {i_know_what_i_am_doing}\n")
 
-    async def new_public_key(self) -> bytes:
-        addr = await self.new_address()
-        public_key = await self._write_command(f"address-reveal-public-key-as-hex {addr}\n")
+    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+        if address is None:
+            address = await self.new_address()
+        public_key = await self._write_command(f"address-reveal-public-key-as-hex {address}\n")
 
         self.log.info(f'pub key output: {public_key}')
         # remove the pub key enum value, the first one byte
@@ -215,6 +216,10 @@ class WalletCliController:
 
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-get-signed-raw {tx_id}\n")
+
+    async def send_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
+        change_address_str = '' if change_address is None else f"--change {change_address}"
+        return await self._write_command(f"transaction-send-from-cold-input {address} {amount} {str(selected_utxo)} {change_address_str}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")

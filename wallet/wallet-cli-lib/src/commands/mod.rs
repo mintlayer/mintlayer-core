@@ -422,6 +422,29 @@ pub enum WalletCommand {
         utxos: Vec<String>,
     },
 
+    /// Creates a transaction that spends from a specific address,
+    /// and returns the change to the same address (unless one is specified), without signature.
+    /// This transaction is used for "withdrawing" small amounts from a cold storage
+    /// without changing the ownership address. Once this is created,
+    /// it can be signed using account-sign-raw-transaction in the cold wallet
+    /// and then broadcast through any hot wallet.
+    /// In summary, this creates a transaction with one input and two outputs,
+    /// with one of the outputs being change returned to the same owner of the input.
+    #[clap(name = "transaction-send-from-cold-input")]
+    SendFromColdInput {
+        /// The receiving address of the coins
+        address: String,
+        /// The amount to be sent, in decimal format
+        amount: DecimalAmount,
+        /// You can choose what utxo to spend. A utxo can be from a transaction output or a block reward output:
+        /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
+        /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
+        utxo: String,
+        /// Optional change address, if not specified it returns the change to the same address from the input
+        #[arg(long = "change")]
+        change_address: Option<String>,
+    },
+
     /// Store data on the blockchain, the data is provided as hex encoded string.
     /// Note that there is a high fee for storing data on the blockchain.
     #[clap(name = "address-deposit-data")]
@@ -1706,6 +1729,41 @@ where
                     .send_coins(selected_account, address, amount, input_utxos, self.config)
                     .await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
+            WalletCommand::SendFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            } => {
+                let selected_input = parse_utxo_outpoint(utxo)?;
+                let selected_account = self.get_selected_acc()?;
+                let tx = self
+                    .wallet_rpc
+                    .request_send_coins(
+                        selected_account,
+                        address,
+                        amount,
+                        selected_input,
+                        change_address,
+                        self.config,
+                    )
+                    .await?;
+
+                let summary = tx.tx().text_summary(self.wallet_rpc.chain_config());
+                let hex_tx = HexEncoded::new(tx);
+
+                let qr_code = utils::qrcode::qrcode_from_str(hex_tx.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                let output_str = format!(
+                    "Send transaction created. \
+                    Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
+                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
+                );
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::SendTokensToAddress {
