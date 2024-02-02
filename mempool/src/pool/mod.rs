@@ -35,7 +35,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction,
     },
-    primitives::{amount::Amount, time::Time, BlockHeight, Id},
+    primitives::{amount::Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -529,14 +529,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
+        let decimals = self.chain_config.coin_decimals();
         let tx_fee = tx.fee();
         let minimum_fee = self.get_update_minimum_mempool_fee(tx.transaction())?;
         log::debug!("pays_minimum_mempool_fee tx_fee = {tx_fee:?}, minimum_fee = {minimum_fee:?}");
         ensure!(
             tx_fee >= minimum_fee,
             MempoolPolicyError::RollingFeeThresholdNotMet {
-                minimum_fee,
-                tx_fee,
+                minimum_fee: DisplayAmount::from_amount_full(minimum_fee.into(), decimals),
+                tx_fee: DisplayAmount::from_amount_full(tx_fee.into(), decimals),
             }
         );
         Ok(())
@@ -558,14 +559,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
+        let decimals = self.chain_config.coin_decimals();
         let tx_fee = tx.fee();
         let min_relay_fee = self.get_minimum_relay_fee(tx.transaction())?;
         log::debug!("tx_fee: {:?}, min_relay_fee: {:?}", tx_fee, min_relay_fee);
         ensure!(
             tx_fee >= min_relay_fee,
             MempoolPolicyError::InsufficientFeesToRelay {
-                tx_fee,
-                min_relay_fee
+                tx_fee: DisplayAmount::from_amount_full(tx_fee.into(), decimals),
+                min_relay_fee: DisplayAmount::from_amount_full(min_relay_fee.into(), decimals),
             }
         );
         Ok(())

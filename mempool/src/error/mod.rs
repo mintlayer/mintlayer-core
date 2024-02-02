@@ -22,7 +22,7 @@ use thiserror::Error;
 
 use common::{
     chain::{GenBlock, Transaction},
-    primitives::{Id, H256},
+    primitives::{decimal_amount::DisplayAmount, Id, H256},
 };
 
 use crate::pool::fee::Fee;
@@ -77,12 +77,18 @@ pub enum MempoolPolicyError {
     TransactionFeeLowerThanConflictsWithDescendants,
     #[error("Underflow in computing transaction's additional fees.")]
     AdditionalFeesUnderflow,
-    #[error("Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee:?}, min_relay_fee: {min_relay_fee:?}).")]
-    InsufficientFeesToRelay { tx_fee: Fee, min_relay_fee: Fee },
+    #[error("Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee}, min_relay_fee: {min_relay_fee}).")]
+    InsufficientFeesToRelay {
+        tx_fee: DisplayAmount,
+        min_relay_fee: DisplayAmount,
+    },
     #[error("Replacement transaction does not pay enough for its bandwidth.")]
     InsufficientFeesToRelayRBF,
-    #[error("Rolling fee threshold not met.")]
-    RollingFeeThresholdNotMet { minimum_fee: Fee, tx_fee: Fee },
+    #[error("Rolling fee threshold not met (fee is {tx_fee}, minimum {minimum_fee}).")]
+    RollingFeeThresholdNotMet {
+        minimum_fee: DisplayAmount,
+        tx_fee: DisplayAmount,
+    },
     #[error("Overflow encountered while computing fee with ancestors")]
     AncestorFeeOverflow,
     #[error("Overflow encountered while updating ancestor fee.")]

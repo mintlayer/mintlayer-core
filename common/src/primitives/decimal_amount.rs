@@ -188,6 +188,70 @@ pub enum ParseError {
     IntParse(#[from] std::num::ParseIntError),
 }
 
+/// Just like [DecimalAmount] but useful in error types, picking a different set of trade-offs.
+///
+/// While [DecimalAmount] is intended to be used as a type to serialize/deserialize amounts to/from
+/// a string, [DisplayAmount] is for printing only. It has an equality comparison (comparing the
+/// string representation). To prevent the result of the comparison from affecting subsequent
+/// [Amount] calculations, there is no easy way of converting `DisplayAmount` to `Amount`.
+///
+/// To further encourage debuggability, we only provide the `from_amount_full` constructor for
+/// converting from `Amount` while `from_amount_minimal` is omitted. The full variant keeps all the
+/// trailing zeros, making it possible to see the amount both in coin/token units and in atoms.
+///
+/// This is most useful in error types where we want to display the amount and subsequently compare
+/// the errors for equality in tests.
+#[derive(Clone, Copy)]
+pub struct DisplayAmount(DecimalAmount);
+
+impl DisplayAmount {
+    /// Convert from [DecimalAmount]
+    pub const fn from_decimal_amount(value: DecimalAmount) -> Self {
+        Self(value)
+    }
+
+    /// Convert from integer with no decimals
+    pub const fn from_uint_integral(number: u128) -> Self {
+        Self(DecimalAmount::from_uint_integral(number))
+    }
+
+    /// Convert from integer, interpreting the last N digits as the fractional part
+    pub const fn from_uint_decimal(mantissa: UnsignedIntType, decimals: u8) -> Self {
+        Self(DecimalAmount::from_uint_decimal(mantissa, decimals))
+    }
+
+    /// Convert from [Amount], keeping all decimal digits
+    pub const fn from_amount_full(amount: Amount, decimals: u8) -> Self {
+        Self(DecimalAmount::from_amount_full(amount, decimals))
+    }
+}
+
+impl std::cmp::PartialEq for DisplayAmount {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.is_same(&other.0)
+    }
+}
+
+impl std::cmp::Eq for DisplayAmount {}
+
+impl From<DecimalAmount> for DisplayAmount {
+    fn from(value: DecimalAmount) -> Self {
+        Self::from_decimal_amount(value)
+    }
+}
+
+impl std::fmt::Display for DisplayAmount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::fmt::Debug for DisplayAmount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
