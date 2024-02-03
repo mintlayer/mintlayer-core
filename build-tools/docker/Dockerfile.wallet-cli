@@ -4,7 +4,7 @@ FROM mintlayer-builder:latest AS builder
 # Runtime Stage
 FROM debian:bookworm-slim
 
-# Create a new user and group 
+# Create a new user and group
 RUN groupadd -r mintlayer && \
     useradd -r -g mintlayer -d /home/mintlayer -s /bin/bash -c "Mintlayer User" mintlayer
 
