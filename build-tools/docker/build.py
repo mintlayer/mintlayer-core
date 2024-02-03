@@ -76,15 +76,21 @@ def delete_docker_image(image_name, version):
 def build_instances(version, num_jobs=None):
     build_docker_image("build-tools/docker/Dockerfile.builder", "mintlayer-builder", "latest", num_jobs)
     build_docker_image("build-tools/docker/Dockerfile.node-daemon", "mintlayer/node-daemon", version)
-    build_docker_image("build-tools/docker/Dockerfile.node-gui", "mintlayer/node-gui", version)
+    build_docker_image("build-tools/docker/Dockerfile.api-blockchain-scanner-daemon", "mintlayer/api-blockchain-scanner-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.api-web-server", "mintlayer/api-web-server", version)
     build_docker_image("build-tools/docker/Dockerfile.wallet-cli", "mintlayer/wallet-cli", version)
-    delete_docker_image("mintlayer-builder", "latest")
+    build_docker_image("build-tools/docker/Dockerfile.wallet-rpc-daemon", "mintlayer/wallet-rpc-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.dns_server", "mintlayer/dns_server", version)
+#    delete_docker_image("mintlayer-builder", "latest")
 
 
 def push_instances(version, latest):
     push_docker_image("mintlayer/node-daemon",version , latest)
-    push_docker_image("mintlayer/node-gui",version , latest)
+    push_docker_image("mintlayer/api-blockchain-scanner-daemon",version , latest)
+    push_docker_image("mintlayer/api-web-server",version , latest)
     push_docker_image("mintlayer/wallet-cli",version , latest)
+    push_docker_image("mintlayer/wallet-rpc-daemon",version , latest)
+    push_docker_image("mintlayer/dns_server",version , latest)
 
 
 def main():

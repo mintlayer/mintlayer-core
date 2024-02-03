@@ -1,0 +1,16 @@
+# Build Stage
+FROM mintlayer-builder:latest AS builder
+
+# Runtime Stage
+FROM debian:bookworm-slim
+
+COPY --from=builder /usr/src/target/release/dns-server /usr/bin
+
+# dns-server listens on port 53
+EXPOSE 53
+
+# Set the working directory
+WORKDIR /root
+
+
+CMD ["dns-server"]

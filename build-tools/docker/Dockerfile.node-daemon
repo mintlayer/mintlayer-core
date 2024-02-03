@@ -5,12 +5,29 @@ FROM mintlayer-builder:latest AS builder
 # Runtime Stage
 FROM debian:bookworm-slim
 
+# Create a new user and group 
+RUN groupadd -r mintlayer && \
+    useradd -r -g mintlayer -d /home/mintlayer -s /bin/bash -c "Mintlayer User" mintlayer
+
+# Create and set the home directory for the new user
+RUN mkdir /home/mintlayer && \
+    chown mintlayer:mintlayer /home/mintlayer
+
+
 COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
 
-# Node daemon listens on ports 13030 and 13031
-EXPOSE 13030 13031
+# Node daemon on mainnet listens on ports 3030 and 3031
+# if you run another network you have to expose different ports manually
+EXPOSE 3030 3031
 
 # Define mintlayer directory as a volume
-VOLUME ["/root/.mintlayer"]
+VOLUME ["/home/mintlayer"]
+
+# Switch to the non-root user
+USER mintlayer
+
+# Set the working directory
+WORKDIR /home/mintlayer
+
 
 CMD ["node-daemon"]

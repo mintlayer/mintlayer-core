@@ -14,7 +14,7 @@ RUN mkdir /home/mintlayer && \
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/target/release/wallet-cli /usr/bin/wallet-cli
+COPY --from=builder /usr/src/target/release/wallet-rpc-daemon /usr/bin/wallet-rpc-daemon
 
 # Define mintlayer directory as a volume
 VOLUME ["/home/mintlayer"]
@@ -25,4 +25,7 @@ USER mintlayer
 # Set the working directory
 WORKDIR /home/mintlayer
 
-CMD ["wallet-cli"]
+# Wallet RPC on mainnet listen to port 3034 by default
+expose 3034
+
+CMD ["wallet-rpc-daemon"]
