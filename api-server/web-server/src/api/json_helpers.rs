@@ -19,6 +19,7 @@ use common::{
         block::ConsensusData, output_value::OutputValue, Block, ChainConfig, Transaction, TxOutput,
     },
     primitives::{Amount, Idable},
+    Uint256,
 };
 use hex::ToHex;
 use serde_json::json;
@@ -155,7 +156,10 @@ pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::V
 
 pub fn block_header_to_json(block: &Block) -> serde_json::Value {
     let consensus_data = match block.header().header().consensus_data() {
-        ConsensusData::PoS(pos) => json!({"target": pos.compact_target()}),
+        ConsensusData::PoS(pos) => {
+            let target = Uint256::try_from(pos.compact_target()).expect("ok");
+            json!({"target": format!("{target:?}")})
+        }
         ConsensusData::PoW(pow) => {
             json!({
                 "nonce": pow.nonce(),
