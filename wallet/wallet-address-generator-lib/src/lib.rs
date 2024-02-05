@@ -68,7 +68,7 @@ pub struct CliArgs {
     pub network: Network,
 
     /// Number of addresses to generate and display
-    #[clap(long, default_value_t = 1)]
+    #[clap(long, short = 'n', default_value_t = 1)]
     pub address_count: u8,
 }
 
