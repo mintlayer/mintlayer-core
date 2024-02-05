@@ -502,7 +502,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         config: ControllerConfig,
-    ) -> WRpcResult<PartiallySignedTransaction, N> {
+    ) -> WRpcResult<(PartiallySignedTransaction, Balances), N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)

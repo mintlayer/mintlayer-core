@@ -450,8 +450,13 @@ impl Account {
         mut request: SendRequest,
     ) -> Result<SendRequest, WalletError> {
         for currency in output_currency_amounts.keys() {
-            let change_amount =
-                selected_inputs.get(currency).map_or(Amount::ZERO, |result| result.get_change());
+            let currency_result = selected_inputs.get(currency);
+            let change_amount = currency_result.map_or(Amount::ZERO, |result| result.get_change());
+            let fees = currency_result.map_or(Amount::ZERO, |result| result.get_total_fees());
+
+            if fees > Amount::ZERO {
+                request.add_fee(currency.clone(), fees);
+            }
 
             if change_amount > Amount::ZERO {
                 let change_address = if let Some(change_address) = change_addresses.remove(currency)
@@ -552,8 +557,8 @@ impl Account {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<PartiallySignedTransaction> {
-        let request = self.select_inputs_for_send_request(
+    ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
+        let mut request = self.select_inputs_for_send_request(
             request,
             inputs,
             change_addresses,
@@ -562,14 +567,17 @@ impl Account {
             fee_rate,
         )?;
 
+        let fees = request.get_fees();
         let (tx, utxos, destinations) = request.into_transaction_and_utxos()?;
         let num_inputs = tx.inputs().len();
-        PartiallySignedTransaction::new(
+        let ptx = PartiallySignedTransaction::new(
             tx,
             vec![None; num_inputs],
             utxos,
             destinations.into_iter().map(Some).collect(),
-        )
+        )?;
+
+        Ok((ptx, fees))
     }
 
     pub fn process_send_request_and_sign(

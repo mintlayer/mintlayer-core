@@ -44,7 +44,9 @@ use wallet::{
     version::get_version,
     WalletError,
 };
-use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_controller::{
+    types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
+};
 use wallet_rpc_lib::{
     config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
     WalletService,
@@ -1418,26 +1420,13 @@ where
                     .wallet_rpc
                     .compose_transaction(input_utxos, outputs, only_transaction)
                     .await?;
-                let (coins, tokens) = fees.into_coins_and_tokens();
                 let encoded_tx = match tx {
                     TransactionToSign::Tx(tx) => HexEncoded::new(tx).to_string(),
                     TransactionToSign::Partial(tx) => HexEncoded::new(tx).to_string(),
                 };
                 let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
 
-                writeln!(
-                    &mut output,
-                    "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
-                )
-                .expect("Writing to a memory buffer should not fail");
-
-                for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, &token_id)
-                        .expect("Encoding token id should never fail");
-                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
-                        .expect("Writing to a memory buffer should not fail");
-                }
-                output.pop();
+                format_fees(&mut output, fees, chain_config);
 
                 Ok(ConsoleCommand::Print(output))
             }
@@ -1739,7 +1728,7 @@ where
             } => {
                 let selected_input = parse_utxo_outpoint(utxo)?;
                 let selected_account = self.get_selected_acc()?;
-                let tx = self
+                let (tx, fees) = self
                     .wallet_rpc
                     .request_send_coins(
                         selected_account,
@@ -1758,11 +1747,13 @@ where
                     .map_err(WalletCliError::QrCodeEncoding)?;
                 let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
 
-                let output_str = format!(
+                let mut output_str = format!(
                     "Send transaction created. \
                     Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
-                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
+                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
                 );
+                format_fees(&mut output_str, fees, chain_config);
+
                 Ok(ConsoleCommand::Print(output_str))
             }
 
@@ -2025,6 +2016,23 @@ where
             }
         }
     }
+}
+
+fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {
+    let (coins, tokens) = fees.into_coins_and_tokens();
+    writeln!(
+        output,
+        "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
+    )
+    .expect("Writing to a memory buffer should not fail");
+
+    for (token_id, amount) in tokens {
+        let token_id =
+            Address::new(chain_config, &token_id).expect("Encoding token id should never fail");
+        writeln!(output, "Token: {token_id} amount: {amount}")
+            .expect("Writing to a memory buffer should not fail");
+    }
+    output.pop();
 }
 
 fn id_to_hex_string(id: H256) -> String {

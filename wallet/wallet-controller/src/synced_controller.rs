@@ -54,7 +54,7 @@ use wallet::{
     DefaultWallet, WalletError, WalletResult,
 };
 
-use crate::{ControllerConfig, ControllerError};
+use crate::{into_balances, types::Balances, ControllerConfig, ControllerError};
 
 pub struct SyncedController<'a, T, W> {
     wallet: &'a mut DefaultWallet,
@@ -397,6 +397,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Create a transaction that transfers coins to the destination address and specified amount
+    /// and broadcast it to the mempool.
+    /// If the selected_utxos are not empty it will try to select inputs from those for the
+    /// transaction, else it will use available ones from the wallet.
     pub async fn send_to_address(
         &mut self,
         address: Address<Destination>,
@@ -425,13 +429,18 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Create a partially signed transfer transaction to the destination address with the
+    /// specified amount, from the specified utxo. The change from the transfer will be sent to the
+    /// optionally specified change address, otherwise it will be sent to the destination from the
+    /// input utxo itself.
+    /// Returns the partially signed transaction and the fees that will be paid by it
     pub async fn request_send_to_address(
         &mut self,
         address: Address<Destination>,
         amount: Amount,
         selected_utxo: UtxoOutPoint,
         change_address: Option<Address<Destination>>,
-    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
+    ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
         let output = make_address_output(self.chain_config, address, amount)
             .map_err(ControllerError::WalletError)?;
 
@@ -453,7 +462,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        self.wallet
+        let (req, fees) = self
+            .wallet
             .create_unsigned_transaction_to_addresses(
                 self.account_index,
                 [output],
@@ -462,9 +472,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok((req, fees))
     }
 
+    /// Create a transaction that creates a new delegation for the specified pool with the
+    /// specified owner address, and broadcasts it to the mempool.
+    /// Returns the new transaction's ID and the newly created Delegation ID
     pub async fn create_delegation(
         &mut self,
         address: Address<Destination>,
@@ -488,6 +505,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Create a transaction to stake to the specified delegation ID and broadcasts it to the
+    /// mempool.
     pub async fn delegate_staking(
         &mut self,
         amount: Amount,
@@ -512,6 +531,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a transaction that sends coins from the specified delegation to the specified
+    /// address destination, and broadcasts it to the mempool.
     pub async fn send_to_address_from_delegation(
         &mut self,
         address: Address<Destination>,
@@ -551,6 +572,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a transaction that transfers tokens to the address destination, and broadcasts it
+    /// to the mempool.
     pub async fn send_tokens_to_address(
         &mut self,
         token_info: RPCTokenInfo,
@@ -581,6 +604,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a transaction that creates a new stake pool and broadcasts it to the mempool.
     pub async fn create_stake_pool_tx(
         &mut self,
         amount: Amount,
@@ -609,6 +633,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a transaction that decommissions a stake pool and broadcasts it to the mempool.
     pub async fn decommission_stake_pool(
         &mut self,
         pool_id: PoolId,
@@ -640,6 +665,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a partially signed transaction that decommissions a stake pool.
     pub async fn decommission_stake_pool_request(
         &mut self,
         pool_id: PoolId,
@@ -667,6 +693,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .map_err(ControllerError::WalletError)
     }
 
+    /// Checks if the wallet has stake pools and marks this account for staking.
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
@@ -680,6 +707,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(())
     }
 
+    /// Tries to sign any unsigned inputs of a raw or partially signed transaction with the private
+    /// keys in this wallet.
     pub fn sign_raw_transaction(
         &mut self,
         tx: TransactionToSign,

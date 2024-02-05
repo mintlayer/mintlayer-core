@@ -4255,7 +4255,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let hot_wallet_address = hot_wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let to_send = Amount::from_atoms(1);
-    let send_req = hot_wallet
+    let (send_req, _) = hot_wallet
         .create_unsigned_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::Transfer(
