@@ -17,22 +17,31 @@ def get_package_name(crate_dir):
     else:
         raise Exception("Cargo.toml not found for crate {}.".format(crate_dir))
 
-def group_crates_by_first_directory(members):
+def group_crates_by_first_directory(members, do_group: bool):
     '''
     Here we ensure that all crates in the same directory are grouped together, to minimize fracturing of coverage.
     We assume here that crates are tested within their directory. This is a fair assumption since we put test-suites
     in the same directory as the crate they are testing.
+
+    This can be disabled with do_group boolean. In that case, groups will be the same crate dirs.
     '''
-    crate_groups = {}
-    for crate_dir in members:
-        # Split the path name with the directory separator
-        dir_parts = crate_dir.split(os.path.sep)
-        if dir_parts:
-            # Group crates by the first element and join them back using the separator
-            dir_name = os.path.sep.join(dir_parts[:1])
-            if dir_name not in crate_groups:
-                crate_groups[dir_name] = []
-            crate_groups[dir_name].append(crate_dir)
+
+    if do_group:
+        crate_groups = {}
+        for crate_dir in members:
+            # Split the path name with the directory separator
+            dir_parts = crate_dir.split(os.path.sep)
+            if dir_parts:
+                # Group crates by the first element and join them back using the separator
+                dir_name = os.path.sep.join(dir_parts[:1])
+                if dir_name not in crate_groups:
+                    crate_groups[dir_name] = []
+                crate_groups[dir_name].append(crate_dir)
+    else:
+        crate_groups = {}
+        for crate_dir in members:
+            crate_groups[crate_dir] = []
+            crate_groups[crate_dir].append(crate_dir)
     return crate_groups
 
 def partition_workspace(m, n):
@@ -49,7 +58,7 @@ def partition_workspace(m, n):
 
     # Group crates based on directory structure using directory separators
     # This was disabled because we still are having disk-space issues
-    # crate_directory_groups = group_crates_by_first_directory(members)
+    crate_directory_groups = group_crates_by_first_directory(members, False)
 
     # Calculate elements per partition and remainder based on the number of crate directories
     total_directories = len(crate_directory_groups)
