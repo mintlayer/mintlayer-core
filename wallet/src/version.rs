@@ -13,20 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn stdout_or_empty(command: &str, args: &[&str]) -> String {
-    let res = std::process::Command::new(command)
-        .args(args)
-        .output()
-        .map(|o| o.stdout)
-        .unwrap_or_default();
-    String::from_utf8_lossy(res.as_ref()).as_ref().trim().to_string()
-}
-
 /// Get the Wallet version and optionally git hash
 pub fn get_version() -> String {
-    let git_head_hash = stdout_or_empty("git", &["rev-parse", "HEAD"]);
-    let git_tree_clean = stdout_or_empty("git", &["status", "-s"]);
-    let version_string = env!("CARGO_PKG_VERSION");
+    let git_head_hash = env!("GIT_HEAD_HASH");
+    let git_tree_clean = env!("GIT_TREE_CLEAN");
+    let version = env!("CARGO_PKG_VERSION");
+
+    let version_string = version;
 
     // If the git hash is not available, we don't want to print anything
     let git_hash_string = if git_head_hash.trim().is_empty() {
