@@ -18,11 +18,14 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountsBalancesCheckVersion, ChainConfig, DelegationId, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
 use utils::ensure;
+
+use crate::accounts_balances_tracker::AccountsBalancesTracker;
 
 use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
 
@@ -72,6 +75,8 @@ impl ConstrainedValueAccumulator {
 
         let mut accumulator = Self::new();
         let mut total_fee_deducted = Amount::ZERO;
+        let mut accounts_balances_tracker =
+            AccountsBalancesTracker::new(&delegation_balance_getter);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -91,6 +96,7 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         outpoint.account(),
+                        &mut accounts_balances_tracker,
                         &delegation_balance_getter,
                     )?;
                 }
@@ -194,6 +200,7 @@ impl ConstrainedValueAccumulator {
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
+        accounts_balances_tracker: &mut AccountsBalancesTracker<DelegationBalanceGetterFn>,
         delegation_balance_getter: &DelegationBalanceGetterFn,
     ) -> Result<(), Error>
     where
@@ -201,12 +208,24 @@ impl ConstrainedValueAccumulator {
     {
         match account {
             AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
-                let delegation_balance = delegation_balance_getter(*delegation_id)?
-                    .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
-                ensure!(
-                    *spend_amount <= delegation_balance,
-                    Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
-                );
+                match chain_config
+                    .chainstate_upgrades()
+                    .version_at_height(block_height)
+                    .1
+                    .accounts_balances_version()
+                {
+                    AccountsBalancesCheckVersion::V0 => {
+                        let delegation_balance = delegation_balance_getter(*delegation_id)?
+                            .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
+                        ensure!(
+                            *spend_amount <= delegation_balance,
+                            Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
+                        );
+                    }
+                    AccountsBalancesCheckVersion::V1 => {
+                        accounts_balances_tracker.spend_from_account(account.clone())?;
+                    }
+                }
 
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);

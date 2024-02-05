@@ -44,7 +44,7 @@ pub use cached_operation::CachedOperation;
 
 pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use self::{
     error::{ConnectTransactionError, TokensError},
@@ -69,8 +69,9 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
-        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, TokenIssuanceVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, AccountsBalancesCheckVersion,
+        Block, ChainConfig, DelegationId, GenBlock, TokenIssuanceVersion, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -308,12 +309,11 @@ where
 
     fn connect_pos_accounting_outputs(
         &mut self,
-        tx_source: TransactionSource,
+        tx_source: &TransactionSourceForConnect,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // TODO: this should also collect all the delegations after the pool decommissioning;
-        // see mintlayer/mintlayer-core/issues/909
-        let mut check_for_delegation_cleanup: Option<DelegationId> = None;
+        let mut check_delegation: Option<DelegationId> = None;
+        let mut delegations_with_spendings = BTreeSet::<DelegationId>::new();
 
         // Process tx inputs in terms of pos accounting.
         // Spending `CreateStakePool`, `ProduceBlockFromStake` utxos or an account input
@@ -323,12 +323,13 @@ where
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(ref outpoint) => {
-                    self.spend_input_from_utxo(tx_source, outpoint).transpose()
+                    self.spend_input_from_utxo(tx_source.into(), outpoint).transpose()
                 }
                 TxInput::Account(outpoint) => {
                     match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, withdraw_amount) => {
-                            check_for_delegation_cleanup = Some(*delegation_id);
+                            check_delegation = Some(*delegation_id);
+                            delegations_with_spendings.insert(*delegation_id);
                             let res = self
                                 .spend_input_from_account(
                                     outpoint.nonce(),
@@ -338,7 +339,7 @@ where
                                     // If the input spends from delegation account, this means the user is
                                     // spending part of their share in the pool.
                                     self.pos_accounting_adapter
-                                        .operations(tx_source)
+                                        .operations(tx_source.into())
                                         .spend_share_from_delegation_id(
                                             *delegation_id,
                                             *withdraw_amount,
@@ -365,7 +366,7 @@ where
                         let res = if expected_pool_id == *pool_id {
                             if data.pledge() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                                 self.pos_accounting_adapter
-                                    .operations(tx_source)
+                                    .operations(tx_source.into())
                                     .create_pool(*pool_id, data.as_ref().clone().into())
                                     .map_err(ConnectTransactionError::PoSAccountingError)
                             } else {
@@ -392,7 +393,7 @@ where
                         Some(input_utxo_outpoint) => {
                             let res = self
                                 .pos_accounting_adapter
-                                .operations(tx_source)
+                                .operations(tx_source.into())
                                 .create_delegation_id(
                                     *target_pool,
                                     spend_destination.clone(),
@@ -410,7 +411,7 @@ where
                 TxOutput::DelegateStaking(amount, delegation_id) => {
                     let res = self
                         .pos_accounting_adapter
-                        .operations(tx_source)
+                        .operations(tx_source.into())
                         .delegate_staking(*delegation_id, *amount)
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
@@ -425,47 +426,47 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // delete delegation if the balance is 0 and the pool has been decommissioned
-        let delete_delegation_undo = match check_for_delegation_cleanup {
-            Some(delegation_id) => {
-                let accounting_view = self.pos_accounting_adapter.accounting_delta();
-                let delegation_balance =
-                    accounting_view.get_delegation_balance(delegation_id)?.ok_or(
-                        ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                    )?;
-                if delegation_balance == Amount::ZERO {
-                    let delegation_data =
-                        accounting_view.get_delegation_data(delegation_id)?.ok_or(
-                            ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                        )?;
-                    if !accounting_view.pool_exists(*delegation_data.source_pool())? {
-                        // When deleting a delegation nonce value is preserved in the db
-                        // in case reorg happens so we don't have to restore it
-                        Some(
-                            self.pos_accounting_adapter
-                                .operations(tx_source)
-                                .delete_delegation_id(delegation_id)?,
-                        )
-                    } else {
-                        None
-                    }
-                } else {
-                    None
+        match self
+            .chain_config
+            .as_ref()
+            .chainstate_upgrades()
+            .version_at_height(tx_source.expected_block_height())
+            .1
+            .accounts_balances_version()
+        {
+            AccountsBalancesCheckVersion::V0 => {
+                if let Some(delegation_id) = check_delegation {
+                    let _ = self
+                        .pos_accounting_adapter
+                        .accounting_delta()
+                        .get_delegation_balance(delegation_id)?
+                        .ok_or(ConnectTransactionError::DelegationDataNotFound(
+                            delegation_id,
+                        ))?;
                 }
             }
-            None => None,
-        };
+            AccountsBalancesCheckVersion::V1 => {
+                // Iterate over all delegations that have spending and get the balance.
+                // By retrieving the balance we apply all the deltas from the accounting and can verify
+                // that final balance is not negative.
+                // This check is not mandatory but a safe-net to ensure no overspends happen.
+                for delegation_id in delegations_with_spendings {
+                    let _ = self
+                        .pos_accounting_adapter
+                        .accounting_delta()
+                        .get_delegation_balance(delegation_id)?
+                        .ok_or(ConnectTransactionError::DelegationDataNotFound(
+                            delegation_id,
+                        ))?;
+                }
+            }
+        }
 
         // Store pos accounting operations undos
-        if !inputs_undos.is_empty() || !outputs_undos.is_empty() || delete_delegation_undo.is_some()
-        {
-            let tx_undos = inputs_undos
-                .into_iter()
-                .chain(outputs_undos)
-                .chain(delete_delegation_undo)
-                .collect();
+        if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
+            let tx_undos = inputs_undos.into_iter().chain(outputs_undos).collect();
             self.pos_accounting_block_undo
-                .get_or_create_block_undo(&tx_source)
+                .get_or_create_block_undo(&tx_source.into())
                 .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
                 .map_err(ConnectTransactionError::AccountingBlockUndoError)
         } else {
@@ -820,7 +821,7 @@ where
             ),
         )?;
 
-        self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
+        self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
         self.connect_tokens_outputs(tx_source, tx.transaction())?;
 

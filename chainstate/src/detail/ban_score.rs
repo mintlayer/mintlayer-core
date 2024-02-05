@@ -503,6 +503,8 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::SpendingNonSpendableOutput(_) => 100,
             constraints_value_accumulator::Error::AttemptToViolateFeeRequirements => 100,
             constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,
+            constraints_value_accumulator::Error::AccountBalanceNotFound(_) => 0,
+            constraints_value_accumulator::Error::NegativeAccountBalance(_) => 100,
         }
     }
 }

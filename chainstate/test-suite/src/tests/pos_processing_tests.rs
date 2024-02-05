@@ -51,9 +51,7 @@ use common::{
         GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
         RequiredConsensus, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{
-        per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Id, Idable, H256,
-    },
+    primitives::{per_thousand::PerThousand, Amount, BlockCount, BlockHeight, Id, Idable, H256},
     Uint256,
 };
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
@@ -1894,7 +1892,9 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::AttemptToPrintMoney(CoinOrTokenId::Coin),
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        common::chain::AccountType::Delegation(delegation_id)
+                    ),
                     tx_id.into()
                 )
             ))

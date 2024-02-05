@@ -22,8 +22,8 @@ use common::chain::{
     output_value::OutputValue,
     signature::inputsig::InputWitness,
     tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
-    Block, ChainstateUpgrade, Destination, NftIdMismatchCheck, OutPointSourceId,
-    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    AccountsBalancesCheckVersion, Block, ChainstateUpgrade, Destination, NftIdMismatchCheck,
+    OutPointSourceId, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
     TokensTickerMaxLengthVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
@@ -1672,6 +1672,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
+                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1732,6 +1733,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
+                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),
