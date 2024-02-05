@@ -70,12 +70,19 @@ pub struct CliArgs {
     /// Number of addresses to generate and display
     #[clap(long, short = 'n', default_value_t = 1)]
     pub address_count: u8,
+
+    /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+    #[clap(long)]
+    #[arg(hide = true)]
+    pub mnemonic: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CliError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+    #[error("Invalid mnemonic: {0}")]
+    InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("WalletError error: {0}")]
     WalletError(#[from] WalletError),
 }
@@ -89,7 +96,7 @@ pub fn run(args: CliArgs) -> Result<(), CliError> {
         ))
     );
 
-    let (root_key, seed_phrase) = root_key_and_mnemonic()?;
+    let (root_key, seed_phrase) = root_key_and_mnemonic(&args.mnemonic)?;
 
     let chain_config = Builder::new(args.network.into()).build();
 
@@ -103,7 +110,9 @@ pub fn run(args: CliArgs) -> Result<(), CliError> {
         args.network.to_string().to_uppercase()
     );
 
-    {
+    if let Some(mnemonic) = args.mnemonic {
+        println!("Using the seed phrase you provided to generate address(es): {mnemonic}");
+    } else {
         println!("No seed phrase provided. Generating a new one.");
         println!("WARNING: MAKE SURE TO WRITE DOWN YOUR SEED PHRASE AND KEEP IT SAFE!");
         println!("============================Seed phrase=============================");
@@ -162,10 +171,15 @@ fn to_receiving_pub_key(
 }
 
 /// Generate a new mnemonic and a root private key
-fn root_key_and_mnemonic() -> Result<(ExtendedPrivateKey, String), CliError> {
+fn root_key_and_mnemonic(
+    mnemonic: &Option<String>,
+) -> Result<(ExtendedPrivateKey, String), CliError> {
     let language = wallet::wallet::Language::English;
-    let mnemonic = wallet_controller::mnemonic::generate_new_mnemonic(language);
-
+    let mnemonic = match mnemonic {
+        Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
+            .map_err(CliError::InvalidMnemonic)?,
+        None => wallet_controller::mnemonic::generate_new_mnemonic(language),
+    };
     let (root_key, _root_vrf_key, _mnemonic) =
         MasterKeyChain::mnemonic_to_root_key(&mnemonic.to_string(), None)
             .map_err(WalletError::from)?;
