@@ -48,7 +48,8 @@ def partition_workspace(m, n):
         raise Exception("No members found in the workspace.")
 
     # Group crates based on directory structure using directory separators
-    crate_directory_groups = group_crates_by_first_directory(members)
+    # This was disabled because we still are having disk-space issues
+    # crate_directory_groups = group_crates_by_first_directory(members)
 
     # Calculate elements per partition and remainder based on the number of crate directories
     total_directories = len(crate_directory_groups)
