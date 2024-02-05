@@ -19,7 +19,6 @@ use iced::{
     Alignment, Element, Length,
 };
 use iced_aw::Grid;
-use serialization::hex::HexEncode;
 
 use crate::{
     backend::messages::AccountInfo,
@@ -54,7 +53,7 @@ pub fn view_transactions(
             || "-".to_owned(),
             |timestamp| print_block_timestamp(*timestamp),
         );
-        let full_tx_id_str = format!("{}", tx.txid.hex_encode());
+        let full_tx_id_str = format!("{:x}", tx.txid);
         transaction_list = transaction_list
             .push(field(format!("{}", current_transaction_list.skip + index)))
             .push(
