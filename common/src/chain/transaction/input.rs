@@ -15,7 +15,7 @@
 
 use serialization::{Decode, Encode};
 
-use crate::chain::AccountNonce;
+use crate::{chain::AccountNonce, text_summary::TextSummary};
 
 use super::{AccountCommand, AccountOutPoint, AccountSpending, OutPointSourceId, UtxoOutPoint};
 
@@ -54,5 +54,34 @@ impl TxInput {
 impl From<UtxoOutPoint> for TxInput {
     fn from(outpoint: UtxoOutPoint) -> TxInput {
         TxInput::Utxo(outpoint)
+    }
+}
+
+impl TextSummary for TxInput {
+    fn text_summary(&self, _chain_config: &crate::chain::ChainConfig) -> String {
+        match self {
+            TxInput::Utxo(utxo) => {
+                let source_id = utxo.source_id();
+                let n = utxo.output_index();
+                match source_id {
+                    OutPointSourceId::Transaction(ref id) => {
+                        let id_str = format!("{:?}", id.to_hash())
+                            .strip_prefix("0x")
+                            .expect("0x exists for some hellish reason")
+                            .to_string();
+                        format!("Transaction({id_str}, {n})")
+                    }
+                    OutPointSourceId::BlockReward(id) => {
+                        let id_str = format!("{:?}", id.to_hash())
+                            .strip_prefix("0x")
+                            .expect("0x exists for some hellish reason")
+                            .to_string();
+                        format!("BlockReward({id_str}, {n})")
+                    }
+                }
+            }
+            TxInput::Account(acc_out) => format!("{acc_out:?}"),
+            TxInput::AccountCommand(nonce, cmd) => format!("AccountCommand({nonce}, {cmd:?})"),
+        }
     }
 }

@@ -32,6 +32,7 @@ use common::{
         Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, H256},
+    text_summary::TextSummary,
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
@@ -1050,7 +1051,7 @@ where
                 let output_str = match result.into_signed_tx() {
                     Ok(signed_tx) => {
                         let summary =
-                            signed_tx.transaction().printable(self.wallet_rpc.chain_config());
+                            signed_tx.transaction().text_summary(self.wallet_rpc.chain_config());
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
                         let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())

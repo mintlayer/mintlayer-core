@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,12 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod address;
-pub mod chain;
-pub mod primitives;
-pub mod size_estimation;
-pub mod text_summary;
-pub mod time_getter;
-pub mod uint;
+use crate::chain::ChainConfig;
 
-pub use uint::{Uint128, Uint256, Uint512, UintConversionError};
+pub trait TextSummary {
+    fn text_summary(&self, chain_config: &ChainConfig) -> String;
+}
