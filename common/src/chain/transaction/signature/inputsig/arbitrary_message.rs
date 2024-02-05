@@ -70,6 +70,10 @@ impl SignedArbitraryMessage {
         Self { raw_signature }
     }
 
+    pub fn to_hex(self) -> String {
+        hex::encode(self.raw_signature)
+    }
+
     pub fn verify_signature(
         &self,
         chain_config: &ChainConfig,

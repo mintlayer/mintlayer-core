@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use common::{
     address::Address,
     chain::{
+        signature::inputsig::arbitrary_message::SignedArbitraryMessage,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
@@ -637,6 +638,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
         self.wallet
             .sign_raw_transaction(self.account_index, tx)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn sign_challenge(
+        &mut self,
+        challenge: Vec<u8>,
+        destination: Destination,
+    ) -> Result<SignedArbitraryMessage, ControllerError<T>> {
+        self.wallet
+            .sign_challenge(self.account_index, challenge, destination)
             .map_err(ControllerError::WalletError)
     }
 

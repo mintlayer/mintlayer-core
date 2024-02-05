@@ -198,6 +198,46 @@ pub enum ColdWalletCommand {
         transaction: String,
     },
 
+    /// Signs a challenge with a private key corresponding to the provided address destination.
+    #[clap(name = "account-sign-challenge-hex")]
+    SignChallegeHex {
+        /// Hex encoded message to be signed
+        message: String,
+        /// Address with whose private key to sign the challenge
+        address: String,
+    },
+
+    /// Signs a challenge with a private key corresponding to the provided address destination.
+    #[clap(name = "account-sign-challenge-plain")]
+    SignChallege {
+        /// The message to be signed
+        message: String,
+        /// Address with whose private key to sign the challenge
+        address: String,
+    },
+
+    /// Verifies a signed challenge against an address destination
+    #[clap(name = "verify-challenge-hex")]
+    VerifyChallengeHex {
+        /// The hex encoded message that was signed
+        message: String,
+        /// Hex encoded signed challenge
+        signed_challenge: String,
+        /// Address with whose private key the challenge was signed with
+        address: String,
+    },
+
+    /// Verifies a signed challenge against an address destination
+    #[clap(name = "verify-challenge-plain")]
+    VerifyChallenge {
+        /// The message that was signed
+        message: String,
+        /// Hex encoded signed challenge
+        signed_challenge: String,
+        /// Address with whose private key the challenge was signed with
+        address: String,
+    },
+
     /// Print command history in the wallet for this execution
     #[clap(name = "history-print")]
     PrintHistory,
@@ -1102,6 +1142,77 @@ where
                 };
 
                 Ok(ConsoleCommand::Print(output_str))
+            }
+
+            ColdWalletCommand::SignChallegeHex {
+                message: challenge,
+                address,
+            } => {
+                let selected_account = self.get_selected_acc()?;
+                let challenge = hex::decode(challenge)
+                    .map_err(|err| WalletCliError::InvalidInput(err.to_string()))?;
+                let result =
+                    self.wallet_rpc.sign_challenge(selected_account, challenge, address).await?;
+
+                Ok(ConsoleCommand::Print(format!(
+                    "The generated hex encoded signature is\n{}",
+                    result.to_hex()
+                )))
+            }
+
+            ColdWalletCommand::SignChallege {
+                message: challenge,
+                address,
+            } => {
+                let selected_account = self.get_selected_acc()?;
+                let result = self
+                    .wallet_rpc
+                    .sign_challenge(selected_account, challenge.into_bytes(), address)
+                    .await?;
+
+                Ok(ConsoleCommand::Print(format!(
+                    "The generated hex encoded signature is\n{}",
+                    result.to_hex()
+                )))
+            }
+
+            ColdWalletCommand::VerifyChallengeHex {
+                message,
+                signed_challenge,
+                address,
+            } => {
+                let message = hex::decode(message).map_err(|e| {
+                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
+                })?;
+                let signed_challenge = hex::decode(signed_challenge).map_err(|e| {
+                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
+                })?;
+
+                self.wallet_rpc.verify_challenge(message, signed_challenge, address)?;
+
+                Ok(ConsoleCommand::Print(
+                    "The provided signature is correct".to_string(),
+                ))
+            }
+
+            ColdWalletCommand::VerifyChallenge {
+                message,
+                signed_challenge,
+                address,
+            } => {
+                let signed_challenge = hex::decode(signed_challenge).map_err(|e| {
+                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
+                })?;
+
+                self.wallet_rpc.verify_challenge(
+                    message.into_bytes(),
+                    signed_challenge,
+                    address,
+                )?;
+
+                Ok(ConsoleCommand::Print(
+                    "The provided signature is correct".to_string(),
+                ))
             }
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),

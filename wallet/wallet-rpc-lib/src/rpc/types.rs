@@ -19,6 +19,7 @@ use common::{
     address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
+        signature::DestinationSigError,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
         ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -88,6 +89,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid hex encoded partially signed transaction")]
     InvalidPartialTransaction,
+
+    #[error("{0}")]
+    DestinationSigError(#[from] DestinationSigError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

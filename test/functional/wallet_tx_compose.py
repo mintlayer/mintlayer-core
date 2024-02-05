@@ -154,7 +154,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert len(encoded_tx) < len(encoded_ptx)
 
             output = await wallet.sign_raw_transaction(encoded_tx)
-            assert_in("The transaction has been fully signed signed", output)
+            assert_in("The transaction has been fully signed and is ready to be broadcast to network.", output)
             signed_tx = output.split('\n')[2]
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
