@@ -10,7 +10,7 @@ name: Code Coverage
 
 env:
   # We partition coverage tests into multiple parts to avoid filling diskspace in a single runner
-  PARTITIONS_COUNT: 7
+  PARTITIONS_COUNT: 8
 
 jobs:
   coverage:
@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         # This range spans from `0` to `PARTITIONS_COUNT - 1`, where `PARTITIONS_COUNT` is the number of partitions (defined in env var above)
-        partition: [0, 1, 2, 3, 4, 5, 6]
+        partition: [0, 1, 2, 3, 4, 5, 6, 7]
 
     steps:
       - name: Install dependencies
