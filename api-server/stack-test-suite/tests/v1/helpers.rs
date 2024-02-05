@@ -48,7 +48,7 @@ pub fn prepare_stake_pool(
         amount_to_stake,
         Destination::PublicKey(pk),
         vrf_pk,
-        Destination::Address(PublicKeyHash::from_low_u64_ne(rng.gen::<u64>())),
+        Destination::PublicKeyHash(PublicKeyHash::from_low_u64_ne(rng.gen::<u64>())),
         PerThousand::new(margin_ratio_per_thousand).unwrap(),
         Amount::ZERO,
     );

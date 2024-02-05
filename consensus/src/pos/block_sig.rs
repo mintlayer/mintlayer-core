@@ -59,7 +59,7 @@ fn get_staking_kernel_destination(
 
     let public_key = match dest {
         Destination::AnyoneCanSpend
-        | Destination::Address(_)
+        | Destination::PublicKeyHash(_)
         | Destination::ScriptHash(_)
         | Destination::ClassicMultisig(_) => {
             return Err(BlockSignatureError::WrongDestination(header.get_id()))

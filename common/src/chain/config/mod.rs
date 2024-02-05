@@ -170,28 +170,28 @@ fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static 
     match chain_type {
         ChainType::Mainnet => match destination {
             Destination::AnyoneCanSpend => "mxanyonecanspend",
-            Destination::Address(_) => "mtc",
+            Destination::PublicKeyHash(_) => "mtc",
             Destination::PublicKey(_) => "mptc",
             Destination::ScriptHash(_) => "mstc",
             Destination::ClassicMultisig(_) => "mmtc",
         },
         ChainType::Testnet => match destination {
             Destination::AnyoneCanSpend => "txanyonecanspend",
-            Destination::Address(_) => "tmt",
+            Destination::PublicKeyHash(_) => "tmt",
             Destination::PublicKey(_) => "tpmt",
             Destination::ScriptHash(_) => "tstc",
             Destination::ClassicMultisig(_) => "tmtc",
         },
         ChainType::Regtest => match destination {
             Destination::AnyoneCanSpend => "rxanyonecanspend",
-            Destination::Address(_) => "rmt",
+            Destination::PublicKeyHash(_) => "rmt",
             Destination::PublicKey(_) => "rpmt",
             Destination::ScriptHash(_) => "rstc",
             Destination::ClassicMultisig(_) => "rmtc",
         },
         ChainType::Signet => match destination {
             Destination::AnyoneCanSpend => "sxanyonecanspend",
-            Destination::Address(_) => "smt",
+            Destination::PublicKeyHash(_) => "smt",
             Destination::PublicKey(_) => "spmt",
             Destination::ScriptHash(_) => "sstc",
             Destination::ClassicMultisig(_) => "smtc",

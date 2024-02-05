@@ -43,7 +43,7 @@ pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
     #[codec(index = 1)]
-    Address(PublicKeyHash),
+    PublicKeyHash(PublicKeyHash),
     #[codec(index = 2)]
     PublicKey(crypto::key::PublicKey),
     #[codec(index = 3)]

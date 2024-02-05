@@ -273,7 +273,7 @@ mod tests {
                 2 => {
                     let (_private_key, public_key) =
                         PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-                    Destination::Address(PublicKeyHash::from(&public_key))
+                    Destination::PublicKeyHash(PublicKeyHash::from(&public_key))
                 }
                 3 => Destination::ScriptHash(crate::primitives::Id::new(H256::random_using(
                     &mut rng,

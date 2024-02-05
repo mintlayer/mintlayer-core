@@ -74,7 +74,7 @@ impl StandardInputSignature {
         sighash: &H256,
     ) -> Result<(), TransactionSigError> {
         match outpoint_destination {
-            Destination::Address(addr) => {
+            Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
                 verify_address_spending(addr, &sig_components, sighash)?
             }
@@ -108,7 +108,7 @@ impl StandardInputSignature {
     ) -> Result<Self, TransactionSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
-            Destination::Address(ref addr) => {
+            Destination::PublicKeyHash(ref addr) => {
                 let sig = sign_address_spending(private_key, addr, &sighash)?;
                 sig.encode()
             }
@@ -233,7 +233,7 @@ mod test {
 
         let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
@@ -298,7 +298,7 @@ mod test {
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let outpoints = [
-            Destination::Address(PublicKeyHash::from(&public_key)),
+            Destination::PublicKeyHash(PublicKeyHash::from(&public_key)),
             Destination::PublicKey(public_key),
         ];
 

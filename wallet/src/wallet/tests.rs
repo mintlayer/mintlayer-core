@@ -1937,7 +1937,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
         OutputValue::TokenV1(*token_id, tokens_to_transfer),
-        Destination::Address(some_other_address),
+        Destination::PublicKeyHash(some_other_address),
     );
 
     let transfer_tokens_transaction = wallet
@@ -1985,7 +1985,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
         OutputValue::TokenV1(*token_id, not_enough_tokens_to_transfer),
-        Destination::Address(some_other_address),
+        Destination::PublicKeyHash(some_other_address),
     );
 
     let transfer_tokens_error = wallet
@@ -2265,7 +2265,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
         OutputValue::TokenV1(issued_token_id, tokens_to_transfer),
-        Destination::Address(some_other_address),
+        Destination::PublicKeyHash(some_other_address),
     );
 
     let transfer_tokens_transaction = wallet

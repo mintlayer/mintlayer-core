@@ -315,7 +315,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
-                Destination::PublicKey(_) | Destination::Address(_) => {
+                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
                     match output_value {
@@ -812,7 +812,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             Destination::AnyoneCanSpend
                             | Destination::ClassicMultisig(_)
                             | Destination::ScriptHash(_) => {}
-                            Destination::PublicKey(_) | Destination::Address(_) => {
+                            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                                 let address =
                                     Address::<Destination>::new(&chain_config, &destination)
                                         .expect("Unable to encode destination");
@@ -837,7 +837,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             Destination::AnyoneCanSpend
                             | Destination::ClassicMultisig(_)
                             | Destination::ScriptHash(_) => {}
-                            Destination::PublicKey(_) | Destination::Address(_) => {
+                            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                                 let address =
                                     Address::<Destination>::new(&chain_config, &destination)
                                         .expect("Unable to encode destination");
@@ -1052,7 +1052,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::Transfer(output_value, destination)
             | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
-                Destination::PublicKey(_) | Destination::Address(_) => {
+                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
 

@@ -290,7 +290,10 @@ impl LeafKeySoftChain {
         // Calculate public key hash
         let public_key_hash = PublicKeyHash::from(&public_key);
         // Calculate the address
-        let address = Address::new(&self.chain_config, &Destination::Address(public_key_hash))?;
+        let address = Address::new(
+            &self.chain_config,
+            &Destination::PublicKeyHash(public_key_hash),
+        )?;
         // Calculate account derivation path id
         let account_path_id = AccountDerivationPathId::new(
             self.account_id.clone(),
@@ -347,7 +350,7 @@ impl LeafKeySoftChain {
 
     pub fn is_destination_mine(&self, dest: &Destination) -> bool {
         match dest {
-            Destination::Address(pkh) => self.is_public_key_hash_mine(pkh),
+            Destination::PublicKeyHash(pkh) => self.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.is_public_key_mine(pk),
             Destination::AnyoneCanSpend
             | Destination::ScriptHash(_)
@@ -366,7 +369,7 @@ impl LeafKeySoftChain {
     /// Get the extended public key provided a destination or None if no key found
     pub fn get_child_num_from_destination(&self, dest: &Destination) -> Option<ChildNumber> {
         match dest {
-            Destination::Address(pkh) => self.get_child_num_from_public_key_hash(pkh),
+            Destination::PublicKeyHash(pkh) => self.get_child_num_from_public_key_hash(pkh),
             Destination::PublicKey(pk) => self.get_child_num_from_public_key(pk),
             Destination::AnyoneCanSpend
             | Destination::ScriptHash(_)

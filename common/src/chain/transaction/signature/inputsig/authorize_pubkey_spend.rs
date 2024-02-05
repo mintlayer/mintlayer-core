@@ -123,7 +123,7 @@ mod test {
 
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

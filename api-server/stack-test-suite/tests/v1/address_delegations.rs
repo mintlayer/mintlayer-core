@@ -51,7 +51,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let chain_config = create_unit_test_config();
 
     let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let destination = Destination::Address(PublicKeyHash::from(&public_key));
+    let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
     let (task, response) =
@@ -93,14 +93,14 @@ async fn ok(#[case] seed: Seed) {
                 let (_alice_sk, alice_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-                let alice_destination = Destination::Address(PublicKeyHash::from(&alice_pk));
+                let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
                 let alice_address =
                     Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-                let bob_destination = Destination::Address(PublicKeyHash::from(&bob_pk));
+                let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
                 let bob_address =
                     Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
 

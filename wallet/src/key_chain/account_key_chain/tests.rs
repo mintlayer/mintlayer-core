@@ -54,7 +54,7 @@ fn check_mine_methods(#[case] public: &str) {
         Secp256k1PublicKey::from_bytes(&hex::decode(public).unwrap()).unwrap().into();
     let pkh = PublicKeyHash::from(&pk);
     let pk_destination = Destination::PublicKey(pk.clone());
-    let addr_destination = Destination::Address(pkh);
+    let addr_destination = Destination::PublicKeyHash(pkh);
 
     assert!(key_chain.is_public_key_mine(&pk));
     assert!(key_chain.is_public_key_hash_mine(&pkh));

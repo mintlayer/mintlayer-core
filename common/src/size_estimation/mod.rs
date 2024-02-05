@@ -73,7 +73,7 @@ pub fn input_signature_size_from_destination(
 ) -> Result<usize, SizeEstimationError> {
     // Sizes calculated upfront
     match destination {
-        Destination::Address(_) => Ok(address_signature_size()),
+        Destination::PublicKeyHash(_) => Ok(address_signature_size()),
         Destination::PublicKey(_) => Ok(public_key_signature_size()),
         Destination::AnyoneCanSpend => Ok(no_signature_size()),
         Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => Err(

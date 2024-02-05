@@ -163,7 +163,7 @@ pub fn verify_signature<T: Transactable>(
 
     match input_witness {
         InputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::Address(_)
+            Destination::PublicKeyHash(_)
             | Destination::PublicKey(_)
             | Destination::ScriptHash(_)
             | Destination::ClassicMultisig(_) => {
