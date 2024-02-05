@@ -165,7 +165,6 @@ class WalletConflictTransaction(BitcoinTestFramework):
             # try to send tokens again should fail as the tokens are already sent
             assert_in("Success", await wallet.select_account(1))
             assert_in("Coin selection error: No available UTXOs", await wallet.send_tokens_to_address(token_id, address, tokens_to_mint))
-
             # check that the mempool still has the transfer tx
             assert node.mempool_contains_tx(transfer_tx_id)
             # abandon it from the wallet side so it is not rebroadcasted

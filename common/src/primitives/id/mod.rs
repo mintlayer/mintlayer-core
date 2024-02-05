@@ -111,7 +111,9 @@ pub struct Id<T> {
 
 impl<T: TypeName> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.hash)
+        let hash_str = format!("{:?}", self.hash);
+        let s = hash_str.strip_prefix("0x").unwrap_or(&hash_str);
+        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), s)
     }
 }
 
@@ -126,7 +128,9 @@ impl<T> Copy for Id<T> {}
 
 impl<T> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.hash, f)
+        let hash_str = self.hash.to_string();
+        let s = hash_str.strip_prefix("0x").unwrap_or(&hash_str);
+        write!(f, "{}", s)
     }
 }
 

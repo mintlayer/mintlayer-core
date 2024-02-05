@@ -55,7 +55,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
         node = self.nodes[0]
 
         block_input_data = { "PoW": { "reward_destination": "AnyoneCanSpend" } }
-        block_input_data = block_input_data_obj.encode(block_input_data).to_hex()[2:]
+        block_input_data = block_input_data_obj.encode(block_input_data).to_hex()[:]
 
         # create a new block, taking transactions from mempool
         block = node.blockprod_generate_block(block_input_data, [], [], "FillSpaceFromMempool")

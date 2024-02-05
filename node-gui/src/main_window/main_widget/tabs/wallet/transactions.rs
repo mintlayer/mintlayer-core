@@ -54,7 +54,7 @@ pub fn view_transactions(
             || "-".to_owned(),
             |timestamp| print_block_timestamp(*timestamp),
         );
-        let full_tx_id_str = format!("0x{}", tx.txid.hex_encode());
+        let full_tx_id_str = format!("{}", tx.txid.hex_encode());
         transaction_list = transaction_list
             .push(field(format!("{}", current_transaction_list.skip + index)))
             .push(
