@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::OutPointSourceId;
+use crypto::key::hdkd::u31::U31;
 use tokio::sync::mpsc::UnboundedSender;
 use wallet::wallet_events::WalletEvents;
-use wallet_types::{AccountWalletTxId, WalletTx};
+use wallet_types::WalletTx;
 
 use super::messages::WalletId;
 
@@ -42,11 +44,11 @@ impl WalletEvents for GuiWalletEvents {
         self.notify();
     }
 
-    fn set_transaction(&self, _id: &AccountWalletTxId, _tx: &WalletTx) {
+    fn set_transaction(&self, _id: U31, _tx: &WalletTx) {
         self.notify();
     }
 
-    fn del_transaction(&self, _id: &AccountWalletTxId) {
+    fn del_transaction(&self, _id: U31, _source: OutPointSourceId) {
         self.notify();
     }
 }

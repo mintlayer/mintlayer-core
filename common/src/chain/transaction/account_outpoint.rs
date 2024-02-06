@@ -58,7 +58,18 @@ impl From<AccountCommand> for AccountType {
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum AccountSpending {
     #[codec(index = 0)]
     DelegationBalance(DelegationId, Amount),
@@ -66,7 +77,18 @@ pub enum AccountSpending {
 
 // Represents a command that can be performed on an account.
 // Operation must be unique and authorized.
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum AccountCommand {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 0)]
@@ -91,7 +113,18 @@ pub enum AccountCommand {
 }
 
 /// Type of OutPoint that represents spending from an account
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct AccountOutPoint {
     nonce: AccountNonce,
     account: AccountSpending,

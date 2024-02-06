@@ -19,7 +19,18 @@ use crate::{chain::AccountNonce, text_summary::TextSummary};
 
 use super::{AccountCommand, AccountOutPoint, AccountSpending, OutPointSourceId, UtxoOutPoint};
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),

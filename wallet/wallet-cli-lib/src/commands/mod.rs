@@ -48,8 +48,8 @@ use wallet_controller::{
     types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_rpc_lib::{
-    config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
-    WalletService,
+    config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletNodeRpcServer, WalletRpc,
+    WalletRpcServer, WalletService,
 };
 
 use crate::{
@@ -817,7 +817,8 @@ where
             Some(
                 rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
                     .with_method_list("list_methods")
-                    .register(wallet_rpc.clone().into_rpc())
+                    .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
+                    .register(WalletNodeRpcServer::into_rpc(wallet_rpc.clone()))
                     .build()
                     .await
                     .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,

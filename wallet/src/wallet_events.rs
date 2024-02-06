@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use wallet_types::{AccountWalletTxId, WalletTx};
+use common::chain::OutPointSourceId;
+use crypto::key::hdkd::u31::U31;
+use wallet_types::WalletTx;
 
 /// Callbacks that are called when the database is updated and the UI should be re-rendered.
 /// For example, when a new wallet is imported and the wallet scan is in progress,
@@ -23,16 +25,16 @@ pub trait WalletEvents {
     fn new_block(&self);
 
     /// The transaction is updated in the DB
-    fn set_transaction(&self, id: &AccountWalletTxId, tx: &WalletTx);
+    fn set_transaction(&self, id: U31, tx: &WalletTx);
 
     /// The transaction is removed from the DB
-    fn del_transaction(&self, id: &AccountWalletTxId);
+    fn del_transaction(&self, id: U31, source_id: OutPointSourceId);
 }
 
 pub struct WalletEventsNoOp;
 
 impl WalletEvents for WalletEventsNoOp {
     fn new_block(&self) {}
-    fn set_transaction(&self, _id: &AccountWalletTxId, _tx: &WalletTx) {}
-    fn del_transaction(&self, _id: &AccountWalletTxId) {}
+    fn set_transaction(&self, _id: U31, _tx: &WalletTx) {}
+    fn del_transaction(&self, _id: U31, _source: OutPointSourceId) {}
 }

@@ -138,7 +138,7 @@ pub struct TxData {
 /// We use the same approach as the Bitcoin Core wallet, but unlike Bitcoin
 /// we don't have coinbase transactions, so the additional `BlockData`
 /// struct is invented here.
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, serde::Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, serde::Serialize, serde::Deserialize)]
 pub struct BlockData {
     // `GenBlock` because this may be the genesis block (kernel_inputs will be empty in this case)
     block_id: Id<GenBlock>,

@@ -31,7 +31,7 @@ use wallet_controller::{
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
-    rpc::{WalletRpc, WalletRpcServer},
+    rpc::{WalletNodeRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
         DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
@@ -41,6 +41,52 @@ use crate::{
     },
     RpcError,
 };
+
+#[async_trait::async_trait]
+impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletNodeRpcServer
+    for WalletRpc<N>
+{
+    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>> {
+        rpc::handle_result(self.node_best_block_id().await)
+    }
+
+    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight> {
+        rpc::handle_result(self.node_best_block_height().await)
+    }
+
+    async fn node_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> rpc::RpcResult<Option<Id<GenBlock>>> {
+        rpc::handle_result(self.node_block_id(block_height).await)
+    }
+
+    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>> {
+        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
+        rpc::handle_result(self.get_node_block(hash.into()).await)
+    }
+
+    async fn node_generate_block(
+        &self,
+        account_index: AccountIndexArg,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    ) -> rpc::RpcResult<()> {
+        let transactions = transactions.into_iter().map(HexEncoded::take).collect();
+        rpc::handle_result(
+            self.generate_block(account_index.index::<N>()?, transactions).await.map(|_| {}),
+        )
+    }
+
+    async fn node_generate_blocks(
+        &self,
+        account_index: AccountIndexArg,
+        block_count: u32,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.generate_blocks(account_index.index::<N>()?, block_count).await.map(|_| {}),
+        )
+    }
+}
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer for WalletRpc<N> {
@@ -639,47 +685,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
     async fn chainstate_info(&self) -> rpc::RpcResult<ChainInfo> {
         rpc::handle_result(self.chainstate_info().await)
-    }
-
-    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>> {
-        rpc::handle_result(self.node_best_block_id().await)
-    }
-
-    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight> {
-        rpc::handle_result(self.node_best_block_height().await)
-    }
-
-    async fn node_block_id(
-        &self,
-        block_height: BlockHeight,
-    ) -> rpc::RpcResult<Option<Id<GenBlock>>> {
-        rpc::handle_result(self.node_block_id(block_height).await)
-    }
-
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>> {
-        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
-        rpc::handle_result(self.get_node_block(hash.into()).await)
-    }
-
-    async fn node_generate_block(
-        &self,
-        account_index: AccountIndexArg,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
-    ) -> rpc::RpcResult<()> {
-        let transactions = transactions.into_iter().map(HexEncoded::take).collect();
-        rpc::handle_result(
-            self.generate_block(account_index.index::<N>()?, transactions).await.map(|_| {}),
-        )
-    }
-
-    async fn node_generate_blocks(
-        &self,
-        account_index: AccountIndexArg,
-        block_count: u32,
-    ) -> rpc::RpcResult<()> {
-        rpc::handle_result(
-            self.generate_blocks(account_index.index::<N>()?, block_count).await.map(|_| {}),
-        )
     }
 
     async fn abandon_transaction(

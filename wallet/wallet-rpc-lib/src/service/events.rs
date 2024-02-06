@@ -17,35 +17,33 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock, OutPointSourceId, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
+use crypto::key::hdkd::u31::U31;
 use logging::log;
 use tokio::sync::mpsc;
-use wallet_types::{
-    wallet_tx::{self, BlockData},
-    AccountId,
-};
+use wallet_types::wallet_tx::{self, BlockData};
 
 /// Events that can be emitted.
-#[derive(Eq, PartialEq, serde::Serialize, Debug, Clone)]
+#[derive(Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum Event {
     /// New block has been processed
     NewBlock {},
 
     /// Wallet transaction state has been updated
     TxUpdated {
-        account_id: AccountId,
+        account_idx: u32,
         tx_id: Id<Transaction>,
         state: TxState,
     },
 
     /// Transaction is no longer being tracked by the wallet
     TxDropped {
-        account_id: AccountId,
+        account_idx: u32,
         tx_id: Id<Transaction>,
     },
 
     /// Added a reward from given block
     RewardAdded {
-        account_id: AccountId,
+        account_idx: u32,
 
         #[serde(flatten)]
         data: BlockData,
@@ -53,7 +51,7 @@ pub enum Event {
 
     /// Reward for given block has been dropped (due to reorg)
     RewardDropped {
-        account_id: AccountId,
+        account_idx: u32,
         block_id: Id<GenBlock>,
     },
 }
@@ -119,43 +117,33 @@ impl wallet::wallet_events::WalletEvents for WalletServiceEvents {
         self.emit(Event::NewBlock {})
     }
 
-    fn set_transaction(&self, id: &wallet_types::AccountWalletTxId, tx: &wallet_types::WalletTx) {
-        let account_id = id.account_id().clone();
-
-        let event = match (id.item_id().clone(), tx) {
-            (OutPointSourceId::Transaction(tx_id), wallet_types::WalletTx::Tx(tx_data)) => {
-                debug_assert_eq!(tx_data.get_transaction().get_id(), tx_id);
+    fn set_transaction(&self, account_idx: U31, tx: &wallet_types::WalletTx) {
+        let account_idx = account_idx.into_u32();
+        let event = match tx {
+            wallet_types::WalletTx::Tx(tx_data) => {
+                let tx_id = tx_data.get_transaction().get_id();
                 Event::TxUpdated {
-                    account_id,
+                    account_idx,
                     tx_id,
                     state: (*tx_data.state()).into(),
                 }
             }
-            (OutPointSourceId::BlockReward(blk_id), wallet_types::WalletTx::Block(data)) => {
-                debug_assert_eq!(blk_id, *data.block_id());
+            wallet_types::WalletTx::Block(data) => {
                 let data = data.clone();
-                Event::RewardAdded { account_id, data }
-            }
-            (OutPointSourceId::Transaction(tx_id), wallet_types::WalletTx::Block(_)) => {
-                log::error!("INCONSISTENCY: Given transaction id {tx_id} but block data");
-                return;
-            }
-            (OutPointSourceId::BlockReward(block_id), wallet_types::WalletTx::Tx(_)) => {
-                log::error!("INCONSISTENCY: Given block id {block_id} but transaction data");
-                return;
+                Event::RewardAdded { account_idx, data }
             }
         };
 
         self.emit(event);
     }
 
-    fn del_transaction(&self, id: &wallet_types::AccountWalletTxId) {
-        let account_id = id.account_id().clone();
+    fn del_transaction(&self, id: U31, source: OutPointSourceId) {
+        let account_idx = id.into_u32();
 
-        let event = match *id.item_id() {
-            OutPointSourceId::Transaction(tx_id) => Event::TxDropped { account_id, tx_id },
+        let event = match source {
+            OutPointSourceId::Transaction(tx_id) => Event::TxDropped { account_idx, tx_id },
             OutPointSourceId::BlockReward(block_id) => Event::RewardDropped {
-                account_id,
+                account_idx,
                 block_id,
             },
         };

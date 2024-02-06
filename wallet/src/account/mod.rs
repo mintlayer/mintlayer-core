@@ -1617,8 +1617,9 @@ impl Account {
 
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
-            wallet_events.del_transaction(&tx_id);
-            self.output_cache.remove_tx(&tx_id.into_item_id())?;
+            let source = tx_id.into_item_id();
+            self.output_cache.remove_tx(&source)?;
+            wallet_events.del_transaction(self.account_index(), source);
         }
 
         Ok(())
@@ -1658,7 +1659,7 @@ impl Account {
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
-            wallet_events.set_transaction(&id, &tx);
+            wallet_events.set_transaction(self.account_index(), &tx);
             self.output_cache.add_tx(id.into_item_id(), tx)?;
             Ok(true)
         } else {

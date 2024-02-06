@@ -28,8 +28,41 @@ use crate::types::{
     NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, StakingStatus,
     TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
+use crate::Event;
 
 #[rpc::rpc(server)]
+trait WalletNodeRpc {
+    #[method(name = "node_best_block_id")]
+    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>>;
+
+    #[method(name = "node_best_block_height")]
+    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight>;
+
+    #[method(name = "node_block_id")]
+    async fn node_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> rpc::RpcResult<Option<Id<GenBlock>>>;
+
+    #[method(name = "node_get_block")]
+    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>>;
+
+    #[method(name = "node_generate_block")]
+    async fn node_generate_block(
+        &self,
+        account_index: AccountIndexArg,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "node_generate_blocks")]
+    async fn node_generate_blocks(
+        &self,
+        account_index: AccountIndexArg,
+        block_count: u32,
+    ) -> rpc::RpcResult<()>;
+}
+
+#[rpc::rpc(server, client)]
 trait WalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
@@ -361,35 +394,6 @@ trait WalletRpc {
 
     #[method(name = "node_chainstate_info")]
     async fn chainstate_info(&self) -> rpc::RpcResult<ChainInfo>;
-
-    #[method(name = "node_best_block_id")]
-    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>>;
-
-    #[method(name = "node_best_block_height")]
-    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight>;
-
-    #[method(name = "node_block_id")]
-    async fn node_block_id(
-        &self,
-        block_height: BlockHeight,
-    ) -> rpc::RpcResult<Option<Id<GenBlock>>>;
-
-    #[method(name = "node_get_block")]
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>>;
-
-    #[method(name = "node_generate_block")]
-    async fn node_generate_block(
-        &self,
-        account_index: AccountIndexArg,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
-    ) -> rpc::RpcResult<()>;
-
-    #[method(name = "node_generate_blocks")]
-    async fn node_generate_blocks(
-        &self,
-        account_index: AccountIndexArg,
-        block_count: u32,
-    ) -> rpc::RpcResult<()>;
 
     #[method(name = "transaction_abandon")]
     async fn abandon_transaction(
