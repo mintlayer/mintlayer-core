@@ -139,5 +139,4 @@ impl SignedArbitraryMessage {
 }
 
 #[cfg(test)]
-#[path = "arbitrary_message_tests.rs"]
 mod tests;
