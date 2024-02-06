@@ -191,7 +191,7 @@ impl Crawler {
                                     peer_software_info: addr_info.software_info.clone(),
                                     last_addr_list_request_time: addr_info
                                         .last_addr_list_request_time
-                                        .map(|time| Time::from_duration_since_epoch(time)),
+                                        .map(Time::from_duration_since_epoch),
                                 }),
                                 disconnected_at: now,
                             },

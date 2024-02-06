@@ -175,14 +175,14 @@ fn addr_list_requests(#[case] seed: Seed) {
     // Respond with addresses from both peers. The response from the second peer should be ignored.
     crawler.step(
         CrawlerEvent::AddressListResponse {
-            addresses: vec![another_addr1.clone()],
+            addresses: vec![another_addr1],
             sender: peer_id1,
         },
         &mut rng,
     );
     crawler.step(
         CrawlerEvent::AddressListResponse {
-            addresses: vec![another_addr2.clone()],
+            addresses: vec![another_addr2],
             sender: peer_id2,
         },
         &mut rng,

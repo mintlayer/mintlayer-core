@@ -234,7 +234,7 @@ impl AddressState {
                 fail_count: _,
                 connection_info,
             } => connection_info.as_ref(),
-            AddressState::Connected { connection_info } => Some(&connection_info),
+            AddressState::Connected { connection_info } => Some(connection_info),
             AddressState::Disconnecting {
                 fail_count: _,
                 connection_info,

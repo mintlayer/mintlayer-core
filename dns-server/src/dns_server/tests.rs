@@ -106,7 +106,7 @@ async fn dns_server_basic() {
 mod same_software_version_addr_selection_test {
     use super::*;
 
-    async fn test_impl(
+    fn test_impl(
         chain_config: Arc<ChainConfig>,
         addr_map: &BTreeMap<IpAddr, SoftwareInfo>,
         expected_same_soft_version_v4_addr_count: usize,
@@ -138,7 +138,7 @@ mod same_software_version_addr_selection_test {
         for addr in &addrs {
             handle_command(
                 &auth,
-                DnsServerCommand::AddAddress((*addr).into(), addr_map.get(addr).unwrap().clone()),
+                DnsServerCommand::AddAddress(*addr, addr_map.get(addr).unwrap().clone()),
             );
         }
 
@@ -211,8 +211,7 @@ mod same_software_version_addr_selection_test {
             expected_same_soft_version_v4_addr_count,
             expected_same_soft_version_v6_addr_count,
             &mut rng,
-        )
-        .await;
+        );
     }
 
     #[rstest::rstest]
@@ -246,8 +245,7 @@ mod same_software_version_addr_selection_test {
             MAX_IPV4_RECORDS,
             MAX_IPV6_RECORDS,
             &mut rng,
-        )
-        .await;
+        );
     }
 
     #[rstest::rstest]
@@ -274,7 +272,7 @@ mod same_software_version_addr_selection_test {
             .map(|addr| (addr, make_random_software_info(&mut rng)))
             .collect::<BTreeMap<_, _>>();
 
-        test_impl(chain_config, &addr_map, 0, 0, &mut rng).await;
+        test_impl(chain_config, &addr_map, 0, 0, &mut rng);
     }
 
     fn make_random_software_info(rng: &mut impl Rng) -> SoftwareInfo {
@@ -290,7 +288,7 @@ mod same_software_version_addr_selection_test {
         rng: &mut impl Rng,
     ) -> SoftwareInfo {
         if idx % 2 == 0 {
-            SoftwareInfo::current(&chain_config)
+            SoftwareInfo::current(chain_config)
         } else {
             make_random_software_info(rng)
         }
@@ -304,7 +302,7 @@ mod same_software_version_addr_selection_test {
         addrs
             .enumerate()
             .map(|(idx, addr)| {
-                let soft_info = make_test_software_info_from_index(idx, &chain_config, rng);
+                let soft_info = make_test_software_info_from_index(idx, chain_config, rng);
                 (addr.clone(), soft_info)
             })
             .collect::<BTreeMap<_, _>>()

@@ -251,20 +251,19 @@ impl AuthorityImpl {
 
         let mut same_version_addrs = addrs
             .iter()
-            .filter_map(|(addr, software_info)| {
-                (*software_info == same_software_info).then(|| addr.clone())
-            })
+            .filter(|(_, software_info)| *software_info == same_software_info)
+            .map(|(addr, _)| addr.clone())
             .choose_multiple(rng, count);
         same_version_addrs.shuffle(rng);
 
         let mut other_version_addrs = addrs
             .iter()
-            .filter_map(|(addr, software_info)| {
-                (*software_info != same_software_info).then(|| addr.clone())
-            })
+            .filter(|(_, software_info)| *software_info != same_software_info)
+            .map(|(addr, _)| addr.clone())
             .choose_multiple(rng, count);
         other_version_addrs.shuffle(rng);
 
+        #[allow(clippy::float_arithmetic)]
         let same_version_addrs_preferred_count =
             (count as f64 * SAME_SOFTWARE_VERSION_PEERS_RATIO) as usize;
 

@@ -269,7 +269,7 @@ where
 
                 let addresses = addresses
                     .iter()
-                    .filter_map(|addr| SocketAddress::from_peer_address(&addr, false))
+                    .filter_map(|addr| SocketAddress::from_peer_address(addr, false))
                     .collect::<Vec<_>>();
 
                 self.send_crawler_event(CrawlerEvent::AddressListResponse {
