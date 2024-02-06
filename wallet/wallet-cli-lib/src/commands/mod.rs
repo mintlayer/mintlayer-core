@@ -200,6 +200,7 @@ pub enum ColdWalletCommand {
 
     /// Signs a challenge with a private key corresponding to the provided address destination.
     #[clap(name = "account-sign-challenge-hex")]
+    #[clap(hide = true)]
     SignChallegeHex {
         /// Hex encoded message to be signed
         message: String,
@@ -218,6 +219,7 @@ pub enum ColdWalletCommand {
 
     /// Verifies a signed challenge against an address destination
     #[clap(name = "verify-challenge-hex")]
+    #[clap(hide = true)]
     VerifyChallengeHex {
         /// The hex encoded message that was signed
         message: String,
