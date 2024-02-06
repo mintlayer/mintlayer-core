@@ -16,7 +16,7 @@
 mod mock_crawler;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     time::Duration,
 };
@@ -43,9 +43,9 @@ use crypto::random::{
 
 use mock_crawler::test_crawler;
 
-use crate::crawler_p2p::crawler::CrawlerEvent;
+use crate::crawler_p2p::{crawler::CrawlerEvent, crawler_manager::storage::AddressInfo};
 
-use super::CrawlerConfig;
+use super::{address_data::SoftwareInfo, CrawlerConfig};
 
 #[rstest]
 #[trace]
@@ -57,7 +57,7 @@ fn basic(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1].into_iter().collect(),
     );
@@ -142,7 +142,18 @@ fn randomized(#[case] seed: Seed) {
     let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
 
     let loaded_count = rng.gen_range(0..10);
-    let loaded_nodes = nodes.choose_multiple(&mut rng, loaded_count).cloned().collect();
+    let loaded_nodes = nodes
+        .choose_multiple(&mut rng, loaded_count)
+        .cloned()
+        .map(|addr| {
+            (
+                addr,
+                AddressInfo {
+                    software_info: SoftwareInfo::current(&chain_config),
+                },
+            )
+        })
+        .collect();
 
     let mut crawler = test_crawler(make_config(), loaded_nodes, BTreeMap::new(), reserved_nodes);
 
@@ -215,7 +226,7 @@ fn incompatible_node(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1].into_iter().collect(),
     );
@@ -249,11 +260,19 @@ fn incompatible_node(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn long_offline(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    let chain_config = common::chain::config::create_mainnet();
     let loaded_node: SocketAddress = "1.0.0.0:3031".parse().unwrap();
     let added_node: SocketAddress = "2.0.0.0:3031".parse().unwrap();
     let mut crawler = test_crawler(
         make_config(),
-        [loaded_node].into_iter().collect(),
+        [(
+            loaded_node,
+            AddressInfo {
+                software_info: SoftwareInfo::current(&chain_config),
+            },
+        )]
+        .into_iter()
+        .collect(),
         BTreeMap::new(),
         [added_node].into_iter().collect(),
     );
@@ -315,7 +334,7 @@ fn ban_misbehaved_peer(#[case] seed: Seed) {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
     );
@@ -445,7 +464,7 @@ fn ban_misbehaved_peers_with_same_address(#[case] seed: Seed) {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2, node3].into_iter().collect(),
     );
@@ -556,7 +575,7 @@ fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
 
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         [(node1.as_bannable(), ban_end_time)].into_iter().collect(),
         [node1, node2].into_iter().collect(),
     );
@@ -592,7 +611,7 @@ fn ban_on_misbehavior_during_handshake(#[case] seed: Seed) {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
     );
@@ -668,7 +687,7 @@ fn no_ban_on_connection_error(#[case] seed: Seed) {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
     );

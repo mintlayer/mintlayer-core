@@ -15,9 +15,17 @@
 
 use std::time::Duration;
 
-use super::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
+use crate::error::DnsServerError;
+
+use super::storage::{AddressInfo, DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
 use common::primitives::time::Time;
-use p2p::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
+use p2p::{
+    peer_manager::peerdb_common::{
+        storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
+        StorageVersion,
+    },
+    types::{bannable_address::BannableAddress, socket_address::SocketAddress},
+};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
 use storage::MakeMapRef;
 
@@ -30,7 +38,7 @@ storage::decl_schema! {
         pub DBValue: Map<ValueId, Vec<u8>>,
 
         /// Table for all reachable addresses
-        pub DBAddresses: Map<String, ()>,
+        pub DBAddresses: Map<String, AddressInfo>,
 
         /// Table for banned addresses
         pub DBBannedAddresses: Map<String, Duration>,
@@ -47,49 +55,68 @@ pub type DnsServerStorageImpl<B> = StorageImpl<B, Schema>;
 impl<B: storage::Backend + 'static> DnsServerStorage for DnsServerStorageImpl<B> {}
 
 impl<'st, B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'st, B> {
-    fn set_version(&mut self, version: u32) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())
+    fn set_version(&mut self, version: StorageVersion) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())?)
     }
 
-    fn add_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBAddresses, _>().put(address, ())
+    fn add_address(&mut self, address: &SocketAddress, info: &AddressInfo) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBAddresses, _>().put(address.to_string(), info)?)
     }
 
-    fn del_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBAddresses, _>().del(address)
+    fn del_address(&mut self, address: &SocketAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBAddresses, _>().del(address.to_string())?)
     }
 
-    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error> {
-        self.storage()
+    fn add_banned_address(&mut self, address: &BannableAddress, time: Time) -> crate::Result<()> {
+        Ok(self
+            .storage()
             .get_mut::<DBBannedAddresses, _>()
-            .put(address, time.as_duration_since_epoch())
+            .put(address.to_string(), time.as_duration_since_epoch())?)
     }
 
-    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBBannedAddresses, _>().del(address)
+    fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()> {
+        Ok(self.storage().get_mut::<DBBannedAddresses, _>().del(address.to_string())?)
     }
 }
 
 impl<'st, B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'st, B> {
-    fn get_version(&self) -> Result<Option<u32>, storage::Error> {
+    fn get_version(&self) -> crate::Result<Option<StorageVersion>> {
         let map = self.storage().get::<DBValue, _>();
         let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);
-        Ok(vec_opt.map(|vec| {
-            u32::decode_all(&mut vec.as_ref()).expect("db values to be encoded correctly")
-        }))
+        vec_opt
+            .map(|vec| {
+                StorageVersion::decode_all(&mut vec.as_ref()).map_err(|err| {
+                    DnsServerError::InvalidStorageState(format!(
+                        "Error decoding version from {vec:?}: {err}"
+                    ))
+                })
+            })
+            .transpose()
     }
 
-    fn get_addresses(&self) -> Result<Vec<String>, storage::Error> {
+    fn get_addresses(&self) -> crate::Result<Vec<(SocketAddress, AddressInfo)>> {
         let map = self.storage().get::<DBAddresses, _>();
-        let iter = map.prefix_iter_decoded(&())?.map(|(addr, ())| addr);
-        Ok(iter.collect::<Vec<_>>())
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, info)| {
+            let addr = addr_str.parse::<SocketAddress>().map_err(|err| {
+                DnsServerError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })?;
+            crate::Result::Ok((addr, info))
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error> {
+    fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
         let map = self.storage().get::<DBBannedAddresses, _>();
-        let iter = map
-            .prefix_iter_decoded(&())?
-            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)));
-        Ok(iter.collect::<Vec<_>>())
+        let iter = map.prefix_iter_decoded(&())?.map(|(addr_str, dur)| {
+            let addr = addr_str.parse::<BannableAddress>().map_err(|err| {
+                DnsServerError::InvalidStorageState(format!(
+                    "Error parsing address from {addr_str:?}: {err}"
+                ))
+            })?;
+            Ok((addr, Time::from_duration_since_epoch(dur)))
+        });
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 }

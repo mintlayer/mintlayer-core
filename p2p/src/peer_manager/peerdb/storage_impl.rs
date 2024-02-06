@@ -22,13 +22,15 @@ use storage::MakeMapRef;
 
 use crate::{
     error::P2pError,
-    peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
+    peer_manager::peerdb_common::{
+        storage_impl::{StorageImpl, StorageTxRo, StorageTxRw},
+        StorageVersion,
+    },
 };
 
 use super::{
     salt::Salt,
     storage::{KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite},
-    StorageVersion,
 };
 
 type ValueId = u32;

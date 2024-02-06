@@ -21,8 +21,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crypto::random::{make_pseudo_rng, SliceRandom};
+use common::chain::ChainConfig;
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
 use futures::never::Never;
+use logging::log;
 use tokio::{net::UdpSocket, sync::mpsc};
 use trust_dns_client::{
     proto::rr::{LowerName, RrKey},
@@ -42,11 +44,14 @@ use trust_dns_server::{
 };
 use utils::atomics::RelaxedAtomicU32;
 
-use crate::{config::DnsServerConfig, error::DnsServerError};
+use crate::{
+    config::DnsServerConfig, crawler_p2p::crawler::address_data::SoftwareInfo,
+    error::DnsServerError,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DnsServerCommand {
-    AddAddress(IpAddr),
+    AddAddress(IpAddr, SoftwareInfo),
 
     DelAddress(IpAddr),
 }
@@ -59,31 +64,39 @@ pub struct DnsServer {
     cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
 }
 
-// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
+/// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
 const SOA_REFRESH: i32 = 604800;
 const SOA_RETRY: i32 = 86400;
 const SOA_EXPIRE: i32 = 2592000;
 const SOA_MINIMUM: u32 = 604800;
 
 // Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
-const TTL_IP: u32 = 3600;
+const TTL_IP: u32 = 360; // FIXME
 const TTL_NS: u32 = 21600;
 const TTL_SOA: u32 = 21600;
 
-// Maximum number of IPv4 addresses in result
+/// Maximum number of IPv4 addresses in result
 const MAX_IPV4_RECORDS: usize = 24;
 
-// Maximum number of IPv6 addresses in result
+/// Maximum number of IPv6 addresses in result
 const MAX_IPV6_RECORDS: usize = 14;
+
+/// When publishing addresses, we give preference to nodes that have the same software version as
+/// the dns server itself.
+/// This constant is a number between 0 and 1 that determines how many addresses of same-version
+/// nodes will be returned compared to nodes of any other version.
+const SAME_SOFTWARE_VERSION_PEERS_RATIO: f64 = 0.8;
 
 impl DnsServer {
     pub async fn new(
         config: Arc<DnsServerConfig>,
+        chain_config: Arc<ChainConfig>,
         cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
-    ) -> Result<Self, DnsServerError> {
+    ) -> crate::Result<Self> {
         let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
 
         let auth = Arc::new(AuthorityImpl {
+            chain_config,
             serial: Default::default(),
             host: config.host.clone(),
             nameserver: config.nameserver.clone(),
@@ -112,7 +125,7 @@ impl DnsServer {
         })
     }
 
-    pub async fn run(self) -> Result<Never, DnsServerError> {
+    pub async fn run(self) -> crate::Result<Never> {
         let DnsServer {
             auth,
             server,
@@ -135,41 +148,38 @@ impl DnsServer {
 
 /// Wrapper for InMemoryAuthority that selects random addresses every second
 struct AuthorityImpl {
+    chain_config: Arc<ChainConfig>,
     serial: RelaxedAtomicU32,
     host: Name,
     nameserver: Option<Name>,
     mbox: Option<Name>,
     inner: InMemoryAuthority,
-    ip4: Mutex<Vec<Ipv4Addr>>,
-    ip6: Mutex<Vec<Ipv6Addr>>,
+    ip4: Mutex<Vec<(Ipv4Addr, SoftwareInfo)>>,
+    ip6: Mutex<Vec<(Ipv6Addr, SoftwareInfo)>>,
 }
 
 impl AuthorityImpl {
-    async fn refresh(&self) {
+    fn create_records(&self, rng: &mut impl Rng) -> Option<BTreeMap<RrKey, Arc<RecordSet>>> {
         let new_serial = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("valid time expected")
             .as_secs() as u32;
         let old_serial = self.serial.swap(new_serial);
         if old_serial == new_serial {
-            return;
+            return None;
         }
 
-        let ipv4 = self
-            .ip4
-            .lock()
-            .expect("mutex must be valid (refresh ipv4)")
-            .choose_multiple(&mut make_pseudo_rng(), MAX_IPV4_RECORDS)
-            .cloned()
-            .collect::<Vec<_>>();
+        let ipv4_addrs = self.select_addresses(
+            &self.ip4.lock().expect("mutex must be valid (refresh ipv4)"),
+            MAX_IPV4_RECORDS,
+            rng,
+        );
 
-        let ipv6 = self
-            .ip6
-            .lock()
-            .expect("mutex must be valid (refresh ipv6)")
-            .choose_multiple(&mut make_pseudo_rng(), MAX_IPV6_RECORDS)
-            .cloned()
-            .collect::<Vec<_>>();
+        let ipv6_addrs = self.select_addresses(
+            &self.ip6.lock().expect("mutex must be valid (refresh ipv6)"),
+            MAX_IPV6_RECORDS,
+            rng,
+        );
 
         let mut new_records = BTreeMap::new();
 
@@ -201,7 +211,7 @@ impl AuthorityImpl {
 
         // A records
         let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
-        for ip in ipv4 {
+        for ip in ipv4_addrs {
             ipv4_rec.add_rdata(RData::A(ip.into()));
         }
         new_records.insert(
@@ -211,7 +221,7 @@ impl AuthorityImpl {
 
         // AAAA records
         let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
-        for ip in ipv6 {
+        for ip in ipv6_addrs {
             ipv6_rec.add_rdata(RData::AAAA(ip.into()));
         }
         new_records.insert(
@@ -219,7 +229,63 @@ impl AuthorityImpl {
             Arc::new(ipv6_rec),
         );
 
-        *self.inner.records_mut().await = new_records;
+        Some(new_records)
+    }
+
+    async fn refresh(&self) {
+        let new_records = self.create_records(&mut make_pseudo_rng());
+        log::trace!("Refreshing, new records = {new_records:#?}");
+
+        if let Some(new_records) = new_records {
+            *self.inner.records_mut().await = new_records;
+        }
+    }
+
+    fn select_addresses<Addr: Clone>(
+        &self,
+        addrs: &[(Addr, SoftwareInfo)],
+        count: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<Addr> {
+        let same_software_info = SoftwareInfo::current(&self.chain_config);
+
+        let mut same_version_addrs = addrs
+            .iter()
+            .filter_map(|(addr, software_info)| {
+                (*software_info == same_software_info).then(|| addr.clone())
+            })
+            .choose_multiple(rng, count);
+        same_version_addrs.shuffle(rng);
+
+        let mut other_version_addrs = addrs
+            .iter()
+            .filter_map(|(addr, software_info)| {
+                (*software_info != same_software_info).then(|| addr.clone())
+            })
+            .choose_multiple(rng, count);
+        other_version_addrs.shuffle(rng);
+
+        let same_version_addrs_preferred_count =
+            (count as f64 * SAME_SOFTWARE_VERSION_PEERS_RATIO) as usize;
+
+        let mut result = Vec::with_capacity(count);
+
+        // First take the required number of same-version addresses.
+        let addr_count_to_take =
+            std::cmp::min(same_version_addrs_preferred_count, same_version_addrs.len());
+        result.extend(same_version_addrs.drain(..addr_count_to_take));
+
+        // Fill the rest with other-version addresses.
+        let addr_count_to_take = std::cmp::min(count - result.len(), other_version_addrs.len());
+        result.extend(other_version_addrs.drain(..addr_count_to_take));
+
+        // If there is still some space left, fill it with same-version addresses, if any.
+        if result.len() < count {
+            let addr_count_to_take = std::cmp::min(count - result.len(), same_version_addrs.len());
+            result.extend(same_version_addrs.drain(..addr_count_to_take));
+        }
+
+        result
     }
 }
 
@@ -249,6 +315,12 @@ impl Authority for AuthorityImpl {
         query_type: RecordType,
         lookup_options: LookupOptions,
     ) -> Result<Self::Lookup, LookupError> {
+        log::trace!(
+            "In lookup for {:?}, query_type = {:?}, lookup_options = {:?}",
+            name,
+            query_type,
+            lookup_options
+        );
         self.refresh().await;
         self.inner.lookup(name, query_type, lookup_options).await
     }
@@ -258,6 +330,14 @@ impl Authority for AuthorityImpl {
         request_info: RequestInfo<'_>,
         lookup_options: LookupOptions,
     ) -> Result<Self::Lookup, LookupError> {
+        log::trace!(
+            "In search, src = {:?}, protocol = {:?}, header = {:?}, query = {:?}, lookup_options = {:?}",
+            request_info.src,
+            request_info.protocol,
+            request_info.header,
+            request_info.query,
+            lookup_options
+        );
         self.refresh().await;
         self.inner.search(request_info, lookup_options).await
     }
@@ -273,23 +353,33 @@ impl Authority for AuthorityImpl {
 
 fn handle_command(auth: &AuthorityImpl, command: DnsServerCommand) {
     match command {
-        DnsServerCommand::AddAddress(IpAddr::V4(ip)) => {
-            auth.ip4.lock().expect("mutex must be valid (add ipv4)").push(ip);
+        DnsServerCommand::AddAddress(IpAddr::V4(ip), software_version) => {
+            log::debug!("Adding address {ip}");
+            auth.ip4
+                .lock()
+                .expect("mutex must be valid (add ipv4)")
+                .push((ip, software_version));
         }
-        DnsServerCommand::AddAddress(IpAddr::V6(ip)) => {
-            auth.ip6.lock().expect("mutex must be valid (add ipv6)").push(ip);
+        DnsServerCommand::AddAddress(IpAddr::V6(ip), software_version) => {
+            log::debug!("Adding address {ip}");
+            auth.ip6
+                .lock()
+                .expect("mutex must be valid (add ipv6)")
+                .push((ip, software_version));
         }
         DnsServerCommand::DelAddress(IpAddr::V4(ip)) => {
+            log::debug!("Deleting address {ip}");
             auth.ip4
                 .lock()
                 .expect("mutex must be valid (remove ipv4)")
-                .retain(|val| *val != ip);
+                .retain(|(addr, _)| *addr != ip);
         }
         DnsServerCommand::DelAddress(IpAddr::V6(ip)) => {
+            log::debug!("Deleting address {ip}");
             auth.ip6
                 .lock()
                 .expect("mutex must be valid (remove ipv6)")
-                .retain(|val| *val != ip);
+                .retain(|(addr, _)| *addr != ip);
         }
     };
 }

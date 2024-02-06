@@ -23,6 +23,7 @@ async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 directories.workspace = true
 futures = { workspace = true }
+itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false }

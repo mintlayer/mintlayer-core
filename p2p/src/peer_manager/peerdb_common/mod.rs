@@ -16,4 +16,4 @@
 pub mod storage;
 pub mod storage_impl;
 
-pub use storage::{TransactionRo, TransactionRw, Transactional};
+pub use storage::{StorageVersion, TransactionRo, TransactionRw, Transactional};

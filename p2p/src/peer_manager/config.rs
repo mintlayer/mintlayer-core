@@ -43,7 +43,8 @@ make_config_setting!(ForceDnsQueryIfNoGlobalAddressesKnown, bool, false);
 make_config_setting!(AllowSameIpConnections, bool, false);
 
 // TODO: this name is too generic, because not all peer manager settings are contained here.
-// PeerManagerInternalConfig might be a better name.
+// PeerManagerInternalConfig might be a better name (though there are objections against it,
+// see https://github.com/mintlayer/mintlayer-core/pull/1451#discussion_r1453407430).
 // Alternatively, we may want to actually put all peer manager settings here. If we do this,
 // it might be better to revise the entire structure of p2p config and make it more hierarchical.
 // E.g. we may have separate structs for backend, sync manager and peer manager settings at the

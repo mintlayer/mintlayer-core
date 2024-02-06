@@ -58,7 +58,6 @@ use super::{
     peerdb_common::storage::update_db,
 };
 
-pub use storage::StorageVersion;
 pub use storage_load::{open_storage, CURRENT_STORAGE_VERSION};
 
 pub struct PeerDb<S> {

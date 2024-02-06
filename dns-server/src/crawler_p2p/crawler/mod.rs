@@ -47,9 +47,11 @@ use p2p::{
 };
 use utils::make_config_setting;
 
-use crate::crawler_p2p::crawler::address_data::AddressStateTransitionTo;
+use crate::crawler_p2p::crawler::address_data::{AddressStateTransitionTo, SoftwareInfo};
 
-use self::address_data::{AddressData, AddressState};
+use self::address_data::{AddressData, AddressState, ConnectionInfo};
+
+use super::crawler_manager::storage::AddressInfo;
 
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
@@ -156,26 +158,50 @@ impl Crawler {
         now: Time,
         chain_config: Arc<ChainConfig>,
         config: CrawlerConfig,
-        loaded_addresses: BTreeSet<SocketAddress>,
+        loaded_addresses: BTreeMap<SocketAddress, AddressInfo>,
         loaded_banned_addresses: BTreeMap<BannableAddress, Time>,
         reserved_addresses: BTreeSet<SocketAddress>,
     ) -> Self {
-        let addresses = loaded_addresses
-            .union(&reserved_addresses)
-            .map(|addr| {
-                (
-                    *addr,
-                    AddressData {
-                        state: AddressState::Disconnected {
-                            fail_count: 0,
-                            was_reachable: loaded_addresses.contains(addr),
-                            disconnected_at: now,
+        let addresses = {
+            let mut addresses = loaded_addresses
+                .iter()
+                .map(|(addr, addr_info)| {
+                    (
+                        *addr,
+                        AddressData {
+                            state: AddressState::Disconnected {
+                                fail_count: 0,
+                                connection_info: Some(ConnectionInfo {
+                                    peer_software_info: addr_info.software_info.clone(),
+                                }),
+                                disconnected_at: now,
+                            },
+                            reserved: false.into(),
                         },
-                        reserved: reserved_addresses.contains(addr).into(),
-                    },
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            for reserved_addr in reserved_addresses {
+                match addresses.entry(reserved_addr) {
+                    Entry::Occupied(mut e) => {
+                        e.get_mut().reserved = true.into();
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(AddressData {
+                            state: AddressState::Disconnected {
+                                fail_count: 0,
+                                connection_info: None,
+                                disconnected_at: now,
+                            },
+                            reserved: true.into(),
+                        });
+                    }
+                }
+            }
+
+            addresses
+        };
 
         Self {
             now,
@@ -323,7 +349,7 @@ impl Crawler {
             vacant.insert(AddressData {
                 state: AddressState::Disconnected {
                     fail_count: 0,
-                    was_reachable: false,
+                    connection_info: None,
                     disconnected_at: self.now,
                 },
                 reserved: false.into(),
@@ -382,6 +408,13 @@ impl Crawler {
         let old_peer = self.outbound_peers.insert(peer_id, peer);
         assert!(old_peer.is_none());
 
+        log::debug!(
+            "Outbound peer inserted, address: {}, peer_id: {} (total peer count: {})",
+            address.to_string(),
+            peer_id,
+            self.outbound_peers.len()
+        );
+
         let peer_compatibility_check_result = peer_info.check_compatibility(&self.chain_config);
 
         match peer_compatibility_check_result {
@@ -389,7 +422,7 @@ impl Crawler {
                 log::info!(
                     "New outbound peer created, address: {}, peer_id: {}",
                     address.to_string(),
-                    peer_id,
+                    peer_id
                 );
 
                 let address_data = self
@@ -401,7 +434,12 @@ impl Crawler {
                     self.now,
                     &address,
                     address_data,
-                    AddressStateTransitionTo::Connected,
+                    AddressStateTransitionTo::Connected {
+                        peer_software_info: SoftwareInfo {
+                            user_agent: peer_info.user_agent,
+                            version: peer_info.software_version,
+                        },
+                    },
                     callback,
                 );
             }
@@ -441,12 +479,16 @@ impl Crawler {
 
     /// Remove existing outbound peer
     fn remove_outbound_peer(&mut self, peer_id: PeerId, callback: &mut impl FnMut(CrawlerCommand)) {
-        log::debug!("outbound peer removed, peer_id: {}", peer_id);
-
         let peer = self
             .outbound_peers
             .remove(&peer_id)
             .expect("peer must be known (remove_outbound_peer)");
+
+        log::debug!(
+            "Outbound peer removed, peer_id: {} (total peer count: {})",
+            peer_id,
+            self.outbound_peers.len()
+        );
 
         let address_data = self
             .addresses

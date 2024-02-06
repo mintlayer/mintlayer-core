@@ -25,8 +25,9 @@ use p2p::types::{
     bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress,
 };
 
-use crate::crawler_p2p::crawler::{
-    address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent,
+use crate::crawler_p2p::{
+    crawler::{address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent},
+    crawler_manager::storage::AddressInfo,
 };
 
 /// Mock crawler
@@ -59,7 +60,7 @@ pub struct AddressUpdate {
 
 pub fn test_crawler(
     config: CrawlerConfig,
-    loaded_addresses: BTreeSet<SocketAddress>,
+    loaded_addresses: BTreeMap<SocketAddress, AddressInfo>,
     loaded_banned_addresses: BTreeMap<BannableAddress, Time>,
     added_addresses: BTreeSet<SocketAddress>,
 ) -> MockCrawler {
@@ -80,7 +81,7 @@ pub fn test_crawler(
         address_updates: Default::default(),
         connect_requests: Default::default(),
         reachable: Default::default(),
-        persistent: loaded_addresses.iter().cloned().collect(),
+        persistent: loaded_addresses.keys().cloned().collect(),
         pending_connects: Default::default(),
         pending_disconnects: Default::default(),
         peers: Default::default(),

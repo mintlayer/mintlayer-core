@@ -992,7 +992,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 Ok(TxStatus::InOrphanPool)
             }
             Err(err) => {
-                log::warn!("Transaction rejected: {}", err);
+                log::warn!("Transaction {tx_id} rejected: {err}");
 
                 let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
                 self.events_controller.broadcast(event.into());

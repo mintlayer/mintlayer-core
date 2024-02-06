@@ -17,13 +17,12 @@ use std::sync::Arc;
 
 use clap::Parser;
 use futures::never::Never;
+use logging::log;
 use tokio::sync::{mpsc, oneshot};
 
 use common::{primitives::user_agent::UserAgent, time_getter::TimeGetter};
 use config::DnsServerConfig;
-use crawler_p2p::crawler_manager::{
-    storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
-};
+use crawler_p2p::crawler_manager::{CrawlerManager, CrawlerManagerConfig};
 use p2p::{
     config::{NodeType, P2pConfig},
     net::NetworkingService,
@@ -31,7 +30,10 @@ use p2p::{
 use utils::atomics::SeqCstAtomicBool;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
-use crate::crawler_p2p::crawler::CrawlerConfig;
+use crate::{
+    crawler_p2p::{crawler::CrawlerConfig, crawler_manager::storage::open_storage},
+    error::DnsServerError,
+};
 
 mod config;
 mod crawler_p2p;
@@ -41,7 +43,9 @@ mod error;
 const DNS_SERVER_USER_AGENT: &str = "MintlayerDnsSeedServer";
 const DNS_SERVER_DB_NAME: &str = "dns_server";
 
-async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerError> {
+pub type Result<T> = core::result::Result<T, error::DnsServerError>;
+
+async fn run(config: Arc<DnsServerConfig>) -> Result<Never> {
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
 
     let chain_type = match config.network {
@@ -99,12 +103,42 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     )
     .expect("Failed to prepare data directory");
 
-    let storage = DnsServerStorageImpl::new(storage_lmdb::Lmdb::new(
-        data_dir.join(DNS_SERVER_DB_NAME),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    ))?;
+    let storage = {
+        let storage_data_dir = data_dir.join(DNS_SERVER_DB_NAME);
+        let open_storage_backend = |data_dir| {
+            storage_lmdb::Lmdb::new(
+                data_dir,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            )
+        };
+
+        match open_storage(open_storage_backend(storage_data_dir.clone())) {
+            Ok(storage) => Ok(storage),
+            Err(err) => match err {
+                DnsServerError::StorageVersionMismatch {
+                    expected_version,
+                    actual_version,
+                } => {
+                    log::warn!(
+                        "Storage version mismatch, expected {}, got {}; removing the db.",
+                        expected_version,
+                        actual_version
+                    );
+                    std::fs::remove_dir_all(&storage_data_dir)?;
+                    open_storage(open_storage_backend(storage_data_dir))
+                }
+                DnsServerError::ProtoError(_)
+                | DnsServerError::AddrParseError(_)
+                | DnsServerError::IoError(_)
+                | DnsServerError::P2pError(_)
+                | DnsServerError::StorageError(_)
+                | DnsServerError::InvalidStorageState(_)
+                | DnsServerError::Other(_) => Err(err),
+            },
+        }
+    }?;
 
     let crawler_mgr_config = CrawlerManagerConfig {
         reserved_nodes: config.reserved_node.clone(),
@@ -115,14 +149,14 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         time_getter,
         crawler_mgr_config,
         CrawlerConfig::default(),
-        chain_config,
+        chain_config.clone(),
         conn,
         sync,
         storage,
         dns_server_cmd_tx,
     )?;
 
-    let server = dns_server::DnsServer::new(config, dns_server_cmd_rx).await?;
+    let server = dns_server::DnsServer::new(config, chain_config, dns_server_cmd_rx).await?;
 
     // Spawn for better parallelism
     let crawler_manager_task = tokio::spawn(async move { crawler_manager.run().await });
