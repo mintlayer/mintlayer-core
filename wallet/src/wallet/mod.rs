@@ -1035,7 +1035,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// * `&mut self` - A mutable reference to the wallet instance.
     /// * `account_index: U31` - The index of the account from which funds will be sent.
     /// * `outputs: impl IntoIterator<Item = TxOutput>` - An iterator over `TxOutput` items representing the addresses and amounts to which funds will be sent.
-    /// * `inputs`: SelectedInputs - if not empty will try to select inputs from those inestead of the avalable ones
+    /// * `inputs`: SelectedInputs - if not empty will try to select inputs from those instead of the available ones
     /// * `change_addresses`: if present will use those change_addresses instead of generating new ones
     /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
     /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
