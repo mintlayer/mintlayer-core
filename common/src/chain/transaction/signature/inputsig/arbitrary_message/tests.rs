@@ -380,7 +380,7 @@ fn signature_with_chosen_text() {
 
     let message =
         "Lorem Ipsum is simply dummy text of the printing and typesetting industry.".as_bytes();
-    let message_challenge = produce_message_challenge(&message);
+    let message_challenge = produce_message_challenge(message);
 
     // Ensure the challenge format hasn't changed
     let message_challenge_hex = "5c0d4f606f2b5c309026e3378ca265cb6b12bce9f82d21a07f6c92f6230ae349";
@@ -398,7 +398,7 @@ fn signature_with_chosen_text() {
     let signature_pubkeyhash = SignedArbitraryMessage::produce_uniparty_signature(
         &private_key,
         &destination_pubkeyhash,
-        &message,
+        message,
     )
     .unwrap();
     SignedArbitraryMessage::from_data(signature_pubkeyhash.raw_signature)
@@ -419,7 +419,7 @@ fn signature_with_chosen_text() {
     let signature_pub_key = SignedArbitraryMessage::produce_uniparty_signature(
         &private_key,
         &destination_pub_key,
-        &message,
+        message,
     )
     .unwrap();
     SignedArbitraryMessage::from_data(signature_pub_key.raw_signature)
