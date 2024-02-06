@@ -1081,6 +1081,70 @@ fn wallet_get_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet = create_wallet(chain_config.clone());
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
+    let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let dest = addr.decode_object(&chain_config).unwrap();
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // send some coins to the address
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::Transfer(OutputValue::Coin(block1_amount), dest.clone())],
+            vec![],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let send_tx_id = tx.transaction().get_id();
+
+    // put the tx in a block and scan it as confirmed
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![tx.clone()],
+        Amount::ZERO,
+        1,
+    );
+
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [gen_random_transfer(&mut rng, block1_amount)],
+            vec![],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let spend_from_tx_id = tx.transaction().get_id();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![tx.clone()],
+        Amount::ZERO,
+        2,
+    );
+
+    let txs = wallet.mainchain_transactions(DEFAULT_ACCOUNT_INDEX, Some(dest), 100).unwrap();
+    // should have 2 txs the send to and the spent from
+    assert_eq!(txs.len(), 2);
+    assert!(txs.iter().any(|info| info.id == send_tx_id));
+    assert!(txs.iter().any(|info| info.id == spend_from_tx_id));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn wallet_transaction_with_fees(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());

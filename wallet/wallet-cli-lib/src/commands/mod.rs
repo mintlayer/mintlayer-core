@@ -668,6 +668,16 @@ pub enum WalletCommand {
     #[clap(name = "transaction-list-pending")]
     ListPendingTransactions,
 
+    /// List mainchain transactions with optional address filter
+    #[clap(name = "transaction-list-by-address")]
+    ListMainchainTransactions {
+        /// Address to filter by
+        address: Option<String>,
+        /// limit the number of printed transactions, default is 100
+        #[arg(long = "limit", default_value_t = 100)]
+        limit: usize,
+    },
+
     /// Get a transaction from the wallet, if present
     #[clap(name = "transaction-get")]
     GetTransaction {
@@ -1495,6 +1505,31 @@ where
                 let selected_account = self.get_selected_acc()?;
                 let utxos = self.wallet_rpc.pending_transactions(selected_account).await?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
+            }
+
+            WalletCommand::ListMainchainTransactions { address, limit } => {
+                let selected_account = self.get_selected_acc()?;
+                let txs = self
+                    .wallet_rpc
+                    .mainchain_transactions(selected_account, address, limit)
+                    .await?;
+
+                let table = {
+                    let mut table = prettytable::Table::new();
+                    table.set_titles(prettytable::row!["Id", "BlockHeight", "BlockTimestamp",]);
+
+                    table.extend(txs.into_iter().map(|info| {
+                        prettytable::row![
+                            id_to_hex_string(*info.id.as_hash()),
+                            info.height,
+                            info.timestamp
+                        ]
+                    }));
+
+                    table
+                };
+
+                Ok(ConsoleCommand::Print(table.to_string()))
             }
 
             WalletCommand::GetTransaction { transaction_id } => {

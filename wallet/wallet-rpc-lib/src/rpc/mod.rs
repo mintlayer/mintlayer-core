@@ -29,7 +29,7 @@ use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 use utils::{ensure, shallow_clone::ShallowClone};
 use wallet::{
-    account::{PartiallySignedTransaction, PoolData, TransactionToSign},
+    account::{PartiallySignedTransaction, PoolData, TransactionToSign, TxInfo},
     WalletError,
 };
 
@@ -349,6 +349,27 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 w.readonly_controller(account_index).pending_transactions().map(|txs| {
                     txs.into_iter().map(|tx| WithId::new(WithId::take(tx).clone())).collect()
                 })
+            })
+            .await?
+    }
+
+    pub async fn mainchain_transactions(
+        &self,
+        account_index: U31,
+        address: Option<String>,
+        limit: usize,
+    ) -> WRpcResult<Vec<TxInfo>, N> {
+        let address = address
+            .map(|address| {
+                Address::<Destination>::from_str(&self.chain_config, &address)
+                    .and_then(|dest| dest.decode_object(&self.chain_config))
+            })
+            .transpose()
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call(move |w| {
+                w.readonly_controller(account_index).mainchain_transactions(address, limit)
             })
             .await?
     }

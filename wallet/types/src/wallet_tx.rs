@@ -56,6 +56,15 @@ impl TxState {
         }
     }
 
+    pub fn block_order_index(&self) -> Option<u64> {
+        match self {
+            TxState::Confirmed(_, _, idx) | TxState::InMempool(idx) | TxState::Inactive(idx) => {
+                Some(*idx)
+            }
+            TxState::Conflicted(_) | TxState::Abandoned => None,
+        }
+    }
+
     pub fn timestamp(&self) -> Option<BlockTimestamp> {
         match self {
             TxState::Confirmed(_block_height, timestamp, _idx) => Some(*timestamp),

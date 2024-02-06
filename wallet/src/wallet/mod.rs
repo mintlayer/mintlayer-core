@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
+use crate::account::TxInfo;
 use crate::account::{
     currency_grouper::Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction,
     PoolData, TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
@@ -872,6 +873,17 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<Vec<WithId<&Transaction>>> {
         let account = self.get_account(account_index)?;
         let transactions = account.pending_transactions();
+        Ok(transactions)
+    }
+
+    pub fn mainchain_transactions(
+        &self,
+        account_index: U31,
+        destination: Option<Destination>,
+        limit: usize,
+    ) -> WalletResult<Vec<TxInfo>> {
+        let account = self.get_account(account_index)?;
+        let transactions = account.mainchain_transactions(destination, limit);
         Ok(transactions)
     }
 
