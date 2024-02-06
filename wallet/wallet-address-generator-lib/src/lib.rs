@@ -68,11 +68,12 @@ pub struct CliArgs {
     pub network: Network,
 
     /// Number of addresses to generate and display
-    #[clap(long, default_value_t = 1)]
+    #[clap(long, short = 'n', default_value_t = 1)]
     pub address_count: u8,
 
     /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
     #[clap(long)]
+    #[arg(hide = true)]
     pub mnemonic: Option<String>,
 }
 
