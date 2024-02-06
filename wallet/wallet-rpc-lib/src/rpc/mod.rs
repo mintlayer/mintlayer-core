@@ -53,6 +53,7 @@ pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{Balances, BlockInfo},
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
+    DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
 
@@ -380,6 +381,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn submit_raw_transaction(
         &self,
         tx: HexEncoded<SignedTransaction>,
+        do_not_store: bool,
         options: TxOptionsOverrides,
     ) -> WRpcResult<NewTransaction, N> {
         let tx = tx.take();
@@ -390,7 +392,27 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             ))
         })?;
         let tx_id = tx.transaction().get_id();
-        self.node.submit_transaction(tx, options).await.map_err(RpcError::RpcError)?;
+        self.node
+            .submit_transaction(tx.clone(), options)
+            .await
+            .map_err(RpcError::RpcError)?;
+
+        let store_tx_in_wallet = !do_not_store;
+        if store_tx_in_wallet {
+            let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
+            self.wallet
+                .call_async(move |controller| {
+                    Box::pin(async move {
+                        controller
+                            .synced_controller(DEFAULT_ACCOUNT_INDEX, config)
+                            .await?
+                            .add_unconfirmed_tx(tx)
+                            .map_err(RpcError::Controller)
+                    })
+                })
+                .await??;
+        }
+
         Ok(NewTransaction { tx_id })
     }
 

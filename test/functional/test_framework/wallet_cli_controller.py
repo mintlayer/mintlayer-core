@@ -306,8 +306,9 @@ class WalletCliController:
     async def verify_challenge_hex(self, message: str, signature: str, address: str) -> str:
         return await self._write_command(f'verify-challenge-hex "{message}" {signature} {address}\n')
 
-    async def submit_transaction(self, transaction: str) -> str:
-        return await self._write_command(f"node-submit-transaction {transaction}\n")
+    async def submit_transaction(self, transaction: str, do_not_store: bool = False) -> str:
+        store_tx = "--do-not-store" if do_not_store else ""
+        return await self._write_command(f"node-submit-transaction {transaction} {store_tx}\n")
 
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n")

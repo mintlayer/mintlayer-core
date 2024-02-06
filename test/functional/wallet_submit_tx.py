@@ -103,7 +103,14 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             assert_in("No transaction found", await wallet.get_transaction(tx_id))
 
-            node.mempool_submit_transaction(encoded_tx, {})
+            store_tx_in_wallet = random.choice([True, False])
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(encoded_tx, not store_tx_in_wallet))
+
+            if store_tx_in_wallet:
+                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance(utxo_states=['inactive']))
+            else:
+                assert_in(f"Coins amount: 0", await wallet.get_balance(utxo_states=['inactive']))
+
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1
