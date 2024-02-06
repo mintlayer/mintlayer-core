@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+const MESSAGE_MAGIC_PREFIX: &'static str = "===MINTLAYER MESSAGE BEGIN===";
+const MESSAGE_MAGIC_SUFFIX: &'static str = "===MINTLAYER MESSAGE END===";
+
 use thiserror::Error;
 
 use serialization::Encode;
@@ -52,17 +55,16 @@ pub struct SignedArbitraryMessage {
 }
 
 pub fn produce_message_challenge(message: &[u8]) -> H256 {
-    let hashed_message = default_hash(&message);
-
-    // Concatenate the message with its hash to prevent abusing signatures to trick users into signing transactions
-    let message = message
+    let wrapped_message = MESSAGE_MAGIC_PREFIX
+        .as_bytes()
         .iter()
-        .chain(hashed_message.as_bytes().iter())
+        .chain(message.iter())
+        .chain(MESSAGE_MAGIC_SUFFIX.as_bytes().iter())
         .copied()
         .collect::<Vec<_>>();
 
-    // Harden it further by hashing that twice. Now it's impossible to make this useful for a transaction
-    default_hash(default_hash(message))
+    // Hash it. Now it's impossible to make this useful for a transaction
+    default_hash(wrapped_message)
 }
 
 impl SignedArbitraryMessage {
