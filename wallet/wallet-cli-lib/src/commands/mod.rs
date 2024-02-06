@@ -1156,9 +1156,15 @@ where
                 let result =
                     self.wallet_rpc.sign_challenge(selected_account, challenge, address).await?;
 
+                let qr_code = utils::qrcode::qrcode_from_str(result.clone().to_hex())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n{}",
-                    result.to_hex()
+                    "The generated hex encoded signature is\n\n{}
+                    \n\n\
+                    The following qr code also contains the signature for easy transport:\n{}",
+                    result.to_hex(),
+                    qr_code.encode_to_console_string_with_defaults(1)
                 )))
             }
 
@@ -1172,9 +1178,15 @@ where
                     .sign_challenge(selected_account, challenge.into_bytes(), address)
                     .await?;
 
+                let qr_code = utils::qrcode::qrcode_from_str(result.clone().to_hex())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n{}",
-                    result.to_hex()
+                    "The generated hex encoded signature is\n\n{}
+                        \n\n\
+                        The following qr code also contains the signature for easy transport:\n{}",
+                    result.to_hex(),
+                    qr_code.encode_to_console_string_with_defaults(1)
                 )))
             }
 

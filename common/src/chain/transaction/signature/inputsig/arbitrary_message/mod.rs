@@ -49,7 +49,7 @@ pub enum SignArbitraryMessageError {
     Unsupported,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SignedArbitraryMessage {
     raw_signature: Vec<u8>,
 }
