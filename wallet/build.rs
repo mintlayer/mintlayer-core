@@ -26,14 +26,12 @@ fn main() {
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
 
-    if let Ok(git_hash) = git_head_hash {
-        println!("cargo:rustc-env=GIT_HEAD_HASH={}", git_hash);
-    } else {
-        println!("cargo:rustc-env=GIT_HEAD_HASH=");
-    }
-    if let Ok(git_tree_clean) = git_tree_clean {
-        println!("cargo:rustc-env=GIT_TREE_CLEAN={}", git_tree_clean);
-    } else {
-        println!("cargo:rustc-env=GIT_TREE_CLEAN=");
-    }
+    println!(
+        "cargo:rustc-env=GIT_HEAD_HASH={}",
+        git_head_hash.unwrap_or("".to_string())
+    );
+    println!(
+        "cargo:rustc-env=GIT_TREE_CLEAN={}",
+        git_tree_clean.unwrap_or("".to_string())
+    );
 }
