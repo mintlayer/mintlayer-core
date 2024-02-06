@@ -23,9 +23,10 @@ use chain::signature::{
 };
 use crypto::{
     hash::StreamHasher,
-    key::{KeyKind, PrivateKey},
+    key::{KeyKind, PrivateKey, PublicKey},
     random::Rng,
 };
+use serialization::DecodeAll;
 use test_utils::{
     assert_matches,
     random::{flip_random_bit, with_random_bit_flipped, Seed},
@@ -366,4 +367,70 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     )
     .unwrap_err();
     assert_eq!(ver_err, DestinationSigError::SignatureVerificationFailed);
+}
+
+#[test]
+fn signature_with_chosen_text() {
+    let private_key_hex = "0085b02139ad6f21099f842d4cf6af705bb8927b9589835be1fef5f53e74e360f3";
+    let private_key_bytes = hex::decode(private_key_hex).unwrap();
+    let private_key = PrivateKey::decode_all(&mut private_key_bytes.as_slice()).unwrap();
+    let public_key = PublicKey::from_private_key(&private_key);
+
+    let chain_config = chain::config::create_testnet();
+
+    let message =
+        "Lorem Ipsum is simply dummy text of the printing and typesetting industry.".as_bytes();
+    let message_challenge = produce_message_challenge(&message);
+
+    // Ensure the challenge format hasn't changed
+    let message_challenge_hex = "5c0d4f606f2b5c309026e3378ca265cb6b12bce9f82d21a07f6c92f6230ae349";
+    let message_challenge_bytes = hex::decode(message_challenge_hex).unwrap();
+    let message_challenge_reproduced =
+        H256::decode_all(&mut message_challenge_bytes.as_slice()).unwrap();
+    assert_eq!(message_challenge_reproduced, message_challenge);
+
+    let destination_pubkeyhash = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    let destination_pub_key = Destination::PublicKey(public_key);
+
+    ////////////////////////////////////////////////////////////
+    // Public key hash verification
+    ////////////////////////////////////////////////////////////
+    let signature_pubkeyhash = SignedArbitraryMessage::produce_uniparty_signature(
+        &private_key,
+        &destination_pubkeyhash,
+        &message,
+    )
+    .unwrap();
+    SignedArbitraryMessage::from_data(signature_pubkeyhash.raw_signature)
+        .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
+        .unwrap();
+
+    // Ensure the stored signature will always verify correctly
+    let signature_pubkeyhash_hex = "00030b84796d1e4f528dc7469c03beda6d9158126818ecf0df28e86354246d3de849004a0dcf6611e49f849bfe27c3d2bb5e4e4a234197f812035a61ec46db22dd3f412007c525999fe87b72e3bec1905f02f1d2e18940eb95e26320ad2c66654cc6b5";
+    let signature_pubkeyhash_bytes = hex::decode(signature_pubkeyhash_hex).unwrap();
+    SignedArbitraryMessage::from_data(signature_pubkeyhash_bytes)
+        .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
+        .unwrap();
+    ////////////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////////////
+    // Public key verification
+    ////////////////////////////////////////////////////////////
+    let signature_pub_key = SignedArbitraryMessage::produce_uniparty_signature(
+        &private_key,
+        &destination_pub_key,
+        &message,
+    )
+    .unwrap();
+    SignedArbitraryMessage::from_data(signature_pub_key.raw_signature)
+        .verify_signature(&chain_config, &destination_pub_key, &message_challenge)
+        .unwrap();
+
+    // Ensure the stored signature will always verify correctly
+    let signature_pubkey_hex = "00c2d1851cc0bf238a2314924e2545e0053cffe7dabd4e531b594dba4bb9a7ce5f556592be4a791602782a782d4d8b65bd58cb009016f91c78c6cbdb0a398f92d6";
+    let signature_pubkey_bytes = hex::decode(signature_pubkey_hex).unwrap();
+    SignedArbitraryMessage::from_data(signature_pubkey_bytes)
+        .verify_signature(&chain_config, &destination_pub_key, &message_challenge)
+        .unwrap();
+    ////////////////////////////////////////////////////////////
 }
