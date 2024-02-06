@@ -16,7 +16,10 @@
 #![allow(clippy::unwrap_used)]
 
 use std::{
-    collections::BTreeSet, fmt::Debug, net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr}, time::Duration
+    collections::BTreeSet,
+    fmt::Debug,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    time::Duration,
 };
 
 use common::primitives::user_agent::mintlayer_core_user_agent;

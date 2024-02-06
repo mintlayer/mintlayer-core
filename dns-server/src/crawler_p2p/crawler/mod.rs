@@ -58,11 +58,18 @@ const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
 
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
+make_config_setting!(
+    AddrListRequestInterval,
+    Duration,
+    Duration::from_secs(60 * 60 * 24)
+);
 
 #[derive(Default, Clone)]
 pub struct CrawlerConfig {
     pub ban_threshold: BanThreshold,
     pub ban_duration: BanDuration,
+    /// How often should we ask peers for addresses.
+    pub addr_list_request_interval: AddrListRequestInterval,
 }
 
 /// The `Crawler` is the component that communicates with Mintlayer peers using p2p,
@@ -98,14 +105,20 @@ struct Peer {
     address: SocketAddress,
     address_rate_limiter: RateLimiter,
     ban_score: u32,
+    expecting_address_list_response: bool,
 }
 
+#[derive(Clone)]
 pub enum CrawlerEvent {
     Timer {
         period: Duration,
     },
-    NewAddress {
+    AddressAnnouncement {
         address: SocketAddress,
+        sender: PeerId,
+    },
+    AddressListResponse {
+        addresses: Vec<SocketAddress>,
         sender: PeerId,
     },
     Connected {
@@ -135,6 +148,9 @@ pub enum CrawlerEvent {
 pub enum CrawlerCommand {
     Connect {
         address: SocketAddress,
+    },
+    RequestAddresses {
+        peer_id: PeerId,
     },
     Disconnect {
         peer_id: PeerId,
@@ -173,6 +189,9 @@ impl Crawler {
                                 fail_count: 0,
                                 connection_info: Some(ConnectionInfo {
                                     peer_software_info: addr_info.software_info.clone(),
+                                    last_addr_list_request_time: addr_info
+                                        .last_addr_list_request_time
+                                        .map(|time| Time::from_duration_since_epoch(time)),
                                 }),
                                 disconnected_at: now,
                             },
@@ -334,16 +353,7 @@ impl Crawler {
         self.remove_outbound_peer(peer_id, callback);
     }
 
-    fn handle_new_address(&mut self, address: SocketAddress, sender: PeerId) {
-        let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
-        if !peer.address_rate_limiter.accept(self.now) {
-            log::debug!(
-                "address announcement is rate limited from peer {} ({})",
-                sender,
-                address.to_string()
-            );
-            return;
-        }
+    fn add_new_address(&mut self, address: SocketAddress) {
         if let Entry::Vacant(vacant) = self.addresses.entry(address) {
             log::debug!("new address {} added", address.to_string());
             vacant.insert(AddressData {
@@ -354,6 +364,33 @@ impl Crawler {
                 },
                 reserved: false.into(),
             });
+        }
+    }
+
+    fn handle_address_announcement(&mut self, address: SocketAddress, sender: PeerId) {
+        let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
+        if !peer.address_rate_limiter.accept(self.now) {
+            log::debug!(
+                "address announcement is rate limited from peer {} ({})",
+                sender,
+                address.to_string()
+            );
+            return;
+        }
+        self.add_new_address(address);
+    }
+
+    fn handle_address_list_response(&mut self, addresses: Vec<SocketAddress>, sender: PeerId) {
+        let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
+        let expecting_address_list_response = peer.expecting_address_list_response;
+        peer.expecting_address_list_response = false;
+
+        if expecting_address_list_response {
+            for address in addresses {
+                self.add_new_address(address);
+            }
+        } else {
+            log::info!("Ignoring unsolicited address list response from peer {sender}");
         }
     }
 
@@ -403,6 +440,7 @@ impl Crawler {
             address,
             address_rate_limiter,
             ban_score: 0,
+            expecting_address_list_response: false,
         };
 
         let old_peer = self.outbound_peers.insert(peer_id, peer);
@@ -430,6 +468,17 @@ impl Crawler {
                     .get_mut(&address)
                     .expect("address must be known (create_outbound_peer)");
 
+                let last_addr_list_request_time = address_data
+                    .state
+                    .connection_info()
+                    .and_then(|conn_info| conn_info.last_addr_list_request_time)
+                    .unwrap_or(Time::from_duration_since_epoch(Duration::ZERO));
+
+                let need_request_addr_list = (last_addr_list_request_time
+                    + *self.config.addr_list_request_interval)
+                    .expect("Must not fail")
+                    <= self.now;
+
                 Self::change_address_state(
                     self.now,
                     &address,
@@ -439,9 +488,16 @@ impl Crawler {
                             user_agent: peer_info.user_agent,
                             version: peer_info.software_version,
                         },
+                        addr_list_requested: need_request_addr_list,
                     },
                     callback,
                 );
+
+                if need_request_addr_list {
+                    let peer = self.outbound_peers.get_mut(&peer_id).expect("peer must exist");
+                    peer.expecting_address_list_response = true;
+                    callback(CrawlerCommand::RequestAddresses { peer_id });
+                }
             }
             Err(err) => {
                 log::info!(
@@ -560,8 +616,11 @@ impl Crawler {
 
                 self.heartbeat(callback, rng);
             }
-            CrawlerEvent::NewAddress { address, sender } => {
-                self.handle_new_address(address, sender);
+            CrawlerEvent::AddressAnnouncement { address, sender } => {
+                self.handle_address_announcement(address, sender);
+            }
+            CrawlerEvent::AddressListResponse { addresses, sender } => {
+                self.handle_address_list_response(addresses, sender);
             }
             CrawlerEvent::Connected { peer_info, address } => {
                 self.handle_connected(address, peer_info, callback);

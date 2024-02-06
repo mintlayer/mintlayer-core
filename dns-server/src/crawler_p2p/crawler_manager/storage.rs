@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common::primitives::time::Time;
 use p2p::{
     peer_manager::peerdb_common::{StorageVersion, TransactionRo, TransactionRw, Transactional},
@@ -26,7 +28,10 @@ use super::{storage_impl::DnsServerStorageImpl, CURRENT_STORAGE_VERSION};
 
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct AddressInfo {
+    /// Peer's software info
     pub software_info: SoftwareInfo,
+    /// Last time we've requested addresses from this peer, as a duration since unix epoch.
+    pub last_addr_list_request_time: Option<Duration>,
 }
 
 pub trait DnsServerStorageRead {

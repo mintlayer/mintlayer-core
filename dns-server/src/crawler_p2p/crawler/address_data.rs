@@ -45,7 +45,10 @@ impl SoftwareInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AddressStateTransitionTo {
     Connecting,
-    Connected { peer_software_info: SoftwareInfo },
+    Connected {
+        peer_software_info: SoftwareInfo,
+        addr_list_requested: bool,
+    },
     Disconnecting,
     Disconnected,
 }
@@ -61,6 +64,8 @@ pub const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 pub struct ConnectionInfo {
     /// Peer's software info
     pub peer_software_info: SoftwareInfo,
+    /// Last time we've requested addresses from this peer.
+    pub last_addr_list_request_time: Option<Time>,
 }
 
 /// Connection state of a potential node address (outbound only)
@@ -98,7 +103,6 @@ pub enum AddressState {
         connection_info: Option<ConnectionInfo>,
 
         /// The time when the address went into the disconnected state.
-        /// FIXME description
         disconnected_at: Time,
     },
 
@@ -325,11 +329,25 @@ impl AddressData {
                 };
             }
 
-            AddressStateTransitionTo::Connected { peer_software_info } => {
+            AddressStateTransitionTo::Connected {
+                peer_software_info,
+                addr_list_requested,
+            } => {
                 assert!(matches!(self.state, AddressState::Connecting { .. }));
 
+                let last_addr_list_request_time = if addr_list_requested {
+                    Some(now)
+                } else {
+                    self.state
+                        .connection_info()
+                        .and_then(|conn_info| conn_info.last_addr_list_request_time)
+                };
+
                 self.state = AddressState::Connected {
-                    connection_info: ConnectionInfo { peer_software_info },
+                    connection_info: ConnectionInfo {
+                        peer_software_info,
+                        last_addr_list_request_time,
+                    },
                 };
             }
 

@@ -23,12 +23,17 @@ use std::{
     time::Duration,
 };
 
+use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
 use futures::never::Never;
 use logging::log;
 use p2p::{
-    message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
+    error::{P2pError, ProtocolError},
+    message::{
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
+        PingResponse,
+    },
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
@@ -43,6 +48,7 @@ use p2p::{
     },
 };
 use tokio::sync::mpsc;
+use utils::ensure;
 
 use crate::{
     crawler_p2p::crawler_manager::storage::AddressInfo, dns_server::DnsServerCommand,
@@ -56,7 +62,7 @@ use super::crawler::{Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent};
 /// How often the server performs maintenance (tries to connect to new nodes)
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
-const CURRENT_STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+const CURRENT_STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[derive(Clone)]
 pub struct CrawlerManagerConfig {
@@ -208,23 +214,30 @@ where
         })
     }
 
-    fn handle_conn_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) {
+    fn handle_conn_message(
+        &mut self,
+        peer_id: PeerId,
+        message: PeerManagerMessage,
+    ) -> p2p::Result<()> {
         match message {
             PeerManagerMessage::AddrListRequest(_) => {
                 // Ignored
+                Ok(())
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 log::debug!(
-                    "address announcement from peer {} ({})",
+                    "Got address announcement from peer {} ({})",
                     peer_id,
                     address.to_string()
                 );
                 if let Some(address) = SocketAddress::from_peer_address(&address, false) {
-                    self.send_crawler_event(CrawlerEvent::NewAddress {
+                    self.send_crawler_event(CrawlerEvent::AddressAnnouncement {
                         address,
                         sender: peer_id,
                     });
                 }
+
+                Ok(())
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
                 self.conn
@@ -233,18 +246,53 @@ where
                         PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     )
                     .expect("send_message must succeed");
+
+                Ok(())
             }
-            // FIXME: ask for addresses once in a while and handle them here (note: bt seeder
-            // does this every 24h)
-            PeerManagerMessage::AddrListResponse(_) => {}
-            PeerManagerMessage::PingResponse(_) => {}
+            PeerManagerMessage::AddrListResponse(AddrListResponse { addresses }) => {
+                log::debug!(
+                    "Got address list response from peer {}, address count = ({})",
+                    peer_id,
+                    addresses.len()
+                );
+
+                ensure!(
+                    addresses.len() <= *p2p::protocol::MaxAddrListResponseAddressCount::default(),
+                    P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
+                );
+
+                log::trace!(
+                    "Got address list response from peer {}, addresses: {:?}",
+                    peer_id,
+                    addresses
+                );
+
+                let addresses = addresses
+                    .iter()
+                    .filter_map(|addr| SocketAddress::from_peer_address(&addr, false))
+                    .collect::<Vec<_>>();
+
+                self.send_crawler_event(CrawlerEvent::AddressListResponse {
+                    addresses,
+                    sender: peer_id,
+                });
+
+                Ok(())
+            }
+            PeerManagerMessage::PingResponse(_) => Ok(()),
         }
     }
 
     fn handle_conn_event(&mut self, event: ConnectivityEvent) {
         match event {
             ConnectivityEvent::Message { peer_id, message } => {
-                self.handle_conn_message(peer_id, message);
+                let result = self.handle_conn_message(peer_id, message);
+
+                if let Err(error) = result {
+                    if error.ban_score() > 0 {
+                        self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
+                    }
+                }
             }
             ConnectivityEvent::OutboundAccepted {
                 peer_address,
@@ -337,6 +385,15 @@ where
             CrawlerCommand::Connect { address } => {
                 conn.connect(address, None).expect("connect must succeed");
             }
+            CrawlerCommand::RequestAddresses { peer_id } => {
+                log::debug!("Requesting addresses from peer {peer_id}");
+
+                conn.send_message(
+                    peer_id,
+                    PeerManagerMessage::AddrListRequest(AddrListRequest {}),
+                )
+                .expect("send_message must succeed");
+            }
             CrawlerCommand::Disconnect { peer_id } => {
                 conn.disconnect(peer_id).expect("disconnect must succeed");
             }
@@ -364,7 +421,10 @@ where
                             .connection_info()
                             .expect("Connection info must be present for a reachable address");
                         dns_server_cmd_tx
-                            .send(DnsServerCommand::AddAddress(ip, connection_info.peer_software_info.clone()))
+                            .send(DnsServerCommand::AddAddress(
+                                ip,
+                                connection_info.peer_software_info.clone(),
+                            ))
                             .expect("sending must succeed (AddAddress)");
                     }
                     (Some(ip), true, false) => {
@@ -378,12 +438,15 @@ where
                 if new_state.is_persistent() {
                     let connection_info = new_state
                         .connection_info()
-                        .expect("Persistent address must have connection info");
+                        .expect("Connection info must be present for a persistent address");
                     update_db(storage, |tx| {
                         tx.add_address(
                             &address,
                             &AddressInfo {
                                 software_info: connection_info.peer_software_info.clone(),
+                                last_addr_list_request_time: connection_info
+                                    .last_addr_list_request_time
+                                    .map(|time| time.as_duration_since_epoch()),
                             },
                         )
                     })

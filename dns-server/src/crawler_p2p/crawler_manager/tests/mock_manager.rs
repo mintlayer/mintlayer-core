@@ -258,7 +258,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
     }
 
     fn send_message(&mut self, _peer_id: PeerId, _request: PeerManagerMessage) -> p2p::Result<()> {
-        unreachable!()
+        Ok(())
     }
 
     fn local_addresses(&self) -> &[SocketAddress] {
@@ -297,6 +297,7 @@ pub fn test_crawler(
     let crawler_config = CrawlerConfig {
         ban_duration: Default::default(),
         ban_threshold: Default::default(),
+        addr_list_request_interval: Default::default(),
     };
 
     let state = MockStateRef {
