@@ -124,7 +124,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             timestamp = block['block']['V1']['header']['block_header']['timestamp']['timestamp']
 
             output = await wallet.get_transaction(tx_id)
-            expected_tx_inputs = f"inputs: [Utxo(UtxoOutPoint {{ id: BlockReward(Id<GenBlock>{{0x{genesis_block_id}}}), index: 0 }})]"
+            expected_tx_inputs = f"inputs: [Utxo(UtxoOutPoint {{ id: BlockReward(Id<GenBlock>{{{genesis_block_id}}}), index: 0 }})]"
             assert_in(expected_tx_inputs, output)
             expected_tx_outputs = f"outputs: [Transfer(Coin(Amount {{ val: {coins_to_send * ATOMS_PER_COIN} }})"
             assert_in(expected_tx_outputs, output)

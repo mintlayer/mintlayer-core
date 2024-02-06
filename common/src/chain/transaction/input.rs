@@ -65,17 +65,11 @@ impl TextSummary for TxInput {
                 let n = utxo.output_index();
                 match source_id {
                     OutPointSourceId::Transaction(ref id) => {
-                        let id_str = format!("{:?}", id.to_hash())
-                            .strip_prefix("0x")
-                            .expect("0x exists for some hellish reason")
-                            .to_string();
+                        let id_str = format!("{:?}", id.to_hash());
                         format!("Transaction({id_str}, {n})")
                     }
                     OutPointSourceId::BlockReward(id) => {
-                        let id_str = format!("{:?}", id.to_hash())
-                            .strip_prefix("0x")
-                            .expect("0x exists for some hellish reason")
-                            .to_string();
+                        let id_str = format!("{:?}", id.to_hash()).to_string();
                         format!("BlockReward({id_str}, {n})")
                     }
                 }

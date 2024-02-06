@@ -18,7 +18,7 @@
 
 mod with_id;
 
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, LowerHex, UpperHex};
 
 use generic_array::{typenum, GenericArray};
 use ref_cast::RefCast;
@@ -111,7 +111,7 @@ pub struct Id<T> {
 
 impl<T: TypeName> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.hash)
+        write!(f, "Id<{}>{{{:x}}}", T::typename_str(), self.hash)
     }
 }
 
@@ -126,7 +126,36 @@ impl<T> Copy for Id<T> {}
 
 impl<T> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.hash, f)
+        let s = self.hash.to_string();
+        write!(
+            f,
+            "{}",
+            self.hash.to_string().strip_prefix("0x").unwrap_or(&s)
+        )
+    }
+}
+
+impl<T> LowerHex for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        for i in &self.hash.0[..] {
+            write!(f, "{:02x}", i)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T> UpperHex for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0X")?;
+        }
+        for i in &self.hash.0[..] {
+            write!(f, "{:02X}", i)?;
+        }
+        Ok(())
     }
 }
 
@@ -251,6 +280,37 @@ mod tests {
         fn typename_str() -> std::borrow::Cow<'static, str> {
             "TestType2".into()
         }
+    }
+
+    #[test]
+    fn basic_str() {
+        let h1: Id<TestType1> =
+            H256::from_str("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd")
+                .unwrap()
+                .into();
+
+        assert_eq!(
+            format!("{:x}", h1),
+            "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd".to_string()
+        );
+        assert_eq!(
+            format!("{:#x}", h1),
+            "0x000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd".to_string()
+        );
+        assert_eq!(
+            format!("{:X}", h1),
+            "000000006A625F06636B8BB6AC7B960A8D03705D1ACE08B1A19DA3FDCC99DDBD".to_string()
+        );
+        assert_eq!(
+            format!("{:#X}", h1),
+            "0X000000006A625F06636B8BB6AC7B960A8D03705D1ACE08B1A19DA3FDCC99DDBD".to_string()
+        );
+        assert_eq!(format!("{}", h1), "0000…ddbd".to_string());
+        assert_eq!(
+            format!("{:?}", h1),
+            "Id<TestType1>{000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd}"
+                .to_string()
+        );
     }
 
     #[rstest]

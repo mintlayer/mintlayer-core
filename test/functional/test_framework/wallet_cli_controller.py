@@ -206,7 +206,7 @@ class WalletCliController:
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
 
-        pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{0x([^}]*)\}[^}]*index:\s*(\d+)'
+        pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{([^}]*)\}[^}]*index:\s*(\d+)'
         matches = re.findall(pattern, output, re.DOTALL)
         return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
 
@@ -364,7 +364,7 @@ class WalletCliController:
 
     async def list_pending_transactions(self) -> List[str]:
         output = await self._write_command(f"transaction-list-pending\n")
-        pattern = r'id: Id<Transaction>\{0x([^}]*)\}'
+        pattern = r'id: Id<Transaction>\{([^}]*)\}'
         return re.findall(pattern, output)
 
     async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:
