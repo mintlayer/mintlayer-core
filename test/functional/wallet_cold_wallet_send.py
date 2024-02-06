@@ -26,17 +26,13 @@ Check that:
 * send it with the hot wallet
 """
 
-import base64
 from random import choice, randint
 import scalecodec
 from scalecodec.base import ScaleBytes
-from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     block_input_data_obj,
-    signed_tx_obj,
     ATOMS_PER_COIN,
 )
-from test_framework.segwit_addr import bech32_decode
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_greater_than_or_equal, assert_in
@@ -44,109 +40,7 @@ from test_framework.wallet_cli_controller import UtxoOutpoint, WalletCliControll
 
 import asyncio
 import sys
-import time
 
-def bech32_decode2(bech32_string):
-    # Constants for the Bech32 encoding
-    CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-    BECH32_SEPARATOR = '1'
-
-    # Helper function to convert between integers and base32 characters
-    def char_to_int(char):
-        return CHARSET.find(char)
-
-    def int_to_char(integer):
-        return CHARSET[integer]
-
-    # Ensure the string is lowercase for compatibility
-    bech32_string = bech32_string.lower()
-
-    # Check for the presence of separator '1'
-    if BECH32_SEPARATOR not in bech32_string:
-        raise ValueError("Missing separator '1' in Bech32 string")
-
-    # Split the Bech32 string into human-readable part and data part
-    hrp, data_part = bech32_string.split(BECH32_SEPARATOR, 1)
-
-    for char in data_part:
-        if char not in CHARSET:
-            raise ValueError(f"Invalid characters in Bech32 string '{char}'")
-
-    # Check for valid characters in the string
-    if any(char not in CHARSET for char in data_part):
-        raise ValueError("Invalid characters in Bech32 string")
-
-    # Ensure the human-readable part and data part are not empty
-    if not hrp or not data_part:
-        raise ValueError("Invalid Bech32 string format")
-
-    # Convert the human-readable part and data part to integers
-    hrp_int = [char_to_int(char) for char in hrp]
-    data_int = [char_to_int(char) for char in data_part]
-
-    # Verify the checksum
-    # if not bech32_verify_checksum(hrp_int, data_int):
-    #     raise ValueError("Invalid Bech32 checksum")
-
-    # Remove the checksum from the data part
-    data_int = data_int[:-6]
-
-    # Convert the data part to bytes
-    data_bytes = bytes(data_int)
-
-    return hrp, data_bytes
-
-
-def bech32_verify_checksum(hrp_int, data_int):
-    """Verify the checksum of a Bech32 string."""
-    GENERATOR_POLYNOMIAL = 0x3D6E6AED9EB10A99
-
-    # Concatenate the human-readable part and data part
-    values = hrp_int + data_int
-
-    # Calculate the checksum
-    checksum = bech32_polymod(values) ^ GENERATOR_POLYNOMIAL
-
-    # Verify that the checksum is zero
-    return checksum == 0
-
-
-def bech32_polymod(values):
-    """Calculate the Bech32 polymod."""
-    GENERATOR = [
-        0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd,
-        0x2a1462b3, 0x362a7a0d, 0x2e8be413, 0x28e9b7f0,
-        0x36d5ebe9, 0x2b60a476, 0x383929a7, 0x3c4a37e3,
-    ]
-
-    chk = 1
-    for value in values:
-        top = chk >> 25
-        chk = (chk & 0x1ffffff) << 5 ^ value
-        for i in range(5):
-            chk ^= (top >> i) & 1 if (value >> i) & 1 else 0
-            chk ^= GENERATOR[i]
-
-    return chk
-
-
-
-"""
-[
-    {'Transfer': (
-        {'Coin': 100000000000},
-        {'Address': '0x8b87696b633ceb51f10fa9c334f42fec6f85780e'}
-        )
-     },
-    {'Transfer': (
-        {'Coin': 4999899999999805},
-        {'PublicKey': {'key': {'Secp256k1Schnorr':
-                               {'pubkey_data': '0x02cdee206d3fd4b770a6489877e85fcf580401207e43a8508a121f5e58b0ea3bc8'}
-                               }}}
-        )
-     }
-]
-"""
 def get_destination(dest):
     if 'Address' in dest:
         return dest['Address']
