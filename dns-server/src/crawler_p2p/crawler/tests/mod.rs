@@ -216,6 +216,17 @@ fn addr_list_requests(#[case] seed: Seed) {
     crawler.step(peer1_connected_event.clone(), &mut rng);
     crawler.step(peer2_connected_event.clone(), &mut rng);
     crawler.assert_address_request_counts(&[(peer_id1, 1), (peer_id2, 1)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id1 }, &mut rng);
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id2 }, &mut rng);
+
+    // Make another half of the interval pass; now an addr request should be sent to
+    // the first peer again.
+    crawler.timer(addr_list_request_interval / 2, &mut rng);
+    crawler.assert_pending_connects(&[peer1_addr, peer2_addr, another_addr1]);
+    crawler.step(peer1_connected_event.clone(), &mut rng);
+    crawler.step(peer2_connected_event.clone(), &mut rng);
+    crawler.assert_address_request_counts(&[(peer_id1, 2), (peer_id2, 1)]);
 }
 
 #[rstest]

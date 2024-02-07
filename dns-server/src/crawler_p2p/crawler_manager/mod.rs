@@ -152,13 +152,6 @@ where
             reserved_addresses.len()
         );
 
-        log::trace!(
-            "Known addresses: {:#?}, banned addresses: {:#?}, reserved addresses: {:#?}",
-            loaded_storage.known_addresses,
-            loaded_storage.banned_addresses,
-            reserved_addresses
-        );
-
         let crawler = Crawler::new(
             last_crawler_timer,
             chain_config,
@@ -259,12 +252,6 @@ where
                 ensure!(
                     addresses.len() <= *p2p::protocol::MaxAddrListResponseAddressCount::default(),
                     P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
-                );
-
-                log::trace!(
-                    "Got address list response from peer {}, addresses: {:?}",
-                    peer_id,
-                    addresses
                 );
 
                 let addresses = addresses

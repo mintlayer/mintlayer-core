@@ -28,9 +28,9 @@ use super::{storage_impl::DnsServerStorageImpl, CURRENT_STORAGE_VERSION};
 
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct AddressInfo {
-    /// Peer's software info
+    /// Peer's software info.
     pub software_info: SoftwareInfo,
-    /// Last time we've requested addresses from this peer, as a duration since unix epoch.
+    /// Last time we've requested addresses from this peer (as duration since unix epoch).
     pub last_addr_list_request_time: Option<Duration>,
 }
 

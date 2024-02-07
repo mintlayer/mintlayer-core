@@ -143,5 +143,3 @@ pub trait SyncingEventReceiver {
     /// Polls syncing-related events from the networking service.
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent>;
 }
-
-// FIXME improve logging when connection fails before the handshake is complete.

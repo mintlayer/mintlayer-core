@@ -46,8 +46,11 @@ impl SoftwareInfo {
 pub enum AddressStateTransitionTo {
     Connecting,
     Connected {
+        /// Peer's software info.
         peer_software_info: SoftwareInfo,
-        addr_list_requested: bool,
+        /// `True` means that address list request will be sent to the peer immediately;
+        /// this is a signal to update ConnectionInfo's last_addr_list_request_time.
+        will_request_addr_list_now: bool,
     },
     Disconnecting,
     Disconnected,
@@ -79,7 +82,7 @@ pub enum AddressState {
         /// If the address was reachable at least once, this field will contain the information
         /// about the last connection.
         /// Addresses that were once reachable are stored in the DB.
-        connection_info: Option<ConnectionInfo>,
+        last_connection_info: Option<ConnectionInfo>,
     },
 
     Connected {
@@ -92,7 +95,7 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Last connection info.
-        connection_info: Option<ConnectionInfo>,
+        last_connection_info: Option<ConnectionInfo>,
     },
 
     Disconnected {
@@ -100,7 +103,7 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Last connection info.
-        connection_info: Option<ConnectionInfo>,
+        last_connection_info: Option<ConnectionInfo>,
 
         /// The time when the address went into the disconnected state.
         disconnected_at: Time,
@@ -113,7 +116,7 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Last connection info.
-        connection_info: Option<ConnectionInfo>,
+        last_connection_info: Option<ConnectionInfo>,
 
         /// At which time the address would be removed from memory
         erase_after: Time,
@@ -134,22 +137,22 @@ impl AddressState {
         match self {
             AddressState::Connecting {
                 fail_count,
-                connection_info: _,
+                last_connection_info: _,
             } => *fail_count,
             AddressState::Connected { connection_info: _ } => 0,
             AddressState::Disconnecting {
                 fail_count,
-                connection_info: _,
+                last_connection_info: _,
             } => *fail_count,
             AddressState::Disconnected {
                 fail_count,
-                connection_info: _,
+                last_connection_info: _,
                 disconnected_at: _,
             } => *fail_count,
             AddressState::Unreachable {
                 fail_count,
                 erase_after: _,
-                connection_info: _,
+                last_connection_info: _,
             } => *fail_count,
         }
     }
@@ -158,23 +161,23 @@ impl AddressState {
         match self {
             AddressState::Connecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.is_some(),
+                last_connection_info,
+            } => last_connection_info.is_some(),
             AddressState::Connected { connection_info: _ } => true,
             AddressState::Disconnecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.is_some(),
+                last_connection_info,
+            } => last_connection_info.is_some(),
             AddressState::Disconnected {
                 fail_count: _,
-                connection_info,
+                last_connection_info,
                 disconnected_at: _,
-            } => connection_info.is_some(),
+            } => last_connection_info.is_some(),
             AddressState::Unreachable {
                 erase_after: _,
-                connection_info,
+                last_connection_info,
                 fail_count: _,
-            } => connection_info.is_some(),
+            } => last_connection_info.is_some(),
         }
     }
 
@@ -183,21 +186,21 @@ impl AddressState {
         match self {
             AddressState::Connecting {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
             } => false,
             AddressState::Connected { connection_info: _ } => true,
             AddressState::Disconnecting {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
             } => false,
             AddressState::Disconnected {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
                 disconnected_at: _,
             } => false,
             AddressState::Unreachable {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
                 erase_after: _,
             } => false,
         }
@@ -208,47 +211,48 @@ impl AddressState {
         match self {
             AddressState::Connecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.is_some(),
+                last_connection_info,
+            } => last_connection_info.is_some(),
             AddressState::Connected { connection_info: _ } => true,
             AddressState::Disconnecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.is_some(),
+                last_connection_info,
+            } => last_connection_info.is_some(),
             AddressState::Disconnected {
                 fail_count: _,
-                connection_info,
+                last_connection_info,
                 disconnected_at: _,
-            } => connection_info.is_some(),
+            } => last_connection_info.is_some(),
             AddressState::Unreachable {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
                 erase_after: _,
             } => false,
         }
     }
 
+    /// Returns the latest known connection info for this address.
     pub fn connection_info(&self) -> Option<&ConnectionInfo> {
         match self {
             AddressState::Connecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.as_ref(),
+                last_connection_info,
+            } => last_connection_info.as_ref(),
             AddressState::Connected { connection_info } => Some(connection_info),
             AddressState::Disconnecting {
                 fail_count: _,
-                connection_info,
-            } => connection_info.as_ref(),
+                last_connection_info,
+            } => last_connection_info.as_ref(),
             AddressState::Disconnected {
                 fail_count: _,
-                connection_info,
+                last_connection_info,
                 disconnected_at: _,
-            } => connection_info.as_ref(),
+            } => last_connection_info.as_ref(),
             AddressState::Unreachable {
                 fail_count: _,
-                connection_info,
+                last_connection_info,
                 erase_after: _,
-            } => connection_info.as_ref(),
+            } => last_connection_info.as_ref(),
         }
     }
 }
@@ -260,21 +264,21 @@ impl AddressData {
             AddressState::Connected { connection_info: _ }
             | AddressState::Connecting {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
             }
             | AddressState::Disconnecting {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
             }
             | AddressState::Unreachable {
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
                 erase_after: _,
             } => false,
 
             AddressState::Disconnected {
                 fail_count,
-                connection_info,
+                last_connection_info,
                 disconnected_at,
             } => {
                 let age = (now - *disconnected_at).expect("Must work");
@@ -286,7 +290,7 @@ impl AddressData {
                         2 => age > Duration::from_secs(360),
                         _ => age > Duration::from_secs(3600),
                     }
-                } else if connection_info.is_some() {
+                } else if last_connection_info.is_some() {
                     match fail_count {
                         0 => true,
                         1 => age > Duration::from_secs(60),
@@ -312,7 +316,7 @@ impl AddressData {
             AddressState::Unreachable {
                 erase_after,
                 fail_count: _,
-                connection_info: _,
+                last_connection_info: _,
             } if erase_after >= now => false,
             _ => true,
         }
@@ -325,17 +329,17 @@ impl AddressData {
 
                 self.state = AddressState::Connecting {
                     fail_count: self.state.fail_count(),
-                    connection_info: self.state.connection_info().cloned(),
+                    last_connection_info: self.state.connection_info().cloned(),
                 };
             }
 
             AddressStateTransitionTo::Connected {
                 peer_software_info,
-                addr_list_requested,
+                will_request_addr_list_now,
             } => {
                 assert!(matches!(self.state, AddressState::Connecting { .. }));
 
-                let last_addr_list_request_time = if addr_list_requested {
+                let last_addr_list_request_time = if will_request_addr_list_now {
                     Some(now)
                 } else {
                     self.state
@@ -359,7 +363,7 @@ impl AddressData {
 
                 self.state = AddressState::Disconnecting {
                     fail_count: self.state.fail_count(),
-                    connection_info: self.state.connection_info().cloned(),
+                    last_connection_info: self.state.connection_info().cloned(),
                 };
             }
 
@@ -374,19 +378,19 @@ impl AddressData {
                     (false, true) if self.state.fail_count() + 1 >= PURGE_REACHABLE_FAIL_COUNT => {
                         AddressState::Unreachable {
                             fail_count: self.state.fail_count() + 1,
-                            connection_info: self.state.connection_info().cloned(),
+                            last_connection_info: self.state.connection_info().cloned(),
                             erase_after: now,
                         }
                     }
                     (false, false) => AddressState::Unreachable {
                         fail_count: self.state.fail_count() + 1,
-                        connection_info: self.state.connection_info().cloned(),
+                        last_connection_info: self.state.connection_info().cloned(),
                         erase_after: (now + PURGE_UNREACHABLE_TIME)
                             .expect("All from local clocks; cannot fail"),
                     },
                     _ => AddressState::Disconnected {
                         fail_count: self.state.fail_count() + 1,
-                        connection_info: self.state.connection_info().cloned(),
+                        last_connection_info: self.state.connection_info().cloned(),
                         disconnected_at: now,
                     },
                 };

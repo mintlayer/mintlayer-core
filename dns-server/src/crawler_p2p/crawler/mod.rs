@@ -187,7 +187,7 @@ impl Crawler {
                         AddressData {
                             state: AddressState::Disconnected {
                                 fail_count: 0,
-                                connection_info: Some(ConnectionInfo {
+                                last_connection_info: Some(ConnectionInfo {
                                     peer_software_info: addr_info.software_info.clone(),
                                     last_addr_list_request_time: addr_info
                                         .last_addr_list_request_time
@@ -210,7 +210,7 @@ impl Crawler {
                         e.insert(AddressData {
                             state: AddressState::Disconnected {
                                 fail_count: 0,
-                                connection_info: None,
+                                last_connection_info: None,
                                 disconnected_at: now,
                             },
                             reserved: true.into(),
@@ -359,7 +359,7 @@ impl Crawler {
             vacant.insert(AddressData {
                 state: AddressState::Disconnected {
                     fail_count: 0,
-                    connection_info: None,
+                    last_connection_info: None,
                     disconnected_at: self.now,
                 },
                 reserved: false.into(),
@@ -419,6 +419,27 @@ impl Crawler {
             old_state,
             new_state: address_data.state.clone(),
         });
+    }
+
+    /// Return a map "peer version info" -> "number of peers of that version", so that it
+    /// can be printed to the log.
+    fn current_peers_version_summary(&self) -> BTreeMap<String, usize> {
+        let mut result = BTreeMap::new();
+
+        for peer in self.outbound_peers.values() {
+            let software_info = &self
+                .addresses
+                .get(&peer.address)
+                .expect("Address of a connected peer must be known")
+                .state
+                .connection_info()
+                .expect("Connection info must exist for a connected peer")
+                .peer_software_info;
+            let version_str = format!("{}-{}", software_info.user_agent, software_info.version);
+            *result.entry(version_str).or_insert(0) += 1;
+        }
+
+        result
     }
 
     /// Create new outbound peer
@@ -488,9 +509,14 @@ impl Crawler {
                             user_agent: peer_info.user_agent,
                             version: peer_info.software_version,
                         },
-                        addr_list_requested: need_request_addr_list,
+                        will_request_addr_list_now: need_request_addr_list,
                     },
                     callback,
+                );
+
+                log::trace!(
+                    "Current peer version summary: {:?}",
+                    self.current_peers_version_summary()
                 );
 
                 if need_request_addr_list {
@@ -544,6 +570,10 @@ impl Crawler {
             "Outbound peer removed, peer_id: {} (total peer count: {})",
             peer_id,
             self.outbound_peers.len()
+        );
+        log::trace!(
+            "Current peer version summary: {:?}",
+            self.current_peers_version_summary()
         );
 
         let address_data = self

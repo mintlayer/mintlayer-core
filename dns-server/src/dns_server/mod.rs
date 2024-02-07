@@ -102,8 +102,8 @@ impl DnsServer {
             nameserver: config.nameserver.clone(),
             mbox: config.mbox.clone(),
             inner,
-            ip4: Default::default(),
-            ip6: Default::default(),
+            ipv4_addrs: Default::default(),
+            ipv6_addrs: Default::default(),
         });
 
         let mut catalog = Catalog::new();
@@ -154,11 +154,26 @@ struct AuthorityImpl {
     nameserver: Option<Name>,
     mbox: Option<Name>,
     inner: InMemoryAuthority,
-    ip4: Mutex<Vec<(Ipv4Addr, SoftwareInfo)>>,
-    ip6: Mutex<Vec<(Ipv6Addr, SoftwareInfo)>>,
+    ipv4_addrs: Mutex<BTreeMap<Ipv4Addr, SoftwareInfo>>,
+    ipv6_addrs: Mutex<BTreeMap<Ipv6Addr, SoftwareInfo>>,
 }
 
 impl AuthorityImpl {
+    fn addr_info_for_logging<Addr: Clone + Ord>(
+        addrs_to_include: &[Addr],
+        all_addrs: &BTreeMap<Addr, SoftwareInfo>,
+    ) -> BTreeMap<Addr, String> {
+        addrs_to_include
+            .iter()
+            .map(|addr| {
+                let software_info = all_addrs.get(addr).expect("Address must be known");
+                let software_info_str =
+                    format!("{}-{}", software_info.user_agent, software_info.version);
+                (addr.clone(), software_info_str)
+            })
+            .collect()
+    }
+
     fn create_records(&self, rng: &mut impl Rng) -> Option<BTreeMap<RrKey, Arc<RecordSet>>> {
         let new_serial = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -169,17 +184,27 @@ impl AuthorityImpl {
             return None;
         }
 
-        let ipv4_addrs = self.select_addresses(
-            &self.ip4.lock().expect("mutex must be valid (refresh ipv4)"),
-            MAX_IPV4_RECORDS,
-            rng,
-        );
+        log::debug!("Creating new records");
 
-        let ipv6_addrs = self.select_addresses(
-            &self.ip6.lock().expect("mutex must be valid (refresh ipv6)"),
-            MAX_IPV6_RECORDS,
-            rng,
-        );
+        let selected_ipv4_addrs = {
+            let all_addrs = &self.ipv4_addrs.lock().expect("mutex must be valid (ipv4_addrs)");
+            let selected_addrs = self.select_addresses(all_addrs, MAX_IPV4_RECORDS, rng);
+            log::trace!(
+                "Selected v4 addresses: {:?}",
+                Self::addr_info_for_logging(&selected_addrs, all_addrs)
+            );
+            selected_addrs
+        };
+
+        let selected_ipv6_addrs = {
+            let all_addrs = &self.ipv6_addrs.lock().expect("mutex must be valid (ipv6_addrs)");
+            let selected_addrs = self.select_addresses(all_addrs, MAX_IPV6_RECORDS, rng);
+            log::trace!(
+                "Selected v6 addresses: {:?}",
+                Self::addr_info_for_logging(&selected_addrs, all_addrs)
+            );
+            selected_addrs
+        };
 
         let mut new_records = BTreeMap::new();
 
@@ -211,7 +236,7 @@ impl AuthorityImpl {
 
         // A records
         let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
-        for ip in ipv4_addrs {
+        for ip in selected_ipv4_addrs {
             ipv4_rec.add_rdata(RData::A(ip.into()));
         }
         new_records.insert(
@@ -221,7 +246,7 @@ impl AuthorityImpl {
 
         // AAAA records
         let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
-        for ip in ipv6_addrs {
+        for ip in selected_ipv6_addrs {
             ipv6_rec.add_rdata(RData::AAAA(ip.into()));
         }
         new_records.insert(
@@ -234,7 +259,6 @@ impl AuthorityImpl {
 
     async fn refresh(&self) {
         let new_records = self.create_records(&mut make_pseudo_rng());
-        log::trace!("Refreshing, new records = {new_records:#?}");
 
         if let Some(new_records) = new_records {
             *self.inner.records_mut().await = new_records;
@@ -243,7 +267,7 @@ impl AuthorityImpl {
 
     fn select_addresses<Addr: Clone>(
         &self,
-        addrs: &[(Addr, SoftwareInfo)],
+        addrs: &BTreeMap<Addr, SoftwareInfo>,
         count: usize,
         rng: &mut impl Rng,
     ) -> Vec<Addr> {
@@ -251,14 +275,14 @@ impl AuthorityImpl {
 
         let mut same_version_addrs = addrs
             .iter()
-            .filter(|(_, software_info)| *software_info == same_software_info)
+            .filter(|(_, software_info)| **software_info == same_software_info)
             .map(|(addr, _)| addr.clone())
             .choose_multiple(rng, count);
         same_version_addrs.shuffle(rng);
 
         let mut other_version_addrs = addrs
             .iter()
-            .filter(|(_, software_info)| *software_info != same_software_info)
+            .filter(|(_, software_info)| **software_info != same_software_info)
             .map(|(addr, _)| addr.clone())
             .choose_multiple(rng, count);
         other_version_addrs.shuffle(rng);
@@ -354,31 +378,25 @@ fn handle_command(auth: &AuthorityImpl, command: DnsServerCommand) {
     match command {
         DnsServerCommand::AddAddress(IpAddr::V4(ip), software_version) => {
             log::debug!("Adding address {ip}");
-            auth.ip4
+            auth.ipv4_addrs
                 .lock()
                 .expect("mutex must be valid (add ipv4)")
-                .push((ip, software_version));
+                .insert(ip, software_version);
         }
         DnsServerCommand::AddAddress(IpAddr::V6(ip), software_version) => {
             log::debug!("Adding address {ip}");
-            auth.ip6
+            auth.ipv6_addrs
                 .lock()
                 .expect("mutex must be valid (add ipv6)")
-                .push((ip, software_version));
+                .insert(ip, software_version);
         }
         DnsServerCommand::DelAddress(IpAddr::V4(ip)) => {
             log::debug!("Deleting address {ip}");
-            auth.ip4
-                .lock()
-                .expect("mutex must be valid (remove ipv4)")
-                .retain(|(addr, _)| *addr != ip);
+            auth.ipv4_addrs.lock().expect("mutex must be valid (remove ipv4)").remove(&ip);
         }
         DnsServerCommand::DelAddress(IpAddr::V6(ip)) => {
             log::debug!("Deleting address {ip}");
-            auth.ip6
-                .lock()
-                .expect("mutex must be valid (remove ipv6)")
-                .retain(|(addr, _)| *addr != ip);
+            auth.ipv6_addrs.lock().expect("mutex must be valid (remove ipv6)").remove(&ip);
         }
     };
 }

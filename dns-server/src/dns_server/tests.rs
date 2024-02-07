@@ -61,8 +61,8 @@ async fn dns_server_basic() {
         nameserver,
         mbox,
         inner,
-        ip4: Default::default(),
-        ip6: Default::default(),
+        ipv4_addrs: Default::default(),
+        ipv6_addrs: Default::default(),
     };
 
     let ip1: Ipv4Addr = "1.2.3.4".parse().unwrap();
@@ -72,8 +72,8 @@ async fn dns_server_basic() {
         DnsServerCommand::AddAddress(ip1.into(), soft_info.clone()),
     );
     handle_command(&auth, DnsServerCommand::AddAddress(ip2.into(), soft_info));
-    assert_eq!(auth.ip4.lock().unwrap().len(), 1);
-    assert_eq!(auth.ip6.lock().unwrap().len(), 1);
+    assert_eq!(auth.ipv4_addrs.lock().unwrap().len(), 1);
+    assert_eq!(auth.ipv6_addrs.lock().unwrap().len(), 1);
 
     let result_a = auth
         .lookup(&host.clone().into(), RecordType::A, Default::default())
@@ -99,8 +99,8 @@ async fn dns_server_basic() {
 
     handle_command(&auth, DnsServerCommand::DelAddress(ip1.into()));
     handle_command(&auth, DnsServerCommand::DelAddress(ip2.into()));
-    assert_eq!(auth.ip4.lock().unwrap().len(), 0);
-    assert_eq!(auth.ip6.lock().unwrap().len(), 0);
+    assert_eq!(auth.ipv4_addrs.lock().unwrap().len(), 0);
+    assert_eq!(auth.ipv6_addrs.lock().unwrap().len(), 0);
 }
 
 mod same_software_version_addr_selection_test {
@@ -131,8 +131,8 @@ mod same_software_version_addr_selection_test {
             nameserver: None,
             mbox: None,
             inner,
-            ip4: Default::default(),
-            ip6: Default::default(),
+            ipv4_addrs: Default::default(),
+            ipv6_addrs: Default::default(),
         };
 
         for addr in &addrs {
