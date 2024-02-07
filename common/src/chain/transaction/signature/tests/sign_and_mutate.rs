@@ -27,7 +27,7 @@ use crate::{
                 check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
                 sign_mutate_then_verify,
             },
-            verify_signature, TransactionSigError,
+            verify_signature, DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         tokens::TokenId,
@@ -57,16 +57,16 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
 
     let test_data = [
         (0, 31, Ok(())),
-        (31, 0, Err(TransactionSigError::SignatureVerificationFailed)),
+        (31, 0, Err(DestinationSigError::SignatureVerificationFailed)),
         (
             INPUTS,
             OUTPUTS,
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         ),
         (
             31,
             31,
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         ),
     ];
 
@@ -95,13 +95,13 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
                 );
             }
             // Not implemented.
-            Err(TransactionSigError::Unsupported) => {
+            Err(DestinationSigError::Unsupported) => {
                 assert!(matches!(destination, Destination::ScriptHash(_)))
             }
-            Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend) => {
+            Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend) => {
                 assert_eq!(destination, Destination::AnyoneCanSpend)
             }
-            Err(TransactionSigError::InvalidInputIndex(0, 0)) => {
+            Err(DestinationSigError::InvalidInputIndex(0, 0)) => {
                 assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single)
             }
             e => assert_eq!(e.unwrap_err(), expected.unwrap_err()),
@@ -402,7 +402,7 @@ fn mutate_all(#[case] seed: Seed) {
         &inputs_utxos,
         &destination,
         mutations,
-        Err(TransactionSigError::SignatureVerificationFailed),
+        Err(DestinationSigError::SignatureVerificationFailed),
     );
 }
 
@@ -445,7 +445,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &inputs_utxos,
         &destination,
         mutations,
-        Err(TransactionSigError::SignatureVerificationFailed),
+        Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     {
@@ -456,7 +456,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         let tx = mutate_first_input(&mut rng, &tx);
         assert_eq!(
             verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         );
     }
 
@@ -510,7 +510,7 @@ fn mutate_none(#[case] seed: Seed) {
         &inputs_utxos,
         &destination,
         mutations,
-        Err(TransactionSigError::SignatureVerificationFailed),
+        Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     let mutations = [
@@ -566,7 +566,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
 
         assert_eq!(
             verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs {
             assert_eq!(
@@ -590,7 +590,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &inputs_utxos,
         &destination,
         mutations,
-        Err(TransactionSigError::SignatureVerificationFailed),
+        Err(DestinationSigError::SignatureVerificationFailed),
     );
 
     let mutations = [
@@ -668,7 +668,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &inputs_utxos_refs,
                     input
                 ),
-                Err(TransactionSigError::SignatureVerificationFailed)
+                Err(DestinationSigError::SignatureVerificationFailed)
             );
         }
         assert_eq!(
@@ -679,7 +679,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 total_inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 total_inputs,
                 total_inputs
             )),
@@ -713,7 +713,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
+            Err(DestinationSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -726,7 +726,7 @@ fn mutate_single(#[case] seed: Seed) {
         // Mutation of the first output makes signature invalid.
         assert_eq!(
             verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..total_inputs - 1 {
             assert_eq!(
@@ -748,7 +748,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 total_inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 total_inputs,
                 total_inputs
             )),
@@ -814,7 +814,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 total_inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 total_inputs,
                 total_inputs
             ))
@@ -830,7 +830,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 
         assert_eq!(
             verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..total_inputs - 1 {
             assert_eq!(
@@ -853,7 +853,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 total_inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 total_inputs,
                 total_inputs
             )),
@@ -878,7 +878,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &inputs_utxos_refs,
                     input
                 ),
-                Err(TransactionSigError::SignatureVerificationFailed),
+                Err(DestinationSigError::SignatureVerificationFailed),
                 "{input}"
             );
         }
@@ -890,7 +890,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 total_inputs
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 total_inputs,
                 total_inputs
             )),
@@ -906,7 +906,7 @@ fn check_mutations<M, R>(
     inputs_utxos: &[Option<TxOutput>],
     destination: &Destination,
     mutations: M,
-    expected: Result<(), TransactionSigError>,
+    expected: Result<(), DestinationSigError>,
 ) where
     R: Rng,
     M: IntoIterator<Item = fn(&mut R, &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo>,
@@ -930,7 +930,7 @@ fn check_mutations<M, R>(
                 &inputs_utxos_refs,
                 INVALID_INPUT
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 INVALID_INPUT,
                 inputs
             ))

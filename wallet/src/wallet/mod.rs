@@ -33,7 +33,10 @@ use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::signature::TransactionSigError;
+use common::chain::signature::inputsig::arbitrary_message::{
+    ArbitraryMessageSignature, SignArbitraryMessageError,
+};
+use common::chain::signature::DestinationSigError;
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
@@ -129,7 +132,7 @@ pub enum WalletError {
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
-    TransactionSig(#[from] TransactionSigError),
+    TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
     DelegationNotFound(DelegationId),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
@@ -200,6 +203,10 @@ pub enum WalletError {
     FullySignedTransactionInDecommissionReq,
     #[error("Input cannot be signed")]
     InputCannotBeSigned,
+    #[error("Destination does not belong to this wallet")]
+    DestinationNotFromThisWallet,
+    #[error("Sign message error: {0}")]
+    SignMessageError(#[from] SignArbitraryMessageError),
     #[error("Input cannot be spent {0:?}")]
     InputCannotBeSpent(TxOutput),
     #[error("Failed to convert partially signed tx to signed")]
@@ -1382,6 +1389,17 @@ impl<B: storage::Backend> Wallet<B> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
             account.sign_raw_transaction(tx, latest_median_time, db_tx)
+        })
+    }
+
+    pub fn sign_challenge(
+        &mut self,
+        account_index: U31,
+        challenge: Vec<u8>,
+        destination: Destination,
+    ) -> WalletResult<ArbitraryMessageSignature> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
+            account.sign_challenge(challenge, destination, db_tx)
         })
     }
 

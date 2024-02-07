@@ -26,7 +26,7 @@ use crate::{
         output_value::OutputValue,
         signature::{
             inputsig::standard_signature::StandardInputSignature, verify_signature,
-            TransactionSigError,
+            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
@@ -107,7 +107,7 @@ fn verify_no_signature(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 0
             ),
-            Err(TransactionSigError::SignatureNotFound),
+            Err(DestinationSigError::SignatureNotFound),
             "{destination:?}"
         );
     }
@@ -151,7 +151,7 @@ fn verify_invalid_signature(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 0
             ),
-            Err(TransactionSigError::InvalidSignatureEncoding),
+            Err(DestinationSigError::InvalidSignatureEncoding),
             "{sighash_type:?}, signature = {raw_signature:?}"
         );
     }
@@ -191,7 +191,7 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 INVALID_SIGNATURE_INDEX
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
+            Err(DestinationSigError::InvalidSignatureIndex(
                 INVALID_SIGNATURE_INDEX,
                 3
             )),
@@ -235,7 +235,7 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 0
             ),
-            Err(TransactionSigError::SignatureVerificationFailed),
+            Err(DestinationSigError::SignatureVerificationFailed),
             "{sighash_type:?}"
         );
     }
@@ -622,7 +622,7 @@ fn check_change_flags(
     for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(chain_config, destination, &tx, inputs_utxos, input_num),
-            Err(TransactionSigError::SignatureVerificationFailed)
+            Err(DestinationSigError::SignatureVerificationFailed)
         );
     }
 }
@@ -651,7 +651,7 @@ fn check_insert_input(
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, &inputs_utxos, 0);
     if should_fail {
-        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+        assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
         res.unwrap();
     }
@@ -678,8 +678,8 @@ fn check_mutate_witness(
 
         assert!(matches!(
             verify_signature(chain_config, outpoint_dest, &tx, inputs_utxos, input),
-            Err(TransactionSigError::SignatureVerificationFailed
-                | TransactionSigError::InvalidSignatureEncoding)
+            Err(DestinationSigError::SignatureVerificationFailed
+                | DestinationSigError::InvalidSignatureEncoding)
         ));
     }
 }
@@ -701,7 +701,7 @@ fn check_insert_output(
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
     if should_fail {
-        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+        assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
         res.unwrap();
     }
@@ -742,7 +742,7 @@ fn check_mutate_output(
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
     if should_fail {
-        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+        assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
         res.unwrap();
     }
@@ -765,7 +765,7 @@ fn check_mutate_input(
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
     if should_fail {
-        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+        assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
         res.unwrap();
     }
@@ -794,7 +794,7 @@ fn check_mutate_inputs_utxos(
                 &inputs_utxos,
                 input
             ),
-            Err(TransactionSigError::SignatureVerificationFailed)
+            Err(DestinationSigError::SignatureVerificationFailed)
         ));
     }
 }

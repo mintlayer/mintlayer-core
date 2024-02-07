@@ -3278,7 +3278,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -3317,7 +3317,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -3463,7 +3463,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -3513,7 +3513,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -3603,7 +3603,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -3642,7 +3642,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -4491,7 +4491,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -4534,7 +4534,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -4572,7 +4572,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -4600,7 +4600,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -4681,7 +4681,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -4720,7 +4720,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );
@@ -4798,7 +4798,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );

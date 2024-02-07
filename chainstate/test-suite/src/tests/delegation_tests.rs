@@ -838,7 +838,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureNotFound
+                    common::chain::signature::DestinationSigError::SignatureNotFound
                 )
             ))
         );
@@ -870,7 +870,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
                 )
             ))
         );

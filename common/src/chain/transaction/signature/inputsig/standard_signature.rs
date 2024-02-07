@@ -20,8 +20,8 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     chain::{
         signature::{
-            sighash::sighashtype::SigHashType, sighash::signature_hash, Signable,
-            TransactionSigError,
+            sighash::sighashtype::SigHashType, sighash::signature_hash, DestinationSigError,
+            Signable,
         },
         ChainConfig, Destination, Transaction, TxOutput,
     },
@@ -61,9 +61,9 @@ impl StandardInputSignature {
         self.sighash_type
     }
 
-    pub fn from_data<T: AsRef<[u8]>>(raw_data: T) -> Result<Self, TransactionSigError> {
+    pub fn from_data<T: AsRef<[u8]>>(raw_data: T) -> Result<Self, DestinationSigError> {
         let decoded_sig = StandardInputSignature::decode_all(&mut raw_data.as_ref())
-            .map_err(|_| TransactionSigError::DecodingWitnessFailed)?;
+            .map_err(|_| DestinationSigError::DecodingWitnessFailed)?;
         Ok(decoded_sig)
     }
 
@@ -72,7 +72,7 @@ impl StandardInputSignature {
         chain_config: &ChainConfig,
         outpoint_destination: &Destination,
         sighash: &H256,
-    ) -> Result<(), TransactionSigError> {
+    ) -> Result<(), DestinationSigError> {
         match outpoint_destination {
             Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
@@ -82,11 +82,11 @@ impl StandardInputSignature {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
                 verify_public_key_spending(pubkey, &sig_components, sighash)?
             }
-            Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
+            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
             Destination::AnyoneCanSpend => {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
                 return Err(
-                    TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+                    DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
             }
             Destination::ClassicMultisig(h) => {
@@ -105,7 +105,7 @@ impl StandardInputSignature {
         tx: &T,
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
-    ) -> Result<Self, TransactionSigError> {
+    ) -> Result<Self, DestinationSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
@@ -116,15 +116,15 @@ impl StandardInputSignature {
                 let sig = sign_pubkey_spending(private_key, pubkey, &sighash)?;
                 sig.encode()
             }
-            Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
+            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
 
             Destination::AnyoneCanSpend => {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
-                return Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
+                return Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
             }
             Destination::ClassicMultisig(_) => return Err(
                 // This function doesn't support this kind of signature
-                TransactionSigError::AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
+                DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
             ),
         };
         Ok(Self {
@@ -140,7 +140,7 @@ impl StandardInputSignature {
         tx: &Transaction,
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
-    ) -> Result<Self, TransactionSigError> {
+    ) -> Result<Self, DestinationSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let message = sighash.encode();
 
@@ -151,8 +151,8 @@ impl StandardInputSignature {
 
         match verification_result {
             super::classical_multisig::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => (),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(TransactionSigError::IncompleteClassicalMultisigAuthorization),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(TransactionSigError::InvalidClassicalMultisigAuthorization),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(DestinationSigError::InvalidClassicalMultisigAuthorization),
         }
 
         let serialized_sig = authorization.encode();
@@ -216,7 +216,7 @@ mod test {
 
     use super::*;
     use crate::chain::signature::tests::utils::generate_inputs_utxos;
-    use crate::chain::signature::{sighash::signature_hash, TransactionSigError};
+    use crate::chain::signature::{sighash::signature_hash, DestinationSigError};
     use crate::chain::Destination;
     use crypto::key::{KeyKind, PrivateKey};
     use itertools::Itertools;
@@ -242,7 +242,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
-                Err(TransactionSigError::PublicKeyToAddressMismatch),
+                Err(DestinationSigError::PublicKeyToAddressMismatch),
                 StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
@@ -273,7 +273,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
-                Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
+                Err(DestinationSigError::SpendeePrivatePublicKeyMismatch),
                 StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,

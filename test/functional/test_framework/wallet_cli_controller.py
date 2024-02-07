@@ -294,6 +294,18 @@ class WalletCliController:
     async def sign_raw_transaction(self, transaction: str) -> str:
         return await self._write_command(f"account-sign-raw-transaction {transaction}\n")
 
+    async def sign_challenge_plain(self, message: str, address: str) -> str:
+        return await self._write_command(f'account-sign-challenge-plain "{message}" {address}\n')
+
+    async def sign_challenge_hex(self, message: str, address: str) -> str:
+        return await self._write_command(f'account-sign-challenge-hex "{message}" {address}\n')
+
+    async def verify_challenge_plain(self, message: str, signature: str, address: str) -> str:
+        return await self._write_command(f'verify-challenge-plain "{message}" {signature} {address}\n')
+
+    async def verify_challenge_hex(self, message: str, signature: str, address: str) -> str:
+        return await self._write_command(f'verify-challenge-hex "{message}" {signature} {address}\n')
+
     async def submit_transaction(self, transaction: str) -> str:
         return await self._write_command(f"node-submit-transaction {transaction}\n")
 

@@ -36,6 +36,9 @@ use wallet::{
 use common::{
     address::Address,
     chain::{
+        signature::inputsig::arbitrary_message::{
+            produce_message_challenge, ArbitraryMessageSignature,
+        },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -216,7 +219,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidAddress)?;
 
-        let publick_key = self
+        let public_key = self
             .wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -224,7 +227,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await??;
-        Ok(PublicKeyInfo::new(publick_key, &self.chain_config))
+        Ok(PublicKeyInfo::new(public_key, &self.chain_config))
     }
 
     pub async fn get_legacy_vrf_public_key(
@@ -420,6 +423,47 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
+    }
+
+    pub async fn sign_challenge(
+        &self,
+        account_index: U31,
+        challenge: Vec<u8>,
+        address: String,
+    ) -> WRpcResult<ArbitraryMessageSignature, N> {
+        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
+        let destination = Address::from_str(&self.chain_config, &address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .sign_challenge(challenge, destination)
+                        .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
+    pub fn verify_challenge(
+        &self,
+        message: Vec<u8>,
+        signed_challenge: Vec<u8>,
+        address: String,
+    ) -> WRpcResult<(), N> {
+        let destination = Address::from_str(&self.chain_config, &address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let message_challenge = produce_message_challenge(&message);
+        let sig = ArbitraryMessageSignature::from_data(signed_challenge);
+        sig.verify_signature(&self.chain_config, &destination, &message_challenge)?;
+
+        Ok(())
     }
 
     pub async fn send_coins(

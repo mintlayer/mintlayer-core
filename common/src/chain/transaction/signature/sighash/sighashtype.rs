@@ -15,7 +15,7 @@
 
 use serialization::Encode;
 
-use super::TransactionSigError;
+use super::DestinationSigError;
 
 /// Specifies which parts of the transaction a signature commits to.
 ///
@@ -53,7 +53,7 @@ impl SigHashType {
 }
 
 impl TryFrom<u8> for SigHashType {
-    type Error = TransactionSigError;
+    type Error = DestinationSigError;
 
     fn try_from(sighash_byte: u8) -> Result<Self, Self::Error> {
         let ok = matches!(
@@ -61,7 +61,7 @@ impl TryFrom<u8> for SigHashType {
             Self::ALL | Self::NONE | Self::SINGLE
         );
         ok.then_some(Self(sighash_byte))
-            .ok_or(TransactionSigError::InvalidSigHashValue(sighash_byte))
+            .ok_or(DestinationSigError::InvalidSigHashValue(sighash_byte))
     }
 }
 
@@ -128,11 +128,11 @@ mod test {
         // Check try from
         assert_eq!(
             SigHashType::try_from(0),
-            Err(TransactionSigError::InvalidSigHashValue(0))
+            Err(DestinationSigError::InvalidSigHashValue(0))
         );
         assert_eq!(
             SigHashType::try_from(SigHashType::ANYONECANPAY),
-            Err(TransactionSigError::InvalidSigHashValue(
+            Err(DestinationSigError::InvalidSigHashValue(
                 SigHashType::ANYONECANPAY
             ))
         );

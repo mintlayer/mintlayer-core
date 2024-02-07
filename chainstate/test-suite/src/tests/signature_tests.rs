@@ -344,7 +344,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                     chainstate::ChainstateError::ProcessBlockError(
                         chainstate::BlockError::StateUpdateFailed(
                             chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                                common::chain::signature::TransactionSigError::IncompleteClassicalMultisigSignature
+                                common::chain::signature::DestinationSigError::IncompleteClassicalMultisigSignature
                             )
                         )
                     )
@@ -550,7 +550,7 @@ fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
             chainstate::ChainstateError::ProcessBlockError(
                 chainstate::BlockError::StateUpdateFailed(
                     chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                        chain::signature::TransactionSigError::SignatureNotFound
+                        chain::signature::DestinationSigError::SignatureNotFound
                     )
                 )
             )

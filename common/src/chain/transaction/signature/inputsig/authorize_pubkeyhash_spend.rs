@@ -17,7 +17,7 @@ use crypto::key::{PublicKey, Signature};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
-    address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,
+    address::pubkeyhash::PublicKeyHash, chain::signature::DestinationSigError, primitives::H256,
 };
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq)]
@@ -27,9 +27,9 @@ pub struct AuthorizedPublicKeyHashSpend {
 }
 
 impl AuthorizedPublicKeyHashSpend {
-    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, TransactionSigError> {
+    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, DestinationSigError> {
         let decoded = AuthorizedPublicKeyHashSpend::decode_all(&mut data.as_ref())
-            .map_err(|e| TransactionSigError::AddressAuthDecodingFailed(e.to_string()))?;
+            .map_err(|e| DestinationSigError::AddressAuthDecodingFailed(e.to_string()))?;
         Ok(decoded)
     }
 
@@ -45,14 +45,14 @@ pub fn verify_address_spending(
     spendee_addr: &PublicKeyHash,
     sig_components: &AuthorizedPublicKeyHashSpend,
     sighash: &H256,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     let calculated_addr = PublicKeyHash::from(&sig_components.public_key);
     if calculated_addr != *spendee_addr {
-        return Err(TransactionSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToAddressMismatch);
     }
     let msg = sighash.encode();
     if !sig_components.public_key.verify_message(&sig_components.signature, &msg) {
-        return Err(TransactionSigError::SignatureVerificationFailed);
+        return Err(DestinationSigError::SignatureVerificationFailed);
     }
     Ok(())
 }
@@ -61,16 +61,16 @@ pub fn sign_address_spending(
     private_key: &crypto::key::PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
-) -> Result<AuthorizedPublicKeyHashSpend, TransactionSigError> {
+) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
-        return Err(TransactionSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToAddressMismatch);
     }
     let msg = sighash.encode();
     let signature = private_key
         .sign_message(&msg)
-        .map_err(TransactionSigError::ProducingSignatureFailed)?;
+        .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
 }
@@ -118,7 +118,7 @@ mod test {
                 &inputs_utxos_refs,
                 1,
             );
-            assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
+            assert_eq!(res, Err(DestinationSigError::InvalidInputIndex(1, 1)));
         }
     }
 
@@ -151,7 +151,7 @@ mod test {
             assert!(
                 matches!(
                     AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()),
-                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                    Err(DestinationSigError::AddressAuthDecodingFailed(_))
                 ),
                 "{sighash_type:X?}"
             )
@@ -194,7 +194,7 @@ mod test {
             assert!(
                 matches!(
                     AuthorizedPublicKeyHashSpend::from_data(&raw_signature),
-                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                    Err(DestinationSigError::AddressAuthDecodingFailed(_))
                 ),
                 "{sighash_type:X?}"
             )

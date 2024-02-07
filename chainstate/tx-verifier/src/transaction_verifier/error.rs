@@ -17,7 +17,7 @@ use chainstate_types::GetAncestorError;
 use common::{
     chain::{
         block::{Block, GenBlock},
-        signature::TransactionSigError,
+        signature::DestinationSigError,
         tokens::TokenId,
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, TokenIssuanceVersion,
         Transaction, UtxoOutPoint,
@@ -65,7 +65,7 @@ pub enum ConnectTransactionError {
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
     #[error("Signature verification failed in transaction: {0}")]
-    SignatureVerificationFailed(#[from] TransactionSigError),
+    SignatureVerificationFailed(#[from] DestinationSigError),
     #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
     #[error("Error while calculating timestamps; possibly an overflow")]

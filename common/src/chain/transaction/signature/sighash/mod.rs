@@ -29,7 +29,7 @@ use crate::{
 
 use self::hashable::{SignatureHashableElement, SignatureHashableInputs};
 
-use super::{Signable, TransactionSigError};
+use super::{DestinationSigError, Signable};
 
 fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
     match val {
@@ -44,14 +44,14 @@ fn stream_signature_hash<T: Signable>(
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
     target_input_num: usize,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     let inputs = match tx.inputs() {
         Some(ins) => ins,
-        None => return Err(TransactionSigError::SigHashRequestWithoutInputs),
+        None => return Err(DestinationSigError::SigHashRequestWithoutInputs),
     };
 
     let target_input = inputs.get(target_input_num).ok_or(
-        TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()),
+        DestinationSigError::InvalidInputIndex(target_input_num, inputs.len()),
     )?;
 
     hash_encoded_to(&mode.get(), stream);
@@ -73,7 +73,7 @@ pub fn signature_hash<T: Signable>(
     tx: &T,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
-) -> Result<H256, TransactionSigError> {
+) -> Result<H256, DestinationSigError> {
     let mut stream = DefaultHashAlgoStream::new();
 
     stream_signature_hash(tx, inputs_utxos, &mut stream, mode, input_num)?;

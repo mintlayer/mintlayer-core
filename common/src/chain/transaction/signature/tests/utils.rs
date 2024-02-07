@@ -28,7 +28,7 @@ use crate::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
-            verify_signature, TransactionSigError,
+            verify_signature, DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
@@ -37,7 +37,9 @@ use crate::{
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
-fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> (TxOutput, crypto::key::PrivateKey) {
+pub fn generate_input_utxo(
+    rng: &mut (impl Rng + CryptoRng),
+) -> (TxOutput, crypto::key::PrivateKey) {
     let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
@@ -132,8 +134,8 @@ pub fn sign_whole_tx(
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
-) -> Result<SignedTransaction, TransactionSigError> {
-    let sigs: Result<Vec<StandardInputSignature>, TransactionSigError> = tx
+) -> Result<SignedTransaction, DestinationSigError> {
+    let sigs: Result<Vec<StandardInputSignature>, DestinationSigError> = tx
         .inputs()
         .iter()
         .enumerate()
@@ -150,7 +152,7 @@ pub fn sign_whole_tx(
         .collect();
     let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect_vec();
 
-    SignedTransaction::new(tx, witnesses).map_err(|_| TransactionSigError::InvalidWitnessCount)
+    SignedTransaction::new(tx, witnesses).map_err(|_| DestinationSigError::InvalidWitnessCount)
 }
 
 pub fn generate_and_sign_tx(
@@ -191,7 +193,7 @@ pub fn make_signature(
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     outpoint_dest: Destination,
-) -> Result<StandardInputSignature, TransactionSigError> {
+) -> Result<StandardInputSignature, DestinationSigError> {
     let input_sig = StandardInputSignature::produce_uniparty_signature_for_input(
         private_key,
         sighash_type,
@@ -208,7 +210,7 @@ pub fn verify_signed_tx(
     tx: &SignedTransaction,
     inputs_utxos: &[Option<&TxOutput>],
     destination: &Destination,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
         verify_signature(chain_config, destination, tx, inputs_utxos, i)?
     }

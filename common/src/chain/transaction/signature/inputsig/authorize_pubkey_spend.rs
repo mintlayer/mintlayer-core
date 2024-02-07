@@ -16,7 +16,7 @@
 use crypto::key::Signature;
 use serialization::{Decode, DecodeAll, Encode};
 
-use crate::{chain::signature::TransactionSigError, primitives::H256};
+use crate::{chain::signature::DestinationSigError, primitives::H256};
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedPublicKeySpend {
@@ -24,9 +24,9 @@ pub struct AuthorizedPublicKeySpend {
 }
 
 impl AuthorizedPublicKeySpend {
-    pub fn from_data(data: &[u8]) -> Result<Self, TransactionSigError> {
+    pub fn from_data(data: &[u8]) -> Result<Self, DestinationSigError> {
         let decoded = AuthorizedPublicKeySpend::decode_all(&mut &data[..])
-            .map_err(|_| TransactionSigError::InvalidSignatureEncoding)?;
+            .map_err(|_| DestinationSigError::InvalidSignatureEncoding)?;
         Ok(decoded)
     }
 
@@ -39,10 +39,10 @@ pub fn verify_public_key_spending(
     spendee_pubkey: &crypto::key::PublicKey,
     spender_signature: &AuthorizedPublicKeySpend,
     sighash: &H256,
-) -> Result<(), TransactionSigError> {
+) -> Result<(), DestinationSigError> {
     let msg = sighash.encode();
     if !spendee_pubkey.verify_message(&spender_signature.signature, &msg) {
-        return Err(TransactionSigError::SignatureVerificationFailed);
+        return Err(DestinationSigError::SignatureVerificationFailed);
     }
     Ok(())
 }
@@ -51,15 +51,15 @@ pub fn sign_pubkey_spending(
     private_key: &crypto::key::PrivateKey,
     spendee_pubkey: &crypto::key::PublicKey,
     sighash: &H256,
-) -> Result<AuthorizedPublicKeySpend, TransactionSigError> {
+) -> Result<AuthorizedPublicKeySpend, DestinationSigError> {
     let calculated_public_key = crypto::key::PublicKey::from_private_key(private_key);
     if *spendee_pubkey != calculated_public_key {
-        return Err(TransactionSigError::SpendeePrivatePublicKeyMismatch);
+        return Err(DestinationSigError::SpendeePrivatePublicKeyMismatch);
     }
     let msg = sighash.encode();
     let signature = private_key
         .sign_message(&msg)
-        .map_err(TransactionSigError::ProducingSignatureFailed)?;
+        .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeySpend::new(signature))
 }
@@ -110,7 +110,7 @@ mod test {
                 &inputs_utxos_refs,
                 1,
             );
-            assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
+            assert_eq!(res, Err(DestinationSigError::InvalidInputIndex(1, 1)));
         }
     }
 
@@ -142,7 +142,7 @@ mod test {
             .unwrap();
 
             assert_eq!(
-                Err(TransactionSigError::InvalidSignatureEncoding),
+                Err(DestinationSigError::InvalidSignatureEncoding),
                 AuthorizedPublicKeySpend::from_data(witness.raw_signature()),
                 "{sighash_type:X?}"
             )
@@ -182,7 +182,7 @@ mod test {
             // signature enum discriminant, therefore it changes the signature type.
             raw_signature[0] = raw_signature[0].wrapping_add(2);
             assert_eq!(
-                Err(TransactionSigError::InvalidSignatureEncoding),
+                Err(DestinationSigError::InvalidSignatureEncoding),
                 AuthorizedPublicKeySpend::from_data(&raw_signature),
                 "{sighash_type:X?}"
             )

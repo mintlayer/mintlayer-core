@@ -49,6 +49,7 @@ fn create_line_editor<N: NodeInterface>(
 ) -> Result<Reedline, WalletCliError<N>> {
     let commands = repl_command
         .get_subcommands()
+        .filter(|command| !command.is_hide_set())
         .map(|command| command.get_name().to_owned())
         .chain(std::iter::once("help".to_owned()))
         .collect::<Vec<_>>();
