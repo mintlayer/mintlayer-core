@@ -17,6 +17,7 @@
 
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
+    address::Address,
     chain::config::regtest::genesis_values,
     chain::{
         block::timestamp::BlockTimestamp,
@@ -107,6 +108,12 @@ trait RpcTestFunctionsRpc {
         amount_to_spend: u64,
         fee_per_tx: u64,
     ) -> rpc::RpcResult<Vec<HexEncoded<SignedTransaction>>>;
+
+    #[method(name = "address_to_destination")]
+    async fn address_to_destination(
+        &self,
+        address: String,
+    ) -> rpc::RpcResult<HexEncoded<Destination>>;
 }
 
 #[async_trait::async_trait]
@@ -326,6 +333,25 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         }
 
         Ok(transactions)
+    }
+
+    async fn address_to_destination(
+        &self,
+        address: String,
+    ) -> rpc::RpcResult<HexEncoded<Destination>> {
+        let destination = self
+            .call(move |this| {
+                this.get_chain_config().map(|chain| {
+                    Address::<Destination>::from_str(&chain, &address)
+                        .and_then(|addr| addr.decode_object(&chain))
+                })
+            })
+            .await
+            .expect("Subsystem call ok")
+            .expect("chain config is present")
+            .map(HexEncoded::new);
+
+        rpc::handle_result(destination)
     }
 }
 

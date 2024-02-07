@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::mem::take;
+
 use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
@@ -20,12 +23,14 @@ use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 
+use crate::account::currency_grouper::Currency;
 use crate::account::PoolData;
 use crate::{WalletError, WalletResult};
 
@@ -44,6 +49,8 @@ pub struct SendRequest {
     inputs: Vec<TxInput>,
 
     outputs: Vec<TxOutput>,
+
+    fees: BTreeMap<Currency, Amount>,
 }
 
 pub fn make_address_output(
@@ -194,7 +201,12 @@ impl SendRequest {
             destinations: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
+            fees: BTreeMap::new(),
         }
+    }
+
+    pub fn add_fee(&mut self, currency: Currency, fee: Amount) {
+        self.fees.insert(currency, fee);
     }
 
     pub fn from_transaction<'a, PoolDataGetter>(
@@ -220,6 +232,7 @@ impl SendRequest {
             destinations,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
+            fees: BTreeMap::new(),
         })
     }
 
@@ -282,6 +295,10 @@ impl SendRequest {
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         Ok((tx, self.utxos, self.destinations))
     }
+
+    pub fn get_fees(&mut self) -> BTreeMap<Currency, Amount> {
+        take(&mut self.fees)
+    }
 }
 
 pub fn get_tx_output_destination<'a, PoolDataGetter>(
@@ -304,5 +321,19 @@ where
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_) => None,
+    }
+}
+
+pub enum SelectedInputs {
+    Utxos(Vec<UtxoOutPoint>),
+    Inputs(Vec<(UtxoOutPoint, TxOutput)>),
+}
+
+impl SelectedInputs {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Utxos(utxos) => utxos.is_empty(),
+            Self::Inputs(inputs) => inputs.is_empty(),
+        }
     }
 }

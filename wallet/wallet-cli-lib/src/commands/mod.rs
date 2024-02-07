@@ -44,7 +44,9 @@ use wallet::{
     version::get_version,
     WalletError,
 };
-use wallet_controller::{ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_controller::{
+    types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
+};
 use wallet_rpc_lib::{
     config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletRpc, WalletRpcServer,
     WalletService,
@@ -420,6 +422,29 @@ pub enum WalletCommand {
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
         #[arg(default_values_t = Vec::<String>::new())]
         utxos: Vec<String>,
+    },
+
+    /// Creates a transaction that spends from a specific address,
+    /// and returns the change to the same address (unless one is specified), without signature.
+    /// This transaction is used for "withdrawing" small amounts from a cold storage
+    /// without changing the ownership address. Once this is created,
+    /// it can be signed using account-sign-raw-transaction in the cold wallet
+    /// and then broadcast through any hot wallet.
+    /// In summary, this creates a transaction with one input and two outputs,
+    /// with one of the outputs being change returned to the same owner of the input.
+    #[clap(name = "transaction-send-from-cold-input")]
+    SendFromColdInput {
+        /// The receiving address of the coins
+        address: String,
+        /// The amount to be sent, in decimal format
+        amount: DecimalAmount,
+        /// You can choose what utxo to spend. A utxo can be from a transaction output or a block reward output:
+        /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
+        /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
+        utxo: String,
+        /// Optional change address, if not specified it returns the change to the same address from the input
+        #[arg(long = "change")]
+        change_address: Option<String>,
     },
 
     /// Store data on the blockchain, the data is provided as hex encoded string.
@@ -1395,26 +1420,13 @@ where
                     .wallet_rpc
                     .compose_transaction(input_utxos, outputs, only_transaction)
                     .await?;
-                let (coins, tokens) = fees.into_coins_and_tokens();
                 let encoded_tx = match tx {
                     TransactionToSign::Tx(tx) => HexEncoded::new(tx).to_string(),
                     TransactionToSign::Partial(tx) => HexEncoded::new(tx).to_string(),
                 };
                 let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
 
-                writeln!(
-                    &mut output,
-                    "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
-                )
-                .expect("Writing to a memory buffer should not fail");
-
-                for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, &token_id)
-                        .expect("Encoding token id should never fail");
-                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
-                        .expect("Writing to a memory buffer should not fail");
-                }
-                output.pop();
+                format_fees(&mut output, fees, chain_config);
 
                 Ok(ConsoleCommand::Print(output))
             }
@@ -1708,6 +1720,43 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
+            WalletCommand::SendFromColdInput {
+                address,
+                amount,
+                utxo,
+                change_address,
+            } => {
+                let selected_input = parse_utxo_outpoint(utxo)?;
+                let selected_account = self.get_selected_acc()?;
+                let (tx, fees) = self
+                    .wallet_rpc
+                    .request_send_coins(
+                        selected_account,
+                        address,
+                        amount,
+                        selected_input,
+                        change_address,
+                        self.config,
+                    )
+                    .await?;
+
+                let summary = tx.tx().text_summary(self.wallet_rpc.chain_config());
+                let hex_tx = HexEncoded::new(tx);
+
+                let qr_code = utils::qrcode::qrcode_from_str(hex_tx.to_string())
+                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+
+                let mut output_str = format!(
+                    "Send transaction created. \
+                    Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
+                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
+                );
+                format_fees(&mut output_str, fees, chain_config);
+
+                Ok(ConsoleCommand::Print(output_str))
+            }
+
             WalletCommand::SendTokensToAddress {
                 token_id,
                 address,
@@ -1967,6 +2016,23 @@ where
             }
         }
     }
+}
+
+fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {
+    let (coins, tokens) = fees.into_coins_and_tokens();
+    writeln!(
+        output,
+        "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
+    )
+    .expect("Writing to a memory buffer should not fail");
+
+    for (token_id, amount) in tokens {
+        let token_id =
+            Address::new(chain_config, &token_id).expect("Encoding token id should never fail");
+        writeln!(output, "Token: {token_id} amount: {amount}")
+            .expect("Writing to a memory buffer should not fail");
+    }
+    output.pop();
 }
 
 fn id_to_hex_string(id: H256) -> String {
