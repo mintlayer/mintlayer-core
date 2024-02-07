@@ -217,9 +217,9 @@ class WalletCliController:
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-get-signed-raw {tx_id}\n")
 
-    async def send_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
+    async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
         change_address_str = '' if change_address is None else f"--change {change_address}"
-        return await self._write_command(f"transaction-send-from-cold-input {address} {amount} {str(selected_utxo)} {change_address_str}\n")
+        return await self._write_command(f"transaction-create-from-cold-input {address} {amount} {str(selected_utxo)} {change_address_str}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
