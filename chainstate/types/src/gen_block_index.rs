@@ -80,6 +80,13 @@ impl GenBlockIndex {
             GenBlockIndex::Genesis(..) => crate::block_status::BlockStatus::new_fully_checked(),
         }
     }
+
+    pub fn chain_transaction_count(&self) -> u128 {
+        match self {
+            GenBlockIndex::Block(b) => b.chain_transaction_count(),
+            GenBlockIndex::Genesis(_) => 0,
+        }
+    }
 }
 
 impl From<BlockIndex> for GenBlockIndex {

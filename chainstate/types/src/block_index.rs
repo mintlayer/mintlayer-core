@@ -26,10 +26,16 @@ use crate::{BlockStatus, GenBlockIndex};
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: SignedBlockHeader,
+    /// One ancestor in the past that can make looping faster
     some_ancestor: Id<GenBlock>,
+    /// The total chain trust up to this point
     chain_trust: H256,
     height: BlockHeight,
-    time_max: BlockTimestamp,
+    /// The highest timestamp in this chain up to this block
+    chain_time_max: BlockTimestamp,
+    #[codec(compact)]
+    /// The total number of transactions up to this block
+    chain_transaction_count: u128,
     status: BlockStatus,
 }
 
@@ -39,7 +45,8 @@ impl BlockIndex {
         chain_trust: Uint256,
         some_ancestor: Id<GenBlock>,
         height: BlockHeight,
-        time_max: BlockTimestamp,
+        chain_time_max: BlockTimestamp,
+        chain_transaction_count: u128,
         status: BlockStatus,
     ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
@@ -49,7 +56,8 @@ impl BlockIndex {
             some_ancestor,
             chain_trust: chain_trust.into(),
             height,
-            time_max,
+            chain_time_max,
+            chain_transaction_count,
             status,
         }
     }
@@ -67,7 +75,7 @@ impl BlockIndex {
     }
 
     pub fn chain_timestamps_max(&self) -> BlockTimestamp {
-        self.time_max
+        self.chain_time_max
     }
 
     pub fn block_height(&self) -> BlockHeight {
@@ -76,6 +84,10 @@ impl BlockIndex {
 
     pub fn chain_trust(&self) -> Uint256 {
         self.chain_trust.into()
+    }
+
+    pub fn chain_transaction_count(&self) -> u128 {
+        self.chain_transaction_count
     }
 
     pub fn block_header(&self) -> &SignedBlockHeader {
