@@ -73,7 +73,7 @@ pub struct FileInput {
 impl FileInput {
     pub fn new<N: NodeInterface>(file_path: PathBuf) -> Result<Self, WalletCliError<N>> {
         let data = std::fs::read_to_string(&file_path)
-            .map_err(|e| WalletCliError::FileError(file_path, e))?;
+            .map_err(|e| WalletCliError::FileError(file_path, e.to_string()))?;
         let lines = data.lines().map(|line| line.to_owned()).collect();
         Ok(Self { lines })
     }

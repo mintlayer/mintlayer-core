@@ -47,6 +47,7 @@ impl Completer for WalletCompletions {
                     extra: None,
                     span: Span::new(0, 0),
                     append_whitespace: false,
+                    style: None,
                 })
                 .collect()
         } else {
