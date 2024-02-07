@@ -23,8 +23,8 @@ use std::path::PathBuf;
 use clap::Command;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, Reedline,
-    ReedlineMenu, Signal, Vi,
+    ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, MenuBuilder,
+    Reedline, ReedlineMenu, Signal, Vi,
 };
 use tokio::sync::{mpsc, oneshot};
 use wallet_controller::NodeInterface;
@@ -67,7 +67,7 @@ fn create_line_editor<N: NodeInterface>(
     if let Some(file_name) = history_file {
         let history = Box::new(
             FileBackedHistory::with_file(HISTORY_MAX_LINES, file_name.clone())
-                .map_err(|e| WalletCliError::FileError(file_name, e))?,
+                .map_err(|e| WalletCliError::FileError(file_name, e.to_string()))?,
         );
         line_editor = line_editor.with_history(history);
     }
