@@ -79,10 +79,10 @@ impl ArbitraryMessageSignature {
     pub fn verify_signature(
         &self,
         chain_config: &ChainConfig,
-        outpoint_destination: &Destination,
+        destination: &Destination,
         challenge: &H256,
     ) -> Result<(), DestinationSigError> {
-        match outpoint_destination {
+        match destination {
             Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
                 verify_address_spending(addr, &sig_components, challenge)?
@@ -109,12 +109,12 @@ impl ArbitraryMessageSignature {
 
     pub fn produce_uniparty_signature(
         private_key: &crypto::key::PrivateKey,
-        outpoint_destination: &Destination,
+        destination: &Destination,
         message: &[u8],
     ) -> Result<Self, SignArbitraryMessageError> {
         let challenge = produce_message_challenge(message);
         let signature =
-            match outpoint_destination {
+            match destination {
                 Destination::PublicKeyHash(addr) => {
                     let sig = sign_address_spending(private_key, addr, &challenge)?;
                     sig.encode()
