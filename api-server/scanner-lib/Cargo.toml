@@ -19,6 +19,7 @@ tx-verifier = { path = "../../chainstate/tx-verifier" }
 constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }
 mempool = { path = "../../mempool" }
 
+futures = { workspace = true, default-features = false }
 async-trait.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

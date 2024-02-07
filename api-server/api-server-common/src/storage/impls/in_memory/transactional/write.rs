@@ -28,7 +28,8 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+    ApiServerStorageWrite, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
+    TransactionInfo, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -233,7 +234,10 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_best_block()
     }
 
-    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
+    async fn get_block(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockInfo>, ApiServerStorageError> {
         self.transaction.get_block(block_id)
     }
 

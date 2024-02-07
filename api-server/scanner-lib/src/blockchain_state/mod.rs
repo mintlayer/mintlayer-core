@@ -33,6 +33,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
+use futures::{stream::FuturesUnordered, TryStreamExt};
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -400,9 +401,14 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
         let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
         total_fees = total_fees.combine(fee.clone()).expect("no overflow");
 
+        let input_tasks: FuturesUnordered<_> =
+            tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
+        let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
+
         let tx_info = TransactionInfo {
             tx: tx.clone(),
             fee: fee.map_into_block_fees(chain_config, block_height).expect("no overflow").0,
+            input_utxos,
         };
 
         db_tx
@@ -412,6 +418,18 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
     }
 
     Ok(total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow"))
+}
+
+async fn fetch_utxo<T: ApiServerStorageRead>(
+    input: &TxInput,
+    db_tx: &T,
+) -> Result<Option<TxOutput>, ApiServerStorageError> {
+    match input {
+        TxInput::Utxo(outpoint) => {
+            Ok(db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output()))
+        }
+        TxInput::Account(_) | TxInput::AccountCommand(_, _) => Ok(None),
+    }
 }
 
 async fn tx_fees<T: ApiServerStorageWrite>(

@@ -934,7 +934,6 @@ fn delegate_and_spend_share_same_tx(
             .build();
 
         let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
-        //let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
         let available_amount = Amount::from_atoms(1000);
         let amount_to_delegate = (available_amount / 2).unwrap();
         let change = (available_amount - amount_to_delegate).unwrap();
@@ -964,11 +963,10 @@ fn delegate_and_spend_share_same_tx(
             .unwrap();
         assert_eq!(amount_to_delegate, original_delegation_balance);
 
-        // try spending in an single input original balance and newly delegated amount
-        let amount_to_spend = Amount::from_atoms(rng.gen_range(
-            original_delegation_balance.into_atoms()
-                ..=(original_delegation_balance + change).unwrap().into_atoms(),
-        ));
+        // try spending in an single input original balance and a part of newly delegated amount
+        let amount_to_spend = (original_delegation_balance
+            + Amount::from_atoms(rng.gen_range(1..=change.into_atoms())))
+        .unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(

@@ -24,7 +24,7 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData,
+        ApiServerStorageWrite, ApiServerTransactionRw, BlockInfo, Delegation, FungibleTokenData,
         TransactionInfo, Utxo,
     },
 };
@@ -129,6 +129,10 @@ where
             test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
         let block1 = test_framework.block(block_id1);
         let block_height = BlockHeight::new(1);
+        let block_info1 = BlockInfo {
+            block: block1.clone(),
+            height: Some(block_height),
+        };
 
         {
             let block_id = db_tx.get_block(block_id1).await.unwrap();
@@ -140,7 +144,7 @@ where
             db_tx.set_mainchain_block(block_id1, block_height, &block1).await.unwrap();
 
             let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block1);
+            assert_eq!(block.unwrap(), block_info1);
 
             let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
             assert_eq!(block_id.unwrap(), block_id1);
@@ -154,8 +158,12 @@ where
             let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
             assert!(block_id.is_none());
             // but the block is still there just not on main chain
+            let block_info1 = BlockInfo {
+                block: block1.clone(),
+                height: None,
+            };
             let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block1);
+            assert_eq!(block.unwrap(), block_info1);
         }
 
         {
@@ -225,8 +233,12 @@ where
             let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
             assert!(block_id.is_none());
 
+            let block_info1 = BlockInfo {
+                block: block1.clone(),
+                height: None,
+            };
             let block = db_tx.get_block(block_id1).await.unwrap();
-            assert_eq!(block.unwrap(), block1);
+            assert_eq!(block.unwrap(), block_info1);
         }
     }
 
@@ -250,6 +262,10 @@ where
                 empty_witness(&mut rng),
             )
             .build();
+        let tx1_input_utxos = vec![Some(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100))),
+            Destination::AnyoneCanSpend,
+        ))];
 
         // before storage
         let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
@@ -264,6 +280,7 @@ where
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 fee: Amount::from_atoms(rng.gen_range(0..100)),
+                input_utxos: tx1_input_utxos.clone(),
             };
             db_tx.set_transaction(tx1.transaction().get_id(), None, &tx_info).await.unwrap();
 
@@ -280,6 +297,7 @@ where
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 fee: Amount::from_atoms(rng.gen_range(0..100)),
+                input_utxos: tx1_input_utxos.clone(),
             };
             db_tx
                 .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx_info)
