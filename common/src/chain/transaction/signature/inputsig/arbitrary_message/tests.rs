@@ -383,7 +383,7 @@ fn signature_with_chosen_text() {
     let message_challenge = produce_message_challenge(message);
 
     // Ensure the challenge format hasn't changed
-    let message_challenge_hex = "5c0d4f606f2b5c309026e3378ca265cb6b12bce9f82d21a07f6c92f6230ae349";
+    let message_challenge_hex = "aa0fa46ccf0a2280611faf94ea4f69594859d88e26c460a422dea4b66cc2f927";
     let message_challenge_bytes = hex::decode(message_challenge_hex).unwrap();
     let message_challenge_reproduced =
         H256::decode_all(&mut message_challenge_bytes.as_slice()).unwrap();
@@ -401,12 +401,13 @@ fn signature_with_chosen_text() {
         message,
     )
     .unwrap();
+
     SignedArbitraryMessage::from_data(signature_pubkeyhash.raw_signature)
         .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
         .unwrap();
 
     // Ensure the stored signature will always verify correctly
-    let signature_pubkeyhash_hex = "00030b84796d1e4f528dc7469c03beda6d9158126818ecf0df28e86354246d3de849004a0dcf6611e49f849bfe27c3d2bb5e4e4a234197f812035a61ec46db22dd3f412007c525999fe87b72e3bec1905f02f1d2e18940eb95e26320ad2c66654cc6b5";
+    let signature_pubkeyhash_hex = "00030b84796d1e4f528dc7469c03beda6d9158126818ecf0df28e86354246d3de84900fa947e4e502cfa7d608fca02e826606b3c59e20dd14e2694f14152b2947d683cf2ab8df603c57f9706d87fe81fded47f73727ce316ec33cac01da96791f10dfc";
     let signature_pubkeyhash_bytes = hex::decode(signature_pubkeyhash_hex).unwrap();
     SignedArbitraryMessage::from_data(signature_pubkeyhash_bytes)
         .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
@@ -427,7 +428,7 @@ fn signature_with_chosen_text() {
         .unwrap();
 
     // Ensure the stored signature will always verify correctly
-    let signature_pubkey_hex = "00c2d1851cc0bf238a2314924e2545e0053cffe7dabd4e531b594dba4bb9a7ce5f556592be4a791602782a782d4d8b65bd58cb009016f91c78c6cbdb0a398f92d6";
+    let signature_pubkey_hex = "004cf0b83576b35b6684eebcad34b1900d4176d844753665fdf7c042e8cc71d6cfe8a4f9f5c24adfbe8a16e3dead56ea07e2deca4b7bffb1376f04205d6dedbc6e";
     let signature_pubkey_bytes = hex::decode(signature_pubkey_hex).unwrap();
     SignedArbitraryMessage::from_data(signature_pubkey_bytes)
         .verify_signature(&chain_config, &destination_pub_key, &message_challenge)

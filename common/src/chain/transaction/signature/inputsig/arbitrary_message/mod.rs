@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const MESSAGE_MAGIC_PREFIX: &str = "===MINTLAYER MESSAGE BEGIN===";
-const MESSAGE_MAGIC_SUFFIX: &str = "===MINTLAYER MESSAGE END===";
+const MESSAGE_MAGIC_PREFIX: &str = "===MINTLAYER MESSAGE BEGIN===\n";
+const MESSAGE_MAGIC_SUFFIX: &str = "\n===MINTLAYER MESSAGE END===";
 
 use thiserror::Error;
 
