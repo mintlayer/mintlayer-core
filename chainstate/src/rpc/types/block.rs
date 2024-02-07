@@ -15,14 +15,17 @@
 
 use chainstate_types::BlockIndex;
 use common::{
-    chain::Block,
+    chain::{Block, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlock {
     id: Id<Block>,
+    prev_block_id: Id<GenBlock>,
     height: BlockHeight,
+    transaction_count_in_block: u32,
+    chain_transaction_count: u128,
     block: Block,
 }
 
@@ -30,7 +33,10 @@ impl RpcBlock {
     pub fn new(block: Block, block_index: BlockIndex) -> Self {
         Self {
             id: block.get_id(),
+            prev_block_id: block.prev_block_id(),
             height: block_index.block_height(),
+            transaction_count_in_block: block.transactions().len() as u32,
+            chain_transaction_count: block_index.chain_transaction_count(),
             block,
         }
     }
