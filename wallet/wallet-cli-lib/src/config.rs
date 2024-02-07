@@ -135,6 +135,23 @@ pub struct CliArgs {
     /// Enable running the wallet service without RPC authentication (assuming wallet RPC server is enabled)
     #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]))]
     pub wallet_rpc_no_authentication: bool,
+
+    /// FIXME
+    /// Optional RPC address
+    #[clap(long)]
+    pub wrpc_address: Option<String>,
+
+    /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
+    #[clap(long)]
+    pub wrpc_cookie_file: Option<String>,
+
+    /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub wrpc_username: Option<String>,
+
+    /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub wrpc_password: Option<String>,
 }
 
 impl From<&Network> for ChainType {

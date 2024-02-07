@@ -113,6 +113,10 @@ impl CliTestFramework {
                     wallet_rpc_password: None,
                     wallet_rpc_cookie_file: None,
                     wallet_rpc_no_authentication: false,
+                    wrpc_address: None,
+                    wrpc_username: None,
+                    wrpc_password: None,
+                    wrpc_cookie_file: None,
                 },
             }))),
             run_options: wallet_cli_lib::config::CliArgs {
@@ -135,6 +139,10 @@ impl CliTestFramework {
                 wallet_rpc_password: None,
                 wallet_rpc_cookie_file: None,
                 wallet_rpc_no_authentication: false,
+                wrpc_address: None,
+                wrpc_username: None,
+                wrpc_password: None,
+                wrpc_cookie_file: None,
             },
         };
 

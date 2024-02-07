@@ -180,7 +180,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.issue_address(account_index.index::<N>()?).await)
     }
 
-    async fn issue_public_key(
+    async fn reveal_public_key(
         &self,
         account_index: AccountIndexArg,
         address: String,

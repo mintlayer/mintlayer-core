@@ -47,10 +47,8 @@ use wallet::{
 use wallet_controller::{
     types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_rpc_lib::{
-    config::WalletRpcConfig, types::NewTransaction, CreatedWallet, WalletNodeRpcServer, WalletRpc,
-    WalletRpcServer, WalletService,
-};
+use wallet_rpc_client::wallet_rpc_traits::ColdWalletInterface;
+use wallet_rpc_lib::{types::NewTransaction, CreatedWallet, WalletRpc, WalletService};
 
 use crate::{
     commands::helper_types::{parse_output, parse_token_supply},
@@ -785,24 +783,28 @@ struct CliWalletState {
     selected_account: U31,
 }
 
-pub struct CommandHandler<N: Clone> {
+pub struct CommandHandler<N: Clone, W> {
     // the CliController if there is a loaded wallet
     state: Option<CliWalletState>,
     config: ControllerConfig,
     wallet_rpc: WalletRpc<N>,
-    server_rpc: Option<rpc::Rpc>,
+
+    wallet: W,
 }
 
-impl<N> CommandHandler<N>
+impl<N, W, E> CommandHandler<N, W>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    W: ColdWalletInterface<Error = E> + Send + Sync + 'static,
+    E: Into<WalletCliError<N>>,
 {
     pub async fn new(
         config: ControllerConfig,
         chain_config: Arc<ChainConfig>,
         node_rpc: N,
-        wallet_rpc_config: Option<WalletRpcConfig>,
+        wallet: W,
     ) -> Result<Self, WalletCliError<N>> {
+        //FIXME remove
         let wallet_service = WalletService::start(chain_config, None, node_rpc)
             .await
             .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
@@ -813,25 +815,11 @@ where
 
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
 
-        let server_rpc = if let Some(rpc_config) = wallet_rpc_config {
-            Some(
-                rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
-                    .with_method_list("list_methods")
-                    .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
-                    .register(WalletNodeRpcServer::into_rpc(wallet_rpc.clone()))
-                    .build()
-                    .await
-                    .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
-            )
-        } else {
-            None
-        };
-
         Ok(CommandHandler {
             state: None,
             config,
-            wallet_rpc,
-            server_rpc,
+            wallet_rpc: wallet_rpc.clone(),
+            wallet,
         })
     }
 
@@ -1240,9 +1228,7 @@ where
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
             ColdWalletCommand::Exit => {
-                if let Some(rpc) = self.server_rpc.take() {
-                    rpc.shutdown().await;
-                }
+                self.wallet.shutdown().await.map_err(|err| err.into())?;
                 Ok(ConsoleCommand::Exit)
             }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),

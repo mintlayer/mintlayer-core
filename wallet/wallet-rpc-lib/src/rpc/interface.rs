@@ -132,7 +132,7 @@ trait WalletRpc {
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo>;
 
     #[method(name = "address_reveal_public_key")]
-    async fn issue_public_key(
+    async fn reveal_public_key(
         &self,
         account_index: AccountIndexArg,
         address: String,

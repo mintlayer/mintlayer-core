@@ -24,6 +24,7 @@ wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
+wallet-rpc-client = { path = "../wallet-rpc-client" }
 
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true

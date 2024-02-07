@@ -19,6 +19,7 @@ use crypto::key::hdkd::u31::U31;
 use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
 use wallet::WalletError;
 use wallet_controller::NodeInterface;
+use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
 use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
@@ -59,4 +60,8 @@ pub enum WalletCliError<N: NodeInterface> {
     WalletRpcError(#[from] RpcError<N>),
     #[error("Failed to convert to signed transaction: {0}")]
     FailedToConvertToSignedTransaction(#[from] WalletError),
+    #[error("{0}")]
+    WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
+    #[error("{0}")]
+    WalletClientRpcError(#[from] WalletRpcError),
 }

@@ -82,7 +82,18 @@ pub async fn run(
     };
 
     let in_top_x_mb = cli_args.in_top_x_mb;
-    if cli_args.cold_wallet {
+    if cli_args.wrpc_address.is_some() {
+        connect_to_rpc_wallet(
+            cli_args,
+            chain_type,
+            mode,
+            output,
+            input,
+            chain_config,
+            in_top_x_mb,
+        )
+        .await
+    } else if cli_args.cold_wallet {
         start_cold_wallet(cli_args, mode, output, input, chain_config, in_top_x_mb).await
     } else {
         start_hot_wallet(
@@ -132,6 +143,7 @@ async fn start_hot_wallet(
             )))
         }
     };
+
     let rpc_address = {
         let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
         cli_args.node_rpc_address.clone().unwrap_or_else(default_addr)
@@ -145,8 +157,11 @@ async fn start_hot_wallet(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
-        node_rpc,
-        wallet_rpc_config,
+        node_rpc.clone(),
+        cli_event_loop::WalletType::Local {
+            node_rpc,
+            wallet_rpc_config,
+        },
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -175,8 +190,69 @@ async fn start_cold_wallet(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
-        wallet_controller::make_cold_wallet_rpc_client(chain_config),
-        wallet_rpc_config,
+        wallet_controller::make_cold_wallet_rpc_client(chain_config.clone()),
+        cli_event_loop::WalletType::Local {
+            node_rpc: wallet_controller::make_cold_wallet_rpc_client(chain_config),
+            wallet_rpc_config,
+        },
+    )
+    .await?;
+    Ok(repl_handle.join().expect("Should not panic")?)
+}
+
+async fn connect_to_rpc_wallet(
+    cli_args: CliArgs,
+    chain_type: ChainType,
+    mode: Mode,
+    output: impl ConsoleOutput,
+    input: impl ConsoleInput,
+    chain_config: Arc<ChainConfig>,
+    in_top_x_mb: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+    let rpc_auth = match (
+        &cli_args.wrpc_cookie_file,
+        &cli_args.wrpc_username,
+        &cli_args.wrpc_password,
+    ) {
+        (None, None, None) => {
+            let cookie_file_path =
+                default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+            RpcAuthData::Cookie { cookie_file_path }
+        }
+        (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
+            cookie_file_path: cookie_file_path.into(),
+        },
+        (None, Some(username), Some(password)) => RpcAuthData::Basic {
+            username: username.clone(),
+            password: password.clone(),
+        },
+        _ => {
+            return Err(Box::new(WalletCliError::<ColdWalletClient>::InvalidConfig(
+                "Invalid RPC cookie/username/password combination".to_owned(),
+            )))
+        }
+    };
+
+    let rpc_address = {
+        let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
+        cli_args.node_rpc_address.clone().unwrap_or_else(default_addr)
+    };
+    let remote_socket_address = cli_args.wrpc_address.clone().expect("checked");
+    let (repl_handle, _wallet_rpc_config) =
+        setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
+
+    let node_rpc = wallet_controller::make_rpc_client(rpc_address, rpc_auth.clone()).await?;
+    cli_event_loop::run(
+        &chain_config.clone(),
+        event_rx,
+        in_top_x_mb,
+        node_rpc,
+        cli_event_loop::WalletType::Remote {
+            remote_socket_address,
+            rpc_auth,
+        },
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)

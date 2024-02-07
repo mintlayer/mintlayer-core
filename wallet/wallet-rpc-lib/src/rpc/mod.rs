@@ -48,7 +48,7 @@ use common::{
         Idable,
     },
 };
-pub use interface::{WalletNodeRpcServer, WalletRpcServer};
+pub use interface::{WalletNodeRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{Balances, BlockInfo},
@@ -159,7 +159,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet.call(|w| w.lock_wallet()).await?
     }
 
-    async fn best_block(&self) -> WRpcResult<BlockInfo, N> {
+    pub async fn best_block(&self) -> WRpcResult<BlockInfo, N> {
         let res = self.wallet.call(|w| Ok::<_, RpcError<N>>(w.best_block())).await??;
         Ok(BlockInfo::from_tuple(res))
     }

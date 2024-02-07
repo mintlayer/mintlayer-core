@@ -7570,6 +7570,7 @@ dependencies = [
  "utils",
  "wallet",
  "wallet-controller",
+ "wallet-rpc-client",
  "wallet-rpc-lib",
  "wallet-storage",
  "wallet-test-node",
@@ -7605,6 +7606,32 @@ dependencies = [
  "wallet-storage",
  "wallet-types",
  "zeroize",
+]
+
+[[package]]
+name = "wallet-rpc-client"
+version = "0.3.0"
+dependencies = [
+ "async-trait",
+ "base64 0.21.7",
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "jsonrpsee",
+ "logging",
+ "node-comm",
+ "node-lib",
+ "p2p-types",
+ "rpc",
+ "serde_json",
+ "serialization",
+ "subsystem",
+ "thiserror",
+ "tokio",
+ "tower",
+ "wallet-controller",
+ "wallet-rpc-lib",
+ "wallet-types",
 ]
 
 [[package]]
