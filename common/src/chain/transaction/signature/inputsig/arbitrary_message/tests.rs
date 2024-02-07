@@ -57,8 +57,9 @@ fn sign_verify_supported_destinations(#[case] seed: Seed) {
     let destination_pub_key = Destination::PublicKey(public_key);
 
     for dest in [&destination_addr, &destination_pub_key] {
-        let sig = SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
-            .unwrap();
+        let sig =
+            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
+                .unwrap();
         let ver_result = sig.verify_signature(&chain_config, dest, &message_challenge);
         assert_eq!(ver_result, Ok(()));
     }
@@ -79,14 +80,14 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
     let message_challenge = produce_message_challenge(&message);
 
     let random_raw_sig: Vec<u8> = (1..100).map(|_| rng.gen()).collect();
-    let random_sig = SignedArbitraryMessage {
+    let random_sig = ArbitraryMessageSignature {
         raw_signature: random_raw_sig,
     };
 
     // Destination::ClassicMultisig can't be used by produce_uniparty_signature.
     let destination = Destination::ClassicMultisig(PublicKeyHash::from(&public_key));
     let sig_err =
-        SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
+        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
             .unwrap_err();
     assert_eq!(
         sig_err,
@@ -96,7 +97,7 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
     // Destination::ScriptHash is unsupported
     let destination = Destination::ScriptHash(Id::<_>::new(H256::random_using(&mut rng)));
     let sig_err =
-        SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
+        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
             .unwrap_err();
     assert_eq!(sig_err, SignArbitraryMessageError::Unsupported);
     // Verifying a random signature should also produce an "Unsupported" error.
@@ -108,7 +109,7 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
     // Destination::AnyoneCanSpend makes no sense for this functionality.
     let destination = Destination::AnyoneCanSpend;
     let sig_err =
-        SignedArbitraryMessage::produce_uniparty_signature(&private_key, &destination, &message)
+        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
             .unwrap_err();
     assert_eq!(
         sig_err,
@@ -208,9 +209,12 @@ fn verify_wrong_destination(#[case] seed: Seed) {
     ];
 
     for (sign_dest, verify_dest, check_func) in test_data {
-        let sig =
-            SignedArbitraryMessage::produce_uniparty_signature(&private_key, sign_dest, &message)
-                .unwrap();
+        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+            &private_key,
+            sign_dest,
+            &message,
+        )
+        .unwrap();
         let ver_result = sig.verify_signature(&chain_config, verify_dest, &message_challenge);
         check_func(ver_result);
     }
@@ -236,8 +240,9 @@ fn verify_corrupted_message(#[case] seed: Seed) {
     let destination_pub_key = Destination::PublicKey(public_key);
 
     for dest in [&destination_addr, &destination_pub_key] {
-        let sig = SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
-            .unwrap();
+        let sig =
+            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
+                .unwrap();
         let ver_result = sig.verify_signature(&chain_config, dest, &corrupted_message_challenge);
         assert_eq!(
             ver_result,
@@ -265,7 +270,7 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 
     for dest in [&destination_addr, &destination_pub_key] {
         let mut sig =
-            SignedArbitraryMessage::produce_uniparty_signature(&private_key, dest, &message)
+            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
                 .unwrap();
         flip_random_bit(&mut sig.raw_signature, &mut rng);
 
@@ -344,7 +349,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     }
 
     // Now try the "arbitrary message" signature.
-    let msg_sig = SignedArbitraryMessage::produce_uniparty_signature(
+    let msg_sig = ArbitraryMessageSignature::produce_uniparty_signature(
         &private_key,
         &destination,
         &unhashed_tx_data_to_sign,
@@ -395,21 +400,21 @@ fn signature_with_chosen_text() {
     ////////////////////////////////////////////////////////////
     // Public key hash verification
     ////////////////////////////////////////////////////////////
-    let signature_pubkeyhash = SignedArbitraryMessage::produce_uniparty_signature(
+    let signature_pubkeyhash = ArbitraryMessageSignature::produce_uniparty_signature(
         &private_key,
         &destination_pubkeyhash,
         message,
     )
     .unwrap();
 
-    SignedArbitraryMessage::from_data(signature_pubkeyhash.raw_signature)
+    ArbitraryMessageSignature::from_data(signature_pubkeyhash.raw_signature)
         .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
         .unwrap();
 
     // Ensure the stored signature will always verify correctly
     let signature_pubkeyhash_hex = "00030b84796d1e4f528dc7469c03beda6d9158126818ecf0df28e86354246d3de84900fa947e4e502cfa7d608fca02e826606b3c59e20dd14e2694f14152b2947d683cf2ab8df603c57f9706d87fe81fded47f73727ce316ec33cac01da96791f10dfc";
     let signature_pubkeyhash_bytes = hex::decode(signature_pubkeyhash_hex).unwrap();
-    SignedArbitraryMessage::from_data(signature_pubkeyhash_bytes)
+    ArbitraryMessageSignature::from_data(signature_pubkeyhash_bytes)
         .verify_signature(&chain_config, &destination_pubkeyhash, &message_challenge)
         .unwrap();
     ////////////////////////////////////////////////////////////
@@ -417,20 +422,20 @@ fn signature_with_chosen_text() {
     ////////////////////////////////////////////////////////////
     // Public key verification
     ////////////////////////////////////////////////////////////
-    let signature_pub_key = SignedArbitraryMessage::produce_uniparty_signature(
+    let signature_pub_key = ArbitraryMessageSignature::produce_uniparty_signature(
         &private_key,
         &destination_pub_key,
         message,
     )
     .unwrap();
-    SignedArbitraryMessage::from_data(signature_pub_key.raw_signature)
+    ArbitraryMessageSignature::from_data(signature_pub_key.raw_signature)
         .verify_signature(&chain_config, &destination_pub_key, &message_challenge)
         .unwrap();
 
     // Ensure the stored signature will always verify correctly
     let signature_pubkey_hex = "004cf0b83576b35b6684eebcad34b1900d4176d844753665fdf7c042e8cc71d6cfe8a4f9f5c24adfbe8a16e3dead56ea07e2deca4b7bffb1376f04205d6dedbc6e";
     let signature_pubkey_bytes = hex::decode(signature_pubkey_hex).unwrap();
-    SignedArbitraryMessage::from_data(signature_pubkey_bytes)
+    ArbitraryMessageSignature::from_data(signature_pubkey_bytes)
         .verify_signature(&chain_config, &destination_pub_key, &message_challenge)
         .unwrap();
     ////////////////////////////////////////////////////////////

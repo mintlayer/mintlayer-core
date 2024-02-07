@@ -34,7 +34,7 @@ pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::inputsig::arbitrary_message::{
-    SignArbitraryMessageError, SignedArbitraryMessage,
+    ArbitraryMessageSignature, SignArbitraryMessageError,
 };
 use common::chain::signature::DestinationSigError;
 use common::chain::tokens::{
@@ -1397,7 +1397,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         challenge: Vec<u8>,
         destination: Destination,
-    ) -> WalletResult<SignedArbitraryMessage> {
+    ) -> WalletResult<ArbitraryMessageSignature> {
         self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
             account.sign_challenge(challenge, destination, db_tx)
         })

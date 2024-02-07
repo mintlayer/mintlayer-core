@@ -50,7 +50,7 @@ pub enum SignArbitraryMessageError {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SignedArbitraryMessage {
+pub struct ArbitraryMessageSignature {
     raw_signature: Vec<u8>,
 }
 
@@ -67,7 +67,7 @@ pub fn produce_message_challenge(message: &[u8]) -> H256 {
     default_hash(wrapped_message)
 }
 
-impl SignedArbitraryMessage {
+impl ArbitraryMessageSignature {
     pub fn from_data(raw_signature: Vec<u8>) -> Self {
         Self { raw_signature }
     }

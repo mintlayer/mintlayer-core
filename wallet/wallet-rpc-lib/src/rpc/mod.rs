@@ -37,7 +37,7 @@ use common::{
     address::Address,
     chain::{
         signature::inputsig::arbitrary_message::{
-            produce_message_challenge, SignedArbitraryMessage,
+            produce_message_challenge, ArbitraryMessageSignature,
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
@@ -430,7 +430,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         challenge: Vec<u8>,
         address: String,
-    ) -> WRpcResult<SignedArbitraryMessage, N> {
+    ) -> WRpcResult<ArbitraryMessageSignature, N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
         let destination = Address::from_str(&self.chain_config, &address)
             .and_then(|addr| addr.decode_object(&self.chain_config))
@@ -460,7 +460,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .map_err(|_| RpcError::InvalidAddress)?;
 
         let message_challenge = produce_message_challenge(&message);
-        let sig = SignedArbitraryMessage::from_data(signed_challenge);
+        let sig = ArbitraryMessageSignature::from_data(signed_challenge);
         sig.verify_signature(&self.chain_config, &destination, &message_challenge)?;
 
         Ok(())

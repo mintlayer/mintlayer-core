@@ -20,7 +20,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::signature::inputsig::arbitrary_message::SignedArbitraryMessage;
+use common::chain::signature::inputsig::arbitrary_message::ArbitraryMessageSignature;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -1240,14 +1240,14 @@ impl Account {
         message: Vec<u8>,
         destination: Destination,
         db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<SignedArbitraryMessage> {
+    ) -> WalletResult<ArbitraryMessageSignature> {
         let private_key = self
             .key_chain
             .get_private_key_for_destination(&destination, db_tx)?
             .ok_or(WalletError::DestinationNotFromThisWallet)?
             .private_key();
 
-        let sig = SignedArbitraryMessage::produce_uniparty_signature(
+        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
             &destination,
             &message,
