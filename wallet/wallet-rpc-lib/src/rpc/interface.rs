@@ -119,6 +119,7 @@ trait WalletRpc {
     async fn submit_raw_transaction(
         &self,
         tx: HexEncoded<SignedTransaction>,
+        do_not_store: bool,
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<NewTransaction>;
 

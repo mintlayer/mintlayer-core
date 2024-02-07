@@ -728,6 +728,12 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .map_err(ControllerError::WalletError)
     }
 
+    pub fn add_unconfirmed_tx(&mut self, tx: SignedTransaction) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .add_unconfirmed_tx(tx, self.wallet_events)
+            .map_err(ControllerError::WalletError)
+    }
+
     async fn get_current_and_consolidation_fee_rate(
         &mut self,
     ) -> Result<(mempool::FeeRate, mempool::FeeRate), ControllerError<T>> {

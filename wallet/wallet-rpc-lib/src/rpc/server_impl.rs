@@ -185,9 +185,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn submit_raw_transaction(
         &self,
         tx: HexEncoded<SignedTransaction>,
+        do_not_store: bool,
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<NewTransaction> {
-        rpc::handle_result(self.submit_raw_transaction(tx, options).await)
+        rpc::handle_result(self.submit_raw_transaction(tx, do_not_store, options).await)
     }
 
     async fn send_coins(

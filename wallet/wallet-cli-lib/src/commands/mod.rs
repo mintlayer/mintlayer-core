@@ -656,6 +656,9 @@ pub enum WalletCommand {
     SubmitTransaction {
         /// Hex encoded transaction.
         transaction: HexEncoded<SignedTransaction>,
+        /// Do not store the transaction in the wallet
+        #[arg(long = "do-not-store", default_value_t = false)]
+        do_not_store: bool,
     },
 
     /// Returns the current node's chainstate (block height information and more)
@@ -1390,10 +1393,17 @@ where
                 ))
             }
 
-            WalletCommand::SubmitTransaction { transaction } => {
+            WalletCommand::SubmitTransaction {
+                transaction,
+                do_not_store,
+            } => {
                 let new_tx = self
                     .wallet_rpc
-                    .submit_raw_transaction(transaction, TxOptionsOverrides::default())
+                    .submit_raw_transaction(
+                        transaction,
+                        do_not_store,
+                        TxOptionsOverrides::default(),
+                    )
                     .await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
