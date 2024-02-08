@@ -90,7 +90,7 @@ pub struct CliArgs {
     pub commands_file: Option<PathBuf>,
 
     /// Preserve history file between application runs.
-    /// This can be very insecure, use at your own risk!
+    /// This can be very insecure as it also stores things like the seed-phrase, use at your own risk!
     #[clap(long)]
     pub history_file: Option<PathBuf>,
 
