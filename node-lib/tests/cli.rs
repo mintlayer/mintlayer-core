@@ -16,7 +16,7 @@
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
 use common::chain::config::create_testnet;
-use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+use p2p::types::network_address::NetworkAddressWithOptionalPort;
 use tempfile::TempDir;
 
 use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
@@ -101,8 +101,8 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_socks5_proxy = "socks5_proxy";
     let p2p_disable_noise = false;
-    let p2p_boot_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
-    let p2p_reserved_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
+    let p2p_boot_node: NetworkAddressWithOptionalPort = "127.0.0.1".parse().unwrap();
+    let p2p_reserved_node: NetworkAddressWithOptionalPort = "127.0.0.1".parse().unwrap();
     let p2p_max_inbound_connections = 123;
     let p2p_discouragement_threshold = 3;
     let p2p_discouragement_duration = 234;

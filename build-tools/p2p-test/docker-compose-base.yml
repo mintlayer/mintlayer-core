@@ -3,11 +3,25 @@ services:
     build:
       context: ../..
       dockerfile: build-tools/p2p-test/Dockerfile
+    # Note:
+    # 1) For ORDINARY_NODES_LIST, we can't just pass container names in --p2p-boot-node, because
+    # some of the containers may not have started yet; the name resolution would fail in this case
+    # and the node would fail to start.
+    # By using 'dig', we pass --p2p-boot-node only for those containers that have already started.
+    # 2) The node in SPECIAL_NODE is supposed to be started earlier than everything else, so we
+    # pass its name directly, to test that name resolution works.
+    # Also note that we pass it as a reserved node; this is needed because for non-reserved
+    # addresses only one outbound connection is allowed per address group and all our nodes
+    # are in the same address group.
+    # 3) The "--p2p-force-dns-query-if-no-global-addresses-known=true" option is not currently
+    # needed, because the "special" node will start without --p2p-boot-node arguments, which will
+    # force an early dns query; "ordinary" nodes should be able to obtain those addresses from
+    # the "special" one.
     command: bash -c "
         node-daemon testnet \
-            --rpc-bind-address 0.0.0.0:$RPC_PORT \
-            $(dig +short $NODES_LIST | xargs printf '--p2p-boot-node %s ') \
-            --p2p-force-dns-query-if-no-global-addresses-known true \
+            $COMMON_NODE_ARGS \
+            $(dig +short $ORDINARY_NODES_LIST | xargs printf '--p2p-boot-node %s ') \
+            --p2p-reserved-node $SPECIAL_NODE \
       "
     environment:
       - RUST_LOG

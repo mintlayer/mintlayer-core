@@ -22,7 +22,7 @@ use p2p::{
     ban_config::BanConfig,
     config::{NodeType, P2pConfig},
     peer_manager::config::PeerManagerConfig,
-    types::ip_or_socket_address::IpOrSocketAddress,
+    types::{network_address::NetworkAddressWithOptionalPort, resolvable_name::resolve_all},
 };
 
 /// A node type.
@@ -66,9 +66,9 @@ pub struct P2pConfigFile {
     /// Disable p2p encryption (for tests only).
     pub disable_noise: Option<bool>,
     /// Optional list of boot node addresses to connect.
-    pub boot_nodes: Option<Vec<IpOrSocketAddress>>,
+    pub boot_nodes: Option<Vec<NetworkAddressWithOptionalPort>>,
     /// Optional list of reserved node addresses to connect.
-    pub reserved_nodes: Option<Vec<IpOrSocketAddress>>,
+    pub reserved_nodes: Option<Vec<NetworkAddressWithOptionalPort>>,
     /// Optional list of whitelisted addresses.
     pub whitelisted_addresses: Option<Vec<IpAddr>>,
     /// Maximum allowed number of inbound connections.
@@ -95,8 +95,8 @@ pub struct P2pConfigFile {
     pub force_dns_query_if_no_global_addresses_known: Option<bool>,
 }
 
-impl From<P2pConfigFile> for P2pConfig {
-    fn from(config_file: P2pConfigFile) -> Self {
+impl P2pConfigFile {
+    pub async fn into_p2p_config(self) -> p2p::Result<P2pConfig> {
         let P2pConfigFile {
             bind_addresses,
             socks5_proxy,
@@ -114,14 +114,17 @@ impl From<P2pConfigFile> for P2pConfig {
             sync_stalling_timeout,
             node_type,
             force_dns_query_if_no_global_addresses_known,
-        } = config_file;
+        } = self;
 
-        P2pConfig {
+        let boot_nodes = resolve_all(boot_nodes.unwrap_or_default().into_iter()).await?;
+        let reserved_nodes = resolve_all(reserved_nodes.unwrap_or_default().into_iter()).await?;
+
+        Ok(P2pConfig {
             bind_addresses: bind_addresses.unwrap_or_default(),
             socks5_proxy,
             disable_noise,
-            boot_nodes: boot_nodes.unwrap_or_default(),
-            reserved_nodes: reserved_nodes.unwrap_or_default(),
+            boot_nodes,
+            reserved_nodes,
             whitelisted_addresses: whitelisted_addresses.unwrap_or_default(),
             ban_config: BanConfig {
                 discouragement_threshold: discouragement_threshold.into(),
@@ -171,6 +174,6 @@ impl From<P2pConfigFile> for P2pConfig {
             },
             protocol_config: Default::default(),
             peer_handshake_timeout: Default::default(),
-        }
+        })
     }
 }

@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
+use p2p_types::{
+    resolvable_name::NameResolutionError, services::Services, socket_address::SocketAddress, PeerId,
+};
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
@@ -170,6 +172,8 @@ pub enum P2pError {
     MempoolError(#[from] MempoolError),
     #[error("Message codec error: {0}")]
     MessageCodecError(#[from] MessageCodecError),
+    #[error("Name resolution error: {0}")]
+    NameResolutionError(#[from] NameResolutionError),
 }
 
 impl From<DialError> for P2pError {
@@ -229,6 +233,7 @@ impl BanScore for P2pError {
             } => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
             P2pError::MessageCodecError(_) => 0,
+            P2pError::NameResolutionError(_) => 0,
         }
     }
 }
@@ -286,7 +291,8 @@ impl TryAsRef<storage::Error> for P2pError {
                 actual_version: _,
             }
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_) => None,
+            | P2pError::MessageCodecError(_)
+            | P2pError::NameResolutionError(_) => None,
             P2pError::StorageFailure(err) => Some(err),
         }
     }

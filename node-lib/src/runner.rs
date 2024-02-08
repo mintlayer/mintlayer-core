@@ -137,7 +137,8 @@ async fn initialize(
             | P2pError::InvalidConfigurationValue(_)
             | P2pError::InvalidStorageState(_)
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_) => false,
+            | P2pError::MessageCodecError(_)
+            | P2pError::NameResolutionError(_) => false,
         });
 
         if is_version_mismatch {
@@ -149,9 +150,10 @@ async fn initialize(
             storage_load_result?
         }
     };
+    let p2p_config = node_config.p2p.unwrap_or_default().into_p2p_config().await?;
     let p2p = p2p::make_p2p(
         Arc::clone(&chain_config),
-        Arc::new(node_config.p2p.unwrap_or_default().into()),
+        Arc::new(p2p_config),
         subsystem::Handle::clone(&chainstate),
         subsystem::Handle::clone(&mempool),
         Default::default(),

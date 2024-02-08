@@ -20,11 +20,12 @@ use std::{
     net::{IpAddr, SocketAddr},
     num::NonZeroU64,
     path::PathBuf,
+    str::FromStr,
 };
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
-use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+use p2p::types::network_address::NetworkAddressWithOptionalPort;
 use utils::default_data_dir::default_data_dir_common;
 
 use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
@@ -121,12 +122,29 @@ pub struct RunOptions {
     pub p2p_disable_noise: Option<bool>,
 
     /// Optional list of boot node addresses to connect.
-    #[clap(long, value_name = "NODE")]
-    pub p2p_boot_node: Option<Vec<IpOrSocketAddress>>,
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "NODE",
+        env = "MINTLAYER_P2P_BOOT_NODE",
+        // Note: comma is the default separator, but we have to specify it explicitly,
+        // because the vec is wrapped in Option.
+        // FIXME: get rid of Option?
+        value_delimiter(','),
+        value_parser(NetworkAddressWithOptionalPort::from_str)
+    )]
+    pub p2p_boot_node: Option<Vec<NetworkAddressWithOptionalPort>>,
 
     /// Optional list of reserved node addresses to connect.
-    #[clap(long, value_name = "NODE")]
-    pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "NODE",
+        env = "MINTLAYER_P2P_RESERVED_NODE",
+        value_delimiter(','),
+        value_parser(NetworkAddressWithOptionalPort::from_str)
+    )]
+    pub p2p_reserved_node: Option<Vec<NetworkAddressWithOptionalPort>>,
 
     /// Optional list of whitelisted addresses.
     #[clap(long, value_name = "ADDR")]
@@ -168,6 +186,7 @@ pub struct RunOptions {
 
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
+    // FIXME: remove it?
     #[clap(long)]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,

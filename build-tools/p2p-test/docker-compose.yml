@@ -10,6 +10,9 @@ services:
       - data01:$DATA_DIR_IN_CONTAINER
     ports:
       - '40001:$RPC_PORT'
+    # node01 is the "special" node that starts without peers; other containers depend on node01,
+    # so it will be started earlier than any other node.
+    command: node-daemon testnet $COMMON_NODE_ARGS
 
   node02:
     extends:
@@ -20,6 +23,8 @@ services:
       - data02:$DATA_DIR_IN_CONTAINER
     ports:
       - '40002:$RPC_PORT'
+    depends_on:
+      - node01
 
   node03:
     extends:
@@ -30,6 +35,8 @@ services:
       - data03:$DATA_DIR_IN_CONTAINER
     ports:
       - '40003:$RPC_PORT'
+    depends_on:
+      - node01
 
   node04:
     extends:
@@ -40,6 +47,8 @@ services:
       - data04:$DATA_DIR_IN_CONTAINER
     ports:
       - '40004:$RPC_PORT'
+    depends_on:
+      - node01
 
   node05:
     extends:
@@ -50,6 +59,8 @@ services:
       - data05:$DATA_DIR_IN_CONTAINER
     ports:
       - '40005:$RPC_PORT'
+    depends_on:
+      - node01
 
   node06:
     extends:
@@ -60,6 +71,8 @@ services:
       - data06:$DATA_DIR_IN_CONTAINER
     ports:
       - '40006:$RPC_PORT'
+    depends_on:
+      - node01
 
   node07:
     extends:
@@ -70,6 +83,8 @@ services:
       - data07:$DATA_DIR_IN_CONTAINER
     ports:
       - '40007:$RPC_PORT'
+    depends_on:
+      - node01
 
   node08:
     extends:
@@ -80,6 +95,8 @@ services:
       - data08:$DATA_DIR_IN_CONTAINER
     ports:
       - '40008:$RPC_PORT'
+    depends_on:
+      - node01
 
   node09:
     extends:
@@ -90,6 +107,8 @@ services:
       - data09:$DATA_DIR_IN_CONTAINER
     ports:
       - '40009:$RPC_PORT'
+    depends_on:
+      - node01
 
   node10:
     extends:
@@ -100,6 +119,8 @@ services:
       - data10:$DATA_DIR_IN_CONTAINER
     ports:
       - '40010:$RPC_PORT'
+    depends_on:
+      - node01
 
   node11:
     extends:
@@ -110,6 +131,8 @@ services:
       - data11:$DATA_DIR_IN_CONTAINER
     ports:
       - '40011:$RPC_PORT'
+    depends_on:
+      - node01
 
   node12:
     extends:
@@ -120,6 +143,8 @@ services:
       - data12:$DATA_DIR_IN_CONTAINER
     ports:
       - '40012:$RPC_PORT'
+    depends_on:
+      - node01
 
   node13:
     extends:
@@ -130,6 +155,8 @@ services:
       - data13:$DATA_DIR_IN_CONTAINER
     ports:
       - '40013:$RPC_PORT'
+    depends_on:
+      - node01
 
   node14:
     extends:
@@ -140,6 +167,8 @@ services:
       - data14:$DATA_DIR_IN_CONTAINER
     ports:
       - '40014:$RPC_PORT'
+    depends_on:
+      - node01
 
   node15:
     extends:
@@ -150,6 +179,8 @@ services:
       - data15:$DATA_DIR_IN_CONTAINER
     ports:
       - '40015:$RPC_PORT'
+    depends_on:
+      - node01
 
 volumes:
   data01:
