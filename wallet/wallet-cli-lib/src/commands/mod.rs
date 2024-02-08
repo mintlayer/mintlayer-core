@@ -556,8 +556,7 @@ pub enum WalletCommand {
         /// Notice that this only works if the selected account in this wallet owns the decommission key.
         pool_id: String,
         /// The address that will be receiving the staker's balance (both pledge and proceeds from staking).
-        /// If not specified, a new receiving address will be created by this wallet's selected account
-        output_address: Option<String>,
+        output_address: String,
     },
 
     /// Create a request to decommission a pool. This assumes that the decommission key is owned
@@ -569,8 +568,7 @@ pub enum WalletCommand {
         /// The pool id of the pool to be decommissioned.
         pool_id: String,
         /// The address that will be receiving the staker's balance (both pledge and proceeds from staking).
-        /// If not specified, a new receiving address will be created by this wallet's selected account
-        output_address: Option<String>,
+        output_address: String,
     },
 
     /// Rescan the blockchain and re-detect all operations related to the selected account in this wallet
@@ -1859,7 +1857,12 @@ where
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
                     .wallet_rpc
-                    .decommission_stake_pool(selected_account, pool_id, output_address, self.config)
+                    .decommission_stake_pool(
+                        selected_account,
+                        pool_id,
+                        Some(output_address),
+                        self.config,
+                    )
                     .await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
@@ -1874,7 +1877,7 @@ where
                     .decommission_stake_pool_request(
                         selected_account,
                         pool_id,
-                        output_address,
+                        Some(output_address),
                         self.config,
                     )
                     .await?;
