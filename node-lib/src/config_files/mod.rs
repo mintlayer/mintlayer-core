@@ -15,7 +15,7 @@
 
 //! The node configuration.
 
-pub const DEFAULT_HTTP_RPC_ENABLED: bool = true;
+pub const DEFAULT_RPC_ENABLED: bool = true;
 
 pub use self::{
     chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
@@ -183,7 +183,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         force_dns_query_if_no_global_addresses_known,
     } = config;
 
-    let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
+    let bind_addresses = options.p2p_bind_address.clone().or(bind_addresses);
     let socks5_proxy = options.p2p_socks5_proxy.clone().or(socks5_proxy);
     let disable_noise = options.p2p_disable_noise.or(disable_noise);
     let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);

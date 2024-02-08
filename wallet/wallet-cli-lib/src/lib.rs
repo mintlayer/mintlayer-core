@@ -110,9 +110,9 @@ async fn start_hot_wallet(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     let rpc_auth = match (
-        &cli_args.rpc_cookie_file,
-        &cli_args.rpc_username,
-        &cli_args.rpc_password,
+        &cli_args.node_rpc_cookie_file,
+        &cli_args.node_rpc_username,
+        &cli_args.node_rpc_password,
     ) {
         (None, None, None) => {
             let cookie_file_path =
@@ -134,7 +134,7 @@ async fn start_hot_wallet(
     };
     let rpc_address = {
         let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-        cli_args.rpc_address.clone().unwrap_or_else(default_addr)
+        cli_args.node_rpc_address.clone().unwrap_or_else(default_addr)
     };
 
     let (repl_handle, wallet_rpc_config) =
@@ -229,7 +229,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
             args.wallet_rpc_username,
             args.wallet_rpc_password,
             args.wallet_rpc_no_authentication,
-            args.wallet_rpc_address,
+            args.wallet_rpc_bind_address,
             chain_type,
         )?)
     } else {

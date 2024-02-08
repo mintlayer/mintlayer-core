@@ -109,7 +109,7 @@ pub struct RunOptions {
 
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
-    pub p2p_addr: Option<Vec<String>>,
+    pub p2p_bind_address: Option<Vec<String>>,
 
     /// Connect through SOCKS5 proxy.
     #[clap(long)]
@@ -179,13 +179,13 @@ pub struct RunOptions {
     #[clap(long, overrides_with("max_tip_age"))]
     pub max_tip_age: Option<u64>,
 
-    /// Address to bind http RPC to.
+    /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
-    pub http_rpc_addr: Option<SocketAddr>,
+    pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
     #[clap(long)]
-    pub http_rpc_enabled: Option<bool>,
+    pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.

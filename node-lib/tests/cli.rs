@@ -77,7 +77,7 @@ fn create_default_config() {
     );
 
     assert_eq!(
-        config.rpc.unwrap_or_default().http_bind_address,
+        config.rpc.unwrap_or_default().bind_address,
         Some(SocketAddr::from_str("127.0.0.1:13030").unwrap())
     );
 }
@@ -112,7 +112,7 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let p2p_force_dns_query_if_no_global_addresses_known = true;
-    let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let rpc_bind_address = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
     let max_tip_age = 1000;
@@ -129,7 +129,7 @@ fn read_config_override_values() {
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
-        p2p_addr: Some(vec![p2p_addr.to_owned()]),
+        p2p_bind_address: Some(vec![p2p_addr.to_owned()]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
         p2p_disable_noise: Some(p2p_disable_noise),
         p2p_boot_node: Some(vec![p2p_boot_node.clone()]),
@@ -147,8 +147,8 @@ fn read_config_override_values() {
             p2p_force_dns_query_if_no_global_addresses_known,
         ),
         max_tip_age: Some(max_tip_age),
-        http_rpc_addr: Some(http_rpc_addr),
-        http_rpc_enabled: Some(true),
+        rpc_bind_address: Some(rpc_bind_address),
+        rpc_enabled: Some(true),
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
@@ -244,10 +244,10 @@ fn read_config_override_values() {
     );
 
     assert_eq!(
-        config.rpc.clone().unwrap().http_bind_address,
-        Some(http_rpc_addr)
+        config.rpc.clone().unwrap().bind_address,
+        Some(rpc_bind_address)
     );
-    assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
+    assert!(config.rpc.clone().unwrap().rpc_enabled.unwrap());
 
     assert_eq!(
         config.rpc.as_ref().unwrap().username.as_deref(),

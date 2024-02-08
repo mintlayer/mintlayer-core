@@ -96,8 +96,8 @@ class TestNode():
         self.version = version
 
         # Calculate RPC address to be passed into the command line
-        rpc_address = rpc_addr(self.index)
-        p2p_addr = p2p_url(self.index)
+        rpc_bind_address = rpc_addr(self.index)
+        p2p_bind_address = p2p_url(self.index)
 
         # For functional tests, we don't want to fail when blocks are too old
         max_tip_age = 60 * 60 * 24 * 365 * 100
@@ -113,8 +113,8 @@ class TestNode():
             self.binary,
             f"--datadir={datadir}",
             "regtest",
-            f"--http-rpc-addr={rpc_address}",
-            f"--p2p-addr={p2p_addr}",
+            f"--rpc-bind-address={rpc_bind_address}",
+            f"--p2p-bind-address={p2p_bind_address}",
             f"--max-tip-age={max_tip_age}",
             f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
             #"-X",
