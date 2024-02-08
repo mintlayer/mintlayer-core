@@ -79,10 +79,10 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
                 ))
             }
         };
-        let default_http_rpc_addr =
-            || default_rpc_config(&chain_config).http_bind_address.expect("Can't fail");
+        let default_rpc_bind_address =
+            || default_rpc_config(&chain_config).bind_address.expect("Can't fail");
 
-        let rpc_address = args.rpc_address.unwrap_or_else(default_http_rpc_addr);
+        let rpc_address = args.rpc_address.unwrap_or_else(default_rpc_bind_address);
 
         make_rpc_client(rpc_address.to_string(), rpc_auth)
             .await

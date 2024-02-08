@@ -42,7 +42,7 @@ use test_rpc_functions::make_rpc_test_functions;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
-    config_files::{NodeConfigFile, DEFAULT_HTTP_RPC_ENABLED},
+    config_files::{NodeConfigFile, DEFAULT_RPC_ENABLED},
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
@@ -186,7 +186,7 @@ async fn initialize(
 
     // RPC subsystem
     let rpc_config = node_config.rpc.unwrap_or_default();
-    if rpc_config.http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED) {
+    if rpc_config.rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
             rpc_config.username.as_deref(),
@@ -196,7 +196,7 @@ async fn initialize(
 
         let rpc = rpc::Builder::new(
             rpc_config
-                .http_bind_address
+                .bind_address
                 .unwrap_or_else(|| RpcConfigFile::default_bind_address(&chain_config)),
             Some(rpc_creds),
         )
@@ -298,7 +298,7 @@ fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
 
 /// For the GUI, we configure different defaults, such as disabling RPC server binding
 fn set_defaults_for_gui_mode(mut opts: RunOptions) -> RunOptions {
-    opts.http_rpc_enabled = Some(opts.http_rpc_enabled.unwrap_or(false));
+    opts.rpc_enabled = Some(opts.rpc_enabled.unwrap_or(false));
     opts
 }
 

@@ -19,18 +19,18 @@ use crate::RunOptions;
 use chainstate_launcher::ChainConfig;
 use serde::{Deserialize, Serialize};
 
-use super::DEFAULT_HTTP_RPC_ENABLED;
+use super::DEFAULT_RPC_ENABLED;
 
 /// The rpc subsystem configuration.
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RpcConfigFile {
-    /// Address to bind http RPC to
-    pub http_bind_address: Option<SocketAddr>,
-
     /// Whether http RPC is enabled
-    pub http_enabled: Option<bool>,
+    pub rpc_enabled: Option<bool>,
+
+    /// Address to bind http RPC to
+    pub bind_address: Option<SocketAddr>,
 
     /// Username for RPC server basic authorization
     pub username: Option<String>,
@@ -53,30 +53,30 @@ impl RpcConfigFile {
         config_file: RpcConfigFile,
         options: &RunOptions,
     ) -> RpcConfigFile {
-        let default_http_rpc_addr = Self::default_bind_address(chain_config);
+        let default_rpc_bind_address = Self::default_bind_address(chain_config);
 
         let RpcConfigFile {
-            http_bind_address,
-            http_enabled,
+            bind_address,
+            rpc_enabled: http_enabled,
             username,
             password,
             cookie_file,
         } = config_file;
 
-        let http_bind_address = options
-            .http_rpc_addr
-            .unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
+        let bind_address = options
+            .rpc_bind_address
+            .unwrap_or_else(|| bind_address.unwrap_or(default_rpc_bind_address));
         let http_enabled = options
-            .http_rpc_enabled
-            .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
+            .rpc_enabled
+            .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
         let username = username.or(options.rpc_username.clone());
         let password = password.or(options.rpc_password.clone());
         let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
         RpcConfigFile {
-            http_bind_address: Some(http_bind_address),
-            http_enabled: Some(http_enabled),
+            bind_address: Some(bind_address),
+            rpc_enabled: Some(http_enabled),
             username,
             password,
             cookie_file,

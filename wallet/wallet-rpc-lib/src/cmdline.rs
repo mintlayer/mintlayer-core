@@ -42,10 +42,6 @@ pub struct Args {
     #[arg()]
     wallet_path: Option<PathBuf>,
 
-    /// Address to bind the RPC interface to
-    #[arg(long, value_name("ADDR"))]
-    wallet_rpc_address: Option<String>,
-
     /// Chain type to use
     #[arg(
         long,
@@ -75,6 +71,10 @@ pub struct Args {
     #[arg(long, value_name("PASS"), requires("node_username"))]
     node_password: Option<String>,
 
+    /// Address to bind the wallet RPC interface to
+    #[arg(long, value_name("ADDR"))]
+    rpc_bind_address: Option<String>,
+
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
     #[arg(long, value_name("PATH"), conflicts_with_all(["rpc_username", "rpc_password"]))]
@@ -102,7 +102,7 @@ impl Args {
     pub fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
             wallet_path: wallet_file,
-            wallet_rpc_address,
+            rpc_bind_address: wallet_rpc_address,
             chain_type,
             node_rpc_address,
             node_cookie_file,
