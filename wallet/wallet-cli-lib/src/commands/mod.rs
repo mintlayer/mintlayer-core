@@ -432,8 +432,8 @@ pub enum WalletCommand {
     /// and then broadcast through any hot wallet.
     /// In summary, this creates a transaction with one input and two outputs,
     /// with one of the outputs being change returned to the same owner of the input.
-    #[clap(name = "transaction-send-from-cold-input")]
-    SendFromColdInput {
+    #[clap(name = "transaction-create-from-cold-input")]
+    CreateTxFromColdInput {
         /// The receiving address of the coins
         address: String,
         /// The amount to be sent, in decimal format
@@ -1730,7 +1730,7 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
-            WalletCommand::SendFromColdInput {
+            WalletCommand::CreateTxFromColdInput {
                 address,
                 amount,
                 utxo,

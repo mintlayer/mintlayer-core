@@ -150,9 +150,9 @@ class WalletColdSend(BitcoinTestFramework):
             hot_wallet_address = await wallet.new_address()
 
             if cold_wallet_new_change:
-                output = await wallet.send_from_cold_address(hot_wallet_address, to_send, UtxoOutpoint(tx_id, 0), cold_wallet_new_change)
+                output = await wallet.create_from_cold_address(hot_wallet_address, to_send, UtxoOutpoint(tx_id, 0), cold_wallet_new_change)
             else:
-                output = await wallet.send_from_cold_address(hot_wallet_address, to_send, UtxoOutpoint(tx_id, 0))
+                output = await wallet.create_from_cold_address(hot_wallet_address, to_send, UtxoOutpoint(tx_id, 0))
 
             assert_in("Send transaction created", output)
             send_req = output.split("\n")[2]
