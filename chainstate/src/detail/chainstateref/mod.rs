@@ -854,8 +854,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             self.get_ancestor(&prev_block_index, skip_ht).unwrap_or_else(err).block_id()
         };
 
+        let chain_transaction_count =
+            prev_block_index.chain_transaction_count() + block.transactions().len() as u128;
+
         // Set Time Max
-        let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
+        let chain_time_max =
+            std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         let current_block_proof =
             self.get_block_proof(prev_block_index.block_timestamp(), block).log_err()?;
@@ -869,7 +873,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             chain_trust,
             some_ancestor,
             height,
-            time_max,
+            chain_time_max,
+            chain_transaction_count,
             block_status,
         );
         Ok(block_index)

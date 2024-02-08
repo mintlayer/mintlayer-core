@@ -307,6 +307,7 @@ mod tests {
                         best_block,
                         height.into(),
                         timestamp,
+                        0,
                         BlockStatus::new(),
                     );
                     best_block = block.get_id().into();
@@ -657,6 +658,7 @@ mod tests {
             random_block_id.into(),
             BlockHeight::new(1),
             timestamp,
+            0,
             BlockStatus::new(),
         );
 
@@ -956,6 +958,7 @@ mod tests {
                     tip_id,
                     tip_height,
                     block_timestamp,
+                    0,
                     BlockStatus::new(),
                 );
                 block_index_handle.add_block_index(tip_height, new_tip);
