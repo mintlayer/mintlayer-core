@@ -28,7 +28,7 @@ impl Locator {
     }
 
     /// Get iterator over locator entries
-    pub fn iter(&self) -> impl Iterator<Item = &Id<GenBlock>> + ExactSizeIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Id<GenBlock>> {
         self.0.iter()
     }
 

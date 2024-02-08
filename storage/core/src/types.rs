@@ -44,7 +44,7 @@ impl DbMapCount {
     }
 
     /// Iterator over all database indices
-    pub fn indices(self) -> impl Iterator<Item = DbMapId> + ExactSizeIterator {
+    pub fn indices(self) -> impl ExactSizeIterator<Item = DbMapId> {
         (0..self.0).map(DbMapId::new)
     }
 }
@@ -92,7 +92,7 @@ impl<T> DbMapsData<T> {
     }
 
     /// Convert into iterator over map indices together with associated data
-    pub fn into_iter_with_id(self) -> impl Iterator<Item = (DbMapId, T)> + ExactSizeIterator {
+    pub fn into_iter_with_id(self) -> impl ExactSizeIterator<Item = (DbMapId, T)> {
         self.0.into_iter().enumerate().map(|(i, m)| (DbMapId::new(i), m))
     }
 }
