@@ -151,6 +151,7 @@ BASE_SCRIPTS = [
     'wallet_high_fee.py',
     'wallet_generate_addresses.py',
     'wallet_set_lookahead_size.py',
+    'wallet_connect_to_rpc.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',
