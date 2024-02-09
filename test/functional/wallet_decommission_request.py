@@ -287,10 +287,11 @@ class WalletDecommissionRequest(BitcoinTestFramework):
                 assert_in("Success", await wallet.stop_staking())
 
             # try decommission from hot wallet
-            assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
+            address = await wallet.new_address()
+            assert (await wallet.decommission_stake_pool(pools[0].pool_id, address)).startswith("Wallet error: Wallet error: Failed to completely sign")
 
             # create decommission request
-            decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
+            decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id, address)
             decommission_req = decommission_req_output.split('\n')[2]
 
             # try to sign decommission request from hot wallet
