@@ -109,7 +109,7 @@ pub struct CliArgs {
     pub in_top_x_mb: usize,
 
     /// use the wallet without a connection to a node
-    #[clap(long)]
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
     pub cold_wallet: bool,
 
     /// enable the RPC interface of the wallet (i.e., run a wallet RPC server with the CLI)
@@ -136,22 +136,21 @@ pub struct CliArgs {
     #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]))]
     pub wallet_rpc_no_authentication: bool,
 
-    /// FIXME
     /// Optional RPC address
-    #[clap(long)]
-    pub wrpc_address: Option<String>,
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    pub connect_to_rpc_wallet_address: Option<String>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]
-    pub wrpc_cookie_file: Option<String>,
+    pub connect_to_rpc_wallet_cookie_file: Option<String>,
 
     /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
-    pub wrpc_username: Option<String>,
+    pub connect_to_rpc_wallet_username: Option<String>,
 
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
-    pub wrpc_password: Option<String>,
+    pub connect_to_rpc_wallet_password: Option<String>,
 }
 
 impl From<&Network> for ChainType {

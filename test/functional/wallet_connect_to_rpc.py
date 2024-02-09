@@ -81,7 +81,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet.create_wallet()
 
             # open a new CLI wallet that connects to the previous one through RPC
-            async with WalletCliController(node, self.config, self.log, wallet_args=["--wrpc-address", "127.0.0.1:23134"]) as rpc_wallet:
+            async with WalletCliController(node, self.config, self.log, wallet_args=["--connect-to-rpc-wallet-address", "127.0.0.1:23134"]) as rpc_wallet:
 
                 # check it is on genesis
                 best_block_height = await rpc_wallet.get_best_block_height()
