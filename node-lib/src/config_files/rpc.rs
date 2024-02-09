@@ -57,7 +57,7 @@ impl RpcConfigFile {
 
         let RpcConfigFile {
             bind_address,
-            rpc_enabled: http_enabled,
+            rpc_enabled,
             username,
             password,
             cookie_file,
@@ -66,9 +66,9 @@ impl RpcConfigFile {
         let bind_address = options
             .rpc_bind_address
             .unwrap_or_else(|| bind_address.unwrap_or(default_rpc_bind_address));
-        let http_enabled = options
+        let rpc_enabled = options
             .rpc_enabled
-            .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
+            .unwrap_or_else(|| rpc_enabled.unwrap_or(DEFAULT_RPC_ENABLED));
 
         let username = username.or(options.rpc_username.clone());
         let password = password.or(options.rpc_password.clone());
@@ -76,7 +76,7 @@ impl RpcConfigFile {
 
         RpcConfigFile {
             bind_address: Some(bind_address),
-            rpc_enabled: Some(http_enabled),
+            rpc_enabled: Some(rpc_enabled),
             username,
             password,
             cookie_file,
