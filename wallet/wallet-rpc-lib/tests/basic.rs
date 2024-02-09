@@ -163,7 +163,13 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
             to_send_amount.into_fixedpoint_str(tf.chain_config().coin_decimals());
         let send_to_addr = acct1_addr.address;
         let options = TransactionOptions { in_top_x_mb: 3 };
-        let params = (ACCOUNT0_ARG, send_to_addr, to_send_amount_str, options);
+        let params = (
+            ACCOUNT0_ARG,
+            send_to_addr,
+            to_send_amount_str,
+            Vec::<UtxoOutPoint>::new(),
+            options,
+        );
         wallet_rpc.request("address_send", params).await.unwrap()
     };
 

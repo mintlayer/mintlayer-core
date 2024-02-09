@@ -42,6 +42,9 @@ trait WalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
+    #[method(name = "version")]
+    async fn version(&self) -> rpc::RpcResult<String>;
+
     #[method(name = "wallet_create")]
     async fn create_wallet(
         &self,

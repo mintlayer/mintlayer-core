@@ -360,7 +360,7 @@ def check_trailing_whitespaces():
 def run_checks():
     return all([
         disallow(SCALECODEC_RE, exclude = ['serialization/core', 'merkletree']),
-        disallow(JSONRPSEE_RE, exclude = ['rpc', 'wallet/wallet-node-client']),
+        disallow(JSONRPSEE_RE, exclude = ['rpc', 'wallet/wallet-node-client', 'wallet/wallet-rpc-client']),
         check_local_licenses(),
         check_crate_versions(),
         check_workspace_and_package_versions_equal(),

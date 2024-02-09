@@ -54,6 +54,12 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn version(&self) -> Result<String, Self::Error> {
+        WalletRpcClient::version(&self.http_client)
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn rpc_completed(&self) {
         pending().await
     }

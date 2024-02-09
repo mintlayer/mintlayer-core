@@ -29,7 +29,10 @@ use p2p_types::{
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::{fmt::Debug, str::FromStr, time::Duration};
-use wallet::account::{PartiallySignedTransaction, TxInfo};
+use wallet::{
+    account::{PartiallySignedTransaction, TxInfo},
+    version::get_version,
+};
 use wallet_controller::{
     types::BlockInfo, ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
@@ -66,6 +69,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletEventsRpcSe
 impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer for WalletRpc<N> {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.shutdown())
+    }
+
+    async fn version(&self) -> rpc::RpcResult<String> {
+        Ok(get_version())
     }
 
     async fn create_wallet(

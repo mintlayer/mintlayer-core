@@ -31,7 +31,10 @@ use p2p_types::{
     socket_address::SocketAddress, PeerId,
 };
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
-use wallet::account::{PartiallySignedTransaction, TxInfo};
+use wallet::{
+    account::{PartiallySignedTransaction, TxInfo},
+    version::get_version,
+};
 use wallet_controller::{ConnectedPeer, ControllerConfig};
 use wallet_rpc_lib::{
     types::{
@@ -55,12 +58,6 @@ pub struct WalletRpcHandlesClient<N: Clone> {
     wallet_rpc: WalletRpc<N>,
     server_rpc: Option<rpc::Rpc>,
 }
-
-// impl<N> std::fmt::Debug for WalletRpcHandlesClient<N> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("WalletRpcHandlesClient").finish()
-//     }
-// }
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletRpcHandlesClientError<N: NodeInterface> {
@@ -91,6 +88,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             rpc.shutdown().await;
         }
         Ok(())
+    }
+
+    async fn version(&self) -> Result<String, Self::Error> {
+        Ok(get_version())
     }
 
     async fn rpc_completed(&self) {

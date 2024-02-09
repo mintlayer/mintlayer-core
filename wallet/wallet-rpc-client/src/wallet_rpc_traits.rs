@@ -45,6 +45,8 @@ pub trait WalletInterface {
 
     async fn shutdown(&mut self) -> Result<(), Self::Error>;
 
+    async fn version(&self) -> Result<String, Self::Error>;
+
     async fn rpc_completed(&self);
 
     async fn create_wallet(

@@ -15,14 +15,11 @@
 
 pub mod client_impl;
 
-use crypto::key::hdkd::u31::U31;
 use rpc::new_http_client;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
 
 use crate::wallet_rpc_traits::WalletInterface;
-
-// use crate::wallet_rpc_traits::ColdWalletInterface;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletRpcError {
@@ -54,7 +51,7 @@ impl ClientWalletRpc {
         let client = Self { http_client };
 
         client
-            .get_issued_addresses(U31::ZERO)
+            .version()
             .await
             .map_err(|e| WalletRpcError::InitializationError(Box::new(e)))?;
 
