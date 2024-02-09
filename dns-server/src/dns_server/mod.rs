@@ -21,9 +21,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use common::chain::ChainConfig;
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
+use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
+use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use futures::never::Never;
+use itertools::Itertools;
 use logging::log;
 use tokio::{net::UdpSocket, sync::mpsc};
 use trust_dns_client::{
@@ -42,7 +43,7 @@ use trust_dns_server::{
     store::in_memory::InMemoryAuthority,
     ServerFuture,
 };
-use utils::atomics::RelaxedAtomicU32;
+use utils::{atomics::RelaxedAtomicU32, make_config_setting};
 
 use crate::{
     config::DnsServerConfig, crawler_p2p::crawler::address_data::SoftwareInfo,
@@ -75,17 +76,12 @@ const TTL_IP: u32 = 3600;
 const TTL_NS: u32 = 21600;
 const TTL_SOA: u32 = 21600;
 
-/// Maximum number of IPv4 addresses in result
-const MAX_IPV4_RECORDS: usize = 24;
+make_config_setting!(MaxIpv4RecordsCount, usize, 24);
+make_config_setting!(MaxIpv6RecordsCount, usize, 14);
 
-/// Maximum number of IPv6 addresses in result
-const MAX_IPV6_RECORDS: usize = 14;
-
-/// When publishing addresses, we give preference to nodes that have the same software version as
-/// the dns server itself.
-/// This constant is a number between 0 and 1 that determines how many addresses of same-version
-/// nodes will be returned compared to nodes of any other version.
-const SAME_SOFTWARE_VERSION_PEERS_RATIO: f64 = 0.8;
+pub fn default_min_same_software_version_nodes_per_thousand() -> PerThousand {
+    PerThousand::new(950).expect("Must be valid PerThousand")
+}
 
 impl DnsServer {
     pub async fn new(
@@ -96,11 +92,9 @@ impl DnsServer {
         let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
 
         let auth = Arc::new(AuthorityImpl {
+            config: AuthorityImplConfig::from_dns_server_config(&config),
             chain_config,
             serial: Default::default(),
-            host: config.host.clone(),
-            nameserver: config.nameserver.clone(),
-            mbox: config.mbox.clone(),
             inner,
             ipv4_addrs: Default::default(),
             ipv6_addrs: Default::default(),
@@ -146,13 +140,38 @@ impl DnsServer {
     }
 }
 
+struct AuthorityImplConfig {
+    pub host: Name,
+    pub nameserver: Option<Name>,
+    pub mbox: Option<Name>,
+    pub min_same_software_version_nodes_per_thousand: PerThousand,
+
+    /// Maximum number of IPv4 addresses in result,
+    pub max_ipv4_records: MaxIpv4RecordsCount,
+
+    /// Maximum number of IPv6 addresses in result,
+    pub max_ipv6_records: MaxIpv6RecordsCount,
+}
+
+impl AuthorityImplConfig {
+    pub fn from_dns_server_config(server_config: &DnsServerConfig) -> Self {
+        Self {
+            host: server_config.host.clone(),
+            nameserver: server_config.nameserver.clone(),
+            mbox: server_config.mbox.clone(),
+            min_same_software_version_nodes_per_thousand: server_config
+                .min_same_software_version_nodes_per_thousand,
+            max_ipv4_records: Default::default(),
+            max_ipv6_records: Default::default(),
+        }
+    }
+}
+
 /// Wrapper for InMemoryAuthority that selects random addresses every second
 struct AuthorityImpl {
     chain_config: Arc<ChainConfig>,
+    config: AuthorityImplConfig,
     serial: RelaxedAtomicU32,
-    host: Name,
-    nameserver: Option<Name>,
-    mbox: Option<Name>,
     inner: InMemoryAuthority,
     ipv4_addrs: Mutex<BTreeMap<Ipv4Addr, SoftwareInfo>>,
     ipv6_addrs: Mutex<BTreeMap<Ipv6Addr, SoftwareInfo>>,
@@ -188,7 +207,8 @@ impl AuthorityImpl {
 
         let selected_ipv4_addrs = {
             let all_addrs = &self.ipv4_addrs.lock().expect("mutex must be valid (ipv4_addrs)");
-            let selected_addrs = self.select_addresses(all_addrs, MAX_IPV4_RECORDS, rng);
+            let selected_addrs =
+                self.select_addresses(all_addrs, *self.config.max_ipv4_records, rng);
             log::trace!(
                 "Selected v4 addresses: {:?}",
                 Self::addr_info_for_logging(&selected_addrs, all_addrs)
@@ -198,7 +218,8 @@ impl AuthorityImpl {
 
         let selected_ipv6_addrs = {
             let all_addrs = &self.ipv6_addrs.lock().expect("mutex must be valid (ipv6_addrs)");
-            let selected_addrs = self.select_addresses(all_addrs, MAX_IPV6_RECORDS, rng);
+            let selected_addrs =
+                self.select_addresses(all_addrs, *self.config.max_ipv6_records, rng);
             log::trace!(
                 "Selected v6 addresses: {:?}",
                 Self::addr_info_for_logging(&selected_addrs, all_addrs)
@@ -208,10 +229,11 @@ impl AuthorityImpl {
 
         let mut new_records = BTreeMap::new();
 
-        if let Some(mbox) = self.mbox.as_ref() {
-            let mut soa_rec = RecordSet::with_ttl(self.host.clone(), RecordType::SOA, TTL_SOA);
+        if let Some(mbox) = self.config.mbox.as_ref() {
+            let mut soa_rec =
+                RecordSet::with_ttl(self.config.host.clone(), RecordType::SOA, TTL_SOA);
             soa_rec.add_rdata(RData::SOA(SOA::new(
-                self.host.clone(),
+                self.config.host.clone(),
                 mbox.clone(),
                 new_serial,
                 SOA_REFRESH,
@@ -225,8 +247,8 @@ impl AuthorityImpl {
             );
         }
 
-        if let Some(nameserver) = self.nameserver.as_ref() {
-            let mut ns_rec = RecordSet::with_ttl(self.host.clone(), RecordType::NS, TTL_NS);
+        if let Some(nameserver) = self.config.nameserver.as_ref() {
+            let mut ns_rec = RecordSet::with_ttl(self.config.host.clone(), RecordType::NS, TTL_NS);
             ns_rec.add_rdata(RData::NS(NS(nameserver.clone())));
             new_records.insert(
                 RrKey::new(ns_rec.name().clone().into(), ns_rec.record_type()),
@@ -235,7 +257,7 @@ impl AuthorityImpl {
         }
 
         // A records
-        let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
+        let mut ipv4_rec = RecordSet::with_ttl(self.config.host.clone(), RecordType::A, TTL_IP);
         for ip in selected_ipv4_addrs {
             ipv4_rec.add_rdata(RData::A(ip.into()));
         }
@@ -245,7 +267,7 @@ impl AuthorityImpl {
         );
 
         // AAAA records
-        let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
+        let mut ipv6_rec = RecordSet::with_ttl(self.config.host.clone(), RecordType::AAAA, TTL_IP);
         for ip in selected_ipv6_addrs {
             ipv6_rec.add_rdata(RData::AAAA(ip.into()));
         }
@@ -273,39 +295,56 @@ impl AuthorityImpl {
     ) -> Vec<Addr> {
         let same_software_info = SoftwareInfo::current(&self.chain_config);
 
-        let mut same_version_addrs = addrs
-            .iter()
-            .filter(|(_, software_info)| **software_info == same_software_info)
-            .map(|(addr, _)| addr.clone())
-            .choose_multiple(rng, count);
-        same_version_addrs.shuffle(rng);
+        let (same_version_addrs, other_version_addrs): (Vec<_>, Vec<_>) =
+            addrs.iter().partition_map(|(addr, software_info)| {
+                if *software_info == same_software_info {
+                    itertools::Either::Left(addr.clone())
+                } else {
+                    itertools::Either::Right(addr.clone())
+                }
+            });
 
-        let mut other_version_addrs = addrs
-            .iter()
-            .filter(|(_, software_info)| **software_info != same_software_info)
-            .map(|(addr, _)| addr.clone())
-            .choose_multiple(rng, count);
-        other_version_addrs.shuffle(rng);
+        let mut selected_same_version_addrs =
+            same_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+        selected_same_version_addrs.shuffle(rng);
+
+        let mut selected_other_version_addrs =
+            other_version_addrs.choose_multiple(rng, count).cloned().collect::<Vec<_>>();
+        selected_other_version_addrs.shuffle(rng);
 
         #[allow(clippy::float_arithmetic)]
-        let same_version_addrs_preferred_count =
-            (count as f64 * SAME_SOFTWARE_VERSION_PEERS_RATIO) as usize;
+        let same_version_addrs_preferred_count = {
+            let min_same_software_version_nodes_ratio =
+                self.config.min_same_software_version_nodes_per_thousand.as_f64();
+            let current_same_software_version_nodes_ratio =
+                same_version_addrs.len() as f64 / addrs.len() as f64;
+            let required_same_software_version_nodes_ratio = f64::max(
+                min_same_software_version_nodes_ratio,
+                current_same_software_version_nodes_ratio,
+            );
+
+            (count as f64 * required_same_software_version_nodes_ratio).round() as usize
+        };
 
         let mut result = Vec::with_capacity(count);
 
         // First take the required number of same-version addresses.
-        let addr_count_to_take =
-            std::cmp::min(same_version_addrs_preferred_count, same_version_addrs.len());
-        result.extend(same_version_addrs.drain(..addr_count_to_take));
+        let addr_count_to_take = std::cmp::min(
+            same_version_addrs_preferred_count,
+            selected_same_version_addrs.len(),
+        );
+        result.extend(selected_same_version_addrs.drain(..addr_count_to_take));
 
         // Fill the rest with other-version addresses.
-        let addr_count_to_take = std::cmp::min(count - result.len(), other_version_addrs.len());
-        result.extend(other_version_addrs.drain(..addr_count_to_take));
+        let addr_count_to_take =
+            std::cmp::min(count - result.len(), selected_other_version_addrs.len());
+        result.extend(selected_other_version_addrs.drain(..addr_count_to_take));
 
         // If there is still some space left, fill it with same-version addresses, if any.
         if result.len() < count {
-            let addr_count_to_take = std::cmp::min(count - result.len(), same_version_addrs.len());
-            result.extend(same_version_addrs.drain(..addr_count_to_take));
+            let addr_count_to_take =
+                std::cmp::min(count - result.len(), selected_same_version_addrs.len());
+            result.extend(selected_same_version_addrs.drain(..addr_count_to_take));
         }
 
         result

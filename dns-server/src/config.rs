@@ -16,8 +16,12 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use trust_dns_client::rr::Name;
+
+use common::primitives::per_thousand::PerThousand;
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+
+use crate::dns_server::default_min_same_software_version_nodes_per_thousand;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -57,4 +61,11 @@ pub struct DnsServerConfig {
     /// If set, the SOA record will be added.
     #[clap(long)]
     pub mbox: Option<Name>,
+
+    /// When publishing addresses, we give preference to nodes that have the same software version
+    /// as the dns server itself.
+    /// This parameter determines how many addresses of same-version nodes will be published
+    /// compared to nodes of any other version.
+    #[clap(long, value_parser(PerThousand::from_decimal_str_with_result), default_value_t = default_min_same_software_version_nodes_per_thousand())]
+    pub min_same_software_version_nodes_per_thousand: PerThousand,
 }

@@ -19,9 +19,7 @@ use std::{
     sync::Arc,
 };
 
-use crypto::random::{Rng, SliceRandom};
-use p2p::testing_utils::TestAddressMaker;
-use trust_dns_client::rr::{Name, RData, RecordType};
+use trust_dns_client::rr::{RData, RecordType};
 use trust_dns_server::{
     authority::{Authority, ZoneType},
     store::in_memory::InMemoryAuthority,
@@ -29,24 +27,35 @@ use trust_dns_server::{
 
 use common::{
     chain::{self, ChainConfig},
-    primitives::semver::SemVer,
+    primitives::{per_thousand::PerThousand, semver::SemVer},
 };
-use test_utils::{assert_matches_return_val, random::Seed};
+use crypto::random::{Rng, SliceRandom};
+use p2p::testing_utils::TestAddressMaker;
+use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
 use crate::{
     crawler_p2p::crawler::address_data::SoftwareInfo,
-    dns_server::{
-        handle_command, AuthorityImpl, DnsServerCommand, MAX_IPV4_RECORDS, MAX_IPV6_RECORDS,
-        SAME_SOFTWARE_VERSION_PEERS_RATIO,
-    },
+    dns_server::{handle_command, AuthorityImpl, DnsServerCommand},
 };
+
+use super::AuthorityImplConfig;
+
+fn create_test_config() -> AuthorityImplConfig {
+    AuthorityImplConfig {
+        host: "seed.mintlayer.org.".parse().unwrap(),
+        nameserver: Some("ns.mintlayer.org.".parse().unwrap()),
+        mbox: Some("admin.mintlayer.org.".parse().unwrap()),
+        min_same_software_version_nodes_per_thousand: PerThousand::new(800).unwrap(),
+        max_ipv4_records: Default::default(),
+        max_ipv6_records: Default::default(),
+    }
+}
 
 #[tokio::test]
 async fn dns_server_basic() {
     let chain_config = Arc::new(chain::config::create_testnet());
-    let host: Name = "seed.mintlayer.org.".parse().unwrap();
-    let nameserver = Some("ns.mintlayer.org.".parse().unwrap());
-    let mbox = Some("admin.mintlayer.org.".parse().unwrap());
+    let config = create_test_config();
+    let host = config.host.clone();
     let soft_info = SoftwareInfo {
         user_agent: "foo1".try_into().unwrap(),
         version: SemVer::new(1, 2, 3),
@@ -55,11 +64,9 @@ async fn dns_server_basic() {
     let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
 
     let auth = AuthorityImpl {
+        config,
         chain_config,
         serial: Default::default(),
-        host: host.clone(),
-        nameserver,
-        mbox,
         inner,
         ipv4_addrs: Default::default(),
         ipv6_addrs: Default::default(),
@@ -104,32 +111,45 @@ async fn dns_server_basic() {
 }
 
 mod same_software_version_addr_selection_test {
+    use crate::dns_server::{MaxIpv4RecordsCount, MaxIpv6RecordsCount};
+
     use super::*;
 
+    #[allow(clippy::too_many_arguments)]
     fn test_impl(
         chain_config: Arc<ChainConfig>,
         addr_map: &BTreeMap<IpAddr, SoftwareInfo>,
+        min_same_software_nodes_ratio: PerThousand,
+        max_ipv4_records: MaxIpv4RecordsCount,
+        max_ipv6_records: MaxIpv6RecordsCount,
         expected_same_soft_version_v4_addr_count: usize,
         expected_same_soft_version_v6_addr_count: usize,
         rng: &mut impl Rng,
     ) {
+        let ipv4_addr_count = addr_map.keys().filter(|addr| addr.is_ipv4()).count();
+        let ipv6_addr_count = addr_map.len() - ipv4_addr_count;
         let addrs = {
             let mut addrs = addr_map.keys().copied().collect::<Vec<_>>();
             addrs.shuffle(rng);
             addrs
         };
 
-        let host: Name = "seed.mintlayer.org.".parse().unwrap();
-        let cur_soft_info = SoftwareInfo::current(&chain_config);
-
-        let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
-        let auth = AuthorityImpl {
-            chain_config: Arc::clone(&chain_config),
-            serial: Default::default(),
-            host: host.clone(),
+        let config = AuthorityImplConfig {
+            host: "seed.mintlayer.org.".parse().unwrap(),
             // Prevent the creation of SOA and NS records, for simplicity.
             nameserver: None,
             mbox: None,
+            min_same_software_version_nodes_per_thousand: min_same_software_nodes_ratio,
+            max_ipv4_records: max_ipv4_records.clone(),
+            max_ipv6_records: max_ipv6_records.clone(),
+        };
+        let cur_soft_info = SoftwareInfo::current(&chain_config);
+
+        let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
+        let auth = AuthorityImpl {
+            config,
+            chain_config: Arc::clone(&chain_config),
+            serial: Default::default(),
             inner,
             ipv4_addrs: Default::default(),
             ipv6_addrs: Default::default(),
@@ -152,7 +172,10 @@ mod same_software_version_addr_selection_test {
             .records_without_rrsigs()
             .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::A(a)), a.0))
             .collect::<Vec<_>>();
-        assert_eq!(selected_v4_addrs.len(), MAX_IPV4_RECORDS);
+        assert_eq!(
+            selected_v4_addrs.len(),
+            std::cmp::min(ipv4_addr_count, *max_ipv4_records)
+        );
         let same_soft_version_addr_count = selected_v4_addrs
             .iter()
             .filter(|addr| *addr_map.get(&(**addr).into()).unwrap() == cur_soft_info)
@@ -167,7 +190,10 @@ mod same_software_version_addr_selection_test {
             .records_without_rrsigs()
             .map(|rec| assert_matches_return_val!(rec.data(), Some(&RData::AAAA(a)), a.0))
             .collect::<Vec<_>>();
-        assert_eq!(selected_v6_addrs.len(), MAX_IPV6_RECORDS);
+        assert_eq!(
+            selected_v6_addrs.len(),
+            std::cmp::min(ipv6_addr_count, *max_ipv6_records)
+        );
         let same_soft_version_addr_count = selected_v6_addrs
             .iter()
             .filter(|addr| *addr_map.get(&(**addr).into()).unwrap() == cur_soft_info)
@@ -178,6 +204,8 @@ mod same_software_version_addr_selection_test {
         );
     }
 
+    // The basic case - there are plenty of addresses, every second one has the current
+    // software version. The selected addresses must have the correct proportion.
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -187,29 +215,92 @@ mod same_software_version_addr_selection_test {
 
         let chain_config = Arc::new(chain::config::create_testnet());
 
+        let max_ipv4_records_count: MaxIpv4RecordsCount = 40.into();
+        let max_ipv6_records_count: MaxIpv6RecordsCount = 20.into();
+
         let v4_addr_count = 100;
         let v6_addr_count = 100;
-        assert!(v4_addr_count > 2 * MAX_IPV4_RECORDS);
-        assert!(v6_addr_count > 2 * MAX_IPV6_RECORDS);
 
         let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
         let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
 
-        let addr_map = make_test_software_infos_from_indices(
-            v4_addrs.into_iter().map(IpAddr::V4).chain(v6_addrs.into_iter().map(IpAddr::V6)),
-            &chain_config,
-            &mut rng,
+        let addr_map = merge_btree_maps(
+            make_software_infos(
+                v4_addrs.into_iter().map(IpAddr::V4),
+                &chain_config,
+                v4_addr_count / 2,
+                &mut rng,
+            ),
+            make_software_infos(
+                v6_addrs.into_iter().map(IpAddr::V6),
+                &chain_config,
+                v6_addr_count / 2,
+                &mut rng,
+            ),
         );
 
+        let same_software_nodes_ratio = PerThousand::new(800).unwrap();
+
         let expected_same_soft_version_v4_addr_count =
-            (MAX_IPV4_RECORDS as f64 * SAME_SOFTWARE_VERSION_PEERS_RATIO) as usize;
+            (*max_ipv4_records_count as f64 * same_software_nodes_ratio.as_f64()) as usize;
         let expected_same_soft_version_v6_addr_count =
-            (MAX_IPV6_RECORDS as f64 * SAME_SOFTWARE_VERSION_PEERS_RATIO) as usize;
+            (*max_ipv6_records_count as f64 * same_software_nodes_ratio.as_f64()) as usize;
         test_impl(
             chain_config,
             &addr_map,
+            same_software_nodes_ratio,
+            max_ipv4_records_count,
+            max_ipv6_records_count,
             expected_same_soft_version_v4_addr_count,
             expected_same_soft_version_v6_addr_count,
+            &mut rng,
+        );
+    }
+
+    // Same as test_normal, but there are not enough addresses. All of them should be returned.
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn test_not_enough_addresses(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(chain::config::create_testnet());
+
+        let max_ipv4_records_count: MaxIpv4RecordsCount = 400.into();
+        let max_ipv6_records_count: MaxIpv6RecordsCount = 200.into();
+
+        let v4_addr_count = 100;
+        let v6_addr_count = 100;
+
+        let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
+        let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
+
+        let addr_map = merge_btree_maps(
+            make_software_infos(
+                v4_addrs.into_iter().map(IpAddr::V4),
+                &chain_config,
+                v4_addr_count / 2,
+                &mut rng,
+            ),
+            make_software_infos(
+                v6_addrs.into_iter().map(IpAddr::V6),
+                &chain_config,
+                v6_addr_count / 2,
+                &mut rng,
+            ),
+        );
+
+        let same_software_nodes_ratio = PerThousand::new(800).unwrap();
+
+        test_impl(
+            chain_config,
+            &addr_map,
+            same_software_nodes_ratio,
+            max_ipv4_records_count,
+            max_ipv6_records_count,
+            v4_addr_count / 2,
+            v6_addr_count / 2,
             &mut rng,
         );
     }
@@ -224,10 +315,11 @@ mod same_software_version_addr_selection_test {
         let chain_config = Arc::new(chain::config::create_testnet());
         let cur_soft_info = SoftwareInfo::current(&chain_config);
 
+        let max_ipv4_records_count: MaxIpv4RecordsCount = 40.into();
+        let max_ipv6_records_count: MaxIpv6RecordsCount = 20.into();
+
         let v4_addr_count = 100;
         let v6_addr_count = 100;
-        assert!(v4_addr_count > 2 * MAX_IPV4_RECORDS);
-        assert!(v6_addr_count > 2 * MAX_IPV6_RECORDS);
 
         let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
         let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
@@ -242,8 +334,11 @@ mod same_software_version_addr_selection_test {
         test_impl(
             chain_config,
             &addr_map,
-            MAX_IPV4_RECORDS,
-            MAX_IPV6_RECORDS,
+            PerThousand::new(800).unwrap(),
+            max_ipv4_records_count.clone(),
+            max_ipv6_records_count.clone(),
+            *max_ipv4_records_count,
+            *max_ipv6_records_count,
             &mut rng,
         );
     }
@@ -257,10 +352,11 @@ mod same_software_version_addr_selection_test {
 
         let chain_config = Arc::new(chain::config::create_testnet());
 
+        let max_ipv4_records_count: MaxIpv4RecordsCount = 40.into();
+        let max_ipv6_records_count: MaxIpv6RecordsCount = 20.into();
+
         let v4_addr_count = 100;
         let v6_addr_count = 100;
-        assert!(v4_addr_count > 2 * MAX_IPV4_RECORDS);
-        assert!(v6_addr_count > 2 * MAX_IPV6_RECORDS);
 
         let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
         let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
@@ -272,7 +368,162 @@ mod same_software_version_addr_selection_test {
             .map(|addr| (addr, make_random_software_info(&mut rng)))
             .collect::<BTreeMap<_, _>>();
 
-        test_impl(chain_config, &addr_map, 0, 0, &mut rng);
+        test_impl(
+            chain_config,
+            &addr_map,
+            PerThousand::new(800).unwrap(),
+            max_ipv4_records_count,
+            max_ipv6_records_count,
+            0,
+            0,
+            &mut rng,
+        );
+    }
+
+    // Check the case when the actual proportion of current-versioned vs other-versioned addresses
+    // is bigger than the specified 'min_same_software_version_nodes_per_thousand'.
+    // The actual proportion should be preferred.
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn test_higher_actual_proportion(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(chain::config::create_testnet());
+
+        let max_ipv4_records_count: MaxIpv4RecordsCount = 40.into();
+        let max_ipv6_records_count: MaxIpv6RecordsCount = 20.into();
+
+        let v4_addr_count = 100;
+        let v6_addr_count = 100;
+
+        let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
+        let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
+
+        let min_same_software_nodes_ratio = PerThousand::new(800).unwrap();
+
+        // 90 out of 100 addresses have the current software version, which is more than
+        // min_same_software_nodes_ratio specified above.
+        let addr_map = merge_btree_maps(
+            make_software_infos(
+                v4_addrs.into_iter().map(IpAddr::V4),
+                &chain_config,
+                90,
+                &mut rng,
+            ),
+            make_software_infos(
+                v6_addrs.into_iter().map(IpAddr::V6),
+                &chain_config,
+                90,
+                &mut rng,
+            ),
+        );
+        // The expected counts reflect the actual proportion of the current addresses, because it's
+        // bigger.
+        let expected_same_soft_version_v4_addr_count = 36;
+        let expected_same_soft_version_v6_addr_count = 18;
+
+        test_impl(
+            chain_config.clone(),
+            &addr_map,
+            min_same_software_nodes_ratio,
+            max_ipv4_records_count,
+            max_ipv6_records_count,
+            expected_same_soft_version_v4_addr_count,
+            expected_same_soft_version_v6_addr_count,
+            &mut rng,
+        );
+    }
+
+    // Ask for 1 address exactly. Make sure that the effective same_software_nodes_ratio is bigger
+    // than 0.5. 1 same-versioned address should be returned.
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn test_rounding_up(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(chain::config::create_testnet());
+
+        let v4_addr_count = 100;
+        let v6_addr_count = 100;
+
+        let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
+        let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
+
+        // Note: the actual and the requested proportion of same-version addresses is 0.6.
+        let addr_map = merge_btree_maps(
+            make_software_infos(
+                v4_addrs.into_iter().map(IpAddr::V4),
+                &chain_config,
+                60,
+                &mut rng,
+            ),
+            make_software_infos(
+                v6_addrs.into_iter().map(IpAddr::V6),
+                &chain_config,
+                60,
+                &mut rng,
+            ),
+        );
+
+        test_impl(
+            chain_config.clone(),
+            &addr_map,
+            PerThousand::new(600).unwrap(),
+            1.into(),
+            1.into(),
+            1,
+            1,
+            &mut rng,
+        );
+    }
+
+    // Ask for 1 address exactly. Make sure that the effective same_software_nodes_ratio is less
+    // than 0.5. 0 same-versioned addresses should be returned.
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn test_rounding_down(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let chain_config = Arc::new(chain::config::create_testnet());
+
+        let v4_addr_count = 100;
+        let v6_addr_count = 100;
+
+        let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
+        let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
+
+        // Note: the actual and the requested proportion of same-version addresses is 0.4.
+        let addr_map = merge_btree_maps(
+            make_software_infos(
+                v4_addrs.into_iter().map(IpAddr::V4),
+                &chain_config,
+                40,
+                &mut rng,
+            ),
+            make_software_infos(
+                v6_addrs.into_iter().map(IpAddr::V6),
+                &chain_config,
+                40,
+                &mut rng,
+            ),
+        );
+
+        test_impl(
+            chain_config,
+            &addr_map,
+            PerThousand::new(400).unwrap(),
+            1.into(),
+            1.into(),
+            0,
+            0,
+            &mut rng,
+        );
     }
 
     fn make_random_software_info(rng: &mut impl Rng) -> SoftwareInfo {
@@ -282,27 +533,21 @@ mod same_software_version_addr_selection_test {
         }
     }
 
-    fn make_test_software_info_from_index(
-        idx: usize,
-        chain_config: &ChainConfig,
-        rng: &mut impl Rng,
-    ) -> SoftwareInfo {
-        if idx % 2 == 0 {
-            SoftwareInfo::current(chain_config)
-        } else {
-            make_random_software_info(rng)
-        }
-    }
-
-    fn make_test_software_infos_from_indices<Addr: Clone + Ord>(
+    fn make_software_infos<Addr: Clone + Ord>(
         addrs: impl Iterator<Item = Addr>,
         chain_config: &ChainConfig,
+        num_current_infos: usize,
         rng: &mut impl Rng,
     ) -> BTreeMap<Addr, SoftwareInfo> {
         addrs
             .enumerate()
-            .map(|(idx, addr)| {
-                let soft_info = make_test_software_info_from_index(idx, chain_config, rng);
+            .map(move |(idx, addr)| {
+                let soft_info = if idx < num_current_infos {
+                    SoftwareInfo::current(chain_config)
+                } else {
+                    make_random_software_info(rng)
+                };
+
                 (addr.clone(), soft_info)
             })
             .collect::<BTreeMap<_, _>>()

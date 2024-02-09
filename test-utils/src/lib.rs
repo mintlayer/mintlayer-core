@@ -18,6 +18,8 @@ pub mod nft_utils;
 pub mod random;
 pub mod test_dir;
 
+use std::collections::BTreeMap;
+
 use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
 use hex::ToHex;
@@ -89,6 +91,16 @@ pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     }
 
     numbers.iter().tuple_windows().map(|(v0, v1)| v1 - v0).collect()
+}
+
+pub fn merge_btree_maps<K: Ord, V>(map1: BTreeMap<K, V>, map2: BTreeMap<K, V>) -> BTreeMap<K, V> {
+    let mut result = map2;
+    for (k, v) in map1.into_iter() {
+        let prev_item = result.insert(k, v);
+        assert!(prev_item.is_none());
+    }
+
+    result
 }
 
 #[macro_export]

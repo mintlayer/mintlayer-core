@@ -83,7 +83,7 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
 }
 
 fn print_margin_ratio(value: PerThousand) -> String {
-    value.into_percentage_str()
+    value.to_string()
 }
 
 fn print_coin_amount_with_ticker(chain_config: &ChainConfig, value: Amount) -> String {
