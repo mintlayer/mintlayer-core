@@ -54,24 +54,24 @@ impl PerThousand {
         self.0 as f64 / DENOMINATOR as f64
     }
 
-    pub fn from_decimal_str(s: &str) -> Option<Self> {
-        // TODO: abstract from_fixedpoint_str() outside of Amount
-        let amount = if s.trim().ends_with('%') {
-            let s = s.trim_end_matches('%');
-            Amount::from_fixedpoint_str(s, 1)?
-        } else {
-            Amount::from_fixedpoint_str(s, 3)?
+    // Note: among other things, this function is used as Clap's value_parser, which requires it
+    // to return a Result. That's why we return it here instead of Option,
+    pub fn from_decimal_str(s: &str) -> Result<Self, PerThousandParseError> {
+        let body = || {
+            // TODO: abstract from_fixedpoint_str() outside of Amount
+            let amount = if s.trim().ends_with('%') {
+                let s = s.trim_end_matches('%');
+                Amount::from_fixedpoint_str(s, 1)?
+            } else {
+                Amount::from_fixedpoint_str(s, 3)?
+            };
+            let value: u16 = amount.into_atoms().try_into().ok()?;
+
+            let result = Self::new(value)?;
+            Some(result)
         };
-        let value: u16 = amount.into_atoms().try_into().ok()?;
 
-        let result = Self::new(value)?;
-        Some(result)
-    }
-
-    // Clap's value_parser requires a function that returns a Result, that's why we have it.
-    // TODO: make from_decimal_str return Result instead?
-    pub fn from_decimal_str_with_result(s: &str) -> Result<Self, PerThousandParseError> {
-        Self::from_decimal_str(s).ok_or_else(|| PerThousandParseError {
+        body().ok_or_else(|| PerThousandParseError {
             bad_value: s.to_owned(),
         })
     }
@@ -138,8 +138,8 @@ mod tests {
                 Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
             let per_thousand_str_percent =
                 Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 1) + "%";
-            assert!(PerThousand::from_decimal_str(&per_thousand_str).is_none());
-            assert!(PerThousand::from_decimal_str(&per_thousand_str_percent).is_none());
+            assert!(PerThousand::from_decimal_str(&per_thousand_str).is_err());
+            assert!(PerThousand::from_decimal_str(&per_thousand_str_percent).is_err());
         }
     }
 

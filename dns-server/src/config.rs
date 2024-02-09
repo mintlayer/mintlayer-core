@@ -66,6 +66,6 @@ pub struct DnsServerConfig {
     /// as the dns server itself.
     /// This parameter determines how many addresses of same-version nodes will be published
     /// compared to nodes of any other version.
-    #[clap(long, value_parser(PerThousand::from_decimal_str_with_result), default_value_t = default_min_same_software_version_nodes_per_thousand())]
+    #[clap(long, value_parser(PerThousand::from_decimal_str), default_value_t = default_min_same_software_version_nodes_per_thousand())]
     pub min_same_software_version_nodes_per_thousand: PerThousand,
 }
