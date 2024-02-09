@@ -78,10 +78,11 @@ const TTL_SOA: u32 = 21600;
 
 make_config_setting!(MaxIpv4RecordsCount, usize, 24);
 make_config_setting!(MaxIpv6RecordsCount, usize, 14);
-
-pub fn default_min_same_software_version_nodes_per_thousand() -> PerThousand {
-    PerThousand::new(950).expect("Must be valid PerThousand")
-}
+make_config_setting!(
+    MinSameSoftwareVersionNodesRatio,
+    PerThousand,
+    PerThousand::new(950).expect("Must be a valid per-thousand")
+);
 
 impl DnsServer {
     pub async fn new(
@@ -144,7 +145,7 @@ struct AuthorityImplConfig {
     pub host: Name,
     pub nameserver: Option<Name>,
     pub mbox: Option<Name>,
-    pub min_same_software_version_nodes_per_thousand: PerThousand,
+    pub min_same_software_version_nodes_ratio: PerThousand,
 
     /// Maximum number of IPv4 addresses in result,
     pub max_ipv4_records: MaxIpv4RecordsCount,
@@ -159,8 +160,8 @@ impl AuthorityImplConfig {
             host: server_config.host.clone(),
             nameserver: server_config.nameserver.clone(),
             mbox: server_config.mbox.clone(),
-            min_same_software_version_nodes_per_thousand: server_config
-                .min_same_software_version_nodes_per_thousand,
+            min_same_software_version_nodes_ratio: server_config
+                .min_same_software_version_nodes_ratio,
             max_ipv4_records: Default::default(),
             max_ipv6_records: Default::default(),
         }
@@ -315,7 +316,7 @@ impl AuthorityImpl {
         #[allow(clippy::float_arithmetic)]
         let same_version_addrs_preferred_count = {
             let min_same_software_version_nodes_ratio =
-                self.config.min_same_software_version_nodes_per_thousand.as_f64();
+                self.config.min_same_software_version_nodes_ratio.as_f64();
             let current_same_software_version_nodes_ratio =
                 same_version_addrs.len() as f64 / addrs.len() as f64;
             let required_same_software_version_nodes_ratio = f64::max(

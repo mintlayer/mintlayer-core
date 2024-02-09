@@ -21,7 +21,7 @@ use trust_dns_client::rr::Name;
 use common::primitives::per_thousand::PerThousand;
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 
-use crate::dns_server::default_min_same_software_version_nodes_per_thousand;
+use crate::dns_server::MinSameSoftwareVersionNodesRatio;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -65,7 +65,12 @@ pub struct DnsServerConfig {
     /// When publishing addresses, we give preference to nodes that have the same software version
     /// as the dns server itself.
     /// This parameter determines how many addresses of same-version nodes will be published
-    /// compared to nodes of any other version.
-    #[clap(long, value_parser(PerThousand::from_decimal_str), default_value_t = default_min_same_software_version_nodes_per_thousand())]
-    pub min_same_software_version_nodes_per_thousand: PerThousand,
+    /// compared to the total number of addresses.
+    #[clap(
+        long,
+        value_name = "PER_THOUSAND",
+        value_parser(PerThousand::from_decimal_str),
+        default_value_t = *MinSameSoftwareVersionNodesRatio::default()
+    )]
+    pub min_same_software_version_nodes_ratio: PerThousand,
 }

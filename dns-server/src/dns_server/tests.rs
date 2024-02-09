@@ -38,14 +38,14 @@ use crate::{
     dns_server::{handle_command, AuthorityImpl, DnsServerCommand},
 };
 
-use super::AuthorityImplConfig;
+use super::{AuthorityImplConfig, MinSameSoftwareVersionNodesRatio};
 
 fn create_test_config() -> AuthorityImplConfig {
     AuthorityImplConfig {
         host: "seed.mintlayer.org.".parse().unwrap(),
         nameserver: Some("ns.mintlayer.org.".parse().unwrap()),
         mbox: Some("admin.mintlayer.org.".parse().unwrap()),
-        min_same_software_version_nodes_per_thousand: PerThousand::new(800).unwrap(),
+        min_same_software_version_nodes_ratio: *MinSameSoftwareVersionNodesRatio::default(),
         max_ipv4_records: Default::default(),
         max_ipv6_records: Default::default(),
     }
@@ -119,7 +119,7 @@ mod same_software_version_addr_selection_test {
     fn test_impl(
         chain_config: Arc<ChainConfig>,
         addr_map: &BTreeMap<IpAddr, SoftwareInfo>,
-        min_same_software_nodes_ratio: PerThousand,
+        min_same_software_version_nodes_ratio: PerThousand,
         max_ipv4_records: MaxIpv4RecordsCount,
         max_ipv6_records: MaxIpv6RecordsCount,
         expected_same_soft_version_v4_addr_count: usize,
@@ -139,7 +139,7 @@ mod same_software_version_addr_selection_test {
             // Prevent the creation of SOA and NS records, for simplicity.
             nameserver: None,
             mbox: None,
-            min_same_software_version_nodes_per_thousand: min_same_software_nodes_ratio,
+            min_same_software_version_nodes_ratio,
             max_ipv4_records: max_ipv4_records.clone(),
             max_ipv6_records: max_ipv6_records.clone(),
         };
@@ -204,7 +204,7 @@ mod same_software_version_addr_selection_test {
         );
     }
 
-    // The basic case - there are plenty of addresses, every second one has the current
+    // The basic case - there are plenty of addresses, half of them have the current
     // software version. The selected addresses must have the correct proportion.
     #[rstest::rstest]
     #[trace]
@@ -453,7 +453,7 @@ mod same_software_version_addr_selection_test {
         let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
         let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
 
-        // Note: the actual and the requested proportion of same-version addresses is 0.6.
+        // Note: both the actual and the requested proportions of same-version addresses are 0.6.
         let addr_map = merge_btree_maps(
             make_software_infos(
                 v4_addrs.into_iter().map(IpAddr::V4),
@@ -498,7 +498,7 @@ mod same_software_version_addr_selection_test {
         let v4_addrs = TestAddressMaker::new_distinct_random_ipv4_addrs(v4_addr_count, &mut rng);
         let v6_addrs = TestAddressMaker::new_distinct_random_ipv6_addrs(v6_addr_count, &mut rng);
 
-        // Note: the actual and the requested proportion of same-version addresses is 0.4.
+        // Note: both the actual and the requested proportions of same-version addresses are 0.4.
         let addr_map = merge_btree_maps(
             make_software_infos(
                 v4_addrs.into_iter().map(IpAddr::V4),
