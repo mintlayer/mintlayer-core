@@ -173,7 +173,7 @@ impl<O: IsOrigin> TxEntry<O> {
         from_outputs.chain(from_inputs)
     }
 
-    fn inputs_iter(&self) -> impl Iterator<Item = &TxInput> + ExactSizeIterator + '_ {
+    fn inputs_iter(&self) -> impl ExactSizeIterator<Item = &TxInput> + '_ {
         self.transaction().inputs().iter()
     }
 

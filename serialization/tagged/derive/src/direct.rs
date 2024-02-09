@@ -39,7 +39,7 @@ impl<'a> VariantInfo<'a> {
         quote!(#ename::#vname)
     }
 
-    fn vars(&self) -> impl Iterator<Item = Ident> + ExactSizeIterator {
+    fn vars(&self) -> impl ExactSizeIterator<Item = Ident> {
         (0..self.variant.fields.len()).map(|i| format_ident!("x{}", i))
     }
 
@@ -56,7 +56,7 @@ impl<'a> VariantInfo<'a> {
         }
     }
 
-    fn field_tys(&self) -> impl Iterator<Item = &syn::Type> + ExactSizeIterator + '_ {
+    fn field_tys(&self) -> impl ExactSizeIterator<Item = &syn::Type> + '_ {
         self.variant.fields.iter().map(|f| &f.ty)
     }
 

@@ -196,7 +196,7 @@ impl Ord for OutputGroupOrd {
 /// Select coins by Single Random Draw. OutputGroups are selected randomly from the eligible
 /// outputs until the target is satisfied
 fn select_coins_srd(
-    utxo_pool: &Vec<OutputGroup>,
+    utxo_pool: &[OutputGroup],
     target_value: Amount,
     rng: &mut impl Rng,
     change_cost: Amount,
