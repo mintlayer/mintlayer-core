@@ -140,8 +140,20 @@ trait WalletRpc {
         account_index: AccountIndexArg,
         address: String,
         amount: DecimalAmount,
+        selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
+
+    #[method(name = "transaction_create_from_cold_input")]
+    async fn transaction_from_cold_input(
+        &self,
+        account_index: AccountIndexArg,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<ComposedTransaction>;
 
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(

@@ -18,6 +18,7 @@ mod helper_types;
 use std::{
     fmt::{Debug, Write},
     path::PathBuf,
+    str::FromStr,
 };
 
 use clap::Parser;
@@ -1664,39 +1665,41 @@ where
             }
 
             WalletCommand::CreateTxFromColdInput {
-                address: _,
-                amount: _,
-                utxo: _,
-                change_address: _,
+                address,
+                amount,
+                utxo,
+                change_address,
             } => {
-                // let selected_input = parse_utxo_outpoint(utxo)?;
-                // let selected_account = self.get_selected_acc()?;
-                // let (tx, fees) = self
-                //     .wallet
-                //     .request_send_coins(
-                //         selected_account,
-                //         address,
-                //         amount,
-                //         selected_input,
-                //         change_address,
-                //         self.config,
-                //     )
-                //     .await?;
+                let selected_input = parse_utxo_outpoint(utxo)?;
+                let selected_account = self.get_selected_acc()?;
+                let ComposedTransaction { encoded_tx, fees } = self
+                    .wallet
+                    .transaction_from_cold_input(
+                        selected_account,
+                        address,
+                        amount,
+                        selected_input,
+                        change_address,
+                        self.config,
+                    )
+                    .await?;
 
-                // let summary = tx.tx().text_summary(chain_config);
-                // let hex_tx = HexEncoded::new(tx);
+                let tx = HexEncoded::<PartiallySignedTransaction>::from_str(&encoded_tx)
+                    .expect("ok")
+                    .take();
 
-                // let qr_code_string = qrcode_or_error_string(&hex_tx.to_string());
+                let summary = tx.tx().text_summary(chain_config);
 
-                // let mut output_str = format!(
-                //     "Send transaction created. \
-                //     Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
-                //     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
-                // );
-                // format_fees(&mut output_str, fees, chain_config);
+                let qr_code_string = qrcode_or_error_string(&encoded_tx);
 
-                // Ok(ConsoleCommand::Print(output_str))
-                Ok(ConsoleCommand::Print("".into()))
+                let mut output_str = format!(
+                    "Send transaction created. \
+                    Pass the following string into the cold wallet with private key to sign:\n\n{encoded_tx}\n\n\
+                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
+                );
+                format_fees(&mut output_str, fees, chain_config);
+
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::SendTokensToAddress {

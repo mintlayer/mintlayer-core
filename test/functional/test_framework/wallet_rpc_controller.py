@@ -165,7 +165,7 @@ class WalletRpcController:
         return self._write_command("transaction_get_signed_raw", [self.account, tx_id])['result']
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
-        self._write_command("address_send", [self.account, address, str(amount), {'in_top_x_mb': 5}])
+        self._write_command("address_send", [self.account, address, str(amount), selected_utxos, {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):

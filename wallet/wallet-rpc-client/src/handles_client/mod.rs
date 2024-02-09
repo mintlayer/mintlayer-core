@@ -317,6 +317,32 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn transaction_from_cold_input(
+        &self,
+        account_index: U31,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<ComposedTransaction, Self::Error> {
+        self.wallet_rpc
+            .request_send_coins(
+                account_index,
+                address,
+                amount_str,
+                selected_utxo,
+                change_address,
+                config,
+            )
+            .await
+            .map(|(tx, fees)| ComposedTransaction {
+                encoded_tx: HexEncoded::new(tx).to_string(),
+                fees,
+            })
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn sign_challenge_hex(
         &self,
         account_index: U31,

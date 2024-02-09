@@ -227,6 +227,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_index: AccountIndexArg,
         address: String,
         amount_str: DecimalAmount,
+        selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -237,10 +238,39 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 account_index.index::<N>()?,
                 address,
                 amount_str,
-                vec![],
+                selected_utxos,
                 config,
             )
             .await,
+        )
+    }
+
+    async fn transaction_from_cold_input(
+        &self,
+        account_index: AccountIndexArg,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<ComposedTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+        };
+        rpc::handle_result(
+            self.request_send_coins(
+                account_index.index::<N>()?,
+                address,
+                amount_str,
+                selected_utxo,
+                change_address,
+                config,
+            )
+            .await
+            .map(|(tx, fees)| ComposedTransaction {
+                encoded_tx: HexEncoded::new(tx).to_string(),
+                fees,
+            }),
         )
     }
 

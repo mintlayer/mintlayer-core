@@ -238,7 +238,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         address: String,
         amount: DecimalAmount,
-        _selected_utxos: Vec<UtxoOutPoint>,
+        selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         let options = TransactionOptions {
@@ -249,6 +249,32 @@ impl WalletInterface for ClientWalletRpc {
             account_index.into(),
             address,
             amount,
+            selected_utxos,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn transaction_from_cold_input(
+        &self,
+        account_index: U31,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<ComposedTransaction, Self::Error> {
+        let options = TransactionOptions {
+            in_top_x_mb: config.in_top_x_mb,
+        };
+        WalletRpcClient::transaction_from_cold_input(
+            &self.http_client,
+            account_index.into(),
+            address,
+            amount_str,
+            selected_utxo,
+            change_address,
             options,
         )
         .await

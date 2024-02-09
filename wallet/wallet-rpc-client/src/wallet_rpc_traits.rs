@@ -166,6 +166,16 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn transaction_from_cold_input(
+        &self,
+        account_index: U31,
+        address: String,
+        amount_str: DecimalAmount,
+        selected_utxo: UtxoOutPoint,
+        change_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<ComposedTransaction, Self::Error>;
+
     async fn create_stake_pool(
         &self,
         account_index: U31,
