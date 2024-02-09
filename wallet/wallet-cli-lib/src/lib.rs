@@ -157,7 +157,6 @@ async fn start_hot_wallet(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
-        node_rpc.clone(),
         cli_event_loop::WalletType::Local {
             node_rpc,
             wallet_rpc_config,
@@ -190,7 +189,6 @@ async fn start_cold_wallet(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
-        wallet_controller::make_cold_wallet_rpc_client(chain_config.clone()),
         cli_event_loop::WalletType::Local {
             node_rpc: wallet_controller::make_cold_wallet_rpc_client(chain_config),
             wallet_rpc_config,
@@ -235,21 +233,15 @@ async fn connect_to_rpc_wallet(
         }
     };
 
-    let rpc_address = {
-        let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-        cli_args.node_rpc_address.clone().unwrap_or_else(default_addr)
-    };
     let remote_socket_address = cli_args.wrpc_address.clone().expect("checked");
     let (repl_handle, _wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
-    let node_rpc = wallet_controller::make_rpc_client(rpc_address, rpc_auth.clone()).await?;
     cli_event_loop::run(
         &chain_config.clone(),
         event_rx,
         in_top_x_mb,
-        node_rpc,
-        cli_event_loop::WalletType::Remote {
+        cli_event_loop::WalletType::<ColdWalletClient>::Remote {
             remote_socket_address,
             rpc_auth,
         },

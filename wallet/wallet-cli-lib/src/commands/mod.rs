@@ -18,8 +18,6 @@ mod helper_types;
 use std::{
     fmt::{Debug, Write},
     path::PathBuf,
-    str::FromStr,
-    sync::Arc,
 };
 
 use clap::Parser;
@@ -28,7 +26,6 @@ use itertools::Itertools;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenCreator},
         Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, H256},
@@ -39,16 +36,14 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
-use wallet::{
-    account::{PartiallySignedTransaction, TransactionToSign},
-    version::get_version,
-    WalletError,
-};
+use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
 use wallet_controller::{
     types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_rpc_client::wallet_rpc_traits::ColdWalletInterface;
-use wallet_rpc_lib::{types::NewTransaction, CreatedWallet, WalletRpc, WalletService};
+use wallet_rpc_client::wallet_rpc_traits::WalletInterface;
+use wallet_rpc_lib::types::{
+    ComposedTransaction, CreatedWallet, NewTransaction, NftMetadata, TokenMetadata,
+};
 
 use crate::{
     commands::helper_types::{parse_output, parse_token_supply},
@@ -116,7 +111,7 @@ pub enum ColdWalletCommand {
     #[clap(name = "wallet-lock-private-keys")]
     LockPrivateKeys,
 
-    /// Show the seed phrase for the loaded wallet if it has been stored.
+    /// Show the seed phrase for the loaded wallet if it has been s
     #[clap(name = "wallet-show-seed-phrase")]
     ShowSeedPhrase,
 
@@ -783,55 +778,48 @@ struct CliWalletState {
     selected_account: U31,
 }
 
-pub struct CommandHandler<N: Clone, W> {
+pub struct CommandHandler<W> {
     // the CliController if there is a loaded wallet
     state: Option<CliWalletState>,
     config: ControllerConfig,
-    wallet_rpc: WalletRpc<N>,
 
     wallet: W,
 }
 
-impl<N, W, E> CommandHandler<N, W>
+impl<W, E> CommandHandler<W>
 where
-    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    W: ColdWalletInterface<Error = E> + Send + Sync + 'static,
-    E: Into<WalletCliError<N>>,
+    W: WalletInterface<Error = E> + Send + Sync + 'static,
 {
-    pub async fn new(
-        config: ControllerConfig,
-        chain_config: Arc<ChainConfig>,
-        node_rpc: N,
-        wallet: W,
-    ) -> Result<Self, WalletCliError<N>> {
-        //FIXME remove
-        let wallet_service = WalletService::start(chain_config, None, node_rpc)
-            .await
-            .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
+    pub async fn new(config: ControllerConfig, wallet: W) -> Self {
+        let state = match wallet.account_names().await {
+            Ok(_) => Some(CliWalletState {
+                selected_account: DEFAULT_ACCOUNT_INDEX,
+            }),
+            Err(_) => None,
+        };
 
-        let wallet_handle = wallet_service.handle();
-        let node_rpc = wallet_service.node_rpc().clone();
-        let chain_config = wallet_service.chain_config().clone();
-
-        let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
-
-        Ok(CommandHandler {
-            state: None,
+        CommandHandler {
+            state,
             config,
-            wallet_rpc: wallet_rpc.clone(),
             wallet,
-        })
+        }
     }
 
     pub async fn rpc_completed(&self) {
-        self.wallet_rpc.closed().await
+        self.wallet.rpc_completed().await
     }
 
-    async fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError<N>> {
+    async fn set_selected_account<N: NodeInterface>(
+        &mut self,
+        account_index: U31,
+    ) -> Result<(), WalletCliError<N>>
+    where
+        WalletCliError<N>: From<E>,
+    {
         let CliWalletState { selected_account } =
             self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
-        if account_index.into_u32() as usize >= self.wallet_rpc.number_of_accounts().await? {
+        if account_index.into_u32() as usize >= self.wallet.account_names().await?.len() {
             return Err(WalletCliError::AccountNotFound(account_index));
         }
 
@@ -839,10 +827,13 @@ where
         Ok(())
     }
 
-    async fn repl_status(&mut self) -> Result<String, WalletCliError<N>> {
+    async fn repl_status<N: NodeInterface>(&mut self) -> Result<String, WalletCliError<N>>
+    where
+        WalletCliError<N>: From<E>,
+    {
         let status = match self.state.as_ref() {
             Some(CliWalletState { selected_account }) => {
-                let accounts = self.wallet_rpc.account_names().await?;
+                let accounts = self.wallet.account_names().await?;
                 if accounts.len() > 1 {
                     match accounts.get(selected_account.into_u32() as usize) {
                         Some(Some(name)) => format!("(Account {})", name),
@@ -858,7 +849,10 @@ where
         Ok(status)
     }
 
-    fn get_selected_acc(&mut self) -> Result<U31, WalletCliError<N>> {
+    fn get_selected_acc<N: NodeInterface>(&mut self) -> Result<U31, WalletCliError<N>>
+    where
+        WalletCliError<N>: From<E>,
+    {
         self.state
             .as_mut()
             .map(|state| state.selected_account)
@@ -873,10 +867,14 @@ where
         ConsoleCommand::Print(status_text)
     }
 
-    async fn handle_cold_wallet_command(
+    async fn handle_cold_wallet_command<N: NodeInterface>(
         &mut self,
         command: ColdWalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError<N>> {
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliError<N>>
+    where
+        WalletCliError<N>: From<E>,
+    {
         match command {
             ColdWalletCommand::CreateWallet {
                 wallet_path,
@@ -885,10 +883,10 @@ where
             } => {
                 utils::ensure!(self.state.is_none(), WalletCliError::WalletFileAlreadyOpen);
                 let newly_generated_mnemonic = self
-                    .wallet_rpc
+                    .wallet
                     .create_wallet(
                         wallet_path,
-                        whether_to_store_seed_phrase.to_walet_type(),
+                        whether_to_store_seed_phrase.to_bool(),
                         mnemonic,
                     )
                     .await?;
@@ -918,7 +916,7 @@ where
             } => {
                 utils::ensure!(self.state.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
-                self.wallet_rpc.open_wallet(wallet_path, encryption_password).await?;
+                self.wallet.open_wallet(wallet_path, encryption_password).await?;
                 self.state = Some(CliWalletState {
                     selected_account: DEFAULT_ACCOUNT_INDEX,
                 });
@@ -932,7 +930,7 @@ where
             ColdWalletCommand::CloseWallet => {
                 utils::ensure!(self.state.is_some(), WalletCliError::NoWallet);
 
-                self.wallet_rpc.close_wallet().await?;
+                self.wallet.close_wallet().await?;
 
                 self.state = None;
 
@@ -943,7 +941,7 @@ where
             }
 
             ColdWalletCommand::EncryptPrivateKeys { password } => {
-                self.wallet_rpc.encrypt_private_keys(password).await?;
+                self.wallet.encrypt_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully encrypted the private keys of the wallet.".to_owned(),
@@ -951,7 +949,7 @@ where
             }
 
             ColdWalletCommand::RemovePrivateKeysEncryption => {
-                self.wallet_rpc.remove_private_key_encryption().await?;
+                self.wallet.remove_private_key_encryption().await?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully removed the encryption from the private keys.".to_owned(),
@@ -959,7 +957,7 @@ where
             }
 
             ColdWalletCommand::UnlockPrivateKeys { password } => {
-                self.wallet_rpc.unlock_private_keys(password).await?;
+                self.wallet.unlock_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now unlocked.".to_owned(),
@@ -967,7 +965,7 @@ where
             }
 
             ColdWalletCommand::LockPrivateKeys => {
-                self.wallet_rpc.lock_private_keys().await?;
+                self.wallet.lock_private_key_encryption().await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now locked.".to_owned(),
@@ -975,9 +973,9 @@ where
             }
 
             ColdWalletCommand::ShowSeedPhrase => {
-                let phrase = self.wallet_rpc.get_seed_phrase().await?;
+                let phrase = self.wallet.get_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase {
+                let msg = if let Some(phrase) = phrase.seed_phrase {
                     format!("The stored seed phrase is \"{}\"", phrase.join(" "))
                 } else {
                     "No stored seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase stored elsewhere when you created the wallet.".into()
@@ -987,9 +985,9 @@ where
             }
 
             ColdWalletCommand::PurgeSeedPhrase => {
-                let phrase = self.wallet_rpc.purge_seed_phrase().await?;
+                let phrase = self.wallet.purge_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase {
+                let msg = if let Some(phrase) = phrase.seed_phrase {
                     format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
                 } else {
                     "No stored seed phrase for this wallet.".into()
@@ -1007,7 +1005,7 @@ where
                     None => false,
                 };
 
-                self.wallet_rpc.set_lookahead_size(lookahead_size, force_reduce).await?;
+                self.wallet.set_lookahead_size(lookahead_size, force_reduce).await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. Lookahead size has been updated, will rescan the blockchain."
@@ -1016,9 +1014,8 @@ where
             }
 
             ColdWalletCommand::AddressQRCode { address } => {
-                let addr: Address<Destination> =
-                    Address::from_str(self.wallet_rpc.chain_config(), &address)
-                        .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
+                let addr: Address<Destination> = Address::from_str(chain_config, &address)
+                    .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
 
                 let qr_code_string = qrcode_or_error_string(&addr.to_string());
                 Ok(ConsoleCommand::Print(qr_code_string))
@@ -1026,28 +1023,28 @@ where
 
             ColdWalletCommand::NewAddress => {
                 let selected_account = self.get_selected_acc()?;
-                let address = self.wallet_rpc.issue_address(selected_account).await?;
+                let address = self.wallet.issue_address(selected_account).await?;
                 Ok(ConsoleCommand::Print(address.address))
             }
 
             ColdWalletCommand::RevealPublicKey { public_key_hash } => {
                 let selected_account = self.get_selected_acc()?;
                 let public_key =
-                    self.wallet_rpc.find_public_key(selected_account, public_key_hash).await?;
+                    self.wallet.reveal_public_key(selected_account, public_key_hash).await?;
                 Ok(ConsoleCommand::Print(public_key.public_key_address))
             }
 
             ColdWalletCommand::RevealPublicKeyHex { public_key_hash } => {
                 let selected_account = self.get_selected_acc()?;
                 let public_key =
-                    self.wallet_rpc.find_public_key(selected_account, public_key_hash).await?;
+                    self.wallet.reveal_public_key(selected_account, public_key_hash).await?;
                 Ok(ConsoleCommand::Print(public_key.public_key_hex))
             }
 
             ColdWalletCommand::ShowReceiveAddresses => {
                 let selected_account = self.get_selected_acc()?;
                 let addresses_with_usage =
-                    self.wallet_rpc.get_issued_addresses(selected_account).await?;
+                    self.wallet.get_issued_addresses(selected_account).await?;
 
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
@@ -1070,7 +1067,7 @@ where
 
             ColdWalletCommand::NewVrfPublicKey => {
                 let selected_account = self.get_selected_acc()?;
-                let vrf_public_key = self.wallet_rpc.issue_vrf_key(selected_account).await?;
+                let vrf_public_key = self.wallet.new_vrf_public_key(selected_account).await?;
                 Ok(ConsoleCommand::Print(format!(
                     "New VRF public key: {} with index {}",
                     vrf_public_key.vrf_public_key, vrf_public_key.child_number
@@ -1079,8 +1076,7 @@ where
 
             ColdWalletCommand::GetVrfPublicKey => {
                 let selected_account = self.get_selected_acc()?;
-                let addresses_with_usage =
-                    self.wallet_rpc.get_vrf_key_usage(selected_account).await?;
+                let addresses_with_usage = self.wallet.get_vrf_public_key(selected_account).await?;
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
                     addresses_table.set_titles(prettytable::row![
@@ -1101,22 +1097,20 @@ where
 
             ColdWalletCommand::GetLegacyVrfPublicKey => {
                 let selected_account = self.get_selected_acc()?;
-                let legacy_pubkey =
-                    self.wallet_rpc.get_legacy_vrf_public_key(selected_account).await?;
+                let legacy_pubkey = self.wallet.get_legacy_vrf_public_key(selected_account).await?;
                 Ok(ConsoleCommand::Print(legacy_pubkey.vrf_public_key))
             }
 
             ColdWalletCommand::SignRawTransaction { transaction } => {
                 let selected_account = self.get_selected_acc()?;
                 let result = self
-                    .wallet_rpc
+                    .wallet
                     .sign_raw_transaction(selected_account, transaction, self.config)
                     .await?;
 
                 let output_str = match result.into_signed_tx() {
                     Ok(signed_tx) => {
-                        let summary =
-                            signed_tx.transaction().text_summary(self.wallet_rpc.chain_config());
+                        let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
                         let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
@@ -1152,18 +1146,15 @@ where
                 address,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                let challenge = hex::decode(challenge)
-                    .map_err(|err| WalletCliError::InvalidInput(err.to_string()))?;
                 let result =
-                    self.wallet_rpc.sign_challenge(selected_account, challenge, address).await?;
+                    self.wallet.sign_challenge_hex(selected_account, challenge, address).await?;
 
-                let qr_code_string = qrcode_or_error_string(&result.clone().to_hex());
+                let qr_code_string = qrcode_or_error_string(&result);
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{}
+                    "The generated hex encoded signature is\n\n{result}
                     \n\n\
                     The following qr code also contains the signature for easy transport:\n{qr_code_string}",
-                    result.to_hex(),
                 )))
             }
 
@@ -1172,18 +1163,15 @@ where
                 address,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                let result = self
-                    .wallet_rpc
-                    .sign_challenge(selected_account, challenge.into_bytes(), address)
-                    .await?;
+                let result =
+                    self.wallet.sign_challenge(selected_account, challenge, address).await?;
 
-                let qr_code_string = qrcode_or_error_string(&result.clone().to_hex());
+                let qr_code_string = qrcode_or_error_string(&result);
 
                 Ok(ConsoleCommand::Print(format!(
-                    "The generated hex encoded signature is\n\n{}
+                    "The generated hex encoded signature is\n\n{result}
                     \n\n\
                     The following qr code also contains the signature for easy transport:\n{qr_code_string}",
-                    result.to_hex(),
                 )))
             }
 
@@ -1192,14 +1180,7 @@ where
                 signed_challenge,
                 address,
             } => {
-                let message = hex::decode(message).map_err(|e| {
-                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
-                })?;
-                let signed_challenge = hex::decode(signed_challenge).map_err(|e| {
-                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
-                })?;
-
-                self.wallet_rpc.verify_challenge(message, signed_challenge, address)?;
+                self.wallet.verify_challenge_hex(message, signed_challenge, address).await?;
 
                 Ok(ConsoleCommand::Print(
                     "The provided signature is correct".to_string(),
@@ -1211,15 +1192,7 @@ where
                 signed_challenge,
                 address,
             } => {
-                let signed_challenge = hex::decode(signed_challenge).map_err(|e| {
-                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
-                })?;
-
-                self.wallet_rpc.verify_challenge(
-                    message.into_bytes(),
-                    signed_challenge,
-                    address,
-                )?;
+                self.wallet.verify_challenge(message, signed_challenge, address).await?;
 
                 Ok(ConsoleCommand::Print(
                     "The provided signature is correct".to_string(),
@@ -1228,7 +1201,7 @@ where
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
             ColdWalletCommand::Exit => {
-                self.wallet.shutdown().await.map_err(|err| err.into())?;
+                self.wallet.shutdown().await?;
                 Ok(ConsoleCommand::Exit)
             }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
@@ -1237,31 +1210,36 @@ where
         }
     }
 
-    pub async fn handle_wallet_command(
+    pub async fn handle_wallet_command<N: NodeInterface>(
         &mut self,
-        chain_config: &Arc<ChainConfig>,
+        chain_config: &ChainConfig,
         command: WalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError<N>> {
+    ) -> Result<ConsoleCommand, WalletCliError<N>>
+    where
+        WalletCliError<N>: From<E>,
+    {
         match command {
-            WalletCommand::ColdCommands(command) => self.handle_cold_wallet_command(command).await,
+            WalletCommand::ColdCommands(command) => {
+                self.handle_cold_wallet_command(command, chain_config).await
+            }
 
             WalletCommand::ChainstateInfo => {
-                let info = self.wallet_rpc.chainstate_info().await?;
+                let info = self.wallet.chainstate_info().await?;
                 Ok(ConsoleCommand::Print(format!("{info:#?}")))
             }
 
             WalletCommand::BestBlock => {
-                let id = self.wallet_rpc.node_best_block_id().await?;
+                let id = self.wallet.node_best_block_id().await?;
                 Ok(ConsoleCommand::Print(id.hex_encode()))
             }
 
             WalletCommand::BestBlockHeight => {
-                let height = self.wallet_rpc.node_best_block_height().await?;
+                let height = self.wallet.node_best_block_height().await?;
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
             WalletCommand::BestBlockTimestamp => {
-                let timestamp = self.wallet_rpc.chainstate_info().await?.best_block_timestamp;
+                let timestamp = self.wallet.chainstate_info().await?.best_block_timestamp;
                 Ok(ConsoleCommand::Print(format!(
                     "{} ({})",
                     timestamp,
@@ -1270,7 +1248,7 @@ where
             }
 
             WalletCommand::BlockId { height } => {
-                let hash = self.wallet_rpc.node_block_id(height).await?;
+                let hash = self.wallet.node_block_id(height).await?;
                 match hash {
                     Some(id) => Ok(ConsoleCommand::Print(id.hex_encode())),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -1278,30 +1256,27 @@ where
             }
 
             WalletCommand::GetBlock { hash } => {
-                let hash = H256::from_str(&hash)
-                    .map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
-                let hash = self.wallet_rpc.get_node_block(hash.into()).await?;
+                let hash = self.wallet.node_block(hash).await?;
                 match hash {
-                    Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
+                    Some(block) => Ok(ConsoleCommand::Print(block)),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
                 }
             }
 
             WalletCommand::GenerateBlock { transactions } => {
                 let selected_account = self.get_selected_acc()?;
-                let transactions = transactions.into_iter().map(HexEncoded::take).collect();
-                let _ = self.wallet_rpc.generate_block(selected_account, transactions).await?;
+                self.wallet.node_generate_block(selected_account, transactions).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::GenerateBlocks { block_count } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc.generate_blocks(selected_account, block_count).await?;
+                self.wallet.node_generate_blocks(selected_account, block_count).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::CreateNewAccount { name } => {
-                let new_acc = self.wallet_rpc.create_account(name).await?;
+                let new_acc = self.wallet.create_account(name).await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -1323,7 +1298,7 @@ where
 
             WalletCommand::StartStaking => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc.start_staking(selected_account).await?;
+                self.wallet.start_staking(selected_account).await?;
                 Ok(ConsoleCommand::Print(
                     "Staking started successfully".to_owned(),
                 ))
@@ -1331,13 +1306,13 @@ where
 
             WalletCommand::StopStaking => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc.stop_staking(selected_account).await?;
+                self.wallet.stop_staking(selected_account).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::StakingStatus => {
                 let selected_account = self.get_selected_acc()?;
-                let status = self.wallet_rpc.staking_status(selected_account).await?;
+                let status = self.wallet.staking_status(selected_account).await?;
                 let status = match status {
                     wallet_rpc_lib::types::StakingStatus::Staking => "Staking",
                     wallet_rpc_lib::types::StakingStatus::NotStaking => "Not staking",
@@ -1346,15 +1321,15 @@ where
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
-                let balance_opt = self.wallet_rpc.stake_pool_balance(pool_id).await?;
-                match balance_opt {
+                let balance_opt = self.wallet.stake_pool_balance(pool_id).await?;
+                match balance_opt.balance {
                     Some(balance) => Ok(ConsoleCommand::Print(balance)),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
                 }
             }
 
             WalletCommand::SubmitBlock { block } => {
-                self.wallet_rpc.submit_block(block).await?;
+                self.wallet.submit_block(block).await?;
                 Ok(ConsoleCommand::Print(
                     "The block was submitted successfully".to_owned(),
                 ))
@@ -1365,7 +1340,7 @@ where
                 do_not_store,
             } => {
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .submit_raw_transaction(
                         transaction,
                         do_not_store,
@@ -1393,14 +1368,8 @@ where
                     .collect::<Result<Vec<_>, WalletCliError<N>>>(
                 )?;
 
-                let (tx, fees) = self
-                    .wallet_rpc
-                    .compose_transaction(input_utxos, outputs, only_transaction)
-                    .await?;
-                let encoded_tx = match tx {
-                    TransactionToSign::Tx(tx) => HexEncoded::new(tx).to_string(),
-                    TransactionToSign::Partial(tx) => HexEncoded::new(tx).to_string(),
-                };
+                let ComposedTransaction { encoded_tx, fees } =
+                    self.wallet.compose_transaction(input_utxos, outputs, only_transaction).await?;
                 let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
 
                 format_fees(&mut output, fees, chain_config);
@@ -1410,9 +1379,7 @@ where
 
             WalletCommand::AbandonTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
-                    .abandon_transaction(selected_account, transaction_id.take())
-                    .await?;
+                self.wallet.abandon_transaction(selected_account, transaction_id.take()).await?;
                 Ok(ConsoleCommand::Print(
                     "The transaction was marked as abandoned successfully".to_owned(),
                 ))
@@ -1430,15 +1397,17 @@ where
 
                 let account_index = self.get_selected_acc()?;
                 let new_token = self
-                    .wallet_rpc
+                    .wallet
                     .issue_new_token(
                         account_index,
-                        number_of_decimals,
                         destination_address,
-                        token_ticker.into_bytes(),
-                        metadata_uri.into_bytes(),
-                        token_supply,
-                        is_freezable.to_wallet_types(),
+                        TokenMetadata {
+                            token_ticker,
+                            number_of_decimals,
+                            metadata_uri,
+                            token_supply,
+                            is_freezable: is_freezable.to_bool(),
+                        },
                         self.config,
                     )
                     .await?;
@@ -1461,22 +1430,20 @@ where
                 media_uri,
                 additional_metadata_uri,
             } => {
-                let metadata = Metadata {
-                    creator: creator.map(|pk| TokenCreator {
-                        public_key: pk.take(),
-                    }),
-                    name: name.into_bytes(),
-                    description: description.into_bytes(),
-                    ticker: ticker.into_bytes(),
-                    icon_uri: icon_uri.map(|x| x.into_bytes()).into(),
-                    additional_metadata_uri: additional_metadata_uri.map(|x| x.into_bytes()).into(),
-                    media_uri: media_uri.map(|x| x.into_bytes()).into(),
-                    media_hash: media_hash.into_bytes(),
+                let metadata = NftMetadata {
+                    creator,
+                    name,
+                    description,
+                    ticker,
+                    icon_uri,
+                    additional_metadata_uri,
+                    media_uri,
+                    media_hash,
                 };
 
                 let selected_account = self.get_selected_acc()?;
                 let new_token = self
-                    .wallet_rpc
+                    .wallet
                     .issue_new_nft(selected_account, destination_address, metadata, self.config)
                     .await?;
 
@@ -1494,7 +1461,7 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .mint_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
@@ -1504,7 +1471,7 @@ where
             WalletCommand::UnmintTokens { token_id, amount } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .unmint_tokens(selected_account, token_id, amount, self.config)
                     .await?;
 
@@ -1513,10 +1480,8 @@ where
 
             WalletCommand::LockTokenSupply { token_id } => {
                 let selected_account = self.get_selected_acc()?;
-                let new_tx = self
-                    .wallet_rpc
-                    .lock_token_supply(selected_account, token_id, self.config)
-                    .await?;
+                let new_tx =
+                    self.wallet.lock_token_supply(selected_account, token_id, self.config).await?;
 
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
@@ -1527,11 +1492,11 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .freeze_token(
                         selected_account,
                         token_id,
-                        is_unfreezable.to_wallet_types(),
+                        is_unfreezable.to_bool(),
                         self.config,
                     )
                     .await?;
@@ -1542,7 +1507,7 @@ where
             WalletCommand::UnfreezeToken { token_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx =
-                    self.wallet_rpc.unfreeze_token(selected_account, token_id, self.config).await?;
+                    self.wallet.unfreeze_token(selected_account, token_id, self.config).await?;
 
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
@@ -1550,7 +1515,7 @@ where
             WalletCommand::ChangeTokenAuthority { token_id, address } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .change_token_authority(selected_account, token_id, address, self.config)
                     .await?;
 
@@ -1558,14 +1523,14 @@ where
             }
 
             WalletCommand::Rescan => {
-                self.wallet_rpc.rescan().await?;
+                self.wallet.rescan().await?;
                 Ok(ConsoleCommand::Print(
                     "Successfully rescanned the blockchain".to_owned(),
                 ))
             }
 
             WalletCommand::SyncWallet => {
-                self.wallet_rpc.sync().await?;
+                self.wallet.sync().await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
@@ -1575,7 +1540,7 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let (coins, tokens) = self
-                    .wallet_rpc
+                    .wallet
                     .get_balance(
                         selected_account,
                         CliUtxoState::to_wallet_states(utxo_states),
@@ -1604,28 +1569,31 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let utxos = self
-                    .wallet_rpc
+                    .wallet
                     .get_utxos(
                         selected_account,
                         utxo_type.to_wallet_types(),
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .await?;
-                Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
+                    .await
+                    .map(serde_json::Value::Array)?;
+                Ok(ConsoleCommand::Print(
+                    serde_json::to_string(&utxos).expect("ok"),
+                ))
             }
 
             WalletCommand::ListPendingTransactions => {
                 let selected_account = self.get_selected_acc()?;
-                let utxos = self.wallet_rpc.pending_transactions(selected_account).await?;
+                let utxos = self.wallet.list_pending_transactions(selected_account).await?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
             }
 
             WalletCommand::ListMainchainTransactions { address, limit } => {
                 let selected_account = self.get_selected_acc()?;
                 let txs = self
-                    .wallet_rpc
-                    .mainchain_transactions(selected_account, address, limit)
+                    .wallet
+                    .list_transactions_by_address(selected_account, address, limit)
                     .await?;
 
                 let table = {
@@ -1649,10 +1617,10 @@ where
             WalletCommand::GetTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let tx = self
-                    .wallet_rpc
+                    .wallet
                     .get_transaction(selected_account, transaction_id.take())
                     .await
-                    .map(|tx| format!("{:?}", tx))?;
+                    .map(|tx| serde_json::to_string(&tx).expect("ok"))?;
 
                 Ok(ConsoleCommand::Print(tx))
             }
@@ -1660,10 +1628,9 @@ where
             WalletCommand::GetRawTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let tx = self
-                    .wallet_rpc
-                    .get_transaction(selected_account, transaction_id.take())
-                    .await
-                    .map(|tx| HexEncode::hex_encode(tx.get_transaction()))?;
+                    .wallet
+                    .get_raw_transaction(selected_account, transaction_id.take())
+                    .await?;
 
                 Ok(ConsoleCommand::Print(tx))
             }
@@ -1671,10 +1638,9 @@ where
             WalletCommand::GetRawSignedTransaction { transaction_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let tx = self
-                    .wallet_rpc
-                    .get_transaction(selected_account, transaction_id.take())
-                    .await
-                    .map(|tx| HexEncode::hex_encode(tx.get_signed_transaction()))?;
+                    .wallet
+                    .get_raw_signed_transaction(selected_account, transaction_id.take())
+                    .await?;
 
                 Ok(ConsoleCommand::Print(tx))
             }
@@ -1691,45 +1657,46 @@ where
                 )?;
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .send_coins(selected_account, address, amount, input_utxos, self.config)
                     .await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::CreateTxFromColdInput {
-                address,
-                amount,
-                utxo,
-                change_address,
+                address: _,
+                amount: _,
+                utxo: _,
+                change_address: _,
             } => {
-                let selected_input = parse_utxo_outpoint(utxo)?;
-                let selected_account = self.get_selected_acc()?;
-                let (tx, fees) = self
-                    .wallet_rpc
-                    .request_send_coins(
-                        selected_account,
-                        address,
-                        amount,
-                        selected_input,
-                        change_address,
-                        self.config,
-                    )
-                    .await?;
+                // let selected_input = parse_utxo_outpoint(utxo)?;
+                // let selected_account = self.get_selected_acc()?;
+                // let (tx, fees) = self
+                //     .wallet
+                //     .request_send_coins(
+                //         selected_account,
+                //         address,
+                //         amount,
+                //         selected_input,
+                //         change_address,
+                //         self.config,
+                //     )
+                //     .await?;
 
-                let summary = tx.tx().text_summary(self.wallet_rpc.chain_config());
-                let hex_tx = HexEncoded::new(tx);
+                // let summary = tx.tx().text_summary(chain_config);
+                // let hex_tx = HexEncoded::new(tx);
 
-                let qr_code_string = qrcode_or_error_string(&hex_tx.to_string());
+                // let qr_code_string = qrcode_or_error_string(&hex_tx.to_string());
 
-                let mut output_str = format!(
-                    "Send transaction created. \
-                    Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
-                    Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
-                );
-                format_fees(&mut output_str, fees, chain_config);
+                // let mut output_str = format!(
+                //     "Send transaction created. \
+                //     Pass the following string into the cold wallet with private key to sign:\n\n{hex_tx}\n\n\
+                //     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
+                // );
+                // format_fees(&mut output_str, fees, chain_config);
 
-                Ok(ConsoleCommand::Print(output_str))
+                // Ok(ConsoleCommand::Print(output_str))
+                Ok(ConsoleCommand::Print("".into()))
             }
 
             WalletCommand::SendTokensToAddress {
@@ -1739,7 +1706,7 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .send_tokens(selected_account, token_id, address, amount, self.config)
                     .await?;
 
@@ -1749,7 +1716,7 @@ where
             WalletCommand::CreateDelegation { owner, pool_id } => {
                 let selected_account = self.get_selected_acc()?;
                 let delegation_id = self
-                    .wallet_rpc
+                    .wallet
                     .create_delegation(selected_account, owner, pool_id, self.config)
                     .await?
                     .delegation_id;
@@ -1765,7 +1732,7 @@ where
                 delegation_id,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                self.wallet
                     .delegate_staking(selected_account, amount, delegation_id, self.config)
                     .await?;
 
@@ -1781,7 +1748,7 @@ where
                 delegation_id,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                self.wallet_rpc
+                self.wallet
                     .withdraw_from_delegation(
                         selected_account,
                         address,
@@ -1803,7 +1770,7 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .create_stake_pool(
                         selected_account,
                         amount,
@@ -1823,7 +1790,7 @@ where
             } => {
                 let selected_account = self.get_selected_acc()?;
                 let new_tx = self
-                    .wallet_rpc
+                    .wallet
                     .decommission_stake_pool(
                         selected_account,
                         pool_id,
@@ -1839,8 +1806,8 @@ where
                 output_address,
             } => {
                 let selected_account = self.get_selected_acc()?;
-                let result = self
-                    .wallet_rpc
+                let result_hex = self
+                    .wallet
                     .decommission_stake_pool_request(
                         selected_account,
                         pool_id,
@@ -1848,7 +1815,6 @@ where
                         self.config,
                     )
                     .await?;
-                let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
 
                 let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
@@ -1861,36 +1827,33 @@ where
             }
 
             WalletCommand::DepositData { hex_data } => {
-                let data = hex::decode(hex_data).map_err(|e| {
-                    WalletCliError::InvalidInput(format!("invalid hex data: {}", e))
-                })?;
                 let selected_account = self.get_selected_acc()?;
                 let new_tx =
-                    self.wallet_rpc.deposit_data(selected_account, data, self.config).await?;
+                    self.wallet.deposit_data(selected_account, hex_data, self.config).await?;
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
             WalletCommand::NodeVersion => {
-                let version = self.wallet_rpc.node_version().await?;
-                Ok(ConsoleCommand::Print(version))
+                let version = self.wallet.node_version().await?;
+                Ok(ConsoleCommand::Print(version.version))
             }
 
             WalletCommand::ListPoolIds => {
                 let selected_account = self.get_selected_acc()?;
                 let pool_ids: Vec<_> = self
-                    .wallet_rpc
+                    .wallet
                     .list_pool_ids(selected_account)
                     .await?
                     .into_iter()
                     .map(format_pool_info)
                     .collect();
-                Ok(ConsoleCommand::Print(pool_ids.join("\n").to_string()))
+                Ok(ConsoleCommand::Print(format!("{}\n", pool_ids.join("\n"))))
             }
 
             WalletCommand::ListDelegationIds => {
                 let selected_account = self.get_selected_acc()?;
                 let delegations: Vec<_> = self
-                    .wallet_rpc
+                    .wallet
                     .list_delegation_ids(selected_account)
                     .await?
                     .into_iter()
@@ -1904,7 +1867,7 @@ where
             WalletCommand::ListCreatedBlocksIds => {
                 let selected_account = self.get_selected_acc()?;
                 let mut block_ids = self
-                    .wallet_rpc
+                    .wallet
                     .list_created_blocks_ids(selected_account)
                     .await?
                     .into_iter()
@@ -1922,21 +1885,21 @@ where
             }
 
             WalletCommand::NodeShutdown => {
-                self.wallet_rpc.node_shutdown().await?;
+                self.wallet.node_shutdown().await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::Connect { address } => {
-                self.wallet_rpc.connect_to_peer(address).await?;
+                self.wallet.connect_to_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Disconnect { peer_id } => {
-                self.wallet_rpc.disconnect_peer(peer_id).await?;
+                self.wallet.disconnect_peer(peer_id).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::ListBanned => {
-                let list = self.wallet_rpc.list_banned().await?;
+                let list = self.wallet.list_banned().await?;
 
                 let msg = list
                     .iter()
@@ -1946,16 +1909,16 @@ where
                 Ok(ConsoleCommand::Print(msg))
             }
             WalletCommand::Ban { address, duration } => {
-                self.wallet_rpc.ban_address(address, duration.into()).await?;
+                self.wallet.ban_address(address, duration.into()).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Unban { address } => {
-                self.wallet_rpc.unban_address(address).await?;
+                self.wallet.unban_address(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::ListDiscouraged => {
-                let list = self.wallet_rpc.list_discouraged().await?;
+                let list = self.wallet.list_discouraged().await?;
 
                 let msg = list
                     .iter()
@@ -1968,28 +1931,28 @@ where
             }
 
             WalletCommand::PeerCount => {
-                let peer_count = self.wallet_rpc.peer_count().await?;
+                let peer_count = self.wallet.peer_count().await?;
                 Ok(ConsoleCommand::Print(peer_count.to_string()))
             }
             WalletCommand::ConnectedPeers => {
-                let peers = self.wallet_rpc.connected_peers().await?;
+                let peers = self.wallet.connected_peers().await?;
                 Ok(ConsoleCommand::Print(format!("{peers:#?}")))
             }
             WalletCommand::ConnectedPeersJson => {
-                let peers = self.wallet_rpc.connected_peers().await?;
+                let peers = self.wallet.connected_peers().await?;
                 let peers_json = serde_json::to_string(&peers)?;
                 Ok(ConsoleCommand::Print(peers_json))
             }
             WalletCommand::ReservedPeers => {
-                let peers = self.wallet_rpc.reserved_peers().await?;
+                let peers = self.wallet.reserved_peers().await?;
                 Ok(ConsoleCommand::Print(format!("{peers:#?}")))
             }
             WalletCommand::AddReservedPeer { address } => {
-                self.wallet_rpc.add_reserved_peer(address).await?;
+                self.wallet.add_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::RemoveReservedPeer { address } => {
-                self.wallet_rpc.remove_reserved_peer(address).await?;
+                self.wallet.remove_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
         }

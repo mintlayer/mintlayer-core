@@ -15,11 +15,12 @@
 
 pub mod client_impl;
 
+use crypto::key::hdkd::u31::U31;
 use rpc::new_http_client;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
 
-use crate::wallet_rpc_traits::ColdWalletInterface;
+use crate::wallet_rpc_traits::WalletInterface;
 
 // use crate::wallet_rpc_traits::ColdWalletInterface;
 
@@ -50,11 +51,10 @@ impl ClientWalletRpc {
         let http_client =
             new_http_client(host, rpc_auth).map_err(WalletRpcError::ClientCreationError)?;
 
-        let mut client = Self { http_client };
+        let client = Self { http_client };
 
-        //FIXME don't call shutdown
         client
-            .shutdown()
+            .get_issued_addresses(U31::ZERO)
             .await
             .map_err(|e| WalletRpcError::InitializationError(Box::new(e)))?;
 

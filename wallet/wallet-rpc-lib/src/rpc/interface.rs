@@ -15,51 +15,26 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, Id},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{types::BlockInfo, ConnectedPeer};
 use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
-    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount, DelegationInfo,
-    EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
+    CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
+    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
     NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, StakingStatus,
     TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
-use crate::Event;
 
 #[rpc::rpc(server)]
-trait WalletNodeRpc {
-    #[method(name = "node_best_block_id")]
-    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>>;
-
-    #[method(name = "node_best_block_height")]
-    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight>;
-
-    #[method(name = "node_block_id")]
-    async fn node_block_id(
-        &self,
-        block_height: BlockHeight,
-    ) -> rpc::RpcResult<Option<Id<GenBlock>>>;
-
-    #[method(name = "node_get_block")]
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>>;
-
-    #[method(name = "node_generate_block")]
-    async fn node_generate_block(
-        &self,
-        account_index: AccountIndexArg,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
-    ) -> rpc::RpcResult<()>;
-
-    #[method(name = "node_generate_blocks")]
-    async fn node_generate_blocks(
-        &self,
-        account_index: AccountIndexArg,
-        block_count: u32,
-    ) -> rpc::RpcResult<()>;
+trait WalletEventsRpc {
+    #[subscription(name = "subscribe_wallet_events", item = Event)]
+    async fn subscribe_wallet_events(&self, options: EmptyArgs) -> rpc::subscription::Reply;
 }
 
 #[rpc::rpc(server, client)]
@@ -73,13 +48,16 @@ trait WalletRpc {
         path: String,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
-    ) -> rpc::RpcResult<()>;
+    ) -> rpc::RpcResult<CreatedWallet>;
 
     #[method(name = "wallet_open")]
     async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()>;
 
     #[method(name = "wallet_close")]
     async fn close_wallet(&self) -> rpc::RpcResult<()>;
+
+    #[method(name = "wallet_account_names")]
+    async fn account_names(&self) -> rpc::RpcResult<Vec<Option<String>>>;
 
     #[method(name = "wallet_sync")]
     async fn sync(&self) -> rpc::RpcResult<()>;
@@ -185,6 +163,15 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    #[method(name = "staking_decommission_pool_request")]
+    async fn decommission_stake_pool_request(
+        &self,
+        account_index: AccountIndexArg,
+        pool_id: String,
+        output_address: Option<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
+
     #[method(name = "delegation_create")]
     async fn create_delegation(
         &self,
@@ -246,6 +233,12 @@ trait WalletRpc {
         &self,
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<VrfPublicKeyInfo>;
+
+    #[method(name = "staking_show_legacy_vrf_key")]
+    async fn get_legacy_vrf_public_key(
+        &self,
+        account_index: AccountIndexArg,
+    ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo>;
 
     #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(
@@ -408,6 +401,14 @@ trait WalletRpc {
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<Id<Transaction>>>;
 
+    #[method(name = "transaction_list_by_address")]
+    async fn list_transactions_by_address(
+        &self,
+        account_index: AccountIndexArg,
+        address: Option<String>,
+        limit: usize,
+    ) -> rpc::RpcResult<Vec<TxInfo>>;
+
     #[method(name = "transaction_get")]
     async fn get_transaction(
         &self,
@@ -422,6 +423,46 @@ trait WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
 
+    #[method(name = "account_sign_raw_transaction")]
+    async fn sign_raw_transaction(
+        &self,
+        account_index: AccountIndexArg,
+        raw_tx: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
+
+    #[method(name = "account_sign_challenge_plain")]
+    async fn sign_challenge(
+        &self,
+        account_index: AccountIndexArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String>;
+
+    #[method(name = "account_sign_challenge_hex")]
+    async fn sign_challenge_hex(
+        &self,
+        account_index: AccountIndexArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String>;
+
+    #[method(name = "verify_challenge_plain")]
+    async fn verify_challenge(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "verify_challenge_hex")]
+    async fn verify_challenge_hex(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()>;
+
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(
         &self,
@@ -429,6 +470,40 @@ trait WalletRpc {
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
 
-    #[subscription(name = "subscribe_wallet_events", item = Event)]
-    async fn subscribe_wallet_events(&self, options: EmptyArgs) -> rpc::subscription::Reply;
+    #[method(name = "transaction_compose")]
+    async fn compose_transaction(
+        &self,
+        inputs: Vec<UtxoOutPoint>,
+        outputs: Vec<TxOutput>,
+        only_transaction: bool,
+    ) -> rpc::RpcResult<ComposedTransaction>;
+
+    #[method(name = "node_best_block_id")]
+    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>>;
+
+    #[method(name = "node_best_block_height")]
+    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight>;
+
+    #[method(name = "node_block_id")]
+    async fn node_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> rpc::RpcResult<Option<Id<GenBlock>>>;
+
+    #[method(name = "node_generate_block")]
+    async fn node_generate_block(
+        &self,
+        account_index: AccountIndexArg,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "node_generate_blocks")]
+    async fn node_generate_blocks(
+        &self,
+        account_index: AccountIndexArg,
+        block_count: u32,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "node_get_block")]
+    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<String>>;
 }

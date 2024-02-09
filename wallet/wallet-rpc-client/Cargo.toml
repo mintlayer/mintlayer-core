@@ -10,17 +10,20 @@ rust-version.workspace = true
 [dependencies]
 common = { path = "../../common" }
 chainstate = { path = "../../chainstate" }
+crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 node-lib = { path = "../../node-lib" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
+wallet = { path = ".." }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-types = { path = "../types" }
 wallet-controller = { path = "../wallet-controller" }
 node-comm = { path = "../wallet-node-client" }
 p2p-types = { path = "../../p2p/types" }
 
+hex.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 serde_json.workspace = true

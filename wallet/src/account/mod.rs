@@ -30,6 +30,7 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
+use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
@@ -96,6 +97,15 @@ pub struct CurrentFeeRate {
 pub enum TransactionToSign {
     Tx(Transaction),
     Partial(PartiallySignedTransaction),
+}
+
+impl TransactionToSign {
+    pub fn to_hex(self) -> String {
+        match self {
+            Self::Tx(tx) => HexEncoded::new(tx).to_string(),
+            Self::Partial(tx) => HexEncoded::new(tx).to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]

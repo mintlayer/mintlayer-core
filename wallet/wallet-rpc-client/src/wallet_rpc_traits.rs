@@ -13,22 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, SignedTransaction, Transaction, UtxoOutPoint},
-    primitives::{DecimalAmount, Id},
+    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    primitives::{BlockHeight, DecimalAmount, Id},
 };
+use crypto::key::hdkd::u31::U31;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
+    socket_address::SocketAddress, PeerId,
 };
 use serialization::hex_encoded::HexEncoded;
+use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{ConnectedPeer, ControllerConfig};
 use wallet_rpc_lib::types::{
-    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, DelegationInfo,
-    NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, StakingStatus, TokenMetadata,
-    TxOptionsOverrides, VrfPublicKeyInfo,
+    AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
+    DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
+    StakingStatus, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::{
     utxo_types::{UtxoStates, UtxoTypes},
@@ -36,21 +40,26 @@ use wallet_types::{
 };
 
 #[async_trait::async_trait]
-pub trait ColdWalletInterface {
+pub trait WalletInterface {
     type Error: std::error::Error + Send + Sync + 'static;
 
     async fn shutdown(&mut self) -> Result<(), Self::Error>;
 
+    async fn rpc_completed(&self);
+
     async fn create_wallet(
         &self,
-        path: String,
+        path: PathBuf,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<CreatedWallet, Self::Error>;
 
-    async fn open_wallet(&self, path: String, password: Option<String>) -> Result<(), Self::Error>;
+    async fn open_wallet(&self, path: PathBuf, password: Option<String>)
+        -> Result<(), Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;
+
+    async fn account_names(&self) -> Result<Vec<Option<String>>, Self::Error>;
 
     async fn sync(&self) -> Result<(), Self::Error>;
 
@@ -80,30 +89,27 @@ pub trait ColdWalletInterface {
 
     async fn get_issued_addresses(
         &self,
-        options: AccountIndexArg,
+        options: U31,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error>;
 
-    async fn issue_address(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> Result<AddressInfo, Self::Error>;
+    async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error>;
 
     async fn reveal_public_key(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         address: String,
     ) -> Result<PublicKeyInfo, Self::Error>;
 
     async fn get_balance(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error>;
 
     async fn get_utxos(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
@@ -116,9 +122,44 @@ pub trait ColdWalletInterface {
         options: TxOptionsOverrides,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn sign_challenge(
+        &self,
+        account_index: U31,
+        challenge: String,
+        address: String,
+    ) -> Result<String, Self::Error>;
+
+    async fn sign_challenge_hex(
+        &self,
+        account_index: U31,
+        challenge: String,
+        address: String,
+    ) -> Result<String, Self::Error>;
+
+    async fn verify_challenge(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> Result<(), Self::Error>;
+
+    async fn verify_challenge_hex(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> Result<(), Self::Error>;
+
+    async fn compose_transaction(
+        &self,
+        inputs: Vec<UtxoOutPoint>,
+        outputs: Vec<TxOutput>,
+        only_transaction: bool,
+    ) -> Result<ComposedTransaction, Self::Error>;
+
     async fn send_coins(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         address: String,
         amount: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
@@ -127,7 +168,7 @@ pub trait ColdWalletInterface {
 
     async fn create_stake_pool(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
@@ -137,15 +178,23 @@ pub trait ColdWalletInterface {
 
     async fn decommission_stake_pool(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         pool_id: String,
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn decommission_stake_pool_request(
+        &self,
+        account_index: U31,
+        pool_id: String,
+        output_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<PartiallySignedTransaction>, Self::Error>;
+
     async fn create_delegation(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         address: String,
         pool_id: String,
         config: ControllerConfig,
@@ -153,7 +202,7 @@ pub trait ColdWalletInterface {
 
     async fn delegate_staking(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
@@ -161,52 +210,49 @@ pub trait ColdWalletInterface {
 
     async fn withdraw_from_delegation(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         address: String,
         amount: DecimalAmount,
         delegation_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
-    async fn start_staking(&self, account_index: AccountIndexArg) -> Result<(), Self::Error>;
+    async fn start_staking(&self, account_index: U31) -> Result<(), Self::Error>;
 
-    async fn stop_staking(&self, account_index: AccountIndexArg) -> Result<(), Self::Error>;
+    async fn stop_staking(&self, account_index: U31) -> Result<(), Self::Error>;
 
-    async fn staking_status(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> Result<StakingStatus, Self::Error>;
+    async fn staking_status(&self, account_index: U31) -> Result<StakingStatus, Self::Error>;
 
-    async fn list_pool_ids(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> Result<Vec<PoolInfo>, Self::Error>;
+    async fn list_pool_ids(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error>;
 
     async fn stake_pool_balance(&self, pool_id: String) -> Result<StakePoolBalance, Self::Error>;
 
     async fn list_delegation_ids(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
     ) -> Result<Vec<DelegationInfo>, Self::Error>;
 
     async fn list_created_blocks_ids(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
     ) -> Result<Vec<BlockInfo>, Self::Error>;
 
-    async fn new_vrf_public_key(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> Result<VrfPublicKeyInfo, Self::Error>;
+    async fn new_vrf_public_key(&self, account_index: U31)
+        -> Result<VrfPublicKeyInfo, Self::Error>;
 
     async fn get_vrf_public_key(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
     ) -> Result<Vec<VrfPublicKeyInfo>, Self::Error>;
+
+    async fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> Result<LegacyVrfPublicKeyInfo, Self::Error>;
 
     async fn issue_new_nft(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         destination_address: String,
         metadata: NftMetadata,
         config: ControllerConfig,
@@ -214,7 +260,7 @@ pub trait ColdWalletInterface {
 
     async fn issue_new_token(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         destination_address: String,
         metadata: TokenMetadata,
         config: ControllerConfig,
@@ -222,7 +268,7 @@ pub trait ColdWalletInterface {
 
     async fn change_token_authority(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         address: String,
         config: ControllerConfig,
@@ -230,7 +276,7 @@ pub trait ColdWalletInterface {
 
     async fn mint_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         address: String,
         amount: DecimalAmount,
@@ -239,7 +285,7 @@ pub trait ColdWalletInterface {
 
     async fn unmint_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         amount: DecimalAmount,
         config: ControllerConfig,
@@ -247,14 +293,14 @@ pub trait ColdWalletInterface {
 
     async fn lock_token_supply(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
     async fn freeze_token(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         is_unfreezable: bool,
         config: ControllerConfig,
@@ -262,14 +308,14 @@ pub trait ColdWalletInterface {
 
     async fn unfreeze_token(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
     async fn send_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         token_id: String,
         address: String,
         amount: DecimalAmount,
@@ -278,7 +324,7 @@ pub trait ColdWalletInterface {
 
     async fn deposit_data(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         data: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
@@ -289,7 +335,7 @@ pub trait ColdWalletInterface {
 
     async fn connect_to_peer(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
 
-    async fn disconnect_peer(&self, peer_id: u64) -> Result<(), Self::Error>;
+    async fn disconnect_peer(&self, peer_id: PeerId) -> Result<(), Self::Error>;
 
     async fn list_banned(
         &self,
@@ -323,30 +369,67 @@ pub trait ColdWalletInterface {
 
     async fn abandon_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> Result<(), Self::Error>;
 
     async fn list_pending_transactions(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
     ) -> Result<Vec<Id<Transaction>>, Self::Error>;
+
+    async fn list_transactions_by_address(
+        &self,
+        account_index: U31,
+        address: Option<String>,
+        limit: usize,
+    ) -> Result<Vec<TxInfo>, Self::Error>;
 
     async fn get_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> Result<serde_json::Value, Self::Error>;
 
     async fn get_raw_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> Result<String, Self::Error>;
 
     async fn get_raw_signed_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> Result<String, Self::Error>;
+
+    async fn sign_raw_transaction(
+        &self,
+        account_index: U31,
+        raw_tx: String,
+        config: ControllerConfig,
+    ) -> Result<PartiallySignedTransaction, Self::Error>;
+
+    async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
+
+    async fn node_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
+
+    async fn node_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, Self::Error>;
+
+    async fn node_generate_block(
+        &self,
+        account_index: U31,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    ) -> Result<(), Self::Error>;
+
+    async fn node_generate_blocks(
+        &self,
+        account_index: U31,
+        block_count: u32,
+    ) -> Result<(), Self::Error>;
+
+    async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error>;
 }

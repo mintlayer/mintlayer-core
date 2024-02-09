@@ -50,6 +50,7 @@ use crate::{get_tx_output_destination, WalletError, WalletResult};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TxInfo {
     pub id: Id<Transaction>,
     pub height: BlockHeight,

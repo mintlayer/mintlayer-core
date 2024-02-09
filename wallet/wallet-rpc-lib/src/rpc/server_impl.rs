@@ -16,7 +16,11 @@
 use chainstate::ChainInfo;
 use common::{
     address::dehexify::{dehexify_all_addresses, to_dehexified_json},
-    chain::{tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction},
+    chain::{
+        signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
+    },
     primitives::{time::Time, BlockHeight, Id, Idable, H256},
 };
 use p2p_types::{
@@ -25,66 +29,36 @@ use p2p_types::{
 };
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::{fmt::Debug, str::FromStr, time::Duration};
+use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::BlockInfo, ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use crate::{
-    rpc::{WalletNodeRpcServer, WalletRpc, WalletRpcServer},
+    rpc::{WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
-        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, DecimalAmount,
-        DelegationInfo, EmptyArgs, HexEncoded, JsonValue, NewAccountInfo, NewDelegation,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
-        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
+        CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
+        LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+        NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
+        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     RpcError,
 };
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletNodeRpcServer
+impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletEventsRpcServer
     for WalletRpc<N>
 {
-    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>> {
-        rpc::handle_result(self.node_best_block_id().await)
-    }
-
-    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight> {
-        rpc::handle_result(self.node_best_block_height().await)
-    }
-
-    async fn node_block_id(
+    async fn subscribe_wallet_events(
         &self,
-        block_height: BlockHeight,
-    ) -> rpc::RpcResult<Option<Id<GenBlock>>> {
-        rpc::handle_result(self.node_block_id(block_height).await)
-    }
-
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<Block>> {
-        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
-        rpc::handle_result(self.get_node_block(hash.into()).await)
-    }
-
-    async fn node_generate_block(
-        &self,
-        account_index: AccountIndexArg,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
-    ) -> rpc::RpcResult<()> {
-        let transactions = transactions.into_iter().map(HexEncoded::take).collect();
-        rpc::handle_result(
-            self.generate_block(account_index.index::<N>()?, transactions).await.map(|_| {}),
-        )
-    }
-
-    async fn node_generate_blocks(
-        &self,
-        account_index: AccountIndexArg,
-        block_count: u32,
-    ) -> rpc::RpcResult<()> {
-        rpc::handle_result(
-            self.generate_blocks(account_index.index::<N>()?, block_count).await.map(|_| {}),
-        )
+        pending: rpc::subscription::Pending,
+        _options: EmptyArgs,
+    ) -> rpc::subscription::Reply {
+        let wallet_events = self.wallet.subscribe().await?;
+        rpc::subscription::connect_broadcast(wallet_events, pending).await
     }
 }
 
@@ -99,7 +73,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         path: String,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
-    ) -> rpc::RpcResult<()> {
+    ) -> rpc::RpcResult<CreatedWallet> {
         let whether_to_store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
         } else {
@@ -108,7 +82,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(
             self.create_wallet(path.into(), whether_to_store_seed_phrase, mnemonic)
                 .await
-                .map(|_| ()),
+                .map(|res| match res {
+                    crate::CreatedWallet::UserProvidedMenmonic => {
+                        CreatedWallet::UserProvidedMenmonic
+                    }
+                    crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
+                        CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
+                    }
+                }),
         )
     }
 
@@ -118,6 +99,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
     async fn close_wallet(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.close_wallet().await)
+    }
+
+    async fn account_names(&self) -> rpc::RpcResult<Vec<Option<String>>> {
+        rpc::handle_result(self.account_names().await)
     }
 
     async fn rescan(&self) -> rpc::RpcResult<()> {
@@ -302,6 +287,28 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 config,
             )
             .await,
+        )
+    }
+
+    async fn decommission_stake_pool_request(
+        &self,
+        account_index: AccountIndexArg,
+        pool_id: String,
+        output_address: Option<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+        };
+        rpc::handle_result(
+            self.decommission_stake_pool_request(
+                account_index.index::<N>()?,
+                pool_id,
+                output_address,
+                config,
+            )
+            .await
+            .map(HexEncoded::new),
         )
     }
 
@@ -590,9 +597,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             in_top_x_mb: options.in_top_x_mb,
         };
 
-        rpc::handle_result(
-            self.deposit_data(account_index.index::<N>()?, data.into_bytes(), config).await,
-        )
+        let data = hex::decode(data).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        rpc::handle_result(self.deposit_data(account_index.index::<N>()?, data, config).await)
     }
 
     async fn stake_pool_balance(&self, pool_id: String) -> rpc::RpcResult<StakePoolBalance> {
@@ -615,6 +621,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_index: AccountIndexArg,
     ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>> {
         rpc::handle_result(self.get_vrf_key_usage(account_index.index::<N>()?).await)
+    }
+
+    async fn get_legacy_vrf_public_key(
+        &self,
+        account_index: AccountIndexArg,
+    ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo> {
+        rpc::handle_result(self.get_legacy_vrf_public_key(account_index.index::<N>()?).await)
     }
 
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion> {
@@ -709,6 +722,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn list_transactions_by_address(
+        &self,
+        account_index: AccountIndexArg,
+        address: Option<String>,
+        limit: usize,
+    ) -> rpc::RpcResult<Vec<TxInfo>> {
+        rpc::handle_result(
+            self.mainchain_transactions(account_index.index::<N>()?, address, limit).await,
+        )
+    }
+
     async fn get_transaction(
         &self,
         account_index: AccountIndexArg,
@@ -749,12 +773,130 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
-    async fn subscribe_wallet_events(
+    async fn sign_raw_transaction(
         &self,
-        pending: rpc::subscription::Pending,
-        _options: EmptyArgs,
-    ) -> rpc::subscription::Reply {
-        let wallet_events = self.wallet.subscribe().await?;
-        rpc::subscription::connect_broadcast(wallet_events, pending).await
+        account_index: AccountIndexArg,
+        raw_tx: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+        };
+        rpc::handle_result(
+            self.sign_raw_transaction(account_index.index::<N>()?, raw_tx, config)
+                .await
+                .map(HexEncoded::new),
+        )
+    }
+
+    async fn sign_challenge(
+        &self,
+        account_index: AccountIndexArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String> {
+        rpc::handle_result(
+            self.sign_challenge(account_index.index::<N>()?, challenge.into_bytes(), address)
+                .await
+                .map(ArbitraryMessageSignature::to_hex),
+        )
+    }
+
+    async fn sign_challenge_hex(
+        &self,
+        account_index: AccountIndexArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String> {
+        let challenge = hex::decode(challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        rpc::handle_result(
+            self.sign_challenge(account_index.index::<N>()?, challenge, address)
+                .await
+                .map(ArbitraryMessageSignature::to_hex),
+        )
+    }
+
+    async fn verify_challenge(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()> {
+        let signed_challenge =
+            hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        rpc::handle_result(self.verify_challenge(message.into_bytes(), signed_challenge, address))
+    }
+
+    async fn verify_challenge_hex(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()> {
+        let message = hex::decode(message).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        let signed_challenge =
+            hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        rpc::handle_result(self.verify_challenge(message, signed_challenge, address))
+    }
+
+    async fn compose_transaction(
+        &self,
+        inputs: Vec<UtxoOutPoint>,
+        outputs: Vec<TxOutput>,
+        only_transaction: bool,
+    ) -> rpc::RpcResult<ComposedTransaction> {
+        rpc::handle_result(
+            self.compose_transaction(inputs, outputs, only_transaction)
+                .await
+                .map(|(tx, fees)| ComposedTransaction {
+                    encoded_tx: tx.to_hex(),
+                    fees,
+                }),
+        )
+    }
+
+    async fn node_best_block_id(&self) -> rpc::RpcResult<Id<GenBlock>> {
+        rpc::handle_result(self.node_best_block_id().await)
+    }
+
+    async fn node_best_block_height(&self) -> rpc::RpcResult<BlockHeight> {
+        rpc::handle_result(self.node_best_block_height().await)
+    }
+
+    async fn node_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> rpc::RpcResult<Option<Id<GenBlock>>> {
+        rpc::handle_result(self.node_block_id(block_height).await)
+    }
+
+    async fn node_generate_block(
+        &self,
+        account_index: AccountIndexArg,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+    ) -> rpc::RpcResult<()> {
+        let transactions = transactions.into_iter().map(HexEncoded::take).collect();
+        rpc::handle_result(
+            self.generate_block(account_index.index::<N>()?, transactions).await.map(|_| {}),
+        )
+    }
+
+    async fn node_generate_blocks(
+        &self,
+        account_index: AccountIndexArg,
+        block_count: u32,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.generate_blocks(account_index.index::<N>()?, block_count).await.map(|_| {}),
+        )
+    }
+
+    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<String>> {
+        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
+        rpc::handle_result(
+            self.get_node_block(hash.into())
+                .await
+                .map(|block_opt| block_opt.map(|block| block.hex_encode())),
+        )
     }
 }

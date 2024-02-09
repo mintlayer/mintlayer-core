@@ -48,7 +48,7 @@ use common::{
         Idable,
     },
 };
-pub use interface::{WalletNodeRpcServer, WalletRpcClient, WalletRpcServer};
+pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{Balances, BlockInfo},
@@ -1310,7 +1310,7 @@ pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
     rpc::Builder::new(bind_addr, auth_credentials)
         .with_method_list("list_methods")
         .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
-        .register(WalletNodeRpcServer::into_rpc(wallet_rpc))
+        .register(WalletEventsRpcServer::into_rpc(wallet_rpc))
         .build()
         .await
 }
