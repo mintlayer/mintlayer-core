@@ -30,6 +30,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
 use tokens_accounting::TokensAccountingStorageRead;
+use tx_verifier::transaction_verifier::CachedUtxosBlockUndo;
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -75,6 +76,19 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                 .get_block_index(&id)
                 .map(|b| b.map(GenBlockIndex::Block)),
         }
+    }
+
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
+        self.storage
+            .transaction_ro()
+            .unwrap()
+            .get_undo_data(id)?
+            .map(|undo| CachedUtxosBlockUndo::from_utxo_block_undo(undo))
+            .transpose()
+            .map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_token_aux_data(
@@ -134,13 +148,6 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error> {
         self.storage.transaction_ro().unwrap().get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error> {
-        self.storage.transaction_ro().unwrap().get_undo_data(id)
     }
 }
 

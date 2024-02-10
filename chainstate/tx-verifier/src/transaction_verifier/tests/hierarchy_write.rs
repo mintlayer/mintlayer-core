@@ -53,7 +53,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
     let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-    let block_1_undo = UtxosBlockUndo::new(
+    let block_1_undo = CachedUtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             tx_1_id,
@@ -65,7 +65,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
     let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
-    let block_2_undo = UtxosBlockUndo::new(
+    let block_2_undo = CachedUtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             tx_2_id,
@@ -427,7 +427,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     let (_, utxo4) = create_utxo(&mut rng, 4000);
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-    let block_undo_1 = UtxosBlockUndo::new(
+    let block_undo_1 = CachedUtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
         BTreeMap::from([(
             tx_1_id,
@@ -436,7 +436,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     )
     .unwrap();
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
-    let block_undo_2 = UtxosBlockUndo::new(
+    let block_undo_2 = CachedUtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
         BTreeMap::from([(
             tx_2_id,
@@ -444,7 +444,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         )]),
     )
     .unwrap();
-    let expected_block_undo = UtxosBlockUndo::new(
+    let expected_block_undo = CachedUtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
         BTreeMap::from([
             (
@@ -1392,7 +1392,7 @@ fn utxo_set_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
 
     let reward_undo = UtxosBlockRewardUndo::new(vec![create_utxo(&mut rng, 100).1]);
 
-    let expected_block_undo = UtxosBlockUndo::new(
+    let expected_block_undo = CachedUtxosBlockUndo::new(
         Some(reward_undo.clone()),
         BTreeMap::from([(tx_1_id, tx_1_undo.clone()), (tx_2_id, tx_2_undo.clone())]),
     )
@@ -1425,7 +1425,7 @@ fn utxo_set_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
     verifier_tx_1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
         CachedUtxoBlockUndoOp::Write(
-            UtxosBlockUndo::new(None, BTreeMap::from([(tx_1_id, tx_1_undo)])).unwrap(),
+            CachedUtxosBlockUndo::new(None, BTreeMap::from([(tx_1_id, tx_1_undo)])).unwrap(),
         ),
     )]));
     let consumed_verifier = verifier_tx_1.consume().unwrap();
@@ -1436,7 +1436,7 @@ fn utxo_set_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
     verifier_tx_2.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
         CachedUtxoBlockUndoOp::Write(
-            UtxosBlockUndo::new(None, BTreeMap::from([(tx_2_id, tx_2_undo)])).unwrap(),
+            CachedUtxosBlockUndo::new(None, BTreeMap::from([(tx_2_id, tx_2_undo)])).unwrap(),
         ),
     )]));
     let consumed_verifier = verifier_tx_2.consume().unwrap();
@@ -1446,7 +1446,7 @@ fn utxo_set_from_chain_hierarchy_with_derived(#[case] seed: Seed) {
     verifier_reward.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
         CachedUtxoBlockUndoOp::Write(
-            UtxosBlockUndo::new(Some(reward_undo), BTreeMap::new()).unwrap(),
+            CachedUtxosBlockUndo::new(Some(reward_undo), BTreeMap::new()).unwrap(),
         ),
     )]));
     let consumed_verifier = verifier_reward.consume().unwrap();

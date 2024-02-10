@@ -21,6 +21,7 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
+    utxos_undo_cache::CachedUtxosBlockUndo,
     CachedOperation, TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
@@ -40,7 +41,7 @@ use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
     TokensAccountingStorageRead, TokensAccountingView,
 };
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
 impl<
         C,
@@ -73,6 +74,17 @@ where
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.storage.get_gen_block_index(block_id)
+    }
+
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
+            // FIXME: combine???
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_undo_data(id),
+        }
     }
 
     fn get_token_aux_data(
@@ -139,18 +151,6 @@ where
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         Ok(self.best_block)
     }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
-        match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(op) => match op {
-                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
-                    Ok(Some(undo.clone()))
-                }
-                CachedOperation::Erase => Ok(None),
-            },
-            None => self.storage.get_undo_data(id),
-        }
-    }
 }
 
 impl<C, S, U, A, T> TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A, T>
@@ -203,7 +203,7 @@ where
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &UtxosBlockUndo,
+        new_undo: &CachedUtxosBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.utxo_block_undo
             .set_undo_data(tx_source, new_undo)

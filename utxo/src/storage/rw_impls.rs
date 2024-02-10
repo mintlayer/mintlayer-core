@@ -32,13 +32,6 @@ impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error> {
         self.0.set_best_block_for_utxos(block_id)
     }
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error> {
-        self.0.set_undo_data(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error> {
-        self.0.del_undo_data(id)
-    }
 }
 
 impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
@@ -50,9 +43,5 @@ impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         self.0.get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
-        self.0.get_undo_data(id)
     }
 }

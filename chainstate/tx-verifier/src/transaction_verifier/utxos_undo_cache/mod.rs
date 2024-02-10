@@ -20,9 +20,12 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndo, UtxosTxUndoWithSources};
+use utxo::{UtxosBlockRewardUndo, UtxosTxUndo, UtxosTxUndoWithSources};
 
-pub type CachedUtxoBlockUndoOp = CachedOperation<UtxosBlockUndo>;
+mod cached_utxo_block_undo;
+pub use cached_utxo_block_undo::CachedUtxosBlockUndo;
+
+pub type CachedUtxoBlockUndoOp = CachedOperation<CachedUtxosBlockUndo>;
 
 // FIXME: think if it's possible to not fully use undo data
 
@@ -55,9 +58,9 @@ impl UtxosBlockUndoCache {
         &self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<Option<UtxosBlockUndo>, ConnectTransactionError>
+    ) -> Result<Option<CachedUtxosBlockUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         match self.data.get(tx_source) {
@@ -77,17 +80,12 @@ impl UtxosBlockUndoCache {
         }
     }
 
-    pub fn add_tx_undo<F, E>(
+    pub fn add_tx_undo(
         &mut self,
         tx_source: TransactionSource,
-        fetcher_func: F,
         tx_id: Id<Transaction>,
         tx_undo: UtxosTxUndoWithSources,
-    ) -> Result<(), ConnectTransactionError>
-    where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
-        ConnectTransactionError: From<E>,
-    {
+    ) -> Result<(), ConnectTransactionError> {
         println!("add_tx_undo {:?}", tx_id);
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
@@ -95,20 +93,16 @@ impl UtxosBlockUndoCache {
                     let mut block_undo = undo.clone();
                     block_undo.insert_tx_undo(tx_id, tx_undo)?;
                     entry.insert(CachedOperation::Write(block_undo.clone()));
-                    println!("block undo tx size {:?}", block_undo.tx_undos().len());
+                    //println!("block undo tx size {:?}", block_undo.tx_undos().len());
                 }
                 CachedOperation::Erase => todo!("is it invariant?"),
             },
             Entry::Vacant(entry) => {
-                let mut block_undo = match tx_source {
-                    TransactionSource::Chain(block_id) => fetcher_func(block_id)?,
-                    TransactionSource::Mempool => None,
-                }
-                .unwrap_or_default();
+                let mut block_undo = CachedUtxosBlockUndo::default();
                 block_undo.insert_tx_undo(tx_id, tx_undo)?;
-                println!("block undo tx size {:?}", block_undo.tx_undos().len());
+                //println!("block undo tx size {:?}", block_undo.tx_undos().len());
 
-                entry.insert(CachedUtxoBlockUndoOp::Write(block_undo));
+                entry.insert(CachedOperation::Write(block_undo));
             }
         };
         println!("---");
@@ -116,16 +110,11 @@ impl UtxosBlockUndoCache {
         Ok(())
     }
 
-    pub fn add_reward_undo<F, E>(
+    pub fn add_reward_undo(
         &mut self,
         tx_source: TransactionSource,
-        fetcher_func: F,
         reward_undo: UtxosBlockRewardUndo,
-    ) -> Result<(), ConnectTransactionError>
-    where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
-        ConnectTransactionError: From<E>,
-    {
+    ) -> Result<(), ConnectTransactionError> {
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
@@ -136,14 +125,10 @@ impl UtxosBlockUndoCache {
                 CachedOperation::Erase => todo!("is it invariant?"),
             },
             Entry::Vacant(entry) => {
-                let mut block_undo = match tx_source {
-                    TransactionSource::Chain(block_id) => fetcher_func(block_id)?,
-                    TransactionSource::Mempool => None,
-                }
-                .unwrap_or_default();
+                let mut block_undo = CachedUtxosBlockUndo::default();
                 block_undo.set_block_reward_undo(reward_undo);
 
-                entry.insert(CachedUtxoBlockUndoOp::Write(block_undo));
+                entry.insert(CachedOperation::Write(block_undo));
             }
         };
 
@@ -157,7 +142,7 @@ impl UtxosBlockUndoCache {
         fetcher_func: F,
     ) -> Result<UtxosTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         println!("take_tx_undo {:?}", tx_id);
@@ -197,7 +182,7 @@ impl UtxosBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<UtxosBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         println!("take_block_reward_undo {:?}", tx_source);
@@ -208,7 +193,7 @@ impl UtxosBlockUndoCache {
                     let block_undo = fetcher_func(*block_id)?;
                     Ok(block_undo)
                 }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
+                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo), // FIXME: this should fetch
             },
             Entry::Occupied(entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
@@ -240,24 +225,15 @@ impl UtxosBlockUndoCache {
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &UtxosBlockUndo,
+        new_undo: &CachedUtxosBlockUndo,
     ) -> Result<(), utxo::UtxosBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(CachedUtxoBlockUndoOp::Write(new_undo.clone()));
+                e.insert(CachedOperation::Write(new_undo.clone()));
             }
             Entry::Occupied(mut e) => match e.get_mut() {
-                CachedUtxoBlockUndoOp::Write(undo) => {
-                    //undo.combine(new_undo.clone())?;
-                    *undo = new_undo.clone();
-                }
-                CachedUtxoBlockUndoOp::Read(undo) => {
-                    if undo != new_undo {
-                        *e.get_mut() = CachedUtxoBlockUndoOp::Write(new_undo.clone());
-                    }
-                    //let mut result = undo.clone();
-                    //result.combine(new_undo.clone())?;
-                    //*e.get_mut() = CachedUtxoBlockUndoOp::Write(result);
+                CachedUtxoBlockUndoOp::Write(undo) | CachedUtxoBlockUndoOp::Read(undo) => {
+                    undo.combine(new_undo.clone());
                 }
                 CachedUtxoBlockUndoOp::Erase => {
                     todo!("is is an error?")

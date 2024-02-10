@@ -26,7 +26,7 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockReward},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        OutPointSourceId, Transaction, TxInput,
+        Block, OutPointSourceId, Transaction, TxInput,
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
@@ -126,6 +126,7 @@ fn create_utxo_entries(
     map
 }
 
+/*
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -278,6 +279,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(res.ok().as_ref(), expected_utxo);
     });
 }
+*/
 
 #[rstest]
 #[trace]

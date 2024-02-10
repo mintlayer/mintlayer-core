@@ -129,6 +129,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
+        self.read::<db::DBUtxosBlockUndo, _, _>(id)
+    }
+
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
@@ -200,10 +204,6 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
     fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>> {
         self.read_value::<well_known::UtxosBestBlockId>()
             .map(|id| id.expect("Best block for UTXOs to be present"))
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
-        self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 }
 
@@ -345,6 +345,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
+        self.read::<db::DBUtxosBlockUndo, _, _>(id)
+    }
+
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
@@ -416,10 +420,6 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
     fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>> {
         self.read_value::<well_known::UtxosBestBlockId>()
             .map(|id| id.expect("Best block for UTXOs to be present"))
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
-        self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 }
 

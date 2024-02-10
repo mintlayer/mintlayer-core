@@ -30,7 +30,7 @@ use thiserror::Error;
 use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
-use super::{error::TokensError, TransactionSource};
+use super::{error::TokensError, utxos_undo_cache::CachedUtxosBlockUndo, TransactionSource};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -79,6 +79,11 @@ pub trait TransactionVerifierStorageRef:
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
+
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_token_aux_data(
         &self,
@@ -132,7 +137,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &utxo::UtxosBlockUndo,
+        undo: &CachedUtxosBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_utxo_undo_data(
@@ -197,6 +202,13 @@ where
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.deref().get_gen_block_index(block_id)
+    }
+
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_undo_data(id)
     }
 
     fn get_token_aux_data(

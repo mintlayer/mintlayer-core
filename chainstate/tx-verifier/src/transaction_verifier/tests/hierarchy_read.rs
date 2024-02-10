@@ -114,7 +114,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo0_undo) = create_utxo(&mut rng, 100);
-    let block_undo_0 = UtxosBlockUndo::new(
+    let block_undo_0 = CachedUtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
@@ -125,7 +125,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
 
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo1_undo) = create_utxo(&mut rng, 100);
-    let block_undo_1 = UtxosBlockUndo::new(
+    let block_undo_1 = CachedUtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
@@ -136,7 +136,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
 
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo2_undo) = create_utxo(&mut rng, 100);
-    let block_undo_2 = UtxosBlockUndo::new(
+    let block_undo_2 = CachedUtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),

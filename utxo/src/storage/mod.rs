@@ -18,9 +18,9 @@ pub mod in_memory;
 mod rw_impls;
 mod view_impls;
 
-use crate::{FlushableUtxoView, Utxo, UtxosBlockUndo, UtxosCache};
+use crate::{FlushableUtxoView, Utxo, UtxosCache};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, UtxoOutPoint},
+    chain::{ChainConfig, GenBlock, UtxoOutPoint},
     primitives::{BlockHeight, Id},
 };
 use std::ops::{Deref, DerefMut};
@@ -29,7 +29,6 @@ pub trait UtxosStorageRead {
     type Error: std::error::Error;
     fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error>;
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error>;
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error>;
 }
 
 pub trait UtxosStorageWrite: UtxosStorageRead {
@@ -37,9 +36,6 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
     fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> Result<(), Self::Error>;
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error>;
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error>;
 }
 
 #[must_use]
@@ -95,10 +91,6 @@ where
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         self.deref().get_best_block_for_utxos()
     }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
-        self.deref().get_undo_data(id)
-    }
 }
 
 impl<T> UtxosStorageWrite for T
@@ -116,14 +108,6 @@ where
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error> {
         self.deref_mut().set_best_block_for_utxos(block_id)
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error> {
-        self.deref_mut().set_undo_data(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error> {
-        self.deref_mut().del_undo_data(id)
     }
 }
 

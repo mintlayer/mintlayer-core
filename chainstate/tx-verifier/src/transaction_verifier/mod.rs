@@ -20,7 +20,6 @@ mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
 mod tokens_accounting_undo_cache;
-mod utxos_undo_cache;
 
 pub mod check_transaction;
 pub mod error;
@@ -41,6 +40,9 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
 mod cached_operation;
 pub use cached_operation::CachedOperation;
+
+mod utxos_undo_cache;
+pub use utxos_undo_cache::CachedUtxosBlockUndo;
 
 pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
 
@@ -837,14 +839,8 @@ where
             .map_err(ConnectTransactionError::from)?;
 
         // save spent utxos for undo
-        let block_undo_fetcher = |id: Id<Block>| {
-            self.storage
-                .get_undo_data(id)
-                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
-        };
         self.utxo_block_undo.add_tx_undo(
             TransactionSource::from(tx_source),
-            block_undo_fetcher,
             tx.transaction().get_id(),
             tx_undo,
         )?;
@@ -886,16 +882,8 @@ where
 
         if let Some(reward_undo) = reward_undo {
             // save spent utxos for undo
-            let block_undo_fetcher = |id: Id<Block>| {
-                self.storage
-                    .get_undo_data(id)
-                    .map_err(|_| ConnectTransactionError::UndoFetchFailure)
-            };
-            self.utxo_block_undo.add_reward_undo(
-                TransactionSource::Chain(block_id),
-                block_undo_fetcher,
-                reward_undo,
-            )?;
+            self.utxo_block_undo
+                .add_reward_undo(TransactionSource::Chain(block_id), reward_undo)?;
         }
 
         match block_index.block_header().consensus_data() {

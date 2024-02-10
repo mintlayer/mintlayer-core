@@ -39,7 +39,7 @@ use pos_accounting::{
     PoSAccountingStorageWrite,
 };
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
-use utxo::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 pub use internal::{ChainstateStorageVersion, Store};
 
@@ -91,6 +91,8 @@ pub trait BlockchainStorageRead:
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
+
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
     /// Get token creation tx
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
@@ -171,6 +173,9 @@ pub trait BlockchainStorageWrite:
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> Result<()>;
+
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<()>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Set data associated with token issuance (and ACL changes in the future)
     fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> Result<()>;

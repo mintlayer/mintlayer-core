@@ -79,6 +79,14 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBBlockByHeight, _>().del(height).map_err(Into::into)
     }
 
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
+        self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<db::DBUtxosBlockUndo, _>().del(id).map_err(Into::into)
+    }
+
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
@@ -197,14 +205,6 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()> {
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
-        self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBUtxosBlockUndo, _>().del(id).map_err(Into::into)
     }
 }
 
