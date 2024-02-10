@@ -177,7 +177,6 @@ class WalletColdSend(BitcoinTestFramework):
 
             output = await wallet.submit_transaction(signed_tx)
             assert_in("The transaction was submitted successfully", output)
-            tx_id = output.split('\n')[1]
 
             transactions = node.mempool_transactions()
             assert_in(signed_tx, transactions)
