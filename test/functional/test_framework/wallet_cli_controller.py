@@ -110,7 +110,7 @@ class WalletCliController:
                 # try to decode, sometimes the read can split a utf-8 symbol in half and the decode can fail
                 # in that case try to read the rest of the output and try to parse again
                 try:
-                    result = output_buf.decode().strip()
+                    result = output_buf.decode()
                 except:
                     pass
 
@@ -121,7 +121,7 @@ class WalletCliController:
                     if not output:
                         break
                     self.wallet_commands_file.write(output)
-                    result += output.decode().strip()
+                    result += output.decode()
             except:
                 pass
 
@@ -137,7 +137,7 @@ class WalletCliController:
         self.wallet_commands_file.write(encoded_cmd)
         self.process.stdin.write(encoded_cmd)
         await self.process.stdin.drain()
-        return await self._read_available_output()
+        return (await self._read_available_output()).strip()
 
     async def create_wallet(self, name: str = "wallet", mnemonic: Optional[str] = None) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
