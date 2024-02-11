@@ -36,8 +36,8 @@ where
     one - (-alpha * t).exp()
 }
 
-// The value of alpha, 0.025, is chosen such that when a block time is hit (120 seconds), there's 5% of the range of the asymptote left.
-const ALPHA: f64 = 0.025;
+// The value of alpha, 0.025, is chosen such that when a block time is hit (120 seconds), there's 30% of the range of the asymptote left.
+const ALPHA: f64 = 0.01;
 
 // We scale the weights by this factor to ensure that they are resolvable as integers, to avoid using floating-point numbers.
 const SCALING_FACTOR: f64 = 1e18;
