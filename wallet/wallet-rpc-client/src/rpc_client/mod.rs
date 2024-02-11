@@ -16,6 +16,7 @@
 pub mod client_impl;
 
 use rpc::new_http_client;
+use rpc::ClientError;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
 
@@ -28,9 +29,9 @@ pub enum WalletRpcError {
     #[error("Decoding error: {0}")]
     DecodingError(#[from] serialization::hex::HexError),
     #[error("Client creation error: {0}")]
-    ClientCreationError(jsonrpsee::core::ClientError),
+    ClientCreationError(ClientError),
     #[error("Response error: {0}")]
-    ResponseError(jsonrpsee::core::ClientError),
+    ResponseError(ClientError),
 }
 
 #[derive(Clone, Debug)]

@@ -25,6 +25,7 @@ pub type RpcResult<T> = jsonrpsee::core::RpcResult<T>;
 pub type RpcCallResult<T> = std::result::Result<T, jsonrpsee::MethodsError>;
 pub type RpcClientResult<T> = std::result::Result<T, jsonrpsee::core::ClientError>;
 pub type Error = ErrorObjectOwned;
+pub type ClientError = jsonrpsee::core::ClientError;
 
 /// Handle RPC result
 ///

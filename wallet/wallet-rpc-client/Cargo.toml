@@ -30,8 +30,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 tower.workspace = true
 
-jsonrpsee = { workspace = true, default-features = false }
-
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
 
