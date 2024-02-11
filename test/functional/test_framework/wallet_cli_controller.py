@@ -64,6 +64,7 @@ class DelegationData:
 class CreatedBlockInfo:
     block_id: str
     block_height: str
+    pool_id: str
 
 class WalletCliController:
 
@@ -337,9 +338,9 @@ class WalletCliController:
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output =  await self._write_command("staking-list-created-block-ids\n")
         self.log.info(output)
-        pattern = r"\((\d+),\s*([0-9a-fA-F]+)\)"
+        pattern = r"\((\d+),\s*([0-9a-fA-F]+),\s*([a-zA-Z0-9]+)\)"
         matches = re.findall(pattern, output)
-        return [CreatedBlockInfo(block_id, block_height) for block_height, block_id in matches]
+        return [CreatedBlockInfo(block_id, block_height, pool_id) for block_height, block_id, pool_id in matches]
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
         output = await self._write_command(f"delegation-create {address} {pool_id}\n")

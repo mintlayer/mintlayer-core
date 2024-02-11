@@ -35,7 +35,10 @@ use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
     version::get_version,
 };
-use wallet_controller::{types::WalletInfo, ConnectedPeer, ControllerConfig};
+use wallet_controller::{
+    types::{CreatedBlockInfo, WalletInfo},
+    ConnectedPeer, ControllerConfig,
+};
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
@@ -553,7 +556,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     async fn list_created_blocks_ids(
         &self,
         account_index: U31,
-    ) -> Result<Vec<BlockInfo>, Self::Error> {
+    ) -> Result<Vec<CreatedBlockInfo>, Self::Error> {
         self.wallet_rpc
             .list_created_blocks_ids(account_index)
             .await

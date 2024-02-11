@@ -950,7 +950,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_created_blocks(
         &self,
         account_index: U31,
-    ) -> WalletResult<Vec<(BlockHeight, Id<GenBlock>)>> {
+    ) -> WalletResult<Vec<(BlockHeight, Id<GenBlock>, PoolId)>> {
         let block_ids = self.get_account(account_index)?.get_created_blocks();
         Ok(block_ids)
     }

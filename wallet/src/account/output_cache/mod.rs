@@ -1330,7 +1330,7 @@ impl OutputCache {
     pub fn get_created_blocks<F: Fn(&Destination) -> bool>(
         &self,
         is_mine: F,
-    ) -> Vec<(BlockHeight, Id<GenBlock>)> {
+    ) -> Vec<(BlockHeight, Id<GenBlock>, PoolId)> {
         self.txs
             .values()
             .filter_map(|wtx| match wtx {
@@ -1338,8 +1338,8 @@ impl OutputCache {
                 WalletTx::Block(block) => block
                     .kernel_inputs()
                     .iter()
-                    .any(|inp| self.created_by_our_stake_pool(inp, &is_mine))
-                    .then_some((block.height(), *block.block_id())),
+                    .find_map(|inp| self.created_by_our_stake_pool(inp, &is_mine))
+                    .map(|pool_id| (block.height(), *block.block_id(), pool_id)),
             })
             .collect_vec()
     }
@@ -1348,14 +1348,14 @@ impl OutputCache {
         &self,
         inp: &TxInput,
         is_mine: &F,
-    ) -> bool {
+    ) -> Option<PoolId> {
         match inp {
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
             TxInput::Utxo(outpoint) => self
                 .txs
                 .get(&outpoint.source_id())
                 .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
-                .map_or(false, |out| match out {
+                .and_then(|out| match out {
                     TxOutput::IssueFungibleToken(_)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
@@ -1363,12 +1363,13 @@ impl OutputCache {
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _) => false,
+                    | TxOutput::LockThenTransfer(_, _, _) => None,
                     TxOutput::ProduceBlockFromStake(_, pool_id)
-                    | TxOutput::CreateStakePool(pool_id, _) => self
-                        .pools
-                        .get(pool_id)
-                        .map_or(false, |pool_data| is_mine(&pool_data.decommission_key)),
+                    | TxOutput::CreateStakePool(pool_id, _) => {
+                        self.pools.get(pool_id).and_then(|pool_data| {
+                            is_mine(&pool_data.decommission_key).then_some(*pool_id)
+                        })
+                    }
                 }),
         }
     }

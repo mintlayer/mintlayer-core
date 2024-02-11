@@ -45,7 +45,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.util import assert_equal, assert_greater_than, assert_in
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
+from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, CreatedBlockInfo, WalletCliController
 
 import asyncio
 import sys
@@ -347,11 +347,12 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 1)
             assert_equal(pools[0].balance, '40000')
+            pool_id = pools[0].pool_id
 
             assert_in("Success", await wallet.select_account(1))
             balance = await wallet.get_balance()
             assert_in("Coins amount: 5000", balance)
-            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
+            delegation_id = await wallet.create_delegation(acc1_address, pool_id)
             assert delegation_id is not None
             transactions = node.mempool_transactions()
 
@@ -421,7 +422,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_equal(len(delegations), 0)
 
             # create a delegation from acc 0 but with destination address for acc1
-            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
+            delegation_id = await wallet.create_delegation(acc1_address, pool_id)
             tip_id = node.chainstate_best_block_id()
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
             block_id = node.chainstate_block_id_at_height(block_height)
@@ -441,7 +442,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_in("Success", await wallet.stop_staking())
             assert_in("Not staking", await wallet.staking_status())
             address = await wallet.new_address()
-            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id, address))
+            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pool_id, address))
 
             transactions = node.mempool_transactions()
             block_height = await wallet.get_best_block_height()
@@ -464,7 +465,10 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             self.log.info(created_block_ids)
             for block_id, block_height in block_ids:
                 self.log.info(f"{block_id} {block_height}")
-                assert(any([block.block_id == block_id and str(block.block_height) == str(block_height) for block in created_block_ids]))
+                def same_with_current(block: CreatedBlockInfo):
+                    return block.block_id == block_id and str(block.block_height) == str(block_height) and block.pool_id == pool_id
+
+                assert(any([same_with_current(block) for block in created_block_ids]))
 
 
 if __name__ == '__main__':

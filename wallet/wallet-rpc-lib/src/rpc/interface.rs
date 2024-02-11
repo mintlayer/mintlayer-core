@@ -21,7 +21,7 @@ use common::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{BlockInfo, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -244,7 +244,7 @@ trait WalletRpc {
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<BlockInfo>>;
+    ) -> rpc::RpcResult<Vec<CreatedBlockInfo>>;
 
     #[method(name = "staking_new_vrf_public_key")]
     async fn new_vrf_public_key(

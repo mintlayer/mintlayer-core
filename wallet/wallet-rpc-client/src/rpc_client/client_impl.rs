@@ -33,7 +33,7 @@ use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{Balances, WalletInfo},
+    types::{Balances, CreatedBlockInfo, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
 };
 use wallet_rpc_lib::{
@@ -465,7 +465,7 @@ impl WalletInterface for ClientWalletRpc {
     async fn list_created_blocks_ids(
         &self,
         account_index: U31,
-    ) -> Result<Vec<BlockInfo>, Self::Error> {
+    ) -> Result<Vec<CreatedBlockInfo>, Self::Error> {
         WalletRpcClient::list_created_blocks_ids(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)

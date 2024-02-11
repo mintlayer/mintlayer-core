@@ -51,7 +51,7 @@ use common::{
 pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
-    types::{Balances, BlockInfo, WalletInfo},
+    types::{Balances, BlockInfo, CreatedBlockInfo, WalletInfo},
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
@@ -1169,7 +1169,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn list_created_blocks_ids(
         &self,
         account_index: U31,
-    ) -> WRpcResult<Vec<BlockInfo>, N> {
+    ) -> WRpcResult<Vec<CreatedBlockInfo>, N> {
         self.wallet
             .call(move |controller| {
                 controller.readonly_controller(account_index).get_created_blocks()

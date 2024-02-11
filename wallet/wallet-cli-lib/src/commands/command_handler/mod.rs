@@ -1093,20 +1093,17 @@ where
 
             WalletCommand::ListCreatedBlocksIds => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let mut block_ids = wallet
-                    .list_created_blocks_ids(selected_account)
-                    .await?
-                    .into_iter()
-                    .map(|block_info| (block_info.height.into_int(), *block_info.id.as_hash()))
-                    .collect::<Vec<_>>();
-                block_ids.sort_by(|(a0, _), (a1, _)| a0.cmp(a1));
+                let mut block_ids = wallet.list_created_blocks_ids(selected_account).await?;
+                block_ids.sort_by_key(|x| x.height);
                 let result = block_ids
                     .into_iter()
-                    .map(|(h, id)| {
-                        let id = id_to_hex_string(id);
-                        format!("({h}, {id})")
+                    .map(|block_info| {
+                        let id = id_to_hex_string(*block_info.id.as_hash());
+                        let h = block_info.height.into_int();
+                        let pool_id = block_info.pool_id;
+                        format!("({h}, {id}, {pool_id})")
                     })
-                    .fold("".to_string(), |curr, v| curr + &v + "\n");
+                    .join("\n");
                 Ok(ConsoleCommand::Print(result))
             }
 
