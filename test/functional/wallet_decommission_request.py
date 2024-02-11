@@ -324,6 +324,10 @@ class WalletDecommissionRequest(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
 
+            # check the locked balance is equal to the genesis pool balance
+            locked_utxos = await wallet.list_utxos('all', with_locked='locked')
+            assert_equal(len(locked_utxos), 1)
+
 # `use_wallet_to_produce_block` indicates whether a test should use a pool created by a wallet to produce block
 # `exit_on_success` indicates if the process should exit or continue and run next test case
 def wallet_decommission_request_test_case(use_wallet_to_produce_block, exit_on_success):
