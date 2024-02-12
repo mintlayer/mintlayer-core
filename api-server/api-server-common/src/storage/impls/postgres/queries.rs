@@ -34,8 +34,9 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, BlockInfo, Delegation,
-        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
+        TransactionInfo, Utxo,
     },
 };
 
@@ -611,7 +612,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let height: Option<i64> = row.get(1);
         let height = height.map(|h| BlockHeight::new(h as u64));
 
-        let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
+        let block = BlockWithExtraData::decode_all(&mut data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
                 "Block {} deserialization failed: {}",
                 block_id, e
@@ -653,11 +654,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
         let height = Self::block_height_to_postgres_friendly(block_height);
-        let timestamp = Self::block_time_to_postgres_friendly(block.timestamp())?;
+        let timestamp = Self::block_time_to_postgres_friendly(block.block.timestamp())?;
 
         self.tx
             .execute(

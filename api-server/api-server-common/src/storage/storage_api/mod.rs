@@ -30,7 +30,7 @@ use common::{
 use pos_accounting::PoolData;
 use serialization::{Decode, Encode};
 
-use self::block_aux_data::BlockAuxData;
+use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 
 pub mod block_aux_data;
 
@@ -190,10 +190,15 @@ impl FungibleTokenData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct TransactionInfo {
-    pub tx: SignedTransaction,
+pub struct TxAdditionalInfo {
     pub fee: Amount,
     pub input_utxos: Vec<Option<TxOutput>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct TransactionInfo {
+    pub tx: SignedTransaction,
+    pub additinal_info: TxAdditionalInfo,
 }
 
 pub struct PoolBlockStats {
@@ -202,7 +207,7 @@ pub struct PoolBlockStats {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockInfo {
-    pub block: Block,
+    pub block: BlockWithExtraData,
     pub height: Option<BlockHeight>,
 }
 
@@ -355,7 +360,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_delegation_at_height(

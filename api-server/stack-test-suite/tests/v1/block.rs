@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_server_common::storage::storage_api::{ApiServerStorageRead, TxAdditionalInfo};
 use common::{
     chain::{stakelock::StakePoolData, CoinUnit, GenBlock, PoolId},
     primitives::{per_thousand::PerThousand, time::get_time, H256},
@@ -142,6 +143,8 @@ async fn ok(#[case] seed: Seed) {
                 .await
                 .unwrap();
 
+            let tx_additional_data = get_tx_additional_data(&local_node, &block).await;
+
             let old_expected_block = json!({
                 "height": None::<BlockHeight>,
                 "header": block_header_to_json(&block),
@@ -153,7 +156,8 @@ async fn ok(#[case] seed: Seed) {
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
-                                        .map(|tx| tx_to_json(tx.transaction(), tf.chain_config()))
+                                        .zip(tx_additional_data.iter())
+                                        .map(|(tx, additinal_data)| tx_to_json(tx.transaction(), additinal_data, tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
@@ -192,6 +196,8 @@ async fn ok(#[case] seed: Seed) {
                 .await
                 .unwrap();
 
+            let tx_additional_data = get_tx_additional_data(&local_node, &block).await;
+
             let new_expected_block = json!({
                 "height": block_height,
                 "header": block_header_to_json(&block),
@@ -203,7 +209,8 @@ async fn ok(#[case] seed: Seed) {
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
-                                        .map(|tx| tx_to_json(tx.transaction(), tf.chain_config()))
+                                        .zip(tx_additional_data.iter())
+                                        .map(|(tx, additinal_data)| tx_to_json(tx.transaction(), additinal_data, tf.chain_config()))
                                         .collect::<Vec<_>>(),
                 },
             });
@@ -258,4 +265,30 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body, old_expected_block);
     task.abort();
+}
+
+async fn get_tx_additional_data(
+    local_node: &BlockchainState<TransactionalApiServerInMemoryStorage>,
+    block: &common::chain::Block,
+) -> Vec<TxAdditionalInfo> {
+    let db_tx = local_node.storage().transaction_ro().await.unwrap();
+    let mut tx_additional_data = vec![];
+    for tx in block.transactions() {
+        let mut input_utxos = vec![];
+        for input in tx.inputs() {
+            let utxo = match input {
+                TxInput::Utxo(outpoint) => {
+                    db_tx.get_utxo(outpoint.clone()).await.unwrap().map(|utxo| utxo.into_output())
+                }
+                TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
+            };
+            input_utxos.push(utxo);
+        }
+
+        tx_additional_data.push(TxAdditionalInfo {
+            input_utxos,
+            fee: Amount::ZERO,
+        });
+    }
+    tx_additional_data
 }

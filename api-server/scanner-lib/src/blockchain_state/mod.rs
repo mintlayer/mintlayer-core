@@ -15,9 +15,9 @@
 
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, ApiServerTransactionRw, Delegation, FungibleTokenData, TransactionInfo,
-    Utxo,
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+    ApiServerTransactionRw, Delegation, FungibleTokenData, TransactionInfo, TxAdditionalInfo, Utxo,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
@@ -33,7 +33,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
 };
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -118,10 +118,11 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
-            let total_fees =
+            let (total_fees, tx_additional_infos) =
                 calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
 
-            for tx in block.transactions() {
+            for (tx, additinal_info) in block.transactions().iter().zip(tx_additional_infos.iter())
+            {
                 update_tables_from_transaction(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
@@ -130,6 +131,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 )
                 .await
                 .expect("Unable to update tables from transaction");
+
+                let tx_info = TransactionInfo {
+                    tx: tx.clone(),
+                    additinal_info: additinal_info.clone(),
+                };
+                db_tx
+                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
+                    .await
+                    .expect("Unable to set transaction");
             }
 
             update_tables_from_block(
@@ -143,10 +153,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             .expect("Unable to update tables from block");
 
             let block_id = block.get_id();
-            db_tx
-                .set_mainchain_block(block_id, block_height, &block)
-                .await
-                .expect("Unable to set block");
+
             db_tx
                 .set_block_aux_data(
                     block_id,
@@ -154,6 +161,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 )
                 .await
                 .expect("Unable to set block aux data");
+
+            let block_with_extras = BlockWithExtraData {
+                block: WithId::take(block),
+                tx_additional_infos,
+            };
+            db_tx
+                .set_mainchain_block(block_id, block_height, &block_with_extras)
+                .await
+                .expect("Unable to set block");
         }
 
         db_tx.commit().await.expect("Unable to commit transaction");
@@ -379,7 +395,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block: &Block,
     block_height: BlockHeight,
-) -> Result<Fee, ApiServerStorageError> {
+) -> Result<(Fee, Vec<TxAdditionalInfo>), ApiServerStorageError> {
     let new_outputs: BTreeMap<_, _> = block
         .transactions()
         .iter()
@@ -397,27 +413,25 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
         .collect();
 
     let mut total_fees = AccumulatedFee::new();
+    let mut tx_aditional_infos = vec![];
     for tx in block.transactions().iter() {
         let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
         total_fees = total_fees.combine(fee.clone()).expect("no overflow");
 
-        let input_tasks: FuturesUnordered<_> =
+        let input_tasks: FuturesOrdered<_> =
             tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
         let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
 
-        let tx_info = TransactionInfo {
-            tx: tx.clone(),
+        let tx_info = TxAdditionalInfo {
             fee: fee.map_into_block_fees(chain_config, block_height).expect("no overflow").0,
             input_utxos,
         };
-
-        db_tx
-            .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
-            .await
-            .expect("Unable to set transaction");
+        tx_aditional_infos.push(tx_info);
     }
+    let total_fees =
+        total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow");
 
-    Ok(total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow"))
+    Ok((total_fees, tx_aditional_infos))
 }
 
 async fn fetch_utxo<T: ApiServerStorageRead>(

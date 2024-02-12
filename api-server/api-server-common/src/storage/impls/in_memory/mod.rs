@@ -16,8 +16,9 @@
 pub mod transactional;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData,
-    PoolBlockStats, TransactionInfo, Utxo,
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
+    TransactionInfo, Utxo,
 };
 use common::{
     chain::{
@@ -39,7 +40,7 @@ use super::CURRENT_STORAGE_VERSION;
 
 #[derive(Debug, Clone)]
 struct ApiServerInMemoryStorage {
-    block_table: BTreeMap<Id<Block>, Block>,
+    block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
@@ -505,12 +506,12 @@ impl ApiServerInMemoryStorage {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
         self.block_table.insert(block_id, block.clone());
         self.block_aux_data_table.insert(
             block_id,
-            BlockAuxData::new(block_id, block_height, block.timestamp()),
+            BlockAuxData::new(block_id, block_height, block.block.timestamp()),
         );
         self.main_chain_blocks_table.insert(block_height, block_id);
         self.best_block = (block_height, block_id.into());

@@ -29,9 +29,9 @@ use pos_accounting::PoolData;
 use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-        ApiServerStorageWrite, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
-        TransactionInfo, Utxo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo, Delegation,
+        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 
@@ -110,7 +110,7 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.set_mainchain_block(block_id, block_height, block).await?;

@@ -23,9 +23,9 @@ use pos_accounting::PoolData;
 use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiServerTransactionRw, BlockInfo, Delegation, FungibleTokenData,
-        TransactionInfo, Utxo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
+        BlockInfo, Delegation, FungibleTokenData, TransactionInfo, TxAdditionalInfo, Utxo,
     },
 };
 use crypto::{
@@ -130,7 +130,10 @@ where
         let block1 = test_framework.block(block_id1);
         let block_height = BlockHeight::new(1);
         let block_info1 = BlockInfo {
-            block: block1.clone(),
+            block: BlockWithExtraData {
+                block: block1.clone(),
+                tx_additional_infos: vec![],
+            },
             height: Some(block_height),
         };
 
@@ -141,7 +144,14 @@ where
             let block_id = db_tx.get_main_chain_block_id(block_height).await.unwrap();
             assert!(block_id.is_none());
 
-            db_tx.set_mainchain_block(block_id1, block_height, &block1).await.unwrap();
+            let block_with_extras = BlockWithExtraData {
+                block: block1.clone(),
+                tx_additional_infos: vec![],
+            };
+            db_tx
+                .set_mainchain_block(block_id1, block_height, &block_with_extras)
+                .await
+                .unwrap();
 
             let block = db_tx.get_block(block_id1).await.unwrap();
             assert_eq!(block.unwrap(), block_info1);
@@ -159,7 +169,10 @@ where
             assert!(block_id.is_none());
             // but the block is still there just not on main chain
             let block_info1 = BlockInfo {
-                block: block1.clone(),
+                block: BlockWithExtraData {
+                    block: block1.clone(),
+                    tx_additional_infos: vec![],
+                },
                 height: None,
             };
             let block = db_tx.get_block(block_id1).await.unwrap();
@@ -175,8 +188,16 @@ where
                     .chain_block_id()
                     .unwrap();
                 let block = test_framework.block(block_id);
+                let block_with_extras = BlockWithExtraData {
+                    block: block.clone(),
+                    tx_additional_infos: vec![],
+                };
                 db_tx
-                    .set_mainchain_block(block_id, BlockHeight::new(block_height), &block)
+                    .set_mainchain_block(
+                        block_id,
+                        BlockHeight::new(block_height),
+                        &block_with_extras,
+                    )
                     .await
                     .unwrap();
                 db_tx
@@ -234,7 +255,10 @@ where
             assert!(block_id.is_none());
 
             let block_info1 = BlockInfo {
-                block: block1.clone(),
+                block: BlockWithExtraData {
+                    block: block1.clone(),
+                    tx_additional_infos: vec![],
+                },
                 height: None,
             };
             let block = db_tx.get_block(block_id1).await.unwrap();
@@ -279,8 +303,10 @@ where
         {
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
-                fee: Amount::from_atoms(rng.gen_range(0..100)),
-                input_utxos: tx1_input_utxos.clone(),
+                additinal_info: TxAdditionalInfo {
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    input_utxos: tx1_input_utxos.clone(),
+                },
             };
             db_tx.set_transaction(tx1.transaction().get_id(), None, &tx_info).await.unwrap();
 
@@ -296,8 +322,10 @@ where
         {
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
-                fee: Amount::from_atoms(rng.gen_range(0..100)),
-                input_utxos: tx1_input_utxos.clone(),
+                additinal_info: TxAdditionalInfo {
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    input_utxos: tx1_input_utxos.clone(),
+                },
             };
             db_tx
                 .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx_info)
