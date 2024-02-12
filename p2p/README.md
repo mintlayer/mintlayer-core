@@ -18,6 +18,8 @@ The peer discovery of any P2P system is constructed of two things: the initial c
 
 #### Bootstrapping
 
+When the node starts for the first time, it obtains peer addresses from the so-called dns seeds; if it fails to do so, a predefined list of addresses is used.
+
 #### Peer-to-peer connections
 
 Once a Mintlayer node has started and established a connection with a bootnode, it receives a list of other active nodes that are present in the network. It then tries to connect to each of these until either the list is exhausted or it has established enough outbound connections.
@@ -44,22 +46,87 @@ This information is exchanged in the `Hello` and `HelloAck` messages. The node w
 
 Once a minute, the node will check if the remote peer is still active by sending a `PingRequest` message. The peer that receives a `PingRequest` must respond with a `PingResponse` message. If no response is heard, the connection is closed. `PingRequest`/`PingResponse` are exchanged only if there has been no activity on the socket in the last minute. Each `PingRequest` message contains a 64-bit nonce that the corresponding `PingResponse` sends back to ascertain that a correct `PingRequest` message was acknowledged.
 
-In addition to maintaining each connection individually, the Mintlayer node will also maintain the overall set of connections by accepting incoming connections/establishing new outbound connections to maintain the total amount of connections at the specified number. This means that the event loop of the node will reject new connections if the number of active connections is higher than it should be; if the number of connections is lower than the lower bound for number of active connections, the node will try establishing new connections with peers it has learned from previous connections.
+In addition to maintaining each connection individually, the Mintlayer node will also maintain the overall set of connections by accepting incoming connections/establishing new outbound connections to maintain the total amount of connections at the specified number. This means that the event loop of the node will reject new connections if the number of active connections is higher than it should be; if the number of connections is lower than the lower bound for the number of active connections, the node will try establishing new connections with peers it has learned from previous connections.
 
 ### Message exchange
 
-#### Hello
+Each message starts with a 4-bytes header that contains the length of the message, not including the header itself.
 
-`Hello` is used by the connecting peer to initiate a handshake and to verify whether the remote peer running compatible software.
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 4 bytes | Message length | `u32` | The length of the message body that follows.
+| Variable | Message body | `enum Message` | An encoded `Rust` enum.
 
-#### HelloAck
+The message body is a SCALE-encoded `Rust` enum. With this encoding, the first byte of the encoded data specifes the enum variant contained in the enum; the rest is that variant's encoded data.
 
-`HelloAck` is used to conclude the handshake with the peer that initiated it, if they are running compatible software and are in the same network.
+The encoded `enum Message`:
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 1 byte | Message variant index | `u8` | The index that specifies which enum variant is encoded below.
+| Variable | The encoded message variant | Depends on the previous field
+
+Currently, the following message variants exist:
+| Variant index | Type |
+|---------------|------|
+| 0 | HandshakeMessage
+| 1 | PingRequest
+| 2 | PingResponse
+| 3 | NewTransaction
+| 4 | HeaderListRequest
+| 5 | HeaderList
+| 6 | BlockListRequest
+| 7 | BlockResponse
+| 8 | AnnounceAddrRequest
+| 9 | AddrListRequest
+| 10 | AddrListResponse
+| 11 | TransactionRequest
+| 12 | TransactionResponse
+
+#### HandshakeMessage
+
+`HandshakeMessage` is itself an enum that consists of 2 variants:
+| Variant index | Type |
+|---------------|------|
+| 0 | Hello
+| 1 | HelloAck
+
+`Hello` is used by the connecting node to initiate a handshake.
+
+| Length | Description | Type | Comments |
+|--------|-------------|---------|----------|
+| 4 bytes | Protocol version | `u32`   | The latest protocol version that the node supports.
+| 4 bytes | Network | `[u8; 4]` | "Magic bytes" that identify the network. For mainnet, this will be equal to `B0075FA0`; for testnet, this will be `2B7E19F8`.
+| 8 bytes | Services | `u64`   | Bitmap of services that the node provides/supports.
+| Variable | User agent | `Vec<u8>` | An ASCII string containing the name of the user's software.
+| 4 bytes | Software version | `SemVer`   | The version of the user's software.
+| Variable | Receiver address | `Option<PeerAddress>` | Socket address of the remote peer as seen by the sending node.
+| Variable | Current time | Compact `u64` | Unix timestamp in seconds.
+| 8 bytes | Handshake nonce | `u64` | A random nonce value that is used to detect self-connects.
+
+`HelloAck` is used to conclude the handshake with the node that initiated it. It is identical to `Hello` except for the last field, the handshake nonce, which is absent for `HelloAck`.
 
 #### PingRequest
 
-Check if the peer is still alive
+Check if the peer is still alive.
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 8 bytes | Nonce | `u64` | Random nonce
 
 #### PingResponse
 
-Respond to an aliveness check
+Respond to an aliveness check.
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 8 bytes | Nonce | `u64` | Random nonce
+
+The random nonce carried in the `PingResponse` message must be the same that was in the `PingRequest` message that this `PingResponse` is now acknowledging.
+
+#### NewTransaction
+
+Announce a new transaction.
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 32 bytes | Transaction ID | `Id<Transaction>`
