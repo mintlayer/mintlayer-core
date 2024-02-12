@@ -38,7 +38,7 @@ use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use utils::qrcode::QrCode;
+use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{
     account::{PartiallySignedTransaction, TransactionToSign},
     version::get_version,
@@ -1031,9 +1031,7 @@ where
                     Address::from_str(self.wallet_rpc.chain_config(), &address)
                         .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
 
-                let qr_code = utils::qrcode::qrcode_from_str(addr.to_string())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
-                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                let qr_code_string = qrcode_or_error_string(&addr.to_string());
                 Ok(ConsoleCommand::Print(qr_code_string))
             }
 
@@ -1132,31 +1130,19 @@ where
                             signed_tx.transaction().text_summary(self.wallet_rpc.chain_config());
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
-                        let qr_code_string = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map(|qr_code| qr_code.encode_to_console_string_with_defaults(1));
+                        let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
-                        match qr_code_string {
-                            Ok(qr_code_string) => format!(
+                        format!(
                             "The transaction has been fully signed and is ready to be broadcast to network. \
                              You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
-                        ),
-                            Err(_) => format!(
-                            "The transaction has been fully signed and is ready to be broadcast to network. \
-                             You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
-                             Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                             Transaction is too long to be put into a Qr code\n\n{summary}"
-                        ),
-                        }
+                             Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}")
                     }
                     Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
                             partially_signed_tx.into();
 
-                        let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                            .map_err(WalletCliError::QrCodeEncoding)?;
-                        let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                        let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
                         format!(
                             "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
@@ -1182,15 +1168,13 @@ where
                 let result =
                     self.wallet_rpc.sign_challenge(selected_account, challenge, address).await?;
 
-                let qr_code = utils::qrcode::qrcode_from_str(result.clone().to_hex())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qrcode_or_error_string(&result.clone().to_hex());
 
                 Ok(ConsoleCommand::Print(format!(
                     "The generated hex encoded signature is\n\n{}
                     \n\n\
-                    The following qr code also contains the signature for easy transport:\n{}",
+                    The following qr code also contains the signature for easy transport:\n{qr_code_string}",
                     result.to_hex(),
-                    qr_code.encode_to_console_string_with_defaults(1)
                 )))
             }
 
@@ -1204,15 +1188,13 @@ where
                     .sign_challenge(selected_account, challenge.into_bytes(), address)
                     .await?;
 
-                let qr_code = utils::qrcode::qrcode_from_str(result.clone().to_hex())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
+                let qr_code_string = qrcode_or_error_string(&result.clone().to_hex());
 
                 Ok(ConsoleCommand::Print(format!(
                     "The generated hex encoded signature is\n\n{}
                     \n\n\
-                    The following qr code also contains the signature for easy transport:\n{}",
+                    The following qr code also contains the signature for easy transport:\n{qr_code_string}",
                     result.to_hex(),
-                    qr_code.encode_to_console_string_with_defaults(1)
                 )))
             }
 
@@ -1751,9 +1733,7 @@ where
                 let summary = tx.tx().text_summary(self.wallet_rpc.chain_config());
                 let hex_tx = HexEncoded::new(tx);
 
-                let qr_code = utils::qrcode::qrcode_from_str(hex_tx.to_string())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
-                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                let qr_code_string = qrcode_or_error_string(&hex_tx.to_string());
 
                 let mut output_str = format!(
                     "Send transaction created. \
@@ -1883,9 +1863,7 @@ where
                     .await?;
                 let result_hex: HexEncoded<PartiallySignedTransaction> = result.into();
 
-                let qr_code = utils::qrcode::qrcode_from_str(result_hex.to_string())
-                    .map_err(WalletCliError::QrCodeEncoding)?;
-                let qr_code_string = qr_code.encode_to_console_string_with_defaults(1);
+                let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
                 let output_str = format!(
                     "Decommission transaction created. \
@@ -2051,4 +2029,13 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
 fn id_to_hex_string(id: H256) -> String {
     let hex_string = format!("{:?}", id);
     hex_string.strip_prefix("0x").unwrap_or(&hex_string).to_string()
+}
+
+/// This is a helper function used to ensure that failing to output a QR code will only display an error message instead of completely failing the command
+fn qrcode_or_error_string(str_data: &str) -> String {
+    let make_error_str = |e: QrCodeError| format!("<<Failed to generate QR Code: {e}>>");
+    let qr_code_result = utils::qrcode::qrcode_from_str(str_data);
+    qr_code_result.map_or_else(make_error_str, |qr| {
+        qr.encode_to_console_string_with_defaults(1)
+    })
 }
