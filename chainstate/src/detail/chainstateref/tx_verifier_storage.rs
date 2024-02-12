@@ -65,13 +65,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
 
     fn get_undo_data(
         &self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_undo_data(id)?
-            .map(|undo| CachedUtxosBlockUndo::from_utxo_block_undo(undo))
-            .transpose()
-            .map_err(TransactionVerifierStorageError::from)
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_undo_data(id)?
+                    .map(|undo| CachedUtxosBlockUndo::from_utxo_block_undo(undo));
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 
     fn get_token_aux_data(

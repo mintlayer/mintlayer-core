@@ -49,7 +49,7 @@ mockall::mock! {
     impl TransactionVerifierStorageRef for Store {
         type Error = TransactionVerifierStorageError;
 
-        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError>;
+        fn get_undo_data(&self, tx_sourve: TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError>;
 
         fn get_token_id_from_issuance_tx(
             &self,

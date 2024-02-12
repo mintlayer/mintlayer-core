@@ -113,6 +113,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);
     let (_, utxo0_undo) = create_utxo(&mut rng, 100);
     let block_undo_0 = CachedUtxosBlockUndo::new(
         None,
@@ -124,6 +125,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     .unwrap();
 
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_1 = TransactionSource::Chain(block_undo_id_1);
     let (_, utxo1_undo) = create_utxo(&mut rng, 100);
     let block_undo_1 = CachedUtxosBlockUndo::new(
         None,
@@ -135,6 +137,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     .unwrap();
 
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_2 = TransactionSource::Chain(block_undo_id_2);
     let (_, utxo2_undo) = create_utxo(&mut rng, 100);
     let block_undo_2 = CachedUtxosBlockUndo::new(
         None,
@@ -149,19 +152,19 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_undo_data()
-        .with(eq(block_undo_id_0))
+        .with(eq(block_undo_source_0))
         .times(2)
         .return_const(Ok(Some(block_undo_0.clone())));
     store
         .expect_get_undo_data()
-        .with(eq(block_undo_id_2))
+        .with(eq(block_undo_source_2))
         .times(1)
         .return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_1),
+            block_undo_source_1,
             CachedUtxoBlockUndoOp::Write(block_undo_1.clone()),
         )]));
         verifier
@@ -170,31 +173,31 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_2),
+            block_undo_source_2,
             CachedUtxoBlockUndoOp::Write(block_undo_2.clone()),
         )]));
         verifier
     };
 
     assert_eq!(
-        verifier1.get_undo_data(block_undo_id_0).unwrap().as_ref(),
+        verifier1.get_undo_data(block_undo_source_0).unwrap().as_ref(),
         Some(&block_undo_0)
     );
     assert_eq!(
-        verifier1.get_undo_data(block_undo_id_1).unwrap().as_ref(),
+        verifier1.get_undo_data(block_undo_source_1).unwrap().as_ref(),
         Some(&block_undo_1)
     );
-    assert_eq!(verifier1.get_undo_data(block_undo_id_2).unwrap(), None);
+    assert_eq!(verifier1.get_undo_data(block_undo_source_2).unwrap(), None);
     assert_eq!(
-        verifier2.get_undo_data(block_undo_id_0).unwrap().as_ref(),
+        verifier2.get_undo_data(block_undo_source_0).unwrap().as_ref(),
         Some(&block_undo_0)
     );
     assert_eq!(
-        verifier2.get_undo_data(block_undo_id_1).unwrap().as_ref(),
+        verifier2.get_undo_data(block_undo_source_1).unwrap().as_ref(),
         Some(&block_undo_1)
     );
     assert_eq!(
-        verifier2.get_undo_data(block_undo_id_2).unwrap().as_ref(),
+        verifier2.get_undo_data(block_undo_source_2).unwrap().as_ref(),
         Some(&block_undo_2)
     );
 }

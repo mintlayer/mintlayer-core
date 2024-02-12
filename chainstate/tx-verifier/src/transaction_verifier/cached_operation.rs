@@ -34,24 +34,4 @@ impl<T> CachedOperation<T> {
             CachedOperation::Erase => None,
         }
     }
-
-    pub fn combine(self, other: Self) -> Self {
-        match (self, other) {
-            (CachedOperation::Write(_), CachedOperation::Write(other)) => {
-                CachedOperation::Write(other)
-            }
-            (CachedOperation::Write(_), CachedOperation::Read(_)) => todo!(),
-            (CachedOperation::Write(_), CachedOperation::Erase) => CachedOperation::Erase,
-            (CachedOperation::Read(_), CachedOperation::Write(other)) => {
-                CachedOperation::Write(other)
-            }
-            (CachedOperation::Read(_), CachedOperation::Read(other)) => {
-                CachedOperation::Read(other)
-            }
-            (CachedOperation::Read(_), CachedOperation::Erase) => CachedOperation::Erase,
-            (CachedOperation::Erase, CachedOperation::Write(_)) => todo!(),
-            (CachedOperation::Erase, CachedOperation::Read(_)) => todo!(),
-            (CachedOperation::Erase, CachedOperation::Erase) => todo!(),
-        }
-    }
 }

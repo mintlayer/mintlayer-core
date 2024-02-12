@@ -109,6 +109,7 @@ pub struct UtxosBlockUndo {
     parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
 }
 
+// FIXME: clean up the methods
 impl UtxosBlockUndo {
     pub fn new(
         reward_undo: Option<UtxosBlockRewardUndo>,
@@ -124,6 +125,36 @@ impl UtxosBlockUndo {
             .into_iter()
             .try_for_each(|(tx_id, tx_undo)| block_undo.insert_tx_undo(tx_id, tx_undo))?;
         Ok(block_undo)
+    }
+
+    pub fn from_data(
+        reward_undo: Option<UtxosBlockRewardUndo>,
+        tx_undos: BTreeMap<Id<Transaction>, UtxosTxUndo>,
+        child_parent_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+        parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+    ) -> Self {
+        Self {
+            reward_undo,
+            tx_undos,
+            child_parent_dependencies,
+            parent_child_dependencies,
+        }
+    }
+
+    pub fn consume(
+        self,
+    ) -> (
+        Option<UtxosBlockRewardUndo>,
+        BTreeMap<Id<Transaction>, UtxosTxUndo>,
+        BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+        BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+    ) {
+        (
+            self.reward_undo,
+            self.tx_undos,
+            self.child_parent_dependencies,
+            self.parent_child_dependencies,
+        )
     }
 
     pub fn is_empty(&self) -> bool {

@@ -16,18 +16,13 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use super::{error::ConnectTransactionError, CachedOperation, TransactionSource};
-use common::{
-    chain::{Block, Transaction},
-    primitives::Id,
-};
+use common::{chain::Transaction, primitives::Id};
 use utxo::{UtxosBlockRewardUndo, UtxosTxUndo, UtxosTxUndoWithSources};
 
 mod cached_utxo_block_undo;
 pub use cached_utxo_block_undo::CachedUtxosBlockUndo;
 
 pub type CachedUtxoBlockUndoOp = CachedOperation<CachedUtxosBlockUndo>;
-
-// FIXME: think if it's possible to not fully use undo data
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct UtxosBlockUndoCache {
@@ -60,7 +55,7 @@ impl UtxosBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<CachedUtxosBlockUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         match self.data.get(tx_source) {
@@ -70,13 +65,7 @@ impl UtxosBlockUndoCache {
                 }
                 CachedOperation::Erase => Ok(None),
             },
-            None => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let block_undo = fetcher_func(*block_id)?;
-                    Ok(block_undo)
-                }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
-            },
+            None => fetcher_func(*tx_source).map_err(ConnectTransactionError::from),
         }
     }
 
@@ -86,26 +75,26 @@ impl UtxosBlockUndoCache {
         tx_id: Id<Transaction>,
         tx_undo: UtxosTxUndoWithSources,
     ) -> Result<(), ConnectTransactionError> {
-        println!("add_tx_undo {:?}", tx_id);
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
                     let mut block_undo = undo.clone();
                     block_undo.insert_tx_undo(tx_id, tx_undo)?;
                     entry.insert(CachedOperation::Write(block_undo.clone()));
-                    //println!("block undo tx size {:?}", block_undo.tx_undos().len());
                 }
-                CachedOperation::Erase => todo!("is it invariant?"),
+                CachedOperation::Erase => {
+                    let block_undo =
+                        CachedUtxosBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                    entry.insert(CachedOperation::Write(block_undo));
+                }
             },
             Entry::Vacant(entry) => {
                 let mut block_undo = CachedUtxosBlockUndo::default();
                 block_undo.insert_tx_undo(tx_id, tx_undo)?;
-                //println!("block undo tx size {:?}", block_undo.tx_undos().len());
 
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };
-        println!("---");
 
         Ok(())
     }
@@ -122,12 +111,13 @@ impl UtxosBlockUndoCache {
                     block_undo.set_block_reward_undo(reward_undo);
                     entry.insert(CachedOperation::Write(block_undo));
                 }
-                CachedOperation::Erase => todo!("is it invariant?"),
+                CachedOperation::Erase => {
+                    let block_undo = CachedUtxosBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
+                    entry.insert(CachedOperation::Write(block_undo));
+                }
             },
             Entry::Vacant(entry) => {
-                let mut block_undo = CachedUtxosBlockUndo::default();
-                block_undo.set_block_reward_undo(reward_undo);
-
+                let block_undo = CachedUtxosBlockUndo::new(Some(reward_undo), Default::default())?;
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };
@@ -142,25 +132,17 @@ impl UtxosBlockUndoCache {
         fetcher_func: F,
     ) -> Result<UtxosTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        println!("take_tx_undo {:?}", tx_id);
-
         let mut block_undo = match self.data.entry(*tx_source) {
-            Entry::Vacant(_) => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let block_undo = fetcher_func(*block_id)?
-                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                    Ok(block_undo)
-                }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
-            },
+            Entry::Vacant(_) => fetcher_func(*tx_source)?
+                .ok_or(ConnectTransactionError::MissingBlockUndo(*tx_source))?,
             Entry::Occupied(entry) => match entry.get() {
-                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Ok(undo.clone()),
-                CachedOperation::Erase => todo!(),
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => undo.clone(),
+                CachedOperation::Erase => panic!("already empty"),
             },
-        }?;
+        };
 
         let res = block_undo
             .take_tx_undo(tx_id)?
@@ -182,26 +164,16 @@ impl UtxosBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<UtxosBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        println!("take_block_reward_undo {:?}", tx_source);
-
         let block_undo = match self.data.entry(*tx_source) {
-            Entry::Vacant(_) => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let block_undo = fetcher_func(*block_id)?;
-                    Ok(block_undo)
-                }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo), // FIXME: this should fetch
-            },
+            Entry::Vacant(_) => fetcher_func(*tx_source)?,
             Entry::Occupied(entry) => match entry.get() {
-                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
-                    Ok(Some(undo.clone()))
-                }
-                CachedOperation::Erase => Ok(None),
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
+                CachedOperation::Erase => None,
             },
-        }?;
+        };
 
         let res = block_undo
             .map(|mut block_undo| {
@@ -233,10 +205,10 @@ impl UtxosBlockUndoCache {
             }
             Entry::Occupied(mut e) => match e.get_mut() {
                 CachedUtxoBlockUndoOp::Write(undo) | CachedUtxoBlockUndoOp::Read(undo) => {
-                    undo.combine(new_undo.clone());
+                    undo.combine(new_undo.clone())?;
                 }
                 CachedUtxoBlockUndoOp::Erase => {
-                    todo!("is is an error?")
+                    e.insert(CachedOperation::Write(new_undo.clone()));
                 }
             },
         };

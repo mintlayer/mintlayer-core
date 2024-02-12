@@ -78,12 +78,11 @@ where
 
     fn get_undo_data(
         &self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
-            // FIXME: combine???
+        match self.utxo_block_undo.data().get(&tx_source) {
             Some(op) => Ok(op.get().cloned()),
-            None => self.storage.get_undo_data(id),
+            None => self.storage.get_undo_data(tx_source),
         }
     }
 

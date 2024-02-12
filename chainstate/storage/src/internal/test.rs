@@ -24,8 +24,7 @@ use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
-use utxo::{Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
-use utxo::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosStorageWrite, UtxosTxUndoWithSources};
 
 type TestStore = crate::inmemory::Store;
 

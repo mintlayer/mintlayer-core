@@ -29,7 +29,7 @@ use pos_accounting::{AccountingTxUndo, DeltaMergeUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingDeltaUndoData};
-use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
+use utxo::{UtxosBlockRewardUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
@@ -423,37 +423,35 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
 
     let (_, utxo1) = create_utxo(&mut rng, 1000);
     let (_, utxo2) = create_utxo(&mut rng, 2000);
-    let (_, utxo3) = create_utxo(&mut rng, 3000);
-    let (_, utxo4) = create_utxo(&mut rng, 4000);
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = CachedUtxosBlockUndo::new(
-        Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
+        None,
         BTreeMap::from([(
             tx_1_id,
-            UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo1.clone())], vec![]),
         )]),
     )
     .unwrap();
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_undo_2 = CachedUtxosBlockUndo::new(
-        Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
+        None,
         BTreeMap::from([(
             tx_2_id,
-            UtxosTxUndoWithSources::new(vec![Some(utxo4.clone())], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]),
         )]),
     )
     .unwrap();
     let expected_block_undo = CachedUtxosBlockUndo::new(
-        Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
+        None,
         BTreeMap::from([
             (
                 tx_1_id,
-                UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![]),
+                UtxosTxUndoWithSources::new(vec![Some(utxo1)], vec![]),
             ),
             (
                 tx_2_id,
-                UtxosTxUndoWithSources::new(vec![Some(utxo4)], vec![]),
+                UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![]),
             ),
         ]),
     )
@@ -499,6 +497,57 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn block_undo_from_chain_conflict_reward_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (_, utxo1) = create_utxo(&mut rng, 1000);
+    let (_, utxo2) = create_utxo(&mut rng, 2000);
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_1 = CachedUtxosBlockUndo::new(
+        Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
+        Default::default(),
+    )
+    .unwrap();
+    let block_undo_2 = CachedUtxosBlockUndo::new(
+        Some(UtxosBlockRewardUndo::new(vec![utxo2.clone()])),
+        Default::default(),
+    )
+    .unwrap();
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+
+    let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
+    verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+        TransactionSource::Chain(block_id),
+        CachedUtxoBlockUndoOp::Write(block_undo_1),
+    )]));
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_id),
+            CachedUtxoBlockUndoOp::Write(block_undo_2),
+        )]));
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    let result = flush::flush_to_storage(&mut verifier1, consumed_verifier2);
+
+    assert_eq!(
+        result.unwrap_err(),
+        TransactionVerifierStorageError::UtxoBlockUndoError(
+            utxo::UtxosBlockUndoError::UndoAlreadyExistsForReward
+        )
+    );
 }
 
 // Create the following hierarchy:

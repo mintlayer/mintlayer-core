@@ -127,7 +127,6 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
     TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
 {
     pub fn new(storage: S, chain_config: C) -> Self {
-        println!("new verifier");
         let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
@@ -169,7 +168,6 @@ where
         // TODO: both "expect"s in this function may fire when exiting the node-gui app;
         // get rid of them and return a proper Result.
         // See https://github.com/mintlayer/mintlayer-core/issues/1221
-        println!("new generic verifier");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block");
@@ -207,7 +205,6 @@ where
         &PoSAccountingDelta<A>,
         &TokensAccountingCache<T>,
     > {
-        println!("deriving verifier");
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -774,8 +771,6 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
-        println!("connect_transaction {:?}", tx.transaction().get_id());
-
         check_transaction::check_transaction(
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
@@ -854,8 +849,6 @@ where
         reward_transactable: BlockRewardTransactable,
         total_fees: Fee,
     ) -> Result<(), ConnectTransactionError> {
-        println!("connect_block_reward {:?}", block_index.block_id());
-
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(_inputs) = reward_transactable.inputs() {
             // verify input signatures
@@ -932,10 +925,9 @@ where
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
-        println!("can_disconnect_transaction {:?}", tx_id);
-        let block_undo_fetcher = |id: Id<Block>| {
+        let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_undo_data(id)
+                .get_undo_data(tx_source)
                 .map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         match tx_source {
@@ -976,11 +968,9 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
-        println!("disconnect_transaction {:?}", tx.transaction().get_id());
-
-        let block_undo_fetcher = |id: Id<Block>| {
+        let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_undo_data(id)
+                .get_undo_data(tx_source)
                 .map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         let tx_undo = self.utxo_block_undo.take_tx_undo(
@@ -1010,9 +1000,9 @@ where
         let reward_transactable = block.block_reward_transactable();
         let tx_source = TransactionSource::Chain(block.get_id());
 
-        let block_undo_fetcher = |id: Id<Block>| {
+        let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_undo_data(id)
+                .get_undo_data(tx_source)
                 .map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         let reward_undo =

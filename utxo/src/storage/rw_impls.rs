@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
-use crate::{Utxo, UtxosBlockUndo};
+use crate::Utxo;
 use common::{
-    chain::{Block, GenBlock, UtxoOutPoint},
+    chain::{GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 

@@ -82,7 +82,7 @@ pub trait TransactionVerifierStorageRef:
 
     fn get_undo_data(
         &self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_token_aux_data(
@@ -206,9 +206,9 @@ where
 
     fn get_undo_data(
         &self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
     ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        self.deref().get_undo_data(id)
+        self.deref().get_undo_data(tx_source)
     }
 
     fn get_token_aux_data(

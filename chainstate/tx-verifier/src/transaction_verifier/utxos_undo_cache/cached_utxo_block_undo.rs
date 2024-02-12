@@ -13,17 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
-    ops::RangeInclusive,
-};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use crate::transaction_verifier::CachedOperation;
 use common::{
     chain::{OutPointSourceId, Transaction},
-    primitives::{Id, H256},
+    primitives::Id,
 };
-use utils::ensure;
 use utxo::{
     UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError, UtxosTxUndo, UtxosTxUndoWithSources,
 };
@@ -37,8 +33,8 @@ pub struct CachedUtxosBlockUndo {
     // Only txs that aren't a dependency for others can be taken out.
     // Collections are a mirrored representation of one another. 2 instances are maintained
     // in order to gain log(N) runtime complexity.
-    child_parent_dependencies: BTreeMap<Id<Transaction>, CachedOperation<Id<Transaction>>>,
-    parent_child_dependencies: BTreeMap<Id<Transaction>, CachedOperation<Id<Transaction>>>,
+    child_parent_dependencies: BTreeMap<(Id<Transaction>, Id<Transaction>), CachedOperation<()>>,
+    parent_child_dependencies: BTreeMap<(Id<Transaction>, Id<Transaction>), CachedOperation<()>>,
 }
 
 impl CachedUtxosBlockUndo {
@@ -46,38 +42,79 @@ impl CachedUtxosBlockUndo {
         reward_undo: Option<UtxosBlockRewardUndo>,
         tx_undos: BTreeMap<Id<Transaction>, UtxosTxUndoWithSources>,
     ) -> Result<Self, UtxosBlockUndoError> {
-        todo!()
-    }
-    //pub fn new(
-    //    reward_undo: Option<UtxosBlockRewardUndo>,
-    //    tx_undos: BTreeMap<Id<Transaction>, UtxosTxUndoWithSources>,
-    //) -> Result<Self, UtxosBlockUndoError> {
-    //    let mut block_undo = CachedUtxosBlockUndo {
-    //        reward_undo,
-    //        tx_undos: Default::default(),
-    //        child_parent_dependencies: Default::default(),
-    //        parent_child_dependencies: Default::default(),
-    //    };
-    //    tx_undos
-    //        .into_iter()
-    //        .try_for_each(|(tx_id, tx_undo)| block_undo.insert_tx_undo(tx_id, tx_undo))?;
-    //    Ok(block_undo)
-    //}
+        let mut block_undo = CachedUtxosBlockUndo::default();
 
-    pub fn from_utxo_block_undo(undo: UtxosBlockUndo) -> Result<Self, UtxosBlockUndoError> {
-        todo!()
+        if let Some(reward_undo) = reward_undo {
+            block_undo.set_block_reward_undo(reward_undo);
+        }
+
+        tx_undos
+            .into_iter()
+            .try_for_each(|(tx_id, tx_undo)| block_undo.insert_tx_undo(tx_id, tx_undo))?;
+        Ok(block_undo)
+    }
+
+    pub fn from_utxo_block_undo(undo: UtxosBlockUndo) -> Self {
+        let (reward_undo, tx_undos, child_parent_dependencies, parent_child_dependencies) =
+            undo.consume();
+
+        let reward_undo = reward_undo.map(|u| CachedOperation::Read(u));
+
+        let tx_undos = tx_undos
+            .into_iter()
+            .map(|(id, undo)| (id, CachedOperation::Read(undo)))
+            .collect::<BTreeMap<_, _>>();
+
+        let child_parent_dependencies = child_parent_dependencies
+            .into_iter()
+            .map(|(child, parent)| ((child, parent), CachedOperation::Read(())))
+            .collect::<BTreeMap<_, _>>();
+
+        let parent_child_dependencies = parent_child_dependencies
+            .into_iter()
+            .map(|(parent, child)| ((parent, child), CachedOperation::Read(())))
+            .collect::<BTreeMap<_, _>>();
+
+        Self {
+            reward_undo,
+            tx_undos,
+            child_parent_dependencies,
+            parent_child_dependencies,
+        }
+    }
+
+    pub fn consume(self) -> UtxosBlockUndo {
+        let reward_undo = self.reward_undo.map(|op| op.get().cloned()).flatten();
+
+        let tx_undos = self
+            .tx_undos
+            .into_iter()
+            .filter_map(|(id, op)| op.get().map(|u| (id, u.clone())))
+            .collect::<BTreeMap<_, _>>();
+
+        let child_parent_dependencies = self
+            .child_parent_dependencies
+            .into_iter()
+            .filter_map(|(id, op)| op.get().map(|_| id))
+            .collect::<BTreeSet<_>>();
+
+        let parent_child_dependencies = self
+            .parent_child_dependencies
+            .into_iter()
+            .filter_map(|(id, op)| op.get().map(|_| id))
+            .collect::<BTreeSet<_>>();
+
+        UtxosBlockUndo::from_data(
+            reward_undo,
+            tx_undos,
+            child_parent_dependencies,
+            parent_child_dependencies,
+        )
     }
 
     pub fn is_empty(&self) -> bool {
-        self.reward_undo.is_none() && self.tx_undos.is_empty()
-    }
-
-    //pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, UtxosTxUndo> {
-    //    &self.tx_undos
-    //}
-
-    pub fn consume(self) -> UtxosBlockUndo {
-        todo!()
+        !self.reward_undo.as_ref().is_some_and(|u| u.get().is_some())
+            && self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 
     pub fn insert_tx_undo(
@@ -89,7 +126,7 @@ impl CachedUtxosBlockUndo {
 
         match self.tx_undos.entry(tx_id) {
             Entry::Vacant(e) => e.insert(CachedOperation::Write(utxos)),
-            Entry::Occupied(e) => return Err(UtxosBlockUndoError::UndoAlreadyExists(tx_id)),
+            Entry::Occupied(_) => return Err(UtxosBlockUndoError::UndoAlreadyExists(tx_id)),
         };
 
         sources
@@ -100,9 +137,9 @@ impl CachedUtxosBlockUndo {
             })
             .for_each(|source_tx_id| {
                 self.child_parent_dependencies
-                    .insert(tx_id, CachedOperation::Write(source_tx_id));
+                    .insert((tx_id, source_tx_id), CachedOperation::Write(()));
                 self.parent_child_dependencies
-                    .insert(source_tx_id, CachedOperation::Write(tx_id));
+                    .insert((source_tx_id, tx_id), CachedOperation::Write(()));
             });
 
         Ok(())
@@ -112,16 +149,20 @@ impl CachedUtxosBlockUndo {
         // Check if the tx is a dependency for other txs.
         self.parent_child_dependencies
             .iter()
-            .filter(|(id, _)| *id == tx_id)
-            .any(|(_, child)| child.get().is_some())
+            .filter(|((id, _), _)| id == tx_id)
+            .any(|(_, op)| op.get().is_some())
     }
 
     fn get_parents_of(&self, tx_id: &Id<Transaction>) -> Vec<(Id<Transaction>, Id<Transaction>)> {
         self.child_parent_dependencies
             .iter()
-            .filter(|(child, _)| *child == tx_id)
-            .filter_map(|(child, parent)| parent.get().map(|p| (*child, *p)))
+            .filter(|((child, _), _)| child == tx_id)
+            .filter_map(|((child, parent), op)| op.get().map(|_| (*child, *parent)))
             .collect()
+    }
+
+    pub fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
+        self.reward_undo.take().map(|op| op.take()).flatten()
     }
 
     pub fn take_tx_undo(
@@ -134,8 +175,8 @@ impl CachedUtxosBlockUndo {
             let to_remove = self.get_parents_of(tx_id);
 
             to_remove.iter().for_each(|(id1, id2)| {
-                self.child_parent_dependencies.insert(*id1, CachedOperation::Erase);
-                self.parent_child_dependencies.insert(*id2, CachedOperation::Erase);
+                self.child_parent_dependencies.insert((*id1, *id2), CachedOperation::Erase);
+                self.parent_child_dependencies.insert((*id2, *id1), CachedOperation::Erase);
             });
 
             let res = self
@@ -149,17 +190,9 @@ impl CachedUtxosBlockUndo {
         }
     }
 
-    //pub fn block_reward_undo(&self) -> Option<&UtxosBlockRewardUndo> {
-    //    self.reward_undo.as_ref()
-    //}
-
     pub fn set_block_reward_undo(&mut self, reward_undo: UtxosBlockRewardUndo) {
         debug_assert!(self.reward_undo.is_none());
         self.reward_undo = Some(CachedOperation::Write(reward_undo));
-    }
-
-    pub fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
-        self.reward_undo.take().map(|op| op.take()).flatten()
     }
 
     pub fn combine(&mut self, other: Self) -> Result<(), UtxosBlockUndoError> {
@@ -169,147 +202,67 @@ impl CachedUtxosBlockUndo {
             (None, Some(reward_undo)) => {
                 self.reward_undo = Some(reward_undo);
             }
-            (Some(_), Some(_)) => panic!(),
+            (Some(_), Some(_)) => return Err(UtxosBlockUndoError::UndoAlreadyExistsForReward),
         }
 
         // combine utxos
-        other.tx_undos.into_iter().try_for_each(|(id, u)| {
-            if self.tx_undos.insert(id, u).is_some() {
-                return Err(UtxosBlockUndoError::UndoAlreadyExists(id));
+        other.tx_undos.into_iter().for_each(|(id, op)| {
+            let result = combine(self.tx_undos.get(&id).cloned(), Some(op));
+            if let Some(result) = result {
+                self.tx_undos.insert(id, result);
             }
-            Ok(())
-        })?;
+        });
 
         // combine dependencies
-        other.child_parent_dependencies.into_iter().try_for_each(|(k, v)| {
-            if self.child_parent_dependencies.insert(k, v).is_some() {
-                return Err(UtxosBlockUndoError::UndoAlreadyExists(k));
+        other.child_parent_dependencies.into_iter().for_each(|(k, op)| {
+            let result = combine(self.child_parent_dependencies.get(&k).cloned(), Some(op));
+            if let Some(result) = result {
+                self.child_parent_dependencies.insert(k, result);
             }
-            Ok(())
-        })?;
-        other.parent_child_dependencies.into_iter().try_for_each(|(k, v)| {
-            if self.parent_child_dependencies.insert(k, v).is_some() {
-                return Err(UtxosBlockUndoError::UndoAlreadyExists(k));
+        });
+        other.parent_child_dependencies.into_iter().for_each(|(k, op)| {
+            let result = combine(self.parent_child_dependencies.get(&k).cloned(), Some(op));
+            if let Some(result) = result {
+                self.parent_child_dependencies.insert(k, result);
             }
-            Ok(())
-        })
+        });
+
+        Ok(())
     }
 }
 
-/*
-#[cfg(test)]
-pub mod test {
-    use super::*;
-    use crate::tests::test_helper::create_utxo;
-    use common::primitives::H256;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn tx_undo_test(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-        let (utxo0, _) = create_utxo(&mut rng, 0);
-        let (utxo1, _) = create_utxo(&mut rng, 1);
-        let tx_undo = UtxosTxUndo::new(vec![Some(utxo0.clone()), None, Some(utxo1.clone())]);
-
-        // check `inner()`
-        let inner = tx_undo.inner();
-        assert_eq!(Some(utxo0.clone()), inner[0]);
-        assert_eq!(None, inner[1]);
-        assert_eq!(Some(utxo1.clone()), inner[2]);
-
-        // check `into_inner()`
-        let undo_vec = tx_undo.into_inner();
-        assert_eq!(Some(utxo0), undo_vec[0]);
-        assert_eq!(None, undo_vec[1]);
-        assert_eq!(Some(utxo1), undo_vec[2]);
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn block_undo_test(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-        let (utxo0, _) = create_utxo(&mut rng, 0);
-        let (utxo1, _) = create_utxo(&mut rng, 1);
-        let tx_undo0 = UtxosTxUndoWithSources::new(vec![Some(utxo0), None, Some(utxo1)], vec![]);
-        let tx_0_id: Id<Transaction> = H256::from_low_u64_be(0).into();
-
-        let (utxo2, _) = create_utxo(&mut rng, 2);
-        let (utxo3, _) = create_utxo(&mut rng, 3);
-        let (utxo4, _) = create_utxo(&mut rng, 4);
-        let tx_undo1 =
-            UtxosTxUndoWithSources::new(vec![Some(utxo2), None, Some(utxo3), Some(utxo4)], vec![]);
-        let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-
-        let (utxo5, _) = create_utxo(&mut rng, 5);
-        let reward_undo = UtxosBlockRewardUndo::new(vec![utxo5]);
-
-        let mut blockundo: CachedUtxosBlockUndo = Default::default();
-        blockundo.set_block_reward_undo(reward_undo.clone());
-        blockundo.insert_tx_undo(tx_0_id, tx_undo0.clone()).unwrap();
-        blockundo.insert_tx_undo(tx_1_id, tx_undo1.clone()).unwrap();
-
-        assert_eq!(&tx_undo0.utxos, blockundo.tx_undos().get(&tx_0_id).unwrap());
-        assert_eq!(&tx_undo1.utxos, blockundo.tx_undos().get(&tx_1_id).unwrap());
-
-        assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn dependencies_test(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-        let (utxo0, _) = create_utxo(&mut rng, 0);
-        let (utxo1, _) = create_utxo(&mut rng, 1);
-
-        let expected_tx_undo0 =
-            UtxosTxUndo::new(vec![Some(utxo0.clone()), None, Some(utxo1.clone())]);
-        let tx_undo0 = UtxosTxUndoWithSources {
-            utxos: UtxosTxUndo::new(vec![Some(utxo0), None, Some(utxo1)]),
-            sources: vec![],
-        };
-        let tx_0_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-
-        let (utxo2, _) = create_utxo(&mut rng, 2);
-        let (utxo3, _) = create_utxo(&mut rng, 3);
-        let (utxo4, _) = create_utxo(&mut rng, 4);
-
-        let expected_tx_undo1 = UtxosTxUndo::new(vec![
-            Some(utxo2.clone()),
-            None,
-            Some(utxo3.clone()),
-            Some(utxo4.clone()),
-        ]);
-        let tx_undo1 = UtxosTxUndoWithSources {
-            utxos: UtxosTxUndo::new(vec![Some(utxo2), None, Some(utxo3), Some(utxo4)]),
-            sources: vec![OutPointSourceId::Transaction(tx_0_id)],
-        };
-        let tx_1_id: Id<Transaction> = H256::from_low_u64_be(2).into();
-
-        let mut blockundo: CachedUtxosBlockUndo = Default::default();
-        blockundo.insert_tx_undo(tx_0_id, tx_undo0).unwrap();
-        blockundo.insert_tx_undo(tx_1_id, tx_undo1).unwrap();
-
-        assert_eq!(
-            blockundo.take_tx_undo(&tx_0_id).unwrap_err(),
-            UtxosBlockUndoError::TxUndoWithDependency(tx_0_id)
-        );
-        assert_eq!(
-            blockundo.take_tx_undo(&tx_1_id).unwrap(),
-            Some(expected_tx_undo1)
-        );
-        assert_eq!(
-            blockundo.take_tx_undo(&tx_0_id).unwrap(),
-            Some(expected_tx_undo0)
-        );
-
-        assert!(blockundo.tx_undos.is_empty());
-        assert!(blockundo.child_parent_dependencies.is_empty());
-        assert!(blockundo.parent_child_dependencies.is_empty());
+pub fn combine<T>(
+    left: Option<CachedOperation<T>>,
+    right: Option<CachedOperation<T>>,
+) -> Option<CachedOperation<T>> {
+    match (left, right) {
+        (None, None) => None,
+        (None, Some(v)) | (Some(v), None) => Some(v),
+        (Some(left), Some(right)) => {
+            let result = match (left, right) {
+                (CachedOperation::Write(_), CachedOperation::Write(other)) => {
+                    CachedOperation::Write(other)
+                }
+                (CachedOperation::Write(_), CachedOperation::Read(_)) => panic!("invariant"),
+                (CachedOperation::Write(_), CachedOperation::Erase) => CachedOperation::Erase,
+                (CachedOperation::Read(_), CachedOperation::Write(other)) => {
+                    CachedOperation::Write(other)
+                }
+                (CachedOperation::Read(_), CachedOperation::Read(other)) => {
+                    CachedOperation::Read(other)
+                }
+                (CachedOperation::Read(_), CachedOperation::Erase) => CachedOperation::Erase,
+                (CachedOperation::Erase, CachedOperation::Write(other)) => {
+                    // it is possible in mempool to disconnect a tx and connect it again,
+                    // e.g. if memory limit was raised
+                    CachedOperation::Write(other)
+                }
+                (CachedOperation::Erase, CachedOperation::Read(_)) => panic!("invariant"),
+                (CachedOperation::Erase, CachedOperation::Erase) => {
+                    panic!("invariant tx disconnected twice")
+                }
+            };
+            Some(result)
+        }
     }
 }
-*/

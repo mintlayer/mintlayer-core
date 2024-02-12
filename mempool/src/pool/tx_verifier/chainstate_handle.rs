@@ -17,7 +17,10 @@ use std::collections::BTreeMap;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
-    tx_verifier::{transaction_verifier::CachedUtxosBlockUndo, TransactionVerifierStorageRef},
+    tx_verifier::{
+        transaction_verifier::CachedUtxosBlockUndo, TransactionSource,
+        TransactionVerifierStorageRef,
+    },
     ChainstateError,
 };
 use chainstate_types::storage_result;
@@ -180,7 +183,10 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         self.call(move |c| c.get_token_id_from_issuance_tx(&tx_id))
     }
 
-    fn get_undo_data(&self, _id: Id<Block>) -> Result<Option<CachedUtxosBlockUndo>, Error> {
+    fn get_undo_data(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, Error> {
         panic!("Mempool should not undo stuff in chainstate")
     }
 

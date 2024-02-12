@@ -26,7 +26,7 @@ use common::{
 };
 use thiserror::Error;
 
-use crate::{timelock_check, CheckTransactionError};
+use crate::{timelock_check, CheckTransactionError, TransactionSource};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
@@ -50,8 +50,8 @@ pub enum ConnectTransactionError {
     MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
-    #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
-    MissingBlockUndo(Id<Block>),
+    #[error("While disconnecting a block, block undo info doesn't exist for block `{0:?}`")]
+    MissingBlockUndo(TransactionSource),
     #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("While disconnecting a mempool tx, undo info is missing")]
