@@ -501,7 +501,7 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.clear_addresses()?;
         db_tx.clear_public_keys()?;
 
-        let lookahead_size = db_tx.get_lookahead_size()?;
+        let lookahead_size = db_tx.get_lookahead_size().unwrap_or(LOOKAHEAD_SIZE);
 
         // set all accounts best block to genesis
         for (id, mut info) in db_tx.get_accounts_info()? {
