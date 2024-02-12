@@ -2,6 +2,7 @@
 
 ##### Note: This was tested on x86_64 Linux, and may not work on other platforms. It didn't work on M1 Mac (particularly the build. A pre-built wasm binary works fine on a browser).
 
+
 ### To run in a web browser
 
 Make sure you have wasm-pack and the wasm32-unknown-unknown target installed:
@@ -17,6 +18,12 @@ To build the wasm package from the crate, run (in the wasm Cargo.toml directory)
 
 ```
 wasm-pack build --target web
+```
+
+**Note for mac users**: `llvm` installed by Xcode doesn't support wasm targets, but the homebrew version does, these commands may make it possible to compile to wasm targets. Note that using these commands could have other side effects on your toolchain. Please consider researching the clang toolchain and how it works before using them. We do not recommend copying and pasting commands without fully understanding the side-effects.
+```
+brew install llvm
+AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack build --target web
 ```
 
 To test the wasm binary. First, install `http-server` web server (feel free to use any other web-server of your choosing):
