@@ -290,11 +290,11 @@ class WalletCliController:
                                 decommission_addr: str) -> str:
         return await self._write_command(f"staking-create-pool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_addr}\n")
 
-    async def decommission_stake_pool(self, pool_id: str) -> str:
-        return await self._write_command(f"staking-decommission-pool {pool_id}\n")
+    async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
+        return await self._write_command(f"staking-decommission-pool {pool_id} {address}\n")
 
-    async def decommission_stake_pool_request(self, pool_id: str) -> str:
-        return await self._write_command(f"staking-decommission-pool-request {pool_id}\n")
+    async def decommission_stake_pool_request(self, pool_id: str, address: str) -> str:
+        return await self._write_command(f"staking-decommission-pool-request {pool_id} {address}\n")
 
     async def sign_raw_transaction(self, transaction: str) -> str:
         return await self._write_command(f"account-sign-raw-transaction {transaction}\n")

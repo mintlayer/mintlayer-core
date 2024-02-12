@@ -316,7 +316,8 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
             assert_equal(len(pools), 1)
             genesis_pool_balance = pools[0].balance
             # decommission from hot wallet
-            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(genesis_pool_id))
+            address = await wallet.new_address()
+            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(genesis_pool_id, address))
             transactions = node.mempool_transactions()
             assert_equal(len(transactions), 1)
 

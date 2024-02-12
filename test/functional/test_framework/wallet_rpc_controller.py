@@ -244,8 +244,8 @@ class WalletRpcController:
         self._write_command("staking_create_pool", [self.account, str(amount), str(cost_per_block), str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
-    async def decommission_stake_pool(self, pool_id: str) -> str:
-        self._write_command("staking_decommission_pool", [self.account, pool_id, None, {'in_top_x_mb': 5}])['result']
+    async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
+        self._write_command("staking_decommission_pool", [self.account, pool_id, address, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:

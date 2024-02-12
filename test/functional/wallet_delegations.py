@@ -440,7 +440,8 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("Success", await wallet.stop_staking())
             assert_in("Not staking", await wallet.staking_status())
-            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id))
+            address = await wallet.new_address()
+            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id, address))
 
             transactions = node.mempool_transactions()
             block_height = await wallet.get_best_block_height()

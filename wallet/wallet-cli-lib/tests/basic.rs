@@ -142,10 +142,11 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
 
     // create the decommission request
     assert_eq!(test.exec("account-select 0"), "Success");
+    let address = test.exec("address-new");
     let pool_id: PoolId = H256::zero().into();
     let output = test.exec(&format!(
-        "staking-decommission-pool-request {}",
-        Address::new(&test.chain_config, &pool_id).unwrap()
+        "staking-decommission-pool-request {} {address}",
+        Address::new(&test.chain_config, &pool_id).unwrap(),
     ));
     let req = output.lines().nth(2).unwrap();
 

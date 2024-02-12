@@ -287,10 +287,11 @@ class WalletDecommissionRequest(BitcoinTestFramework):
                 assert_in("Success", await wallet.stop_staking())
 
             # try decommission from hot wallet
-            assert (await wallet.decommission_stake_pool(pools[0].pool_id)).startswith("Wallet error: Wallet error: Failed to completely sign")
+            address = await wallet.new_address()
+            assert (await wallet.decommission_stake_pool(pools[0].pool_id, address)).startswith("Wallet error: Wallet error: Failed to completely sign")
 
             # create decommission request
-            decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id)
+            decommission_req_output = await wallet.decommission_stake_pool_request(pools[0].pool_id, address)
             decommission_req = decommission_req_output.split('\n')[2]
 
             # try to sign decommission request from hot wallet
@@ -322,6 +323,10 @@ class WalletDecommissionRequest(BitcoinTestFramework):
 
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
+
+            # check the locked balance is equal to the genesis pool balance
+            locked_utxos = await wallet.list_utxos('all', with_locked='locked')
+            assert_equal(len(locked_utxos), 1)
 
 # `use_wallet_to_produce_block` indicates whether a test should use a pool created by a wallet to produce block
 # `exit_on_success` indicates if the process should exit or continue and run next test case
