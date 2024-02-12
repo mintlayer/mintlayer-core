@@ -21,7 +21,7 @@ use common::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -30,8 +30,8 @@ use crate::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
     CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
     LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
-    StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
+    TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -54,6 +54,7 @@ trait WalletRpc {
         path: String,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
     #[method(name = "wallet_open")]
@@ -72,10 +73,10 @@ trait WalletRpc {
     async fn rescan(&self) -> rpc::RpcResult<()>;
 
     #[method(name = "wallet_show_seed_phrase")]
-    async fn get_seed_phrase(&self) -> rpc::RpcResult<SeedPhrase>;
+    async fn get_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>>;
 
     #[method(name = "wallet_purge_seed_phrase")]
-    async fn purge_seed_phrase(&self) -> rpc::RpcResult<SeedPhrase>;
+    async fn purge_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>>;
 
     #[method(name = "wallet_set_lookahead_size")]
     async fn set_lookahead_size(

@@ -31,14 +31,14 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, InsepectTransaction, WalletInfo},
+    types::{Balances, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, EmptyArgs, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId,
         StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         VrfPublicKeyInfo,
     },
@@ -71,12 +71,14 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> Result<CreatedWallet, Self::Error> {
         WalletRpcClient::create_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             store_seed_phrase,
             mnemonic,
+            passphrase,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -120,13 +122,13 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn get_seed_phrase(&self) -> Result<SeedPhrase, Self::Error> {
+    async fn get_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
         WalletRpcClient::get_seed_phrase(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn purge_seed_phrase(&self) -> Result<SeedPhrase, Self::Error> {
+    async fn purge_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
         WalletRpcClient::purge_seed_phrase(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)

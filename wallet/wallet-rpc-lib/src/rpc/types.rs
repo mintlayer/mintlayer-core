@@ -375,11 +375,6 @@ impl TokenMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SeedPhrase {
-    pub seed_phrase: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StakePoolBalance {
     pub balance: Option<String>,
 }

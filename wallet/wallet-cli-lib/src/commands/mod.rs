@@ -54,6 +54,10 @@ pub enum ColdWalletCommand {
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
+
+        /// Passphrase along the menmonic
+        #[arg(long = "passphrase")]
+        passphrase: Option<String>,
     },
 
     /// Open an exiting wallet by specifying the file location of the wallet file

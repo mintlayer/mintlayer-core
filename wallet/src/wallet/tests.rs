@@ -50,6 +50,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
+    seed_phrase::PassPhrase,
     utxo_types::{UtxoState, UtxoType},
 };
 use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
@@ -434,6 +435,12 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         assert!(seed_phrase.is_none());
     }
 
+    let wallet_passphrase: Option<String> = if rng.gen::<bool>() {
+        Some(gen_random_password(&mut rng))
+    } else {
+        None
+    };
+
     // create wallet with saving the seed phrase
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
@@ -441,20 +448,30 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         Arc::clone(&chain_config),
         db,
         MNEMONIC,
-        None,
+        wallet_passphrase.as_ref().map(|p| p.as_ref()),
         StoreSeedPhrase::Store,
         BlockHeight::new(0),
         genesis_block_id,
     )
     .unwrap();
 
+    let wallet_passphrase = PassPhrase::new(zeroize::Zeroizing::new(wallet_passphrase));
+
     {
         let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-        let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        let (seed_phrase_language, seed_phrase, passphrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (
+                language,
+                seed_phrase,
+                PassPhrase::new(zeroize::Zeroizing::new(None)),
+            ),
+            SerializableSeedPhrase::V1(language, seed_phrase, passphrase) => {
+                (language, seed_phrase, passphrase)
+            }
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+        assert_eq!(passphrase, wallet_passphrase);
     }
 
     let password = gen_random_password(&mut rng);
@@ -470,21 +487,37 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     wallet.unlock_wallet(&password).unwrap();
     {
         let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-        let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        let (seed_phrase_language, seed_phrase, passphrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (
+                language,
+                seed_phrase,
+                PassPhrase::new(zeroize::Zeroizing::new(None)),
+            ),
+            SerializableSeedPhrase::V1(language, seed_phrase, passphrase) => {
+                (language, seed_phrase, passphrase)
+            }
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+        assert_eq!(passphrase, wallet_passphrase);
     }
 
     {
         // Deleting the seed phrase will return it
         let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
-        let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        let (seed_phrase_language, seed_phrase, passphrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (
+                language,
+                seed_phrase,
+                PassPhrase::new(zeroize::Zeroizing::new(None)),
+            ),
+            SerializableSeedPhrase::V1(language, seed_phrase, passphrase) => {
+                (language, seed_phrase, passphrase)
+            }
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+        assert_eq!(passphrase, wallet_passphrase);
     }
 
     // Now the seed phrase doesn't exist in the wallet anymore

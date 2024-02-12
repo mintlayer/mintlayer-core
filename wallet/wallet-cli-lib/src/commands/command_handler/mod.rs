@@ -136,6 +136,7 @@ where
                 wallet_path,
                 mnemonic,
                 whether_to_store_seed_phrase,
+                passphrase,
             } => {
                 let newly_generated_mnemonic = self
                     .wallet()
@@ -144,6 +145,7 @@ where
                         wallet_path,
                         whether_to_store_seed_phrase.to_bool(),
                         mnemonic,
+                        passphrase,
                     )
                     .await?;
 
@@ -222,8 +224,19 @@ where
             ColdWalletCommand::ShowSeedPhrase => {
                 let phrase = self.non_empty_wallet().await?.get_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase.seed_phrase {
-                    format!("The stored seed phrase is \"{}\"", phrase.join(" "))
+                let msg = if let Some(phrase) = phrase {
+                    if let Some(passphrase) = phrase.passphrase {
+                        format!(
+                            "The stored seed phrase is \"{}\" with passphrase \"{}\"",
+                            phrase.seed_phrase.join(" "),
+                            passphrase
+                        )
+                    } else {
+                        format!(
+                            "The stored seed phrase is \"{}\"",
+                            phrase.seed_phrase.join(" ")
+                        )
+                    }
                 } else {
                     "No stored seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase stored elsewhere when you created the wallet.".into()
                 };
@@ -234,8 +247,12 @@ where
             ColdWalletCommand::PurgeSeedPhrase => {
                 let phrase = self.non_empty_wallet().await?.purge_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase.seed_phrase {
-                    format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
+                let msg = if let Some(phrase) = phrase {
+                    if let Some(passphrase) = phrase.passphrase {
+                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\" with passphrase \"{}\"", phrase.seed_phrase.join(" "), passphrase)
+                    } else {
+                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.seed_phrase.join(" "))
+                    }
                 } else {
                     "No stored seed phrase for this wallet.".into()
                 };

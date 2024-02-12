@@ -38,8 +38,8 @@ use std::{
     time::Duration,
 };
 use types::{
-    Balances, InsepectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
-    WalletInfo,
+    Balances, InsepectTransaction, SeedWithPassPhrase, SignatureStats, TransactionToInspect,
+    ValidatedSignatures, WalletInfo,
 };
 
 use read::ReadOnlyController;
@@ -304,28 +304,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(wallet)
     }
 
-    fn serializable_seed_phrase_to_vec(
-        serializable_seed_phrase: wallet_types::seed_phrase::SerializableSeedPhrase,
-    ) -> Vec<String> {
-        match serializable_seed_phrase {
-            wallet_types::seed_phrase::SerializableSeedPhrase::V0(_, words) => {
-                words.mnemonic().to_vec()
-            }
-        }
-    }
-
-    pub fn seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
+    pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
         self.wallet
             .seed_phrase()
-            .map(|opt| opt.map(Self::serializable_seed_phrase_to_vec))
+            .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
             .map_err(ControllerError::WalletError)
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
+    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
         self.wallet
             .delete_seed_phrase()
-            .map(|opt| opt.map(Self::serializable_seed_phrase_to_vec))
+            .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
             .map_err(ControllerError::WalletError)
     }
 

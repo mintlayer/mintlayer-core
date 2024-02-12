@@ -32,7 +32,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
@@ -43,7 +43,7 @@ use crate::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
         CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
         LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId,
         StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         UtxoInfo, VrfPublicKeyInfo,
     },
@@ -79,6 +79,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         path: String,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> rpc::RpcResult<CreatedWallet> {
         let whether_to_store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
@@ -86,16 +87,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             StoreSeedPhrase::DoNotStore
         };
         rpc::handle_result(
-            self.create_wallet(path.into(), whether_to_store_seed_phrase, mnemonic)
-                .await
-                .map(|res| match res {
-                    crate::CreatedWallet::UserProvidedMenmonic => {
-                        CreatedWallet::UserProvidedMenmonic
-                    }
-                    crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
-                        CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
-                    }
-                }),
+            self.create_wallet(
+                path.into(),
+                whether_to_store_seed_phrase,
+                mnemonic,
+                passphrase,
+            )
+            .await
+            .map(|res| match res {
+                crate::CreatedWallet::UserProvidedMenmonic => CreatedWallet::UserProvidedMenmonic,
+                crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
+                }
+            }),
         )
     }
 
@@ -119,16 +123,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.sync().await)
     }
 
-    async fn get_seed_phrase(&self) -> rpc::RpcResult<SeedPhrase> {
-        rpc::handle_result(
-            self.get_seed_phrase().await.map(|seed_phrase| SeedPhrase { seed_phrase }),
-        )
+    async fn get_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>> {
+        rpc::handle_result(self.get_seed_phrase().await)
     }
 
-    async fn purge_seed_phrase(&self) -> rpc::RpcResult<SeedPhrase> {
-        rpc::handle_result(
-            self.purge_seed_phrase().await.map(|seed_phrase| SeedPhrase { seed_phrase }),
-        )
+    async fn purge_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>> {
+        rpc::handle_result(self.purge_seed_phrase().await)
     }
 
     async fn set_lookahead_size(
