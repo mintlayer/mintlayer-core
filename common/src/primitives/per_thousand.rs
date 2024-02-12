@@ -75,6 +75,21 @@ impl PerThousand {
             bad_value: s.to_owned(),
         })
     }
+
+    pub fn into_percentage_str(&self) -> String {
+        let mut result = String::new();
+        self.write_as_percentage_str(&mut result)
+            .expect("Writing to string must succeed");
+        result
+    }
+
+    fn write_as_percentage_str(&self, dest: &mut impl std::fmt::Write) -> std::fmt::Result {
+        write!(
+            dest,
+            "{}%",
+            Amount::from_atoms(self.0.into()).into_fixedpoint_str(1)
+        )
+    }
 }
 
 #[derive(Error, Debug)]
@@ -95,11 +110,7 @@ impl Decode for PerThousand {
 
 impl Display for PerThousand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}%",
-            Amount::from_atoms(self.0.into()).into_fixedpoint_str(1)
-        )
+        self.write_as_percentage_str(f)
     }
 }
 
@@ -144,19 +155,47 @@ mod tests {
     }
 
     #[test]
-    fn test_to_string() {
-        assert_eq!(PerThousand::new(1).unwrap().to_string(), "0.1%");
-        assert_eq!(PerThousand::new(10).unwrap().to_string(), "1%");
-        assert_eq!(PerThousand::new(100).unwrap().to_string(), "10%");
-        assert_eq!(PerThousand::new(1000).unwrap().to_string(), "100%");
+    fn test_into_percentage_str() {
+        assert_eq!(PerThousand::new(1).unwrap().into_percentage_str(), "0.1%");
+        assert_eq!(PerThousand::new(10).unwrap().into_percentage_str(), "1%");
+        assert_eq!(PerThousand::new(100).unwrap().into_percentage_str(), "10%");
+        assert_eq!(
+            PerThousand::new(1000).unwrap().into_percentage_str(),
+            "100%"
+        );
 
-        assert_eq!(PerThousand::new(11).unwrap().to_string(), "1.1%");
-        assert_eq!(PerThousand::new(23).unwrap().to_string(), "2.3%");
-        assert_eq!(PerThousand::new(98).unwrap().to_string(), "9.8%");
+        assert_eq!(PerThousand::new(11).unwrap().into_percentage_str(), "1.1%");
+        assert_eq!(PerThousand::new(23).unwrap().into_percentage_str(), "2.3%");
+        assert_eq!(PerThousand::new(98).unwrap().into_percentage_str(), "9.8%");
 
-        assert_eq!(PerThousand::new(311).unwrap().to_string(), "31.1%");
-        assert_eq!(PerThousand::new(564).unwrap().to_string(), "56.4%");
-        assert_eq!(PerThousand::new(827).unwrap().to_string(), "82.7%");
+        assert_eq!(
+            PerThousand::new(311).unwrap().into_percentage_str(),
+            "31.1%"
+        );
+        assert_eq!(
+            PerThousand::new(564).unwrap().into_percentage_str(),
+            "56.4%"
+        );
+        assert_eq!(
+            PerThousand::new(827).unwrap().into_percentage_str(),
+            "82.7%"
+        );
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(format!("{}", PerThousand::new(1).unwrap()), "0.1%");
+        assert_eq!(format!("{}", PerThousand::new(10).unwrap()), "1%");
+        assert_eq!(format!("{}", PerThousand::new(100).unwrap()), "10%");
+        assert_eq!(format!("{}", PerThousand::new(1000).unwrap()), "100%");
+
+        assert_eq!(format!("{}", PerThousand::new(11).unwrap()), "1.1%");
+        assert_eq!(format!("{}", PerThousand::new(23).unwrap()), "2.3%");
+        assert_eq!(format!("{}", PerThousand::new(98).unwrap()), "9.8%");
+
+        assert_eq!(format!("{}", PerThousand::new(311).unwrap()), "31.1%");
+        assert_eq!(format!("{}", PerThousand::new(564).unwrap()), "56.4%");
+        assert_eq!(format!("{}", PerThousand::new(827).unwrap()), "82.7%");
     }
 
     #[rstest]
