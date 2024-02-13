@@ -15,7 +15,7 @@
 
 use std::{future::pending, path::PathBuf};
 
-use crate::wallet_rpc_traits::WalletInterface;
+use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 
 use super::{ClientWalletRpc, WalletRpcError};
 
@@ -30,6 +30,7 @@ use p2p_types::{
     socket_address::SocketAddress, PeerId,
 };
 use serialization::hex_encoded::HexEncoded;
+use serialization::DecodeAll;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{types::Balances, ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
 use wallet_rpc_lib::{
@@ -876,7 +877,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartiallySignedTransaction, Self::Error> {
+    ) -> Result<PartialOrSignedTx, Self::Error> {
         let options = TransactionOptions {
             in_top_x_mb: config.in_top_x_mb,
         };
@@ -887,7 +888,19 @@ impl WalletInterface for ClientWalletRpc {
             options,
         )
         .await
-        .map(HexEncoded::take)
+        .map(|result| {
+            let bytes = hex::decode(result.hex).expect("valid hex");
+            if result.is_complete {
+                PartialOrSignedTx::Signed(
+                    SignedTransaction::decode_all(&mut bytes.as_slice()).expect("valid singed tx"),
+                )
+            } else {
+                PartialOrSignedTx::Partial(
+                    PartiallySignedTransaction::decode_all(&mut bytes.as_slice())
+                        .expect("valid partially signed tx"),
+                )
+            }
+        })
         .map_err(WalletRpcError::ResponseError)
     }
 

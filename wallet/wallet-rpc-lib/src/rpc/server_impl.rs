@@ -43,10 +43,10 @@ use crate::{
     types::{
         AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
         CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
-        LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
-        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
+        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -275,7 +275,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             )
             .await
             .map(|(tx, fees)| ComposedTransaction {
-                encoded_tx: HexEncoded::new(tx).to_string(),
+                hex: HexEncoded::new(tx).to_string(),
                 fees,
             }),
         )
@@ -815,14 +815,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_index: AccountIndexArg,
         raw_tx: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
+    ) -> rpc::RpcResult<MaybeSignedTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
         };
         rpc::handle_result(
             self.sign_raw_transaction(account_index.index::<N>()?, raw_tx, config)
                 .await
-                .map(HexEncoded::new),
+                .map(|tx| {
+                    let is_complete = tx.is_fully_signed();
+                    let hex = if is_complete {
+                        let tx = tx.into_signed_tx().expect("already checked");
+                        tx.hex_encode()
+                    } else {
+                        tx.hex_encode()
+                    };
+
+                    MaybeSignedTransaction { hex, is_complete }
+                }),
         )
     }
 
@@ -886,7 +896,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             self.compose_transaction(inputs, outputs, only_transaction)
                 .await
                 .map(|(tx, fees)| ComposedTransaction {
-                    encoded_tx: tx.to_hex(),
+                    hex: tx.to_hex(),
                     fees,
                 }),
         )

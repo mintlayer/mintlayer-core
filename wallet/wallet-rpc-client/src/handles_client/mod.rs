@@ -52,7 +52,7 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-use crate::wallet_rpc_traits::WalletInterface;
+use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 
 pub struct WalletRpcHandlesClient<N: Clone> {
     wallet_rpc: WalletRpc<N>,
@@ -338,7 +338,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             )
             .await
             .map(|(tx, fees)| ComposedTransaction {
-                encoded_tx: HexEncoded::new(tx).to_string(),
+                hex: HexEncoded::new(tx).to_string(),
                 fees,
             })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -395,7 +395,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .compose_transaction(inputs, outputs, only_transaction)
             .await
             .map(|(tx, fees)| ComposedTransaction {
-                encoded_tx: tx.to_hex(),
+                hex: tx.to_hex(),
                 fees,
             })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -936,10 +936,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartiallySignedTransaction, Self::Error> {
+    ) -> Result<PartialOrSignedTx, Self::Error> {
         self.wallet_rpc
             .sign_raw_transaction(account_index, raw_tx, config)
             .await
+            .map(|ptx| {
+                if ptx.is_fully_signed() {
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
+                } else {
+                    PartialOrSignedTx::Partial(ptx)
+                }
+            })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

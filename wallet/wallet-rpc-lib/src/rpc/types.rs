@@ -428,6 +428,12 @@ pub enum CreatedWallet {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ComposedTransaction {
-    pub encoded_tx: String,
+    pub hex: String,
     pub fees: Balances,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MaybeSignedTransaction {
+    pub hex: String,
+    pub is_complete: bool,
 }

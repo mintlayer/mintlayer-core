@@ -39,6 +39,11 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
+pub enum PartialOrSignedTx {
+    Partial(PartiallySignedTransaction),
+    Signed(SignedTransaction),
+}
+
 #[async_trait::async_trait]
 pub trait WalletInterface {
     type Error: std::error::Error + Send + Sync + 'static;
@@ -420,7 +425,7 @@ pub trait WalletInterface {
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartiallySignedTransaction, Self::Error>;
+    ) -> Result<PartialOrSignedTx, Self::Error>;
 
     async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
 

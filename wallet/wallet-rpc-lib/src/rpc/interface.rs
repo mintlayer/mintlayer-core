@@ -26,9 +26,9 @@ use wallet_types::with_locked::WithLocked;
 use crate::types::{
     AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
     CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
-    LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance, StakingStatus,
-    TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase, StakePoolBalance,
+    StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -444,7 +444,7 @@ trait WalletRpc {
         account_index: AccountIndexArg,
         raw_tx: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
+    ) -> rpc::RpcResult<MaybeSignedTransaction>;
 
     #[method(name = "account_sign_challenge_plain")]
     async fn sign_challenge(

@@ -37,11 +37,11 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
-use wallet::{account::PartiallySignedTransaction, version::get_version, WalletError};
+use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_controller::{
     types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_rpc_client::wallet_rpc_traits::WalletInterface;
+use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     ComposedTransaction, CreatedWallet, NewTransaction, NftMetadata, TokenMetadata,
 };
@@ -1109,8 +1109,8 @@ where
                     .sign_raw_transaction(selected_account, transaction, self.config)
                     .await?;
 
-                let output_str = match result.into_signed_tx() {
-                    Ok(signed_tx) => {
+                let output_str = match result {
+                    PartialOrSignedTx::Signed(signed_tx) => {
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
 
@@ -1122,7 +1122,7 @@ where
                              Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}")
                     }
-                    Err(WalletError::FailedToConvertPartiallySignedTx(partially_signed_tx)) => {
+                    PartialOrSignedTx::Partial(partially_signed_tx) => {
                         let result_hex: HexEncoded<PartiallySignedTransaction> =
                             partially_signed_tx.into();
 
@@ -1133,9 +1133,6 @@ where
                              Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
                         )
-                    }
-                    Err(err) => {
-                        return Err(WalletCliError::FailedToConvertToSignedTransaction(err))
                     }
                 };
 
@@ -1356,8 +1353,6 @@ where
                 utxos,
                 only_transaction,
             } => {
-                eprintln!("outputs: {outputs:?}");
-                eprintln!("utxos: {utxos:?}");
                 let outputs: Vec<TxOutput> = outputs
                     .into_iter()
                     .map(|input| parse_output(input, chain_config))
@@ -1369,9 +1364,9 @@ where
                     .collect::<Result<Vec<_>, WalletCliError<N>>>(
                 )?;
 
-                let ComposedTransaction { encoded_tx, fees } =
+                let ComposedTransaction { hex, fees } =
                     self.wallet.compose_transaction(input_utxos, outputs, only_transaction).await?;
-                let mut output = format!("The hex encoded transaction is:\n{encoded_tx}\n");
+                let mut output = format!("The hex encoded transaction is:\n{hex}\n");
 
                 format_fees(&mut output, fees, chain_config);
 
@@ -1672,7 +1667,7 @@ where
             } => {
                 let selected_input = parse_utxo_outpoint(utxo)?;
                 let selected_account = self.get_selected_acc()?;
-                let ComposedTransaction { encoded_tx, fees } = self
+                let ComposedTransaction { hex, fees } = self
                     .wallet
                     .transaction_from_cold_input(
                         selected_account,
@@ -1684,17 +1679,16 @@ where
                     )
                     .await?;
 
-                let tx = HexEncoded::<PartiallySignedTransaction>::from_str(&encoded_tx)
-                    .expect("ok")
-                    .take();
+                let tx =
+                    HexEncoded::<PartiallySignedTransaction>::from_str(&hex).expect("ok").take();
 
                 let summary = tx.tx().text_summary(chain_config);
 
-                let qr_code_string = qrcode_or_error_string(&encoded_tx);
+                let qr_code_string = qrcode_or_error_string(&hex);
 
                 let mut output_str = format!(
                     "Send transaction created. \
-                    Pass the following string into the cold wallet with private key to sign:\n\n{encoded_tx}\n\n\
+                    Pass the following string into the cold wallet with private key to sign:\n\n{hex}\n\n\
                     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
                 );
                 format_fees(&mut output_str, fees, chain_config);
