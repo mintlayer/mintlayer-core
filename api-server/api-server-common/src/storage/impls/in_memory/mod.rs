@@ -123,6 +123,35 @@ impl ApiServerInMemoryStorage {
         }))
     }
 
+    fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        Ok(self
+            .main_chain_blocks_table
+            .values()
+            .rev()
+            .flat_map(|block_id| {
+                let block_aux = self.block_aux_data_table.get(block_id).expect("must exist");
+                let block = self.block_table.get(block_id).expect("must exist");
+                block.block.transactions().iter().zip(block.tx_additional_infos.iter()).map(
+                    |(tx, additinal_data)| {
+                        (
+                            block_aux.clone(),
+                            TransactionInfo {
+                                tx: tx.clone(),
+                                additinal_info: additinal_data.clone(),
+                            },
+                        )
+                    },
+                )
+            })
+            .skip(offset as usize)
+            .take(len as usize)
+            .collect())
+    }
+
     #[allow(clippy::type_complexity)]
     fn get_transaction_with_block(
         &self,

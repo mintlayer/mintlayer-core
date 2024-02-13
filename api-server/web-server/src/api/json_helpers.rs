@@ -13,13 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::storage::storage_api::TxAdditionalInfo;
+use std::ops::Sub;
+
+use api_server_common::storage::storage_api::{
+    block_aux_data::BlockAuxData, TransactionInfo, TxAdditionalInfo,
+};
 use common::{
     address::Address,
     chain::{
         block::ConsensusData, output_value::OutputValue, Block, ChainConfig, Transaction, TxOutput,
     },
-    primitives::{Amount, Idable},
+    primitives::{Amount, BlockHeight, Idable},
     Uint256,
 };
 use hex::ToHex;
@@ -161,6 +165,32 @@ pub fn tx_to_json(
             .map(|out| txoutput_to_json(out, chain_config))
             .collect::<Vec<_>>()
     })
+}
+
+pub fn to_tx_json_with_block_info(
+    tx: &TransactionInfo,
+    chain_config: &ChainConfig,
+    tip_height: BlockHeight,
+    block: BlockAuxData,
+) -> serde_json::Value {
+    let mut json = tx_to_json(tx.tx.transaction(), &tx.additinal_info, chain_config);
+    let obj = json.as_object_mut().expect("object");
+
+    let confirmations = tip_height.sub(block.block_height());
+
+    obj.insert(
+        "block_id".into(),
+        block.block_id().to_hash().encode_hex::<String>().into(),
+    );
+    obj.insert(
+        "timestamp".into(),
+        block.block_timestamp().to_string().into(),
+    );
+    obj.insert(
+        "confirmations".into(),
+        confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+    );
+    json
 }
 
 pub fn block_header_to_json(block: &Block) -> serde_json::Value {

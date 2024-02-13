@@ -295,6 +295,12 @@ pub trait ApiServerStorageRead: Sync {
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError>;
 
+    async fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError>;
+
     async fn get_utxo(&self, outpoint: UtxoOutPoint)
         -> Result<Option<Utxo>, ApiServerStorageError>;
 

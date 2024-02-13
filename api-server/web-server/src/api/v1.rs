@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::{
-    api::json_helpers::{amount_to_json, block_header_to_json, tx_to_json},
+    api::json_helpers::{
+        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+    },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
@@ -84,6 +86,7 @@ pub fn routes<
     let router = router.route("/feerate", get(feerate));
 
     let router = router
+        .route("/transaction", get(transactions))
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
@@ -405,6 +408,56 @@ pub async fn submit_transaction<T: ApiServerStorage>(
     Ok(Json(
         json!({"tx_id": tx_id.to_hash().encode_hex::<String>()}),
     ))
+}
+
+pub async fn transactions<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET: &str = "offset";
+    const ITEMS: &str = "items";
+    const DEFAULT_NUM_ITEMS: u32 = 10;
+
+    let offset = params
+        .get(OFFSET)
+        .map(|offset| u32::from_str(offset))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
+        })?
+        .unwrap_or_default();
+
+    let items = params
+        .get(ITEMS)
+        .map(|items| u32::from_str(items))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+        })?
+        .unwrap_or(DEFAULT_NUM_ITEMS);
+
+    let txs = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_transactions_with_block(items, offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let (tip_height, _) = best_block(&state).await?;
+    let txs = txs
+        .into_iter()
+        .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(txs)))
 }
 
 pub async fn transaction<T: ApiServerStorage>(

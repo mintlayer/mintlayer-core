@@ -360,14 +360,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_main_chain_blocks (
-            block_height bigint PRIMARY KEY,
-            block_id bytea NOT NULL
-        );",
-        )
-        .await?;
-
-        self.just_execute(
             "CREATE TABLE ml_blocks (
                 block_id bytea PRIMARY KEY,
                 block_height bigint,
@@ -481,7 +473,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute("DROP TABLE ml_misc_data;").await?;
         self.just_execute("DROP TABLE ml_genesis;").await?;
-        self.just_execute("DROP TABLE ml_main_chain_blocks;").await?;
         self.just_execute("DROP TABLE ml_blocks;").await?;
         self.just_execute("DROP TABLE ml_transactions;").await?;
         self.just_execute("DROP TABLE ml_address_balance;").await?;
@@ -1208,6 +1199,60 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some((block_data, transaction)))
+    }
+
+    pub async fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT
+                    t.transaction_data,
+                    b.aux_data
+                FROM
+                    ml_blocks mb
+                INNER JOIN
+                    ml_transactions t ON t.owning_block_id = mb.block_id
+                INNER JOIN
+                    ml_block_aux_data b ON t.owning_block_id = b.block_id
+                ORDER BY mb.block_height DESC
+                OFFSET $1
+                LIMIT $2;
+                "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|data| {
+                let transaction_data: Vec<u8> = data.get(0);
+                let block_data: Vec<u8> = data.get(1);
+
+                let block_data =
+                    BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Block deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                let transaction = TransactionInfo::decode_all(&mut transaction_data.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Transaction deserialization failed: {e}"
+                        ))
+                    })?;
+
+                Ok((block_data, transaction))
+            })
+            .collect()
     }
 
     pub async fn set_transaction(

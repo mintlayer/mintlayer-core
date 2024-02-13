@@ -291,6 +291,14 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_transaction_with_block(transaction_id)
     }
 
+    async fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        self.transaction.get_transactions_with_block(len, offset)
+    }
+
     async fn get_pool_data(
         &self,
         pool_id: PoolId,

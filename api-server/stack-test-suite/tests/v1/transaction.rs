@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_web_server::api::json_helpers::txoutput_to_json;
-
 use super::*;
 
 #[tokio::test]
