@@ -89,9 +89,8 @@ impl UtxosBlockUndoCache {
                 }
             },
             Entry::Vacant(entry) => {
-                let mut block_undo = CachedUtxosBlockUndo::default();
-                block_undo.insert_tx_undo(tx_id, tx_undo)?;
-
+                let block_undo =
+                    CachedUtxosBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };
@@ -117,7 +116,7 @@ impl UtxosBlockUndoCache {
                 }
             },
             Entry::Vacant(entry) => {
-                let block_undo = CachedUtxosBlockUndo::new(Some(reward_undo), Default::default())?;
+                let block_undo = CachedUtxosBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };

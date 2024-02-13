@@ -33,8 +33,6 @@ use utxo::{UtxosBlockRewardUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
-// FIXME: tests that emulates Disposable strategy
-
 // Create the following hierarchy:
 //
 // TransactionVerifier -> TransactionVerifier -> MockStore

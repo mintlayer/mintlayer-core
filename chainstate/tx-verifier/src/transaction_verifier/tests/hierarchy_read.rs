@@ -32,7 +32,7 @@ use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView};
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
-use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosTxUndoWithSources};
+use utxo::{UtxosStorageRead, UtxosTxUndoWithSources};
 
 // Create the following hierarchy:
 //

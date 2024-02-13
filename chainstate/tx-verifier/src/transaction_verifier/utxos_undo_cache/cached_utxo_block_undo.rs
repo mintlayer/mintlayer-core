@@ -231,7 +231,7 @@ impl CachedUtxosBlockUndo {
     }
 }
 
-pub fn combine<T>(
+fn combine<T>(
     left: Option<CachedOperation<T>>,
     right: Option<CachedOperation<T>>,
 ) -> Option<CachedOperation<T>> {
@@ -258,9 +258,7 @@ pub fn combine<T>(
                     CachedOperation::Write(other)
                 }
                 (CachedOperation::Erase, CachedOperation::Read(_)) => panic!("invariant"),
-                (CachedOperation::Erase, CachedOperation::Erase) => {
-                    panic!("invariant tx disconnected twice")
-                }
+                (CachedOperation::Erase, CachedOperation::Erase) => CachedOperation::Erase,
             };
             Some(result)
         }

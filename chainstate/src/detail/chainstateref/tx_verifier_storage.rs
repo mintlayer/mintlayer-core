@@ -42,7 +42,7 @@ use tokens_accounting::{
     TokensAccountingStorageRead,
 };
 use tx_verifier::transaction_verifier::{CachedUtxosBlockUndo, TransactionSource};
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, V>
