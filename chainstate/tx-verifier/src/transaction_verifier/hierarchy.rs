@@ -21,6 +21,7 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
+    tokens_accounting_undo_cache::CachedTokensBlockUndo,
     utxos_undo_cache::CachedUtxosBlockUndo,
     CachedOperation, TransactionSource, TransactionVerifier,
 };
@@ -112,12 +113,11 @@ where
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
-    {
-        match self.tokens_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_tokens_accounting_undo(id),
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.tokens_accounting_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_tokens_accounting_undo(tx_source),
         }
     }
 
@@ -268,7 +268,7 @@ where
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &tokens_accounting::BlockUndo,
+        new_undo: &CachedTokensBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.tokens_accounting_block_undo
             .set_undo_data(tx_source, new_undo)

@@ -22,6 +22,7 @@ use super::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
+    tokens_accounting_undo_cache::CachedTokensBlockUndo,
     CachedUtxosBlockUndo,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
@@ -49,7 +50,7 @@ mockall::mock! {
     impl TransactionVerifierStorageRef for Store {
         type Error = TransactionVerifierStorageError;
 
-        fn get_undo_data(&self, tx_sourve: TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError>;
+        fn get_undo_data(&self, tx_source: TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError>;
 
         fn get_token_id_from_issuance_tx(
             &self,
@@ -73,8 +74,8 @@ mockall::mock! {
 
         fn get_tokens_accounting_undo(
             &self,
-            id: Id<Block>,
-        ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError>;
+            tx_source: TransactionSource,
+        ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError>;
 
         fn get_account_nonce_count(
             &self,
@@ -138,7 +139,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &CachedTokensBlockUndo,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_tokens_accounting_undo_data(

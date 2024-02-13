@@ -15,23 +15,18 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use super::{error::ConnectTransactionError, TransactionSource};
-use common::{
-    chain::{Block, Transaction},
-    primitives::Id,
-};
-use tokens_accounting::{BlockUndo, BlockUndoError, TxUndo};
+use super::{error::ConnectTransactionError, CachedOperation, TransactionSource};
+use common::{chain::Transaction, primitives::Id};
+use tokens_accounting::{BlockUndoError, TxUndo};
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct TokensAccountingBlockUndoEntry {
-    pub undo: BlockUndo,
-    // indicates whether this BlockUndo was fetched from the db or it's new
-    pub is_fresh: bool,
-}
+mod cached_block_undo;
+pub use cached_block_undo::CachedTokensBlockUndo;
+
+pub type CachedTokensBlockUndoOp = CachedOperation<CachedTokensBlockUndo>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct TokensAccountingBlockUndoCache {
-    data: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>,
+    data: BTreeMap<TransactionSource, CachedOperation<CachedTokensBlockUndo>>,
 }
 
 impl TokensAccountingBlockUndoCache {
@@ -42,44 +37,47 @@ impl TokensAccountingBlockUndoCache {
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>) -> Self {
+    pub fn new_for_test(
+        data: BTreeMap<TransactionSource, CachedOperation<CachedTokensBlockUndo>>,
+    ) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry> {
+    pub fn data(&self) -> &BTreeMap<TransactionSource, CachedOperation<CachedTokensBlockUndo>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry> {
+    pub fn consume(self) -> BTreeMap<TransactionSource, CachedOperation<CachedTokensBlockUndo>> {
         self.data
     }
 
-    fn fetch_block_undo<F, E>(
+    pub fn add_tx_undo(
         &mut self,
-        tx_source: &TransactionSource,
-        fetcher_func: F,
-    ) -> Result<Option<&mut BlockUndo>, ConnectTransactionError>
-    where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, E>,
-        ConnectTransactionError: From<E>,
-    {
-        match self.data.entry(*tx_source) {
-            Entry::Occupied(entry) => Ok(Some(&mut entry.into_mut().undo)),
-            Entry::Vacant(entry) => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let entry = fetcher_func(*block_id)?.map(|block_undo| {
-                        &mut entry
-                            .insert(TokensAccountingBlockUndoEntry {
-                                undo: block_undo,
-                                is_fresh: false,
-                            })
-                            .undo
-                    });
-                    Ok(entry)
+        tx_source: TransactionSource,
+        tx_id: Id<Transaction>,
+        tx_undo: TxUndo,
+    ) -> Result<(), ConnectTransactionError> {
+        match self.data.entry(tx_source) {
+            Entry::Occupied(mut entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    let mut block_undo = undo.clone();
+                    block_undo.insert_tx_undo(tx_id, tx_undo)?;
+                    entry.insert(CachedOperation::Write(block_undo.clone()));
                 }
-                TransactionSource::Mempool => Ok(None),
+                CachedOperation::Erase => {
+                    let block_undo =
+                        CachedTokensBlockUndo::new(BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                    entry.insert(CachedOperation::Write(block_undo));
+                }
             },
-        }
+            Entry::Vacant(entry) => {
+                let block_undo =
+                    CachedTokensBlockUndo::new(BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                entry.insert(CachedOperation::Write(block_undo));
+            }
+        };
+
+        Ok(())
     }
 
     pub fn take_tx_undo<F, E>(
@@ -89,56 +87,57 @@ impl TokensAccountingBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<TxUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedTokensBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        Ok(self
-            .fetch_block_undo(tx_source, fetcher_func)?
-            .and_then(|entry| entry.take_tx_undo(tx_id)))
-    }
+        let block_undo = match self.data.entry(*tx_source) {
+            Entry::Vacant(_) => fetcher_func(*tx_source)?,
+            Entry::Occupied(entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
+                CachedOperation::Erase => panic!("already empty"),
+            },
+        };
 
-    pub fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
-        &mut self
-            .data
-            .entry(*tx_source)
-            .or_insert(TokensAccountingBlockUndoEntry {
-                is_fresh: true,
-                undo: Default::default(),
-            })
-            .undo
+        if let Some(mut block_undo) = block_undo {
+            let res = block_undo.take_tx_undo(tx_id)?;
+
+            if res.is_some() {
+                // if block undo used up completely then remove it from the db
+                if block_undo.is_empty() {
+                    self.data.insert(*tx_source, CachedOperation::Erase);
+                } else {
+                    self.data.insert(*tx_source, CachedOperation::Write(block_undo));
+                }
+            }
+            return Ok(res);
+        }
+
+        Ok(None)
     }
 
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &BlockUndo,
+        new_undo: &CachedTokensBlockUndo,
     ) -> Result<(), BlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(TokensAccountingBlockUndoEntry {
-                    undo: new_undo.clone(),
-                    is_fresh: true,
-                });
+                e.insert(CachedOperation::Write(new_undo.clone()));
             }
-            Entry::Occupied(mut e) => {
-                e.get_mut().undo.combine(new_undo.clone())?;
-            }
+            Entry::Occupied(mut e) => match e.get_mut() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    undo.combine(new_undo.clone())?;
+                }
+                CachedOperation::Erase => {
+                    e.insert(CachedOperation::Write(new_undo.clone()));
+                }
+            },
         };
         Ok(())
     }
 
     pub fn del_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), BlockUndoError> {
-        // delete undo from current cache
-        if self.data.remove(&tx_source).is_none() {
-            // if current cache doesn't have such data - insert empty undo to be flushed to the parent
-            self.data.insert(
-                tx_source,
-                TokensAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
-            );
-        }
+        self.data.insert(tx_source, CachedOperation::Erase);
         Ok(())
     }
 }

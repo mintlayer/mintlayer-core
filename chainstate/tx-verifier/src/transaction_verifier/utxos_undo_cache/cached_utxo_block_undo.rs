@@ -15,7 +15,7 @@
 
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
-use crate::transaction_verifier::CachedOperation;
+use crate::transaction_verifier::{cached_operation::combine, CachedOperation};
 use common::{
     chain::{OutPointSourceId, Transaction},
     primitives::Id,
@@ -228,39 +228,5 @@ impl CachedUtxosBlockUndo {
         });
 
         Ok(())
-    }
-}
-
-fn combine<T>(
-    left: Option<CachedOperation<T>>,
-    right: Option<CachedOperation<T>>,
-) -> Option<CachedOperation<T>> {
-    match (left, right) {
-        (None, None) => None,
-        (None, Some(v)) | (Some(v), None) => Some(v),
-        (Some(left), Some(right)) => {
-            let result = match (left, right) {
-                (CachedOperation::Write(_), CachedOperation::Write(other)) => {
-                    CachedOperation::Write(other)
-                }
-                (CachedOperation::Write(_), CachedOperation::Read(_)) => panic!("invariant"),
-                (CachedOperation::Write(_), CachedOperation::Erase) => CachedOperation::Erase,
-                (CachedOperation::Read(_), CachedOperation::Write(other)) => {
-                    CachedOperation::Write(other)
-                }
-                (CachedOperation::Read(_), CachedOperation::Read(other)) => {
-                    CachedOperation::Read(other)
-                }
-                (CachedOperation::Read(_), CachedOperation::Erase) => CachedOperation::Erase,
-                (CachedOperation::Erase, CachedOperation::Write(other)) => {
-                    // it is possible in mempool to disconnect a tx and connect it again,
-                    // e.g. if memory limit was raised
-                    CachedOperation::Write(other)
-                }
-                (CachedOperation::Erase, CachedOperation::Read(_)) => panic!("invariant"),
-                (CachedOperation::Erase, CachedOperation::Erase) => CachedOperation::Erase,
-            };
-            Some(result)
-        }
     }
 }

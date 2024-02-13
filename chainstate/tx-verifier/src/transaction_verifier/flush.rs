@@ -70,6 +70,7 @@ where
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
+    println!("flushing");
     flush_tokens(storage, &consumed.token_issuance_cache)?;
 
     // flush utxo set
@@ -112,20 +113,14 @@ where
     storage.batch_write_tokens_data(consumed.tokens_accounting_delta)?;
 
     // flush tokens accounting block undo
-    for (tx_source, entry) in consumed.tokens_accounting_delta_undo {
-        if entry.is_fresh {
-            storage.set_tokens_accounting_undo_data(tx_source, &entry.undo)?;
-        } else if entry.undo.is_empty() {
-            storage.del_tokens_accounting_undo_data(tx_source)?;
-        } else {
-            match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    panic!("BlockUndo tokens accounting entries were not used up completely while disconnecting a block {}", block_id)
-                }
-                TransactionSource::Mempool => {
-                    /* it's ok for the mempool to use tx undos partially */
-                }
+
+    for (tx_source, op) in consumed.tokens_accounting_delta_undo {
+        match op {
+            CachedOperation::Write(undo) => {
+                storage.set_tokens_accounting_undo_data(tx_source, &undo)?
             }
+            CachedOperation::Read(_) => (),
+            CachedOperation::Erase => storage.del_tokens_accounting_undo_data(tx_source)?,
         }
     }
 

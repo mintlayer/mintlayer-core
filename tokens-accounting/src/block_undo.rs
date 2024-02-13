@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 
 use crate::TokenAccountingUndo;
 
@@ -25,6 +25,8 @@ use thiserror::Error;
 pub enum BlockUndoError {
     #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
     UndoAlreadyExists(Id<Transaction>),
+    #[error("Tokens undo is missing for transaction `{0}`")]
+    MissingTxUndo(Id<Transaction>),
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
@@ -54,42 +56,7 @@ impl BlockUndo {
         Self { tx_undos }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.tx_undos.is_empty()
-    }
-
-    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, TxUndo> {
-        &self.tx_undos
-    }
-
-    pub fn insert_tx_undo(
-        &mut self,
-        tx_id: Id<Transaction>,
-        tx_undo: TxUndo,
-    ) -> Result<(), BlockUndoError> {
-        match self.tx_undos.entry(tx_id) {
-            Entry::Vacant(e) => {
-                e.insert(tx_undo);
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(BlockUndoError::UndoAlreadyExists(tx_id)),
-        }
-    }
-
-    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
-        self.tx_undos.remove(tx_id)
-    }
-
-    pub fn combine(&mut self, other: BlockUndo) -> Result<(), BlockUndoError> {
-        other
-            .tx_undos
-            .into_iter()
-            .try_for_each(|(id, u)| match self.tx_undos.entry(id) {
-                Entry::Vacant(e) => {
-                    e.insert(u);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(BlockUndoError::UndoAlreadyExists(id)),
-            })
+    pub fn consume(self) -> BTreeMap<Id<Transaction>, TxUndo> {
+        self.tx_undos
     }
 }

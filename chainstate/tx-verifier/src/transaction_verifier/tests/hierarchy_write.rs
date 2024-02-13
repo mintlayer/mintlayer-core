@@ -1167,7 +1167,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_1)
                 && undo.tx_undos().len() == 1
-                && undo.tx_undos()[&tx_id_1].inner().len() == 2
+                && undo.tx_undos()[&tx_id_1].get().unwrap().inner().len() == 2
         })
         .times(1)
         .return_const(Ok(()));
@@ -1176,7 +1176,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_2)
                 && undo.tx_undos().len() == 1
-                && undo.tx_undos()[&tx_id_2].inner().len() == 2
+                && undo.tx_undos()[&tx_id_2].get().unwrap().inner().len() == 2
         })
         .times(1)
         .return_const(Ok(()));
@@ -1191,8 +1191,8 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
 
         verifier
             .tokens_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
                 tx_id_1,
                 tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
             )
@@ -1210,8 +1210,8 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
 
         verifier
             .tokens_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_2))
-            .insert_tx_undo(
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_2),
                 tx_id_2,
                 tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
             )
@@ -1303,8 +1303,11 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
 
         verifier
             .tokens_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(tx_id, tokens_accounting::TxUndo::new(vec![undo_issue]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
+                tx_id,
+                tokens_accounting::TxUndo::new(vec![undo_issue]),
+            )
             .unwrap();
         verifier
     };
@@ -1319,8 +1322,11 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
 
         verifier
             .tokens_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_2))
-            .insert_tx_undo(tx_id, tokens_accounting::TxUndo::new(vec![undo_issue]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_2),
+                tx_id,
+                tokens_accounting::TxUndo::new(vec![undo_issue]),
+            )
             .unwrap();
         verifier
     };
@@ -1333,8 +1339,11 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
 
         verifier
             .tokens_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(tx_id, tokens_accounting::TxUndo::new(vec![undo_lock]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
+                tx_id,
+                tokens_accounting::TxUndo::new(vec![undo_lock]),
+            )
             .unwrap();
         verifier
     };
@@ -1391,10 +1400,7 @@ fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
         verifier.tokens_accounting_block_undo =
             TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                TokensAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                CachedTokensBlockUndoOp::Erase,
             )]));
         verifier
     };
@@ -1405,10 +1411,7 @@ fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
         verifier.tokens_accounting_block_undo =
             TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                TokensAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                CachedTokensBlockUndoOp::Erase,
             )]));
         verifier
     };

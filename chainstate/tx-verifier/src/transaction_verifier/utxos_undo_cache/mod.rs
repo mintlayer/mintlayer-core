@@ -203,10 +203,10 @@ impl UtxosBlockUndoCache {
                 e.insert(CachedOperation::Write(new_undo.clone()));
             }
             Entry::Occupied(mut e) => match e.get_mut() {
-                CachedUtxoBlockUndoOp::Write(undo) | CachedUtxoBlockUndoOp::Read(undo) => {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
                     undo.combine(new_undo.clone())?;
                 }
-                CachedUtxoBlockUndoOp::Erase => {
+                CachedOperation::Erase => {
                     e.insert(CachedOperation::Write(new_undo.clone()));
                 }
             },
@@ -218,7 +218,7 @@ impl UtxosBlockUndoCache {
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), utxo::UtxosBlockUndoError> {
-        self.data.insert(tx_source, CachedUtxoBlockUndoOp::Erase);
+        self.data.insert(tx_source, CachedOperation::Erase);
         Ok(())
     }
 }

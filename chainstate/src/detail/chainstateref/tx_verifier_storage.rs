@@ -41,7 +41,9 @@ use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
     TokensAccountingStorageRead,
 };
-use tx_verifier::transaction_verifier::{CachedUtxosBlockUndo, TransactionSource};
+use tx_verifier::transaction_verifier::{
+    CachedTokensBlockUndo, CachedUtxosBlockUndo, TransactionSource,
+};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
@@ -101,11 +103,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_tokens_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_tokens_accounting_undo(id)?
+                    .map(|undo| CachedTokensBlockUndo::from_block_undo(undo));
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 
     fn get_account_nonce_count(
@@ -322,13 +333,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &tokens_accounting::BlockUndo,
+        undo: &CachedTokensBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_tokens_accounting_undo_data(id, undo)
+                .set_tokens_accounting_undo_data(id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")

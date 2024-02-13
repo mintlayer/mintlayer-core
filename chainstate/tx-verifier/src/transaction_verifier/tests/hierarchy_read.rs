@@ -685,8 +685,11 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     let token_id_2 = make_token_id(&[input2]).unwrap();
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_1 = TransactionSource::Chain(block_undo_id_1);
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_2 = TransactionSource::Chain(block_undo_id_2);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -724,12 +727,12 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
 
     store
         .expect_get_tokens_accounting_undo()
-        .with(eq(block_undo_id_0))
+        .with(eq(block_undo_source_0))
         .times(2)
         .return_const(Ok(None));
     store
         .expect_get_tokens_accounting_undo()
-        .with(eq(block_undo_id_2))
+        .with(eq(block_undo_source_2))
         .times(1)
         .return_const(Ok(None));
 
@@ -742,18 +745,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_1, supply1).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
             tx_id,
             tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]));
+        )]))
+        .unwrap();
 
         verifier.tokens_accounting_block_undo =
             TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                TokensAccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                CachedTokensBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -767,18 +768,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_2, supply2).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
             tx_id,
             tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]));
+        )]))
+        .unwrap();
 
         verifier.tokens_accounting_block_undo =
             TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                TokensAccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                CachedTokensBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -835,10 +834,10 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     );
 
     // fetch undo
-    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_0).unwrap().is_none());
-    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_1).unwrap().is_some());
-    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_2).unwrap().is_none());
-    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_0).unwrap().is_none());
-    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_1).unwrap().is_some());
-    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_2).unwrap().is_some());
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_source_2).unwrap().is_none());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_source_2).unwrap().is_some());
 }

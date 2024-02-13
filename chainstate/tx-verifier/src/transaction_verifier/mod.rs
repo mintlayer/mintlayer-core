@@ -19,7 +19,6 @@ mod pos_accounting_undo_cache;
 mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
-mod tokens_accounting_undo_cache;
 
 pub mod check_transaction;
 pub mod error;
@@ -44,6 +43,9 @@ pub use cached_operation::CachedOperation;
 mod utxos_undo_cache;
 pub use utxos_undo_cache::CachedUtxosBlockUndo;
 
+mod tokens_accounting_undo_cache;
+pub use tokens_accounting_undo_cache::CachedTokensBlockUndo;
+
 pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,9 +57,7 @@ use self::{
     signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
-    tokens_accounting_undo_cache::{
-        TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
-    },
+    tokens_accounting_undo_cache::{CachedTokensBlockUndoOp, TokensAccountingBlockUndoCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
@@ -94,7 +94,7 @@ pub struct TransactionVerifierDelta {
     pos_accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
     tokens_accounting_delta: TokensAccountingDeltaData,
-    tokens_accounting_delta_undo: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>,
+    tokens_accounting_delta_undo: BTreeMap<TransactionSource, CachedTokensBlockUndoOp>,
 }
 
 impl TransactionVerifierDelta {
@@ -205,6 +205,7 @@ where
         &PoSAccountingDelta<A>,
         &TokensAccountingCache<T>,
     > {
+        println!("deriving");
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -687,13 +688,14 @@ where
         // Store accounting operations undos
         if !input_undos.is_empty() || !output_undos.is_empty() {
             let tx_undos = input_undos.into_iter().chain(output_undos).collect();
-            self.tokens_accounting_block_undo
-                .get_or_create_block_undo(&tx_source.into())
-                .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))
-                .map_err(ConnectTransactionError::TokensAccountingBlockUndoError)
-        } else {
-            Ok(())
+            self.tokens_accounting_block_undo.add_tx_undo(
+                TransactionSource::from(tx_source),
+                tx.get_id(),
+                tokens_accounting::TxUndo::new(tx_undos),
+            )?;
         }
+
+        Ok(())
     }
 
     fn check_operations_with_frozen_tokens(
@@ -744,9 +746,9 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         // apply undos to accounting
-        let block_undo_fetcher = |id: Id<Block>| {
+        let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_tokens_accounting_undo(id)
+                .get_tokens_accounting_undo(tx_source)
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         };
         let undos = self.tokens_accounting_block_undo.take_tx_undo(
@@ -771,6 +773,7 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
+        println!("connect tx {:?}", tx.transaction().get_id());
         check_transaction::check_transaction(
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
@@ -968,6 +971,8 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
+        println!("disconnect tx {:?}", tx.transaction().get_id());
+
         let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
                 .get_undo_data(tx_source)
