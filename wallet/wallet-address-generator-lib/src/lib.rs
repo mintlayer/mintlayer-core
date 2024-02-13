@@ -64,15 +64,20 @@ impl std::fmt::Display for Network {
 #[clap(version)]
 pub struct CliArgs {
     /// The network, for which addresses will be generated
-    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
     pub network: Network,
 
     /// Number of addresses to generate and display
-    #[clap(long, short = 'n', default_value_t = 1)]
+    #[clap(
+        long,
+        short = 'n',
+        default_value_t = 1,
+        env = "MINTLAYER_ADDRESS_COUNT"
+    )]
     pub address_count: u8,
 
     /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_MNEMONIC")]
     #[arg(hide = true)]
     pub mnemonic: Option<String>,
 }

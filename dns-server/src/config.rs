@@ -32,34 +32,41 @@ pub enum Network {
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
     /// Optional path to the data directory
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_DATADIR")]
     pub datadir: Option<PathBuf>,
 
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
     pub network: Network,
 
-    /// UDP socket address to listen on. Can be specified multiple times.
-    #[clap(long, default_values_t = vec!["[::]:53".to_string()])]
+    /// UDP socket addresses to listen on.
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        default_values_t = vec!["[::]:53".to_string()],
+        value_delimiter(','),
+        env = "MINTLAYER_BIND_ADDR"
+    )]
     pub bind_addr: Vec<String>,
 
-    /// Reserved node address to connect. Can be specified multiple times.
-    #[clap(long)]
-    pub reserved_node: Vec<IpOrSocketAddress>,
+    /// Reserved node addresses to connect.
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(long, value_delimiter(','), env = "MINTLAYER_RESERVED_NODES")]
+    pub reserved_nodes: Vec<IpOrSocketAddress>,
 
     /// Hostname of the DNS seed
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_HOST")]
     pub host: Name,
 
     /// Hostname of the nameserver.
     /// If set, the NS record will be added.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_NAMESERVER")]
     pub nameserver: Option<Name>,
 
     /// Email address reported in SOA records.
     /// `@` symbol should be replaced with `.`.
     /// If set, the SOA record will be added.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_MBOX")]
     pub mbox: Option<Name>,
 
     /// When publishing addresses, we give preference to nodes that have the same software version

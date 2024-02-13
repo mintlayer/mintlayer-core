@@ -20,23 +20,23 @@ use std::net::SocketAddr;
 #[derive(Parser, Debug)]
 pub struct ApiServerScannerArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
     pub network: Network,
 
     /// Optional RPC address
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_RPC_ADDRESS")]
     pub rpc_address: Option<SocketAddr>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_RPC_COOKIE_FILE")]
     pub rpc_cookie_file: Option<String>,
 
     /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_RPC_USERNAME")]
     pub rpc_username: Option<String>,
 
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_RPC_PASSWORD")]
     pub rpc_password: Option<String>,
 
     /// Postgres config values

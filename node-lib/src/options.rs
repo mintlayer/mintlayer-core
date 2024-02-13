@@ -36,7 +36,7 @@ const CONFIG_NAME: &str = "config.toml";
 #[clap(author, version, about)]
 pub struct Options {
     /// The path to the data directory.
-    #[clap(short, long = "datadir")]
+    #[clap(short, long = "datadir", env = "MINTLAYER_DATADIR")]
     pub data_dir: Option<PathBuf>,
 
     #[clap(subcommand)]
@@ -63,12 +63,16 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
-    /// A flag that will clean data dir before starting
-    #[clap(long, short, action = clap::ArgAction::SetTrue)]
+    /// A flag that will clean the data dir before starting
+    #[clap(long, short, action = clap::ArgAction::SetTrue, env = "MINTLAYER_CLEAN_DATA")]
     pub clean_data: Option<bool>,
 
     /// Minimum number of connected peers to enable block production.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "COUNT",
+        env = "MINTLAYER_BLOCKPROD_MIN_PEERS_TO_PRODUCE_BLOCKS"
+    )]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
 
     /// Skip the initial block download check for block production.
@@ -77,98 +81,142 @@ pub struct RunOptions {
     /// not, it downloads the missing blocks from its peers. This is
     /// called the initial block download (IBD).
     ///
-    /// If this option is set to true, the node will skip the IBD
+    /// If this flag is set, the node will skip the IBD
     /// check and start producing blocks immediately. This option
     /// should only be used once, when the node is starting from
     /// Genesis. If used on a node that is not starting from Genesis,
     /// the node may produce blocks from the past, which will lead
     /// to being banned by the network.
-    #[clap(long)]
+    #[clap(long, action = clap::ArgAction::SetTrue, env = "MINTLAYER_BLOCKPROD_SKIP_IBD_CHECK")]
     pub blockprod_skip_ibd_check: Option<bool>,
 
     /// Storage backend to use.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_STORAGE_BACKEND")]
     pub storage_backend: Option<StorageBackendConfigFile>,
 
-    /// A node type.
-    #[clap(long)]
+    /// The node type.
+    #[clap(long, env = "MINTLAYER_NODE_TYPE")]
     pub node_type: Option<NodeTypeConfigFile>,
 
     /// Mock time used to initialize the node time at startup, in seconds (valid only for regtest).
     #[clap(long)]
-    #[arg(hide = true)]
+    #[arg(hide = true, env = "MINTLAYER_MOCK_TIME")]
     pub mock_time: Option<u64>,
 
     /// The number of maximum attempts to process a block.
-    #[clap(long)]
+    #[clap(long, value_name = "COUNT", env = "MINTLAYER_MAX_DB_COMMIT_ATTEMPTS")]
     pub max_db_commit_attempts: Option<usize>,
 
     /// The maximum capacity of the orphan blocks pool in blocks.
-    #[clap(long)]
+    #[clap(long, value_name = "COUNT", env = "MINTLAYER_MAX_ORPHAN_BLOCKS")]
     pub max_orphan_blocks: Option<usize>,
 
-    /// Address to bind P2P to.
-    #[clap(long, value_name = "ADDR")]
-    pub p2p_bind_address: Option<Vec<String>>,
+    /// Addresses to bind P2P to.
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "ADDR",
+        value_delimiter(','),
+        env = "MINTLAYER_P2P_BIND_ADDRESSES"
+    )]
+    pub p2p_bind_addresses: Option<Vec<String>>,
 
     /// Connect through SOCKS5 proxy.
-    #[clap(long)]
+    #[clap(long, value_name = "PROXY", env = "MINTLAYER_P2P_SOCKS5_PROXY")]
     pub p2p_socks5_proxy: Option<String>,
 
     /// Disable p2p encryption (for tests only).
-    #[clap(long)]
+    #[clap(long, action = clap::ArgAction::SetTrue, env = "MINTLAYER_P2P_DISABLE_NOISE")]
     #[arg(hide = true)]
     pub p2p_disable_noise: Option<bool>,
 
     /// Optional list of boot node addresses to connect.
-    #[clap(long, value_name = "NODE")]
-    pub p2p_boot_node: Option<Vec<IpOrSocketAddress>>,
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "ADDR",
+        value_delimiter(','),
+        env = "MINTLAYER_P2P_BOOT_NODES"
+    )]
+    pub p2p_boot_nodes: Option<Vec<IpOrSocketAddress>>,
 
     /// Optional list of reserved node addresses to connect.
-    #[clap(long, value_name = "NODE")]
-    pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "ADDR",
+        value_delimiter(','),
+        env = "MINTLAYER_P2P_RESERVED_NODES"
+    )]
+    pub p2p_reserved_nodes: Option<Vec<IpOrSocketAddress>>,
 
     /// Optional list of whitelisted addresses.
-    #[clap(long, value_name = "ADDR")]
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        value_name = "ADDR",
+        value_delimiter(','),
+        env = "MINTLAYER_P2P_WHITELIST_ADDR"
+    )]
     pub p2p_whitelist_addr: Option<Vec<IpAddr>>,
 
     /// Maximum allowed number of inbound connections.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "COUNT",
+        env = "MINTLAYER_P2P_MAX_INBOUND_CONNECTIONS"
+    )]
     pub p2p_max_inbound_connections: Option<usize>,
 
     /// The p2p score threshold after which a peer is discouraged.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "THRESHOLD",
+        env = "MINTLAYER_P2P_DISCOURAGEMENT_THRESHOLD"
+    )]
     pub p2p_discouragement_threshold: Option<u32>,
 
     /// The p2p discouragement duration in seconds.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "DURATION",
+        env = "MINTLAYER_P2P_DISCOURAGEMENT_DURATION"
+    )]
     pub p2p_discouragement_duration: Option<u64>,
 
     /// The p2p timeout value in seconds.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "TIMEOUT",
+        env = "MINTLAYER_P2P_OUTBOUND_CONNECTION_TIMEOUT"
+    )]
     pub p2p_outbound_connection_timeout: Option<NonZeroU64>,
 
     /// How often send ping requests to peers (in seconds).
     /// Set to 0 to disable sending ping requests.
-    #[clap(long)]
+    #[clap(long, value_name = "PERIOD", env = "MINTLAYER_P2P_PING_CHECK_PERIOD")]
     pub p2p_ping_check_period: Option<u64>,
 
     /// After what time a peer is detected as dead and is disconnected (in seconds).
-    #[clap(long)]
+    #[clap(long, value_name = "TIMEOUT", env = "MINTLAYER_P2P_PING_TIMEOUT")]
     pub p2p_ping_timeout: Option<NonZeroU64>,
 
     /// A timeout after which a peer is disconnected.
-    #[clap(long)]
+    #[clap(
+        long,
+        value_name = "TIMEOUT",
+        env = "MINTLAYER_P2P_SYNC_STALLING_TIMEOUT"
+    )]
     pub p2p_sync_stalling_timeout: Option<NonZeroU64>,
 
     /// Maximum acceptable time difference between this node and the remote peer (in seconds).
     /// If a large difference is detected, the peer will be disconnected.
-    #[clap(long)]
+    #[clap(long, value_name = "DIFF", env = "MINTLAYER_P2P_MAX_CLOCK_DIFF")]
     pub p2p_max_clock_diff: Option<u64>,
 
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
-    #[clap(long)]
+    #[clap(long, action = clap::ArgAction::SetTrue, env = "MINTLAYER_P2P_FORCE_DNS_QUERY_IF_NO_GLOBAL_ADDRESSES_KNOWN")]
     #[arg(hide = true)]
     pub p2p_force_dns_query_if_no_global_addresses_known: Option<bool>,
 
@@ -176,34 +224,34 @@ pub struct RunOptions {
     ///
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
-    #[clap(long, overrides_with("max_tip_age"))]
+    #[clap(long, value_name = "AGE", env = "MINTLAYER_MAX_TIP_AGE")]
     pub max_tip_age: Option<u64>,
 
     /// Address to bind RPC to.
-    #[clap(long, value_name = "ADDR")]
+    #[clap(long, value_name = "ADDR", env = "MINTLAYER_RPC_BIND_ADDRESS")]
     pub rpc_bind_address: Option<SocketAddr>,
 
     /// Enable/Disable http RPC.
-    #[clap(long)]
+    #[clap(long, value_name = "VAL", env = "MINTLAYER_RPC_ENABLED")]
     pub rpc_enabled: Option<bool>,
 
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
-    #[clap(long)]
+    #[clap(long, value_name = "USERNAME", env = "MINTLAYER_RPC_USERNAME")]
     pub rpc_username: Option<String>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
-    #[clap(long)]
+    #[clap(long, value_name = "PASSWORD", env = "MINTLAYER_RPC_PASSWORD")]
     pub rpc_password: Option<String>,
 
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
-    #[clap(long)]
+    #[clap(long, value_name = "PATH", env = "MINTLAYER_RPC_COOKIE_FILE")]
     pub rpc_cookie_file: Option<String>,
 
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
-    #[clap(long)]
+    #[clap(long, value_name = "VAL", env = "MINTLAYER_MIN_TX_RELAY_FEE_RATE")]
     pub min_tx_relay_fee_rate: Option<u64>,
 }
 

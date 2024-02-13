@@ -22,7 +22,7 @@ mempool = { path = "../../mempool" }
 
 axum.workspace = true
 async-trait.workspace = true
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 hex.workspace = true
 hyper.workspace = true
 serde = { workspace = true, features = ["derive"] }

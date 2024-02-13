@@ -39,55 +39,55 @@ use paste::paste;
 #[derive(Args, Clone, Debug)]
 pub struct ChainConfigOptions {
     /// Magic bytes.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_MAGIC_BYTES")]
     pub chain_magic_bytes: Option<String>,
 
     /// The maximum future block offset in seconds.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_MAX_FUTURE_BLOCK_TIME_OFFSET")]
     pub chain_max_future_block_time_offset: Option<u64>,
 
     /// The software version (major.minor.path).
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_SOFTWARE_VERSION")]
     pub software_version: Option<String>,
 
     /// Target block spacing in seconds.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_TARGET_BLOCK_SPACING")]
     pub chain_target_block_spacing: Option<u64>,
 
     /// Coin decimals.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_COIN_DECIMALS")]
     pub chain_coin_decimals: Option<u8>,
 
     /// Emission schedule (`<initial_supply>+<initial_subsidy>[, <height>+<subsidy>]`).
     pub chain_emission_schedule: Option<String>,
 
     /// The maximum block header size in bytes.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_MAX_BLOCK_HEADER_SIZE")]
     pub chain_max_block_header_size: Option<usize>,
 
     /// The maximum transactions size in block in bytes.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_MAX_BLOCK_SIZE_WITH_STANDARD_TXS")]
     pub chain_max_block_size_with_standard_txs: Option<usize>,
 
     /// The maximum smart contracts size ib block in bytes.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_MAX_BLOCK_SIZE_WITH_SMART_CONTRACTS")]
     pub chain_max_block_size_with_smart_contracts: Option<usize>,
 
     /// Initial difficulty for the chain in Compact representation.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_INITIAL_DIFFICULTY")]
     pub chain_initial_difficulty: Option<u32>,
 
     /// PoS NetUpgrade override after Genesis
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_POS_NETUPGRADES")]
     pub chain_pos_netupgrades: Option<bool>,
 
     /// PoS NetUpgrade override after Genesis with upgrade of consensus version from V0 to V1
     /// at specific height
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_POS_NETUPGRADES_V0_TO_V1")]
     pub chain_pos_netupgrades_v0_to_v1: Option<u64>,
 
     /// Genesis block timestamp in seconds since UNIX epoch.
-    #[clap(long)]
+    #[clap(long, env = "MINTLAYER_CHAIN_GENESIS_BLOCK_TIMESTAMP")]
     pub chain_genesis_block_timestamp: Option<u64>,
 
     /// PoS Genesis staking settings

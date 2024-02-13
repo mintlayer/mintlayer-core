@@ -20,7 +20,7 @@ storage-lmdb = { path = "../storage/lmdb" }
 utils = { path = '../utils' }
 
 async-trait.workspace = true
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 directories.workspace = true
 futures = { workspace = true }
 itertools.workspace = true

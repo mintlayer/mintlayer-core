@@ -7,7 +7,7 @@ services:
         node-daemon testnet \
             --rpc-bind-address 0.0.0.0:$RPC_PORT \
             $(dig +short $NODES_LIST | xargs printf '--p2p-boot-node %s ') \
-            --p2p-force-dns-query-if-no-global-addresses-known true \
+            --p2p-force-dns-query-if-no-global-addresses-known \
       "
     environment:
       - RUST_LOG

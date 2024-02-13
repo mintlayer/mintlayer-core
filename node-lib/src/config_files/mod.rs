@@ -183,11 +183,11 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         force_dns_query_if_no_global_addresses_known,
     } = config;
 
-    let bind_addresses = options.p2p_bind_address.clone().or(bind_addresses);
+    let bind_addresses = options.p2p_bind_addresses.clone().or(bind_addresses);
     let socks5_proxy = options.p2p_socks5_proxy.clone().or(socks5_proxy);
     let disable_noise = options.p2p_disable_noise.or(disable_noise);
-    let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);
-    let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
+    let boot_nodes = options.p2p_boot_nodes.clone().or(boot_nodes);
+    let reserved_nodes = options.p2p_reserved_nodes.clone().or(reserved_nodes);
     let whitelisted_addresses = options.p2p_whitelist_addr.clone().or(whitelisted_addresses);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
     let discouragement_threshold =

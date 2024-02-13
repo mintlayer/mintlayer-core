@@ -18,6 +18,6 @@ node-lib = { path = "../../node-lib" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils" }
 
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
