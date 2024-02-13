@@ -32,7 +32,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
@@ -278,6 +278,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 fees,
             }),
         )
+    }
+
+    async fn transaction_inspect(
+        &self,
+        transaction: String,
+    ) -> rpc::RpcResult<InsepectTransaction> {
+        rpc::handle_result(self.transaction_inspect(transaction).await)
     }
 
     async fn create_stake_pool(

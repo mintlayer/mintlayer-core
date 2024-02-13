@@ -32,8 +32,8 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, NewTransaction, NftMetadata,
-    TokenMetadata,
+    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InsepectTransaction,
+    NewTransaction, NftMetadata, SignatureStats, TokenMetadata,
 };
 
 use crate::errors::WalletCliError;
@@ -928,6 +928,28 @@ where
                     "Send transaction created. \
                     Pass the following string into the cold wallet with private key to sign:\n\n{hex}\n\n\
                     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
+                );
+                format_fees(&mut output_str, fees, chain_config);
+
+                Ok(ConsoleCommand::Print(output_str))
+            }
+
+            WalletCommand::InspectTransaction { transaction } => {
+                let InsepectTransaction {
+                    tx,
+                    fees,
+                    signatures:
+                        SignatureStats {
+                            num_inputs,
+                            num_valid_signatures,
+                            num_invalid_signatures,
+                        },
+                } = self.non_empty_wallet().await?.transaction_inspect(transaction).await?;
+
+                let missing_signatures = num_inputs - num_valid_signatures - num_invalid_signatures;
+                let summary = tx.take().text_summary(chain_config);
+                let mut output_str = format!("{summary}\n\
+                    number of inputs: {num_inputs} of which {num_valid_signatures} have valid signatures, {num_invalid_signatures} with invalid signatures and {missing_signatures} missing signatures\n"
                 );
                 format_fees(&mut output_str, fees, chain_config);
 

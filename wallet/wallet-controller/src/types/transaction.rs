@@ -13,20 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support types for presenting data in user-facing settings
+use common::chain::{SignedTransaction, Transaction};
+use serialization::hex_encoded::HexEncoded;
+use wallet::account::PartiallySignedTransaction;
 
-mod balances;
-mod block_info;
-mod transaction;
+use super::Balances;
 
-pub use balances::Balances;
-pub use block_info::{BlockInfo, CreatedBlockInfo};
-pub use common::primitives::DecimalAmount;
-use common::primitives::H256;
-pub use transaction::{InsepectTransaction, SignatureStats, TransactionToInspect};
+pub enum TransactionToInspect {
+    Tx(Transaction),
+    Partial(PartiallySignedTransaction),
+    Signed(SignedTransaction),
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct WalletInfo {
-    pub wallet_id: H256,
-    pub account_names: Vec<Option<String>>,
+pub struct SignatureStats {
+    pub num_inputs: usize,
+    pub num_valid_signatures: usize,
+    pub num_invalid_signatures: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InsepectTransaction {
+    pub tx: HexEncoded<Transaction>,
+    pub fees: Balances,
+    pub signatures: SignatureStats,
 }

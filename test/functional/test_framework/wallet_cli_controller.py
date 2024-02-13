@@ -227,6 +227,9 @@ class WalletCliController:
         except:
             return out
 
+    async def inspect_transaction(self, tx: str) -> str:
+        return await self._write_command(f"transaction-inspect {tx}\n")
+
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-get-signed-raw {tx_id}\n")
 

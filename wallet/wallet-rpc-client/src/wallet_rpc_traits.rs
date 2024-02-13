@@ -26,7 +26,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{CreatedBlockInfo, WalletInfo},
+    types::{CreatedBlockInfo, InsepectTransaction, WalletInfo},
     ConnectedPeer, ControllerConfig,
 };
 use wallet_rpc_lib::types::{
@@ -183,6 +183,11 @@ pub trait WalletInterface {
         change_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<ComposedTransaction, Self::Error>;
+
+    async fn transaction_inspect(
+        &self,
+        transaction: String,
+    ) -> Result<InsepectTransaction, Self::Error>;
 
     async fn create_stake_pool(
         &self,

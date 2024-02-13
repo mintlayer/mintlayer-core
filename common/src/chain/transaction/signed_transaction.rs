@@ -46,6 +46,10 @@ impl SignedTransaction {
         &self.transaction
     }
 
+    pub fn take_transaction(self) -> Transaction {
+        self.transaction
+    }
+
     pub fn version_byte(&self) -> u8 {
         self.transaction.version_byte()
     }
