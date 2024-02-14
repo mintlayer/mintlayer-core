@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
+use std::{
+    net::{Ipv6Addr, SocketAddr, SocketAddrV6},
+    path::PathBuf,
+};
 
 use clap::Parser;
 use trust_dns_client::rr::Name;
@@ -45,10 +48,10 @@ pub struct DnsServerConfig {
     /// Can be specified multiple times and/or be a comma-separated list.
     #[clap(
         long,
-        default_values_t = vec!["[::]:53".to_string()],
+        default_values_t = vec![Into::<SocketAddr>::into(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 53, 0, 0))],
         value_delimiter(','),
     )]
-    pub bind_addr: Vec<String>,
+    pub bind_addr: Vec<SocketAddr>,
 
     /// Reserved node addresses to connect.
     /// Can be specified multiple times and/or be a comma-separated list.

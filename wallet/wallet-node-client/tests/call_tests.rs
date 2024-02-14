@@ -50,7 +50,7 @@ pub async fn start_subsystems(
     let shutdown_trigger = manager.make_shutdown_trigger();
 
     let p2p_config = p2p::config::P2pConfig {
-        bind_addresses: vec!["127.0.0.1:0".to_owned()],
+        bind_addresses: vec!["127.0.0.1:0".parse().unwrap()],
 
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),

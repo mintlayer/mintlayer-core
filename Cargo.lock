@@ -238,6 +238,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utils-networking",
 ]
 
 [[package]]
@@ -362,6 +363,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "utils",
+ "utils-networking",
 ]
 
 [[package]]

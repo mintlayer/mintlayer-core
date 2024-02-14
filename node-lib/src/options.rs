@@ -113,7 +113,7 @@ pub struct RunOptions {
     /// Addresses to bind P2P to.
     /// Can be specified multiple times and/or be a comma-separated list.
     #[clap(long, value_name = "ADDR", value_delimiter(','))]
-    pub p2p_bind_addresses: Option<Vec<String>>,
+    pub p2p_bind_addresses: Option<Vec<SocketAddr>>,
 
     /// Connect through SOCKS5 proxy.
     #[clap(long, value_name = "PROXY")]

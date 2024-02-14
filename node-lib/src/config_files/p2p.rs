@@ -13,7 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::IpAddr, num::NonZeroU64, str::FromStr, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU64,
+    str::FromStr,
+    time::Duration,
+};
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
@@ -60,7 +65,7 @@ impl FromStr for NodeTypeConfigFile {
 #[serde(deny_unknown_fields)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
-    pub bind_addresses: Option<Vec<String>>,
+    pub bind_addresses: Option<Vec<SocketAddr>>,
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
     /// Disable p2p encryption (for tests only).

@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
+
+use api_server_common::{Network, PostgresConfig};
+use utils_networking::NetworkAddressWithPort;
 
 use clap::Parser;
 
@@ -29,7 +31,7 @@ pub struct ApiServerScannerArgs {
 
     /// Optional RPC address
     #[clap(long)]
-    pub rpc_address: Option<SocketAddr>,
+    pub rpc_address: Option<NetworkAddressWithPort>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]

@@ -17,7 +17,7 @@
 
 use std::{
     collections::BTreeMap,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     sync::{Arc, Mutex},
 };
 
@@ -108,8 +108,7 @@ impl DnsServer {
         let mut server = ServerFuture::new(catalog);
 
         for bind_addr in config.bind_addr.iter() {
-            let socket_addr: SocketAddr = bind_addr.parse()?;
-            let udp_socket = UdpSocket::bind(socket_addr).await?;
+            let udp_socket = UdpSocket::bind(bind_addr).await?;
             server.register_socket(udp_socket);
         }
 

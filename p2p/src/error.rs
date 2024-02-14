@@ -122,6 +122,7 @@ pub enum DialError {
     ProxyError(String),
 }
 
+// FIXME remove?
 /// Conversion errors
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ConversionError {

@@ -160,7 +160,7 @@ pub fn create_chain_config(
 
 pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, SocketAddr) {
     let p2p_config = p2p::config::P2pConfig {
-        bind_addresses: vec!["127.0.0.1:0".to_owned()],
+        bind_addresses: vec!["127.0.0.1:0".parse().unwrap()],
 
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),

@@ -23,6 +23,7 @@ use rpc::{
     RpcAuthData,
 };
 use utils::{clap_utils, ensure};
+use utils_networking::NetworkAddressWithPort;
 
 use crate::config::{WalletRpcConfig, WalletServiceConfig};
 
@@ -54,7 +55,7 @@ pub struct WalletRpcDaemonArgs {
 
     /// RPC address of the node to connect to
     #[arg(long, value_name("ADDR"))]
-    node_rpc_address: Option<String>,
+    node_rpc_address: Option<NetworkAddressWithPort>,
 
     /// Node RPC authentication cookie file path
     #[arg(
@@ -127,7 +128,10 @@ impl WalletRpcDaemonArgs {
 
             WalletServiceConfig::new(chain_type, wallet_file, chain_config)
                 .map_err(|err| ConfigError::InvalidChainConfigOption(err.to_string()))?
-                .apply_option(WalletServiceConfig::with_node_rpc_address, node_rpc_address)
+                .apply_option(
+                    WalletServiceConfig::with_node_rpc_address,
+                    node_rpc_address.map(|addr| addr.to_string()),
+                )
                 .with_node_credentials(node_credentials)
         };
 

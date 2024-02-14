@@ -117,7 +117,10 @@ pub fn test_blockprod_config() -> BlockProdConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{
+        net::{Ipv4Addr, SocketAddrV4},
+        time::Duration,
+    };
 
     use chainstate::{
         BlockIndex, BlockSource, ChainstateConfig, ChainstateHandle,
@@ -264,7 +267,7 @@ mod tests {
         let mempool = manager.add_custom_subsystem("mempool", |hdl| mempool.init(hdl));
 
         let mut p2p_config = test_p2p_config();
-        p2p_config.bind_addresses = vec!["127.0.0.1:0".to_owned()];
+        p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];
 
         let p2p = p2p::make_p2p(
             Arc::clone(&chain_config),
