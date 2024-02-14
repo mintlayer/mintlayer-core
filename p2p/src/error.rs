@@ -122,14 +122,6 @@ pub enum DialError {
     ProxyError(String),
 }
 
-// FIXME remove?
-/// Conversion errors
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
-pub enum ConversionError {
-    #[error("Invalid address: {0}")]
-    InvalidAddress(String),
-}
-
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum MessageCodecError {
     #[error("Message size {actual_size} exceeds the maximum size {max_size}")]
@@ -154,8 +146,6 @@ pub enum P2pError {
     ChainstateError(ChainstateError),
     #[error("DatabaseFailure")]
     StorageFailure(#[from] storage::Error),
-    #[error("Failed to convert data {0}")]
-    ConversionError(ConversionError),
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
     #[error("The configuration value is invalid: {0}")]
@@ -219,7 +209,6 @@ impl BanScore for P2pError {
             P2pError::SubsystemFailure => 0,
             P2pError::ChainstateError(err) => err.ban_score(),
             P2pError::StorageFailure(_) => 0,
-            P2pError::ConversionError(err) => err.ban_score(),
             // Could be a noise protocol violation but also a network error, do not ban peer
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
@@ -261,14 +250,6 @@ impl BanScore for ProtocolError {
     }
 }
 
-impl BanScore for ConversionError {
-    fn ban_score(&self) -> u32 {
-        match self {
-            ConversionError::InvalidAddress(_) => 0,
-        }
-    }
-}
-
 impl TryAsRef<storage::Error> for P2pError {
     fn try_as_ref(&self) -> Option<&storage::Error> {
         match self {
@@ -278,7 +259,6 @@ impl TryAsRef<storage::Error> for P2pError {
             | P2pError::PeerError(_)
             | P2pError::SubsystemFailure
             | P2pError::ChainstateError(_)
-            | P2pError::ConversionError(_)
             | P2pError::NoiseHandshakeError(_)
             | P2pError::InvalidConfigurationValue(_)
             | P2pError::InvalidStorageState(_)

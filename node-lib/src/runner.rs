@@ -142,7 +142,6 @@ async fn initialize(
                 | P2pError::SubsystemFailure
                 | P2pError::ChainstateError(_)
                 | P2pError::StorageFailure(_)
-                | P2pError::ConversionError(_)
                 | P2pError::NoiseHandshakeError(_)
                 | P2pError::InvalidConfigurationValue(_)
                 | P2pError::InvalidStorageState(_)
