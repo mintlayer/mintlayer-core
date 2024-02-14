@@ -17,4 +17,9 @@
 
 pub mod broadcaster;
 pub mod ip_or_socket_address;
+pub mod network_address;
+pub mod resolvable_name;
+
 pub use ip_or_socket_address::*;
+pub use network_address::*;
+pub use resolvable_name::*;
