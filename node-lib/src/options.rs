@@ -173,6 +173,8 @@ pub struct RunOptions {
     #[clap(long, value_name = "DIFF")]
     pub p2p_max_clock_diff: Option<u64>,
 
+    // TODO: this option and the corresponding field of PeerManagerConfig are no longer used,
+    // remove them.
     /// If true, the node will perform an early dns query if the peer db doesn't contain
     /// any global addresses at startup.
     #[clap(long, action = clap::ArgAction::SetTrue)]

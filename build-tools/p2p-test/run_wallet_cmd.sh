@@ -28,4 +28,4 @@ docker compose exec "${NODE}" bash -c "echo $@ > /tmp/cmd.txt"
 # it was printed to stderr, e.g. the logs, making it a PITA to parse the normal output.
 # The '-T' AKA '--no-TTY' option solves this somehow. But the logs become non-colored in this case
 # though.
-docker compose exec -T "${NODE}" wallet-cli --commands-file /tmp/cmd.txt
+docker compose exec -T "${NODE}" wallet-cli testnet --commands-file /tmp/cmd.txt
