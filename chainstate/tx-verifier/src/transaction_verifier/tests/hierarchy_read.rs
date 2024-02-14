@@ -15,7 +15,10 @@
 
 use std::sync::Arc;
 
-use crate::transaction_verifier::token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp};
+use crate::transaction_verifier::{
+    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
+};
 
 use super::*;
 use chainstate_types::GenBlockIndex;
@@ -28,7 +31,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView};
+use pos_accounting::{AccountingTxUndo, PoSAccountingView};
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
@@ -406,8 +409,11 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_0 = TransactionSource::Chain(block_undo_id_0);
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_1 = TransactionSource::Chain(block_undo_id_1);
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_source_2 = TransactionSource::Chain(block_undo_id_2);
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -437,12 +443,12 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
 
     store
         .expect_get_accounting_undo()
-        .with(eq(block_undo_id_0))
+        .with(eq(block_undo_source_0))
         .times(2)
         .return_const(Ok(None));
     store
         .expect_get_accounting_undo()
-        .with(eq(block_undo_id_2))
+        .with(eq(block_undo_source_2))
         .times(1)
         .return_const(Ok(None));
 
@@ -455,18 +461,16 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = AccountingBlockUndo::new(
-            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+        let block_undo = CachedPoSBlockUndo::new(
             None,
-        );
+            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+        )
+        .unwrap();
 
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                PoSAccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                CachedPoSBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -480,18 +484,16 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = AccountingBlockUndo::new(
-            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+        let block_undo = CachedPoSBlockUndo::new(
             None,
-        );
+            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+        )
+        .unwrap();
 
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                PoSAccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                CachedPoSBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -548,12 +550,12 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     );
 
     // fetch undo
-    assert!(verifier1.get_accounting_undo(block_undo_id_0).unwrap().is_none());
-    assert!(verifier1.get_accounting_undo(block_undo_id_1).unwrap().is_some());
-    assert!(verifier1.get_accounting_undo(block_undo_id_2).unwrap().is_none());
-    assert!(verifier2.get_accounting_undo(block_undo_id_0).unwrap().is_none());
-    assert!(verifier2.get_accounting_undo(block_undo_id_1).unwrap().is_some());
-    assert!(verifier2.get_accounting_undo(block_undo_id_2).unwrap().is_some());
+    assert!(verifier1.get_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier1.get_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier1.get_accounting_undo(block_undo_source_2).unwrap().is_none());
+    assert!(verifier2.get_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier2.get_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier2.get_accounting_undo(block_undo_source_2).unwrap().is_some());
 }
 
 // Create the following hierarchy:

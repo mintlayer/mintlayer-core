@@ -202,7 +202,12 @@ impl CachedUtxosBlockUndo {
             (None, Some(reward_undo)) => {
                 self.reward_undo = Some(reward_undo);
             }
-            (Some(_), Some(_)) => return Err(UtxosBlockUndoError::UndoAlreadyExistsForReward),
+            (Some(left), Some(right)) => {
+                utils::ensure!(
+                    *left == right,
+                    UtxosBlockUndoError::UndoAlreadyExistsForReward
+                );
+            }
         }
 
         // combine utxos

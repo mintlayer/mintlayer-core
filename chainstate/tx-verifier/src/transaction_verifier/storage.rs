@@ -23,16 +23,15 @@ use common::{
     },
     primitives::Id,
 };
-use pos_accounting::{
-    AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
-};
+use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView};
 use thiserror::Error;
 use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
 use super::{
-    error::TokensError, tokens_accounting_undo_cache::CachedTokensBlockUndo,
-    utxos_undo_cache::CachedUtxosBlockUndo, TransactionSource,
+    error::TokensError, pos_accounting_undo_cache::CachedPoSBlockUndo,
+    tokens_accounting_undo_cache::CachedTokensBlockUndo, utxos_undo_cache::CachedUtxosBlockUndo,
+    TransactionSource,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -95,8 +94,8 @@ pub trait TransactionVerifierStorageRef:
 
     fn get_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_tokens_accounting_undo(
         &self,
@@ -151,7 +150,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &AccountingBlockUndo,
+        undo: &CachedPoSBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_accounting_undo_data(
@@ -223,9 +222,9 @@ where
 
     fn get_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        self.deref().get_accounting_undo(id)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_accounting_undo(tx_source)
     }
 
     fn get_tokens_accounting_undo(

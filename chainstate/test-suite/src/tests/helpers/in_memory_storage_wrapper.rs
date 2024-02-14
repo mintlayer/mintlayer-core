@@ -23,7 +23,7 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
         Transaction,
     },
     primitives::{Amount, Id},
@@ -31,7 +31,7 @@ use common::{
 use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::{
-    transaction_verifier::{CachedTokensBlockUndo, CachedUtxosBlockUndo},
+    transaction_verifier::{CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
     TransactionSource,
 };
 use utxo::UtxosStorageRead;
@@ -114,13 +114,20 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
 
     fn get_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
-        self.storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_accounting_undo(id)?
+                    .map(|undo| CachedPoSBlockUndo::from_block_undo(undo));
+                Ok(undo)
+            }
+            TransactionSource::Mempool => Ok(None),
+        }
     }
 
     fn get_account_nonce_count(

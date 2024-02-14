@@ -55,7 +55,7 @@ impl CachedTokensBlockUndo {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tx_undos.is_empty()
+        self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 
     pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, CachedOperation<TxUndo>> {

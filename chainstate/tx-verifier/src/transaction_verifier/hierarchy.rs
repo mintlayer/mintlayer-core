@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 
 use super::{
+    pos_accounting_undo_cache::CachedPoSBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
@@ -29,14 +30,13 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData,
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
@@ -103,11 +103,11 @@ where
 
     fn get_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        match self.pos_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_accounting_undo(id),
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.pos_accounting_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_accounting_undo(tx_source),
         }
     }
 
@@ -221,7 +221,7 @@ where
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &AccountingBlockUndo,
+        new_undo: &CachedPoSBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.pos_accounting_block_undo
             .set_undo_data(tx_source, new_undo)

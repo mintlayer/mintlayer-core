@@ -15,7 +15,6 @@
 
 mod input_output_policy;
 mod pos_accounting_delta_adapter;
-mod pos_accounting_undo_cache;
 mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
@@ -40,11 +39,14 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
-mod utxos_undo_cache;
-pub use utxos_undo_cache::CachedUtxosBlockUndo;
+mod pos_accounting_undo_cache;
+pub use pos_accounting_undo_cache::CachedPoSBlockUndo;
 
 mod tokens_accounting_undo_cache;
 pub use tokens_accounting_undo_cache::CachedTokensBlockUndo;
+
+mod utxos_undo_cache;
+pub use utxos_undo_cache::CachedUtxosBlockUndo;
 
 pub use input_output_policy::{calculate_tokens_burned_in_outputs, IOPolicyError};
 
@@ -53,7 +55,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use self::{
     error::{ConnectTransactionError, TokensError},
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
-    pos_accounting_undo_cache::{PoSAccountingBlockUndoCache, PoSAccountingBlockUndoEntry},
+    pos_accounting_undo_cache::{CachedPoSBlockUndoOp, PoSAccountingBlockUndoCache},
     signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -90,7 +92,7 @@ pub struct TransactionVerifierDelta {
     utxo_block_undo: BTreeMap<TransactionSource, CachedUtxoBlockUndoOp>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
     accounting_delta: PoSAccountingDeltaData,
-    pos_accounting_delta_undo: BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry>,
+    pos_accounting_delta_undo: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>,
     pos_accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
     tokens_accounting_delta: TokensAccountingDeltaData,
@@ -468,13 +470,14 @@ where
         // Store pos accounting operations undos
         if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
             let tx_undos = inputs_undos.into_iter().chain(outputs_undos).collect();
-            self.pos_accounting_block_undo
-                .get_or_create_block_undo(&tx_source.into())
-                .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
-                .map_err(ConnectTransactionError::AccountingBlockUndoError)
-        } else {
-            Ok(())
+            self.pos_accounting_block_undo.add_tx_undo(
+                tx_source.into(),
+                tx.get_id(),
+                pos_accounting::AccountingTxUndo::new(tx_undos),
+            )?;
         }
+
+        Ok(())
     }
 
     fn disconnect_accounting_outputs(
@@ -508,9 +511,9 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         // apply undos to accounting
-        let block_undo_fetcher = |id: Id<Block>| {
+        let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_accounting_undo(id)
+                .get_accounting_undo(tx_source)
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         };
         let undos = self.pos_accounting_block_undo.take_tx_undo(
@@ -915,8 +918,7 @@ where
                 };
 
                 self.pos_accounting_block_undo
-                    .get_or_create_block_undo(&TransactionSource::Chain(block_id))
-                    .set_reward_undo(undos);
+                    .add_reward_undo(TransactionSource::Chain(block_id), undos)?;
             }
         };
 
@@ -1021,9 +1023,9 @@ where
         match block.header().consensus_data() {
             ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
             ConsensusData::PoS(_) => {
-                let block_undo_fetcher = |id: Id<Block>| {
+                let block_undo_fetcher = |tx_source: TransactionSource| {
                     self.storage
-                        .get_accounting_undo(id)
+                        .get_accounting_undo(tx_source)
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                 };
                 let reward_undo = self.pos_accounting_block_undo.take_block_reward_undo(

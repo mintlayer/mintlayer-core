@@ -15,25 +15,18 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use super::{error::ConnectTransactionError, TransactionSource};
-use common::{
-    chain::{Block, Transaction},
-    primitives::Id,
-};
-use pos_accounting::{
-    AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo,
-};
+use super::{error::ConnectTransactionError, CachedOperation, TransactionSource};
+use common::{chain::Transaction, primitives::Id};
+use pos_accounting::{AccountingBlockRewardUndo, AccountingBlockUndoError, AccountingTxUndo};
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct PoSAccountingBlockUndoEntry {
-    pub undo: AccountingBlockUndo,
-    // indicates whether this BlockUndo was fetched from the db or it's new
-    pub is_fresh: bool,
-}
+mod cached_block_undo;
+pub use cached_block_undo::CachedPoSBlockUndo;
+
+pub type CachedPoSBlockUndoOp = CachedOperation<CachedPoSBlockUndo>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct PoSAccountingBlockUndoCache {
-    data: BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry>,
+    data: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>,
 }
 
 impl PoSAccountingBlockUndoCache {
@@ -44,44 +37,71 @@ impl PoSAccountingBlockUndoCache {
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry>) -> Self {
+    pub fn new_for_test(data: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry> {
+    pub fn data(&self) -> &BTreeMap<TransactionSource, CachedPoSBlockUndoOp> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry> {
+    pub fn consume(self) -> BTreeMap<TransactionSource, CachedPoSBlockUndoOp> {
         self.data
     }
 
-    fn fetch_block_undo<F, E>(
+    pub fn add_reward_undo(
         &mut self,
-        tx_source: &TransactionSource,
-        fetcher_func: F,
-    ) -> Result<Option<&mut AccountingBlockUndo>, ConnectTransactionError>
-    where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
-        ConnectTransactionError: From<E>,
-    {
-        match self.data.entry(*tx_source) {
-            Entry::Occupied(entry) => Ok(Some(&mut entry.into_mut().undo)),
-            Entry::Vacant(entry) => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let entry = fetcher_func(*block_id)?.map(|block_undo| {
-                        &mut entry
-                            .insert(PoSAccountingBlockUndoEntry {
-                                undo: block_undo,
-                                is_fresh: false,
-                            })
-                            .undo
-                    });
-                    Ok(entry)
+        tx_source: TransactionSource,
+        reward_undo: AccountingBlockRewardUndo,
+    ) -> Result<(), ConnectTransactionError> {
+        match self.data.entry(tx_source) {
+            Entry::Occupied(mut entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    let mut block_undo = undo.clone();
+                    block_undo.set_block_reward_undo(reward_undo);
+                    entry.insert(CachedOperation::Write(block_undo));
                 }
-                TransactionSource::Mempool => Ok(None),
+                CachedOperation::Erase => {
+                    let block_undo = CachedPoSBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
+                    entry.insert(CachedOperation::Write(block_undo));
+                }
             },
-        }
+            Entry::Vacant(entry) => {
+                let block_undo = CachedPoSBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
+                entry.insert(CachedOperation::Write(block_undo));
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn add_tx_undo(
+        &mut self,
+        tx_source: TransactionSource,
+        tx_id: Id<Transaction>,
+        tx_undo: AccountingTxUndo,
+    ) -> Result<(), ConnectTransactionError> {
+        match self.data.entry(tx_source) {
+            Entry::Occupied(mut entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    let mut block_undo = undo.clone();
+                    block_undo.insert_tx_undo(tx_id, tx_undo)?;
+                    entry.insert(CachedOperation::Write(block_undo.clone()));
+                }
+                CachedOperation::Erase => {
+                    let block_undo =
+                        CachedPoSBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                    entry.insert(CachedOperation::Write(block_undo));
+                }
+            },
+            Entry::Vacant(entry) => {
+                let block_undo =
+                    CachedPoSBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                entry.insert(CachedOperation::Write(block_undo));
+            }
+        };
+
+        Ok(())
     }
 
     pub fn take_tx_undo<F, E>(
@@ -91,12 +111,32 @@ impl PoSAccountingBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<AccountingTxUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        Ok(self
-            .fetch_block_undo(tx_source, fetcher_func)?
-            .and_then(|entry| entry.take_tx_undo(tx_id)))
+        let block_undo = match self.data.entry(*tx_source) {
+            Entry::Vacant(_) => fetcher_func(*tx_source)?,
+            Entry::Occupied(entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
+                CachedOperation::Erase => panic!("already empty"),
+            },
+        };
+
+        if let Some(mut block_undo) = block_undo {
+            let res = block_undo.take_tx_undo(tx_id)?;
+
+            if res.is_some() {
+                // if block undo used up completely then remove it from the db
+                if block_undo.is_empty() {
+                    self.data.insert(*tx_source, CachedOperation::Erase);
+                } else {
+                    self.data.insert(*tx_source, CachedOperation::Write(block_undo));
+                }
+            }
+            return Ok(res);
+        }
+
+        Ok(None)
     }
 
     pub fn take_block_reward_undo<F, E>(
@@ -105,43 +145,53 @@ impl PoSAccountingBlockUndoCache {
         fetcher_func: F,
     ) -> Result<Option<AccountingBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        Ok(self
-            .fetch_block_undo(tx_source, fetcher_func)?
-            .and_then(|entry| entry.take_reward_undos()))
-    }
+        let block_undo = match self.data.entry(*tx_source) {
+            Entry::Vacant(_) => fetcher_func(*tx_source)?,
+            Entry::Occupied(entry) => match entry.get() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
+                CachedOperation::Erase => None,
+            },
+        };
 
-    pub fn get_or_create_block_undo(
-        &mut self,
-        tx_source: &TransactionSource,
-    ) -> &mut AccountingBlockUndo {
-        &mut self
-            .data
-            .entry(*tx_source)
-            .or_insert(PoSAccountingBlockUndoEntry {
-                is_fresh: true,
-                undo: Default::default(),
+        let res = block_undo
+            .map(|mut block_undo| {
+                let reward_undo = block_undo.take_block_reward_undo();
+
+                if reward_undo.is_some() {
+                    // if block undo used up completely then remove it from the db
+                    if block_undo.is_empty() {
+                        self.data.insert(*tx_source, CachedOperation::Erase);
+                    } else {
+                        self.data.insert(*tx_source, CachedOperation::Write(block_undo));
+                    }
+                }
+                reward_undo
             })
-            .undo
+            .flatten();
+
+        Ok(res)
     }
 
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &AccountingBlockUndo,
+        new_undo: &CachedPoSBlockUndo,
     ) -> Result<(), AccountingBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(PoSAccountingBlockUndoEntry {
-                    undo: new_undo.clone(),
-                    is_fresh: true,
-                });
+                e.insert(CachedOperation::Write(new_undo.clone()));
             }
-            Entry::Occupied(mut e) => {
-                e.get_mut().undo.combine(new_undo.clone())?;
-            }
+            Entry::Occupied(mut e) => match e.get_mut() {
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
+                    undo.combine(new_undo.clone())?;
+                }
+                CachedOperation::Erase => {
+                    e.insert(CachedOperation::Write(new_undo.clone()));
+                }
+            },
         };
         Ok(())
     }
@@ -150,17 +200,7 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), AccountingBlockUndoError> {
-        // delete undo from current cache
-        if self.data.remove(&tx_source).is_none() {
-            // if current cache doesn't have such data - insert empty undo to be flushed to the parent
-            self.data.insert(
-                tx_source,
-                PoSAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
-            );
-        }
+        self.data.insert(tx_source, CachedOperation::Erase);
         Ok(())
     }
 }

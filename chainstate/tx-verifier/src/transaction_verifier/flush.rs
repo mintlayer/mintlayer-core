@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TransactionSource;
-
 use super::{
     storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
@@ -93,27 +91,17 @@ where
     }
 
     // flush pos accounting block undo
-    for (tx_source, entry) in consumed.pos_accounting_delta_undo {
-        if entry.is_fresh {
-            storage.set_accounting_undo_data(tx_source, &entry.undo)?;
-        } else if entry.undo.is_empty() {
-            storage.del_accounting_undo_data(tx_source)?;
-        } else {
-            match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    panic!("BlockUndo accounting entries were not used up completely while disconnecting a block {}", block_id)
-                }
-                TransactionSource::Mempool => {
-                    /* it's ok for the mempool to use tx undos partially */
-                }
-            }
+    for (tx_source, op) in consumed.pos_accounting_delta_undo {
+        match op {
+            CachedOperation::Write(undo) => storage.set_accounting_undo_data(tx_source, &undo)?,
+            CachedOperation::Read(_) => (),
+            CachedOperation::Erase => storage.del_accounting_undo_data(tx_source)?,
         }
     }
 
     storage.batch_write_tokens_data(consumed.tokens_accounting_delta)?;
 
     // flush tokens accounting block undo
-
     for (tx_source, op) in consumed.tokens_accounting_delta_undo {
         match op {
             CachedOperation::Write(undo) => {

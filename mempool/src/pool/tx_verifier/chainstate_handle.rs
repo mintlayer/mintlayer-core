@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use chainstate::{
     chainstate_interface::ChainstateInterface,
     tx_verifier::{
-        transaction_verifier::{CachedTokensBlockUndo, CachedUtxosBlockUndo},
+        transaction_verifier::{CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
         TransactionSource, TransactionVerifierStorageRef,
     },
     ChainstateError,
@@ -27,12 +27,11 @@ use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{AccountingBlockUndo, DelegationData, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
@@ -217,8 +216,11 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         self.call(move |c| c.get_token_aux_data(token_id))
     }
 
-    fn get_accounting_undo(&self, _id: Id<Block>) -> Result<Option<AccountingBlockUndo>, Error> {
-        panic!("Mempool should not undo stuff in chainstate")
+    fn get_accounting_undo(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, Error> {
+        Ok(None)
     }
 
     fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {

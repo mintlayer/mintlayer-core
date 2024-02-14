@@ -767,8 +767,11 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
 
         verifier
             .pos_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(tx_id, AccountingTxUndo::new(vec![undo]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
+                tx_id,
+                AccountingTxUndo::new(vec![undo]),
+            )
             .unwrap();
         verifier
     };
@@ -785,8 +788,11 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
 
         verifier
             .pos_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_2))
-            .insert_tx_undo(tx_id, AccountingTxUndo::new(vec![undo_pool]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_2),
+                tx_id,
+                AccountingTxUndo::new(vec![undo_pool]),
+            )
             .unwrap();
         verifier
     };
@@ -867,8 +873,11 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
 
         verifier
             .pos_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(tx_id, AccountingTxUndo::new(vec![undo]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
+                tx_id,
+                AccountingTxUndo::new(vec![undo]),
+            )
             .unwrap();
         verifier
     };
@@ -884,8 +893,11 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
 
         verifier
             .pos_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_2))
-            .insert_tx_undo(tx_id, AccountingTxUndo::new(vec![undo_pool]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_2),
+                tx_id,
+                AccountingTxUndo::new(vec![undo_pool]),
+            )
             .unwrap();
         verifier
     };
@@ -902,8 +914,11 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
 
         verifier
             .pos_accounting_block_undo
-            .get_or_create_block_undo(&TransactionSource::Chain(block_undo_id_1))
-            .insert_tx_undo(tx_id, AccountingTxUndo::new(vec![undo_delegation]))
+            .add_tx_undo(
+                TransactionSource::Chain(block_undo_id_1),
+                tx_id,
+                AccountingTxUndo::new(vec![undo_delegation]),
+            )
             .unwrap();
         verifier
     };
@@ -960,10 +975,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                PoSAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                CachedPoSBlockUndoOp::Erase,
             )]));
         verifier
     };
@@ -974,10 +986,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                PoSAccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                CachedPoSBlockUndoOp::Erase,
             )]));
         verifier
     };

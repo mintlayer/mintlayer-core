@@ -22,6 +22,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
+        timelock::OutputTimeLock,
         tokens::{make_token_id, TokenIssuance},
         AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
         UtxoOutPoint,
@@ -101,6 +102,11 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .build();
 
         tf.make_block_builder()
+            .with_reward(vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(u64::MAX),
+            )])
             .add_transaction(tx_1.clone())
             .add_transaction(tx_2.clone())
             .add_transaction(tx_3.clone())
@@ -109,6 +115,11 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap();
 
         tf2.make_block_builder()
+            .with_reward(vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(u64::MAX),
+            )])
             .add_transaction(tx_1)
             .add_transaction(tx_2)
             .add_transaction(tx_3)
