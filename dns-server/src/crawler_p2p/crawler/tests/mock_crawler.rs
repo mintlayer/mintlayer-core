@@ -25,8 +25,9 @@ use p2p::types::{
     bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress,
 };
 
-use crate::crawler_p2p::crawler::{
-    address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent,
+use crate::crawler_p2p::{
+    crawler::{address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent},
+    crawler_manager::storage::AddressInfo,
 };
 
 /// Mock crawler
@@ -42,6 +43,7 @@ pub struct MockCrawler {
     pub peers: BTreeMap<PeerId, MockPeer>,
     pub peer_addresses: BTreeMap<SocketAddress, PeerId>,
     pub banned_addresses: BTreeMap<BannableAddress, Time>,
+    pub address_requests: BTreeMap<PeerId, usize>,
 }
 
 #[derive(Debug)]
@@ -59,19 +61,20 @@ pub struct AddressUpdate {
 
 pub fn test_crawler(
     config: CrawlerConfig,
-    loaded_addresses: BTreeSet<SocketAddress>,
+    loaded_addresses: BTreeMap<SocketAddress, AddressInfo>,
     loaded_banned_addresses: BTreeMap<BannableAddress, Time>,
-    added_addresses: BTreeSet<SocketAddress>,
+    reserved_addresses: BTreeSet<SocketAddress>,
+    now: Time,
 ) -> MockCrawler {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
     let crawler = Crawler::new(
-        Time::from_duration_since_epoch(Duration::ZERO),
+        now,
         chain_config.clone(),
         config,
         loaded_addresses.clone(),
         loaded_banned_addresses.clone(),
-        added_addresses,
+        reserved_addresses,
     );
 
     MockCrawler {
@@ -80,12 +83,13 @@ pub fn test_crawler(
         address_updates: Default::default(),
         connect_requests: Default::default(),
         reachable: Default::default(),
-        persistent: loaded_addresses.iter().cloned().collect(),
+        persistent: loaded_addresses.keys().cloned().collect(),
         pending_connects: Default::default(),
         pending_disconnects: Default::default(),
         peers: Default::default(),
         peer_addresses: BTreeMap::new(),
         banned_addresses: loaded_banned_addresses,
+        address_requests: BTreeMap::new(),
     }
 }
 
@@ -97,8 +101,12 @@ impl MockCrawler {
     pub fn step(&mut self, event: CrawlerEvent, rng: &mut impl Rng) {
         match &event {
             CrawlerEvent::Timer { period: _ } => {}
-            CrawlerEvent::NewAddress {
+            CrawlerEvent::AddressAnnouncement {
                 address: _,
+                sender: _,
+            } => {}
+            CrawlerEvent::AddressListResponse {
+                addresses: _,
                 sender: _,
             } => {}
             CrawlerEvent::Connected { peer_info, address } => {
@@ -142,6 +150,9 @@ impl MockCrawler {
                 let inserted = self.pending_connects.insert(address);
                 assert!(inserted);
                 self.connect_requests.push(address);
+            }
+            CrawlerCommand::RequestAddresses { peer_id } => {
+                *self.address_requests.entry(peer_id).or_insert(0) += 1;
             }
             CrawlerCommand::Disconnect { peer_id } => {
                 let inserted = self.pending_disconnects.insert(peer_id);
@@ -257,5 +268,10 @@ impl MockCrawler {
 
         let actual2: BTreeSet<_> = self.crawler.outbound_peers.keys().copied().collect();
         assert_eq!(actual2, expected);
+    }
+
+    pub fn assert_address_request_counts(&self, expected: &[(PeerId, usize)]) {
+        let expected: BTreeMap<_, _> = expected.iter().copied().collect();
+        assert_eq!(self.address_requests, expected);
     }
 }

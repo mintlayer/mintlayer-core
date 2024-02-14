@@ -418,7 +418,7 @@ impl Backend {
             .ok_or(BackendError::InvalidCostPerBlockAmount(cost_per_block))?;
 
         let mpt = PerThousand::from_decimal_str(&mpt)
-            .ok_or(BackendError::InvalidMarginPerThousand(mpt))?;
+            .map_err(|_| BackendError::InvalidMarginPerThousand(mpt))?;
 
         let decommission_key = parse_address(&self.chain_config, &decommission_address)
             .map_err(|err| BackendError::AddressError(err.to_string()))?

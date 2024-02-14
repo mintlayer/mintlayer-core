@@ -16,6 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::{
+    collections::BTreeSet,
     fmt::Debug,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     time::Duration,
@@ -150,8 +151,28 @@ impl TestAddressMaker {
         )
     }
 
+    pub fn new_distinct_random_ipv6_addrs(count: usize, rng: &mut impl Rng) -> Vec<Ipv6Addr> {
+        let mut addrs = BTreeSet::new();
+
+        while addrs.len() < count {
+            addrs.insert(Self::new_random_ipv6_addr(rng));
+        }
+
+        addrs.iter().copied().collect()
+    }
+
     pub fn new_random_ipv4_addr(rng: &mut impl Rng) -> Ipv4Addr {
         Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())
+    }
+
+    pub fn new_distinct_random_ipv4_addrs(count: usize, rng: &mut impl Rng) -> Vec<Ipv4Addr> {
+        let mut addrs = BTreeSet::new();
+
+        while addrs.len() < count {
+            addrs.insert(Self::new_random_ipv4_addr(rng));
+        }
+
+        addrs.iter().copied().collect()
     }
 
     pub fn new_random_address_with_rng(rng: &mut impl Rng) -> SocketAddress {

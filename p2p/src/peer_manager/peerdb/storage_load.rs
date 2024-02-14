@@ -20,15 +20,13 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 
 use crate::{
     error::P2pError,
-    peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional},
+    peer_manager::peerdb_common::{StorageVersion, TransactionRo, TransactionRw, Transactional},
 };
 
 use super::{
     config::PeerDbConfig,
     salt::Salt,
-    storage::{
-        KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, StorageVersion,
-    },
+    storage::{KnownAddressState, PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite},
     storage_impl::PeerDbStorageImpl,
 };
 
@@ -84,15 +82,14 @@ impl LoadedStorage {
     fn load_storage_v3<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
 
-        let known_addresses = tx.get_known_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
+        let known_addresses = tx.get_known_addresses()?.into_iter().collect::<BTreeMap<_, _>>();
 
-        let banned_addresses =
-            tx.get_banned_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
+        let banned_addresses = tx.get_banned_addresses()?.into_iter().collect::<BTreeMap<_, _>>();
 
         let discouraged_addresses =
-            tx.get_discouraged_addresses()?.iter().copied().collect::<BTreeMap<_, _>>();
+            tx.get_discouraged_addresses()?.into_iter().collect::<BTreeMap<_, _>>();
 
-        let anchor_addresses = tx.get_anchor_addresses()?.iter().copied().collect::<BTreeSet<_>>();
+        let anchor_addresses = tx.get_anchor_addresses()?.into_iter().collect::<BTreeSet<_>>();
 
         let salt = tx
             .get_salt()?

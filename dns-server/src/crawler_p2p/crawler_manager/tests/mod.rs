@@ -18,6 +18,7 @@ mod mock_manager;
 use std::time::Duration;
 
 use chainstate::ban_score::BanScore;
+use common::primitives::semver::SemVer;
 use p2p::{
     error::{P2pError, ProtocolError},
     types::socket_address::SocketAddress,
@@ -26,7 +27,7 @@ use p2p_test_utils::{expect_no_recv, expect_recv};
 
 use crate::{
     crawler_p2p::{
-        crawler::{BanDuration, BanThreshold},
+        crawler::{address_data::SoftwareInfo, BanDuration, BanThreshold},
         crawler_manager::tests::mock_manager::{
             advance_time, assert_banned_addresses, assert_known_addresses, test_crawler,
             ErraticNodeConnectError,
@@ -37,30 +38,101 @@ use crate::{
 
 #[tokio::test]
 async fn basic() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
+    let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node_soft_info = SoftwareInfo {
+        user_agent: "foo".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
 
     // Node goes online, DNS record added
-    state.node_online(node1);
+    state.node_online(node_addr, node_soft_info.clone());
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node_addr.socket_addr().ip(), node_soft_info.clone())
     );
 
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info.clone())]);
+
     // Node goes offline, DNS record removed
-    state.node_offline(node1);
+    state.node_offline(node_addr);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::DelAddress(node1.socket_addr().ip())
+        DnsServerCommand::DelAddress(node_addr.socket_addr().ip())
     );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info.clone())]);
+
+    // Node goes online again, DNS record added
+    state.node_online(node_addr, node_soft_info.clone());
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
+    assert_eq!(
+        expect_recv!(command_rx),
+        DnsServerCommand::AddAddress(node_addr.socket_addr().ip(), node_soft_info.clone())
+    );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info)]);
+}
+
+// Node comes offline and back online, but with different software info.
+// The new info should be stored in the db.
+#[tokio::test]
+async fn software_info_update() {
+    let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node_soft_info1 = SoftwareInfo {
+        user_agent: "foo1".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+    let node_soft_info2 = SoftwareInfo {
+        user_agent: "foo2".try_into().unwrap(),
+        version: SemVer::new(2, 3, 4),
+    };
+
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
+
+    // Node goes online.
+    state.node_online(node_addr, node_soft_info1.clone());
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
+    assert_eq!(
+        expect_recv!(command_rx),
+        DnsServerCommand::AddAddress(node_addr.socket_addr().ip(), node_soft_info1.clone())
+    );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info1.clone())]);
+
+    // Node goes offline.
+    state.node_offline(node_addr);
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
+    assert_eq!(
+        expect_recv!(command_rx),
+        DnsServerCommand::DelAddress(node_addr.socket_addr().ip())
+    );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info1)]);
+
+    // Node goes online again with a different software info.
+    state.node_online(node_addr, node_soft_info2.clone());
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
+    assert_eq!(
+        expect_recv!(command_rx),
+        DnsServerCommand::AddAddress(node_addr.socket_addr().ip(), node_soft_info2.clone())
+    );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info2)]);
 }
 
 #[tokio::test]
 async fn long_offline() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
+    let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node_soft_info = SoftwareInfo {
+        user_agent: "foo".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
 
     // Two weeks passed
     advance_time(
@@ -72,112 +144,162 @@ async fn long_offline() {
     .await;
 
     // Node goes online, DNS record is added in 24 hours
-    state.node_online(node1);
+    state.node_online(node_addr, node_soft_info.clone());
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node_addr.socket_addr().ip(), node_soft_info.clone())
     );
+
+    assert_known_addresses(&crawler, &[(node_addr, node_soft_info)]);
 }
 
 #[tokio::test]
 async fn announced_online() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddress = "1.2.3.5:3031".parse().unwrap();
-    let node3: SocketAddress = "[2a00::1]:3031".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
+    let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node1_soft_info = SoftwareInfo {
+        user_agent: "foo1".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+    let node2_addr: SocketAddress = "1.2.3.5:3031".parse().unwrap();
+    let node2_soft_info = SoftwareInfo {
+        user_agent: "foo2".try_into().unwrap(),
+        version: SemVer::new(2, 3, 4),
+    };
+    let node3_addr: SocketAddress = "[2a00::1]:3031".parse().unwrap();
+    let node3_soft_info = SoftwareInfo {
+        user_agent: "foo3".try_into().unwrap(),
+        version: SemVer::new(3, 4, 5),
+    };
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1_addr]);
 
-    state.node_online(node1);
-    state.node_online(node2);
-    state.node_online(node3);
+    state.node_online(node1_addr, node1_soft_info.clone());
+    state.node_online(node2_addr, node2_soft_info.clone());
+    state.node_online(node3_addr, node3_soft_info.clone());
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node1_soft_info.clone())
     );
 
-    state.announce_address(node1, node2);
+    state.announce_address(node1_addr, node2_addr);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node2.socket_addr().ip())
+        DnsServerCommand::AddAddress(node2_addr.socket_addr().ip(), node2_soft_info.clone())
     );
 
-    state.announce_address(node2, node3);
+    state.announce_address(node2_addr, node3_addr);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node3.socket_addr().ip())
+        DnsServerCommand::AddAddress(node3_addr.socket_addr().ip(), node3_soft_info.clone())
     );
 
-    assert_known_addresses(&crawler, &[node1, node2, node3]);
+    assert_known_addresses(
+        &crawler,
+        &[
+            (node1_addr, node1_soft_info),
+            (node2_addr, node2_soft_info),
+            (node3_addr, node3_soft_info),
+        ],
+    );
 }
 
 #[tokio::test]
 async fn announced_offline() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddress = "1.2.3.5:3031".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
+    let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node1_soft_info = SoftwareInfo {
+        user_agent: "foo1".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+    let node2_addr: SocketAddress = "1.2.3.5:3031".parse().unwrap();
+    let node2_soft_info = SoftwareInfo {
+        user_agent: "foo2".try_into().unwrap(),
+        version: SemVer::new(2, 3, 4),
+    };
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1_addr]);
 
-    state.node_online(node1);
+    state.node_online(node1_addr, node1_soft_info.clone());
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node1_soft_info.clone())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 1);
 
     // Check that the crawler tries to connect to an offline node just once
-    state.announce_address(node1, node2);
+    state.announce_address(node1_addr, node2_addr);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 2);
 
     // Check that the crawler tries to connect if the same address is announced later
-    state.node_online(node2);
-    state.announce_address(node1, node2);
+    state.node_online(node2_addr, node2_soft_info.clone());
+    state.announce_address(node1_addr, node2_addr);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node2.socket_addr().ip())
+        DnsServerCommand::AddAddress(node2_addr.socket_addr().ip(), node2_soft_info.clone())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
+
+    assert_known_addresses(
+        &crawler,
+        &[(node1_addr, node1_soft_info), (node2_addr, node2_soft_info)],
+    );
 }
 
 #[tokio::test]
 async fn private_ip() {
-    let node1: SocketAddress = "1.0.0.1:3031".parse().unwrap();
-    let node2: SocketAddress = "[2a00::1]:3031".parse().unwrap();
-    let node3: SocketAddress = "192.168.0.1:3031".parse().unwrap();
-    let node4: SocketAddress = "[fe80::1]:3031".parse().unwrap();
-    let node5: SocketAddress = "1.0.0.2:12345".parse().unwrap();
-    let node6: SocketAddress = "[2a00::2]:12345".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) =
-        test_crawler(vec![node1, node2, node3, node4, node5, node6]);
+    let node1_addr: SocketAddress = "1.0.0.1:3031".parse().unwrap();
+    let node2_addr: SocketAddress = "[2a00::1]:3031".parse().unwrap();
+    let node3_addr: SocketAddress = "192.168.0.1:3031".parse().unwrap();
+    let node4_addr: SocketAddress = "[fe80::1]:3031".parse().unwrap();
+    let node5_addr: SocketAddress = "1.0.0.2:12345".parse().unwrap();
+    let node6_addr: SocketAddress = "[2a00::2]:12345".parse().unwrap();
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![
+        node1_addr, node2_addr, node3_addr, node4_addr, node5_addr, node6_addr,
+    ]);
 
-    state.node_online(node1);
-    state.node_online(node2);
-    state.node_online(node3);
-    state.node_online(node4);
-    state.node_online(node5);
-    state.node_online(node6);
+    let node_soft_info = SoftwareInfo {
+        user_agent: "foo".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+
+    state.node_online(node1_addr, node_soft_info.clone());
+    state.node_online(node2_addr, node_soft_info.clone());
+    state.node_online(node3_addr, node_soft_info.clone());
+    state.node_online(node4_addr, node_soft_info.clone());
+    state.node_online(node5_addr, node_soft_info.clone());
+    state.node_online(node6_addr, node_soft_info.clone());
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
 
     // Check that only nodes with public addresses and on the default port are added to DNS
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node_soft_info.clone())
     );
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node2.socket_addr().ip())
+        DnsServerCommand::AddAddress(node2_addr.socket_addr().ip(), node_soft_info.clone())
     );
     expect_no_recv!(command_rx);
 
     // Check that all reachable nodes are stored in the DB
-    assert_known_addresses(&crawler, &[node1, node2, node3, node4, node5, node6]);
+    assert_known_addresses(
+        &crawler,
+        &[
+            (node1_addr, node_soft_info.clone()),
+            (node2_addr, node_soft_info.clone()),
+            (node3_addr, node_soft_info.clone()),
+            (node4_addr, node_soft_info.clone()),
+            (node5_addr, node_soft_info.clone()),
+            (node6_addr, node_soft_info.clone()),
+        ],
+    );
 }
 
 // 1) Create an erratic node, such that connecting to it produces
@@ -189,11 +311,17 @@ async fn private_ip() {
 // no longer banned and that its address is added to DNS.
 #[tokio::test]
 async fn ban_unban() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddress = "2.3.4.5:3031".parse().unwrap();
-    let node3: SocketAddress = "3.4.5.6:3031".parse().unwrap();
+    let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node2_addr: SocketAddress = "2.3.4.5:3031".parse().unwrap();
+    let node3_addr: SocketAddress = "3.4.5.6:3031".parse().unwrap();
 
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1, node2, node3]);
+    let node_soft_info = SoftwareInfo {
+        user_agent: "foo".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+
+    let (mut crawler, state, mut command_rx, time_getter) =
+        test_crawler(vec![node1_addr, node2_addr, node3_addr]);
 
     let erratic_node_conn_error = P2pError::ProtocolError(ProtocolError::HandshakeExpected);
     // Sanity check
@@ -201,9 +329,10 @@ async fn ban_unban() {
 
     let ban_duration = *BanDuration::default();
 
-    state.node_online(node1);
+    state.node_online(node1_addr, node_soft_info.clone());
     state.erratic_node_online(
-        node2,
+        node2_addr,
+        node_soft_info.clone(),
         vec![
             ErraticNodeConnectError::MisbehavedOnHandshake(erratic_node_conn_error.clone()),
             // Note: ConnectionError is still expected and is needed for the peer to become disconnected.
@@ -212,7 +341,7 @@ async fn ban_unban() {
             ErraticNodeConnectError::ConnectionError(erratic_node_conn_error.clone()),
         ],
     );
-    state.node_online(node3);
+    state.node_online(node3_addr, node_soft_info.clone());
 
     let time_step = Duration::from_secs(60);
 
@@ -223,22 +352,22 @@ async fn ban_unban() {
     // Only normal nodes are added to DNS
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node_soft_info.clone())
     );
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node3.socket_addr().ip())
+        DnsServerCommand::AddAddress(node3_addr.socket_addr().ip(), node_soft_info.clone())
     );
     expect_no_recv!(command_rx);
 
     // node2 is banned
-    assert_banned_addresses(&crawler, &[(node2.as_bannable(), node2_ban_end_time)]);
+    assert_banned_addresses(&crawler, &[(node2_addr.as_bannable(), node2_ban_end_time)]);
 
     advance_time(&mut crawler, &time_getter, time_step, 1).await;
 
     // Report misbehavior for node1; the passed error has big enough ban score, so the node should
     // be banned immediately.
-    state.report_misbehavior(node1, erratic_node_conn_error);
+    state.report_misbehavior(node1_addr, erratic_node_conn_error);
 
     advance_time(&mut crawler, &time_getter, time_step, 1).await;
 
@@ -247,29 +376,29 @@ async fn ban_unban() {
     // Check that it's been removed from DNS.
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::DelAddress(node1.socket_addr().ip())
+        DnsServerCommand::DelAddress(node1_addr.socket_addr().ip())
     );
 
     // Both bad nodes are now banned.
     assert_banned_addresses(
         &crawler,
         &[
-            (node1.as_bannable(), node1_ban_end_time),
-            (node2.as_bannable(), node2_ban_end_time),
+            (node1_addr.as_bannable(), node1_ban_end_time),
+            (node2_addr.as_bannable(), node2_ban_end_time),
         ],
     );
 
     // Node 2 comes online again and now it'll behave correctly. This shouldn't have any immediate effect though.
-    state.node_offline(node2);
-    state.node_online(node2);
+    state.node_offline(node2_addr);
+    state.node_online(node2_addr, node_soft_info.clone());
 
     // Wait some more time, the nodes should still be banned.
     advance_time(&mut crawler, &time_getter, time_step, 1).await;
     assert_banned_addresses(
         &crawler,
         &[
-            (node1.as_bannable(), node1_ban_end_time),
-            (node2.as_bannable(), node2_ban_end_time),
+            (node1_addr.as_bannable(), node1_ban_end_time),
+            (node2_addr.as_bannable(), node2_ban_end_time),
         ],
     );
     expect_no_recv!(command_rx);
@@ -280,10 +409,10 @@ async fn ban_unban() {
     advance_time(&mut crawler, &time_getter, time_until_node2_unban, 1).await;
 
     // node2 is no longer banned; its address has been added to DNS.
-    assert_banned_addresses(&crawler, &[(node1.as_bannable(), node1_ban_end_time)]);
+    assert_banned_addresses(&crawler, &[(node1_addr.as_bannable(), node1_ban_end_time)]);
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node2.socket_addr().ip())
+        DnsServerCommand::AddAddress(node2_addr.socket_addr().ip(), node_soft_info.clone())
     );
 
     // Wait enough time for node1 to be unbanned.
@@ -295,7 +424,7 @@ async fn ban_unban() {
     assert_banned_addresses(&crawler, &[]);
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node_soft_info.clone())
     );
 }
 
@@ -303,11 +432,17 @@ async fn ban_unban() {
 // doesn't result in a ban even if the error has a non-zero ban score.
 #[tokio::test]
 async fn no_ban_on_connection_error() {
-    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddress = "2.3.4.5:3031".parse().unwrap();
-    let node3: SocketAddress = "3.4.5.6:3031".parse().unwrap();
+    let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node2_addr: SocketAddress = "2.3.4.5:3031".parse().unwrap();
+    let node3_addr: SocketAddress = "3.4.5.6:3031".parse().unwrap();
 
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1, node2, node3]);
+    let node_soft_info = SoftwareInfo {
+        user_agent: "foo".try_into().unwrap(),
+        version: SemVer::new(1, 2, 3),
+    };
+
+    let (mut crawler, state, mut command_rx, time_getter) =
+        test_crawler(vec![node1_addr, node2_addr, node3_addr]);
 
     // Note: this error won't normally appear inside ConnectivityEvent::ConnectionError, we use
     // it just because it's known to have a non-zero ban score.
@@ -315,12 +450,13 @@ async fn no_ban_on_connection_error() {
     // Sanity check
     assert!(erratic_node_conn_error.ban_score() >= *BanThreshold::default());
 
-    state.node_online(node1);
+    state.node_online(node1_addr, node_soft_info.clone());
     state.erratic_node_online(
-        node2,
+        node2_addr,
+        node_soft_info.clone(),
         vec![ErraticNodeConnectError::ConnectionError(erratic_node_conn_error)],
     );
-    state.node_online(node3);
+    state.node_online(node3_addr, node_soft_info.clone());
 
     let time_step = Duration::from_secs(60);
 
@@ -329,11 +465,11 @@ async fn no_ban_on_connection_error() {
     // Only normal nodes are added to DNS
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node1.socket_addr().ip())
+        DnsServerCommand::AddAddress(node1_addr.socket_addr().ip(), node_soft_info.clone())
     );
     assert_eq!(
         expect_recv!(command_rx),
-        DnsServerCommand::AddAddress(node3.socket_addr().ip())
+        DnsServerCommand::AddAddress(node3_addr.socket_addr().ip(), node_soft_info)
     );
     expect_no_recv!(command_rx);
 

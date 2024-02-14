@@ -361,7 +361,7 @@ where
     ) -> crate::Result<()> {
         let (backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
 
-        log::debug!("Assigning peer id {peer_id} to peer at address {peer_address:?}");
+        log::info!("Assigning peer id {peer_id} to peer at address {peer_address:?}");
 
         let (peer_event_sender, peer_event_receiver) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
         let peer_event_stream = ReceiverStream::new(peer_event_receiver);

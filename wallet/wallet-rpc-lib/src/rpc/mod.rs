@@ -597,7 +597,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             cost_per_block.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
 
         let margin_ratio_per_thousand = PerThousand::from_decimal_str(&margin_ratio_per_thousand)
-            .ok_or(RpcError::InvalidMarginRatio)?;
+            .map_err(|_| RpcError::InvalidMarginRatio)?;
 
         let decommission_destination = Address::from_str(&self.chain_config, &decommission_address)
             .and_then(|addr| addr.decode_object(&self.chain_config))

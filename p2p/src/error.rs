@@ -24,7 +24,7 @@ use common::{
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 use utils::try_as::TryAsRef;
 
-use crate::{net::types::PeerRole, peer_manager::peerdb, protocol::ProtocolVersion};
+use crate::{net::types::PeerRole, peer_manager::peerdb_common, protocol::ProtocolVersion};
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
@@ -163,8 +163,8 @@ pub enum P2pError {
     InvalidStorageState(String),
     #[error("Peer db storage version mismatch: expected {expected_version}, got {actual_version}")]
     PeerDbStorageVersionMismatch {
-        expected_version: peerdb::StorageVersion,
-        actual_version: peerdb::StorageVersion,
+        expected_version: peerdb_common::StorageVersion,
+        actual_version: peerdb_common::StorageVersion,
     },
     #[error("Mempool error: {0}")]
     MempoolError(#[from] MempoolError),

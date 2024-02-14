@@ -1831,6 +1831,7 @@ dependencies = [
  "crypto",
  "directories",
  "futures",
+ "itertools 0.12.1",
  "logging",
  "p2p",
  "p2p-test-utils",

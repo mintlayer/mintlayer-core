@@ -15,9 +15,10 @@
 
 use std::net::AddrParseError;
 
-use p2p::error::P2pError;
+use p2p::{error::P2pError, peer_manager::peerdb_common};
 use thiserror::Error;
 use trust_dns_client::proto::error::ProtoError;
+use utils::try_as::TryAsRef;
 
 #[derive(Error, Debug)]
 pub enum DnsServerError {
@@ -33,4 +34,29 @@ pub enum DnsServerError {
     StorageError(#[from] storage::Error),
     #[error("Other: `{0}`")]
     Other(&'static str),
+    #[error("The storage state is invalid: {0}")]
+    InvalidStorageState(String),
+    #[error("Storage version mismatch: expected {expected_version}, got {actual_version}")]
+    StorageVersionMismatch {
+        expected_version: peerdb_common::StorageVersion,
+        actual_version: peerdb_common::StorageVersion,
+    },
+}
+
+impl TryAsRef<storage::Error> for DnsServerError {
+    fn try_as_ref(&self) -> Option<&storage::Error> {
+        match self {
+            DnsServerError::ProtoError(_)
+            | DnsServerError::AddrParseError(_)
+            | DnsServerError::IoError(_)
+            | DnsServerError::P2pError(_)
+            | DnsServerError::Other(_)
+            | DnsServerError::InvalidStorageState(_)
+            | DnsServerError::StorageVersionMismatch {
+                expected_version: _,
+                actual_version: _,
+            } => None,
+            DnsServerError::StorageError(err) => Some(err),
+        }
+    }
 }

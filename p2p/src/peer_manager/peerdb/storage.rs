@@ -17,18 +17,11 @@ use common::primitives::time::Time;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use serialization::{Decode, Encode};
 
-use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
+use crate::peer_manager::peerdb_common::{
+    StorageVersion, TransactionRo, TransactionRw, Transactional,
+};
 
 use super::salt::Salt;
-
-#[derive(Debug, derive_more::Display, Clone, Copy, Encode, Decode, Eq, PartialEq)]
-pub struct StorageVersion(u32);
-
-impl StorageVersion {
-    pub const fn new(val: u32) -> Self {
-        Self(val)
-    }
-}
 
 #[derive(Debug, Clone, Copy, Encode, Decode, Eq, PartialEq)]
 pub enum KnownAddressState {

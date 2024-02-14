@@ -23,19 +23,24 @@ use std::{
     time::Duration,
 };
 
+use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
 use futures::never::Never;
 use logging::log;
 use p2p::{
-    message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
+    error::{P2pError, ProtocolError},
+    message::{
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
+        PingResponse,
+    },
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     peer_manager::{
         ip_or_socket_address_to_peer_address,
-        peerdb_common::{storage::update_db, TransactionRo, TransactionRw},
+        peerdb_common::{storage::update_db, StorageVersion, TransactionRo, TransactionRw},
     },
     types::{
         bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
@@ -43,8 +48,12 @@ use p2p::{
     },
 };
 use tokio::sync::mpsc;
+use utils::ensure;
 
-use crate::{dns_server::DnsServerCommand, error::DnsServerError};
+use crate::{
+    crawler_p2p::crawler_manager::storage::AddressInfo, dns_server::DnsServerCommand,
+    error::DnsServerError,
+};
 
 use self::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
 
@@ -53,7 +62,7 @@ use super::crawler::{Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent};
 /// How often the server performs maintenance (tries to connect to new nodes)
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
-const STORAGE_VERSION: u32 = 1;
+const CURRENT_STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[derive(Clone)]
 pub struct CrawlerManagerConfig {
@@ -93,14 +102,14 @@ pub struct CrawlerManager<N: NetworkingService, S> {
 
 // Note: "pub" access is only needed because of the "load_storage_for_tests" function.
 pub struct LoadedStorage {
-    pub known_addresses: BTreeSet<SocketAddress>,
+    pub known_addresses: BTreeMap<SocketAddress, AddressInfo>,
     pub banned_addresses: BTreeMap<BannableAddress, Time>,
 }
 
 impl LoadedStorage {
     pub fn new() -> Self {
         Self {
-            known_addresses: BTreeSet::new(),
+            known_addresses: BTreeMap::new(),
             banned_addresses: BTreeMap::new(),
         }
     }
@@ -121,7 +130,7 @@ where
         sync: N::SyncingEventReceiver,
         storage: S,
         dns_server_cmd_tx: mpsc::UnboundedSender<DnsServerCommand>,
-    ) -> Result<Self, DnsServerError> {
+    ) -> crate::Result<Self> {
         let last_crawler_timer = time_getter.get_time();
 
         // Addresses that are stored in the DB as reachable
@@ -135,6 +144,13 @@ where
             .collect::<BTreeSet<SocketAddress>>();
 
         assert!(conn.local_addresses().is_empty());
+
+        log::debug!(
+            "Got {} known addresses, {} banned addresses, {} reserved addresses",
+            loaded_storage.known_addresses.len(),
+            loaded_storage.banned_addresses.len(),
+            reserved_addresses.len()
+        );
 
         let crawler = Crawler::new(
             last_crawler_timer,
@@ -157,35 +173,33 @@ where
         })
     }
 
-    fn load_storage(storage: &S) -> Result<LoadedStorage, DnsServerError> {
+    fn load_storage(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
 
         match version {
             None => Self::init_storage(storage),
-            Some(STORAGE_VERSION) => Self::load_storage_v1(storage),
-            Some(_version) => Err(DnsServerError::Other("Unexpected storage version")),
+            Some(CURRENT_STORAGE_VERSION) => Self::load_storage_impl(storage),
+            Some(version) => Err(DnsServerError::StorageVersionMismatch {
+                expected_version: CURRENT_STORAGE_VERSION,
+                actual_version: version,
+            }),
         }
     }
 
-    fn init_storage(storage: &S) -> Result<LoadedStorage, DnsServerError> {
+    fn init_storage(storage: &S) -> crate::Result<LoadedStorage> {
         let mut tx = storage.transaction_rw()?;
-        tx.set_version(STORAGE_VERSION)?;
+        tx.set_version(CURRENT_STORAGE_VERSION)?;
         tx.commit()?;
         Ok(LoadedStorage::new())
     }
 
-    fn load_storage_v1(storage: &S) -> Result<LoadedStorage, DnsServerError> {
+    fn load_storage_impl(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
-        let known_addresses =
-            tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()).collect();
+        let known_addresses = tx.get_addresses()?.into_iter().collect::<BTreeMap<_, _>>();
 
-        let banned_addresses = tx
-            .get_banned_addresses()?
-            .iter()
-            .filter_map(|(address, ban_until)| address.parse().ok().map(|addr| (addr, *ban_until)))
-            .collect();
+        let banned_addresses = tx.get_banned_addresses()?.into_iter().collect::<BTreeMap<_, _>>();
 
         Ok(LoadedStorage {
             known_addresses,
@@ -193,23 +207,30 @@ where
         })
     }
 
-    fn handle_conn_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) {
+    fn handle_conn_message(
+        &mut self,
+        peer_id: PeerId,
+        message: PeerManagerMessage,
+    ) -> p2p::Result<()> {
         match message {
             PeerManagerMessage::AddrListRequest(_) => {
                 // Ignored
+                Ok(())
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 log::debug!(
-                    "address announcement from peer {} ({})",
+                    "Got address announcement from peer {} ({})",
                     peer_id,
                     address.to_string()
                 );
                 if let Some(address) = SocketAddress::from_peer_address(&address, false) {
-                    self.send_crawler_event(CrawlerEvent::NewAddress {
+                    self.send_crawler_event(CrawlerEvent::AddressAnnouncement {
                         address,
                         sender: peer_id,
                     });
                 }
+
+                Ok(())
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
                 self.conn
@@ -218,16 +239,47 @@ where
                         PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     )
                     .expect("send_message must succeed");
+
+                Ok(())
             }
-            PeerManagerMessage::AddrListResponse(_) => {}
-            PeerManagerMessage::PingResponse(_) => {}
+            PeerManagerMessage::AddrListResponse(AddrListResponse { addresses }) => {
+                log::debug!(
+                    "Got address list response from peer {}, address count = ({})",
+                    peer_id,
+                    addresses.len()
+                );
+
+                ensure!(
+                    addresses.len() <= *p2p::protocol::MaxAddrListResponseAddressCount::default(),
+                    P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
+                );
+
+                let addresses = addresses
+                    .iter()
+                    .filter_map(|addr| SocketAddress::from_peer_address(addr, false))
+                    .collect::<Vec<_>>();
+
+                self.send_crawler_event(CrawlerEvent::AddressListResponse {
+                    addresses,
+                    sender: peer_id,
+                });
+
+                Ok(())
+            }
+            PeerManagerMessage::PingResponse(_) => Ok(()),
         }
     }
 
     fn handle_conn_event(&mut self, event: ConnectivityEvent) {
         match event {
             ConnectivityEvent::Message { peer_id, message } => {
-                self.handle_conn_message(peer_id, message);
+                let result = self.handle_conn_message(peer_id, message);
+
+                if let Err(error) = result {
+                    if error.ban_score() > 0 {
+                        self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
+                    }
+                }
             }
             ConnectivityEvent::OutboundAccepted {
                 peer_address,
@@ -320,6 +372,15 @@ where
             CrawlerCommand::Connect { address } => {
                 conn.connect(address, None).expect("connect must succeed");
             }
+            CrawlerCommand::RequestAddresses { peer_id } => {
+                log::debug!("Requesting addresses from peer {peer_id}");
+
+                conn.send_message(
+                    peer_id,
+                    PeerManagerMessage::AddrListRequest(AddrListRequest {}),
+                )
+                .expect("send_message must succeed");
+            }
             CrawlerCommand::Disconnect { peer_id } => {
                 conn.disconnect(peer_id).expect("disconnect must succeed");
             }
@@ -328,14 +389,29 @@ where
                 old_state,
                 new_state,
             } => {
+                let was_reachable = old_state.is_reachable();
+                let is_reachable = new_state.is_reachable();
+                log::debug!(
+                    "Got address update for {}, was_reachable = {}, is_reachable = {}",
+                    address,
+                    was_reachable,
+                    is_reachable
+                );
+
                 match (
                     Self::get_dns_ip(&address, config.default_p2p_port),
-                    old_state.is_reachable(),
-                    new_state.is_reachable(),
+                    was_reachable,
+                    is_reachable,
                 ) {
                     (Some(ip), false, true) => {
+                        let connection_info = new_state
+                            .connection_info()
+                            .expect("Connection info must be present for a reachable address");
                         dns_server_cmd_tx
-                            .send(DnsServerCommand::AddAddress(ip))
+                            .send(DnsServerCommand::AddAddress(
+                                ip,
+                                connection_info.peer_software_info.clone(),
+                            ))
                             .expect("sending must succeed (AddAddress)");
                     }
                     (Some(ip), true, false) => {
@@ -346,26 +422,33 @@ where
                     _ => {}
                 }
 
-                match (old_state.is_persistent(), new_state.is_persistent()) {
-                    (false, true) => {
-                        update_db(storage, |tx| tx.add_address(&address.to_string()))
-                            .expect("update_db must succeed (add_address)");
-                    }
-                    (true, false) => {
-                        update_db(storage, |tx| tx.del_address(&address.to_string()))
-                            .expect("update_db must succeed (del_address)");
-                    }
-                    _ => {}
+                if new_state.is_persistent() {
+                    let connection_info = new_state
+                        .connection_info()
+                        .expect("Connection info must be present for a persistent address");
+                    update_db(storage, |tx| {
+                        tx.add_address(
+                            &address,
+                            &AddressInfo {
+                                software_info: connection_info.peer_software_info.clone(),
+                                last_addr_list_request_time: connection_info
+                                    .last_addr_list_request_time
+                                    .map(|time| time.as_duration_since_epoch()),
+                            },
+                        )
+                    })
+                    .expect("update_db must succeed (add_address)");
+                } else if old_state.is_persistent() {
+                    update_db(storage, |tx| tx.del_address(&address))
+                        .expect("update_db must succeed (del_address)");
                 }
             }
             CrawlerCommand::MarkAsBanned { address, ban_until } => {
-                update_db(storage, |tx| {
-                    tx.add_banned_address(&address.to_string(), ban_until)
-                })
-                .expect("update_db must succeed (add_banned_address)");
+                update_db(storage, |tx| tx.add_banned_address(&address, ban_until))
+                    .expect("update_db must succeed (add_banned_address)");
             }
             CrawlerCommand::RemoveBannedStatus { address } => {
-                update_db(storage, |tx| tx.del_banned_address(&address.to_string()))
+                update_db(storage, |tx| tx.del_banned_address(&address))
                     .expect("update_db must succeed (del_banned_address)");
             }
         }
@@ -387,7 +470,7 @@ where
         );
     }
 
-    pub async fn run(&mut self) -> Result<Never, DnsServerError> {
+    pub async fn run(&mut self) -> crate::Result<Never> {
         let mut heartbeat_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
 
         loop {
@@ -406,7 +489,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn load_storage_for_tests(&self) -> Result<LoadedStorage, DnsServerError> {
+    pub fn load_storage_for_tests(&self) -> crate::Result<LoadedStorage> {
         Self::load_storage(&self.storage)
     }
 }

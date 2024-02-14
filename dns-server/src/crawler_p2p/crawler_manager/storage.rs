@@ -13,27 +13,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common::primitives::time::Time;
-use p2p::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
+use p2p::{
+    peer_manager::peerdb_common::{StorageVersion, TransactionRo, TransactionRw, Transactional},
+    types::{bannable_address::BannableAddress, socket_address::SocketAddress},
+};
+use serialization::{Decode, Encode};
+
+use crate::{crawler_p2p::crawler::address_data::SoftwareInfo, error::DnsServerError};
+
+use super::{storage_impl::DnsServerStorageImpl, CURRENT_STORAGE_VERSION};
+
+#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
+pub struct AddressInfo {
+    /// Peer's software info.
+    pub software_info: SoftwareInfo,
+    /// Last time we've requested addresses from this peer (as duration since unix epoch).
+    pub last_addr_list_request_time: Option<Duration>,
+}
 
 pub trait DnsServerStorageRead {
-    fn get_version(&self) -> Result<Option<u32>, storage::Error>;
+    fn get_version(&self) -> crate::Result<Option<StorageVersion>>;
 
-    fn get_addresses(&self) -> Result<Vec<String>, storage::Error>;
+    fn get_addresses(&self) -> crate::Result<Vec<(SocketAddress, AddressInfo)>>;
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error>;
+    fn get_banned_addresses(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
 }
 
 pub trait DnsServerStorageWrite {
-    fn set_version(&mut self, version: u32) -> Result<(), storage::Error>;
+    fn set_version(&mut self, version: StorageVersion) -> crate::Result<()>;
 
-    fn add_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn add_address(&mut self, address: &SocketAddress, info: &AddressInfo) -> crate::Result<()>;
 
-    fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn del_address(&mut self, address: &SocketAddress) -> crate::Result<()>;
 
-    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error>;
+    fn add_banned_address(&mut self, address: &BannableAddress, time: Time) -> crate::Result<()>;
 
-    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error>;
+    fn del_banned_address(&mut self, address: &BannableAddress) -> crate::Result<()>;
 }
 
 // Note: here we want to say something like:
@@ -59,4 +77,20 @@ where
 {
     type TxRo = Self::TransactionRo;
     type TxRw = Self::TransactionRw;
+}
+
+pub fn open_storage<Backend>(backend: Backend) -> crate::Result<DnsServerStorageImpl<Backend>>
+where
+    Backend: storage::Backend,
+{
+    let storage = DnsServerStorageImpl::new(backend)?;
+    let version = storage.transaction_ro()?.get_version()?;
+
+    match version {
+        None | Some(CURRENT_STORAGE_VERSION) => Ok(storage),
+        Some(version) => Err(DnsServerError::StorageVersionMismatch {
+            expected_version: CURRENT_STORAGE_VERSION,
+            actual_version: version,
+        }),
+    }
 }

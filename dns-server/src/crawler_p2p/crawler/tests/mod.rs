@@ -43,9 +43,9 @@ use crypto::random::{
 
 use mock_crawler::test_crawler;
 
-use crate::crawler_p2p::crawler::CrawlerEvent;
+use crate::crawler_p2p::{crawler::CrawlerEvent, crawler_manager::storage::AddressInfo};
 
-use super::CrawlerConfig;
+use super::{address_data::SoftwareInfo, CrawlerConfig};
 
 #[rstest]
 #[trace]
@@ -57,9 +57,10 @@ fn basic(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     crawler.timer(Duration::from_secs(100), &mut rng);
@@ -81,7 +82,7 @@ fn basic(#[case] seed: Seed) {
     let peer2 = PeerId::new();
 
     crawler.step(
-        CrawlerEvent::NewAddress {
+        CrawlerEvent::AddressAnnouncement {
             address: node2,
             sender: peer1,
         },
@@ -100,6 +101,132 @@ fn basic(#[case] seed: Seed) {
     );
     assert!(crawler.persistent.contains(&node2));
     assert!(crawler.reachable.contains(&node2));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn addr_list_requests(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let peer1_addr: SocketAddress = "1.1.1.1:3031".parse().unwrap();
+    let peer2_addr: SocketAddress = "2.1.1.1:3031".parse().unwrap();
+    let another_addr1: SocketAddress = "3.1.1.1:3031".parse().unwrap();
+    let another_addr2: SocketAddress = "4.1.1.1:3031".parse().unwrap();
+
+    let peer_id1 = PeerId::new();
+    let peer_id2 = PeerId::new();
+
+    let addr_list_request_interval = Duration::from_secs(1000);
+    let chain_config = common::chain::config::create_mainnet();
+    let config = CrawlerConfig {
+        addr_list_request_interval: addr_list_request_interval.into(),
+
+        ban_duration: Default::default(),
+        ban_threshold: Default::default(),
+    };
+
+    // For peer1_addr, the addr list request interval has already passed.
+    // For peer2_addr, half of the interval has passed.
+    let now = Time::from_duration_since_epoch(addr_list_request_interval);
+    let mut crawler = test_crawler(
+        config,
+        [
+            (
+                peer1_addr,
+                AddressInfo {
+                    software_info: SoftwareInfo::current(&chain_config),
+                    last_addr_list_request_time: Some(Duration::ZERO),
+                },
+            ),
+            (
+                peer2_addr,
+                AddressInfo {
+                    software_info: SoftwareInfo::current(&chain_config),
+                    last_addr_list_request_time: Some(addr_list_request_interval / 2),
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        BTreeMap::new(),
+        BTreeSet::new(),
+        now,
+    );
+
+    let peer1_connected_event = CrawlerEvent::Connected {
+        address: peer1_addr,
+        peer_info: make_peer_info(peer_id1, &chain_config),
+    };
+    let peer2_connected_event = CrawlerEvent::Connected {
+        address: peer2_addr,
+        peer_info: make_peer_info(peer_id2, &chain_config),
+    };
+
+    crawler.timer(Duration::ZERO, &mut rng);
+    crawler.assert_pending_connects(&[peer1_addr, peer2_addr]);
+
+    crawler.step(peer1_connected_event.clone(), &mut rng);
+    crawler.step(peer2_connected_event.clone(), &mut rng);
+
+    // Only the first peer has been asked for addresses.
+    crawler.assert_address_request_counts(&[(peer_id1, 1)]);
+
+    // Respond with addresses from both peers. The response from the second peer should be ignored.
+    crawler.step(
+        CrawlerEvent::AddressListResponse {
+            addresses: vec![another_addr1],
+            sender: peer_id1,
+        },
+        &mut rng,
+    );
+    crawler.step(
+        CrawlerEvent::AddressListResponse {
+            addresses: vec![another_addr2],
+            sender: peer_id2,
+        },
+        &mut rng,
+    );
+
+    crawler.timer(Duration::ZERO, &mut rng);
+    // The crawler attempts to connect to another_addr1, but not to another_addr2.
+    crawler.assert_pending_connects(&[another_addr1]);
+
+    // The addr request counts stay the same.
+    crawler.assert_address_request_counts(&[(peer_id1, 1)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id1 }, &mut rng);
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id2 }, &mut rng);
+
+    // Make a quarter of the interval pass; nothing should change.
+    crawler.timer(addr_list_request_interval / 4, &mut rng);
+    crawler.assert_pending_connects(&[peer1_addr, peer2_addr, another_addr1]);
+    crawler.step(peer1_connected_event.clone(), &mut rng);
+    crawler.step(peer2_connected_event.clone(), &mut rng);
+    // The addr request counts stay the same.
+    crawler.assert_address_request_counts(&[(peer_id1, 1)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id1 }, &mut rng);
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id2 }, &mut rng);
+
+    // Make another quarter of the interval pass; now an addr request should be sent to
+    // the second peer too.
+    crawler.timer(addr_list_request_interval / 4, &mut rng);
+    crawler.assert_pending_connects(&[peer1_addr, peer2_addr, another_addr1]);
+    crawler.step(peer1_connected_event.clone(), &mut rng);
+    crawler.step(peer2_connected_event.clone(), &mut rng);
+    crawler.assert_address_request_counts(&[(peer_id1, 1), (peer_id2, 1)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id1 }, &mut rng);
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer_id2 }, &mut rng);
+
+    // Make another half of the interval pass; now an addr request should be sent to
+    // the first peer again.
+    crawler.timer(addr_list_request_interval / 2, &mut rng);
+    crawler.assert_pending_connects(&[peer1_addr, peer2_addr, another_addr1]);
+    crawler.step(peer1_connected_event.clone(), &mut rng);
+    crawler.step(peer2_connected_event.clone(), &mut rng);
+    crawler.assert_address_request_counts(&[(peer_id1, 2), (peer_id2, 1)]);
 }
 
 #[rstest]
@@ -142,9 +269,27 @@ fn randomized(#[case] seed: Seed) {
     let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
 
     let loaded_count = rng.gen_range(0..10);
-    let loaded_nodes = nodes.choose_multiple(&mut rng, loaded_count).cloned().collect();
+    let loaded_nodes = nodes
+        .choose_multiple(&mut rng, loaded_count)
+        .cloned()
+        .map(|addr| {
+            (
+                addr,
+                AddressInfo {
+                    software_info: SoftwareInfo::current(&chain_config),
+                    last_addr_list_request_time: None,
+                },
+            )
+        })
+        .collect();
 
-    let mut crawler = test_crawler(make_config(), loaded_nodes, BTreeMap::new(), reserved_nodes);
+    let mut crawler = test_crawler(
+        make_config(),
+        loaded_nodes,
+        BTreeMap::new(),
+        reserved_nodes,
+        Time::from_duration_since_epoch(Duration::ZERO),
+    );
 
     for _ in 0..rng.gen_range(0..100000) {
         crawler.timer(Duration::from_secs(rng.gen_range(0..100)), &mut rng);
@@ -195,7 +340,10 @@ fn randomized(#[case] seed: Seed) {
         if !crawler.peers.is_empty() && rng.gen_bool(0.01) {
             let address = nodes.iter().choose(&mut rng).cloned().unwrap();
             let sender = crawler.peers.keys().choose(&mut rng).cloned().unwrap();
-            crawler.step(CrawlerEvent::NewAddress { address, sender }, &mut rng)
+            crawler.step(
+                CrawlerEvent::AddressAnnouncement { address, sender },
+                &mut rng,
+            )
         }
 
         if !crawler.peers.is_empty() && rng.gen_bool(0.001) {
@@ -215,9 +363,10 @@ fn incompatible_node(#[case] seed: Seed) {
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     // Crawler attempts to connect to the specified node
@@ -249,13 +398,23 @@ fn incompatible_node(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn long_offline(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    let chain_config = common::chain::config::create_mainnet();
     let loaded_node: SocketAddress = "1.0.0.0:3031".parse().unwrap();
     let added_node: SocketAddress = "2.0.0.0:3031".parse().unwrap();
     let mut crawler = test_crawler(
         make_config(),
-        [loaded_node].into_iter().collect(),
+        [(
+            loaded_node,
+            AddressInfo {
+                software_info: SoftwareInfo::current(&chain_config),
+                last_addr_list_request_time: None,
+            },
+        )]
+        .into_iter()
+        .collect(),
         BTreeMap::new(),
         [added_node].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
     assert!(crawler.persistent.contains(&loaded_node));
 
@@ -314,10 +473,12 @@ fn ban_misbehaved_peer(#[case] seed: Seed) {
         CrawlerConfig {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
+            addr_list_request_interval: Default::default(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     let times_step = Duration::from_secs(100);
@@ -444,10 +605,12 @@ fn ban_misbehaved_peers_with_same_address(#[case] seed: Seed) {
         CrawlerConfig {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
+            addr_list_request_interval: Default::default(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2, node3].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     let times_step = Duration::from_secs(100);
@@ -556,9 +719,10 @@ fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
 
     let mut crawler = test_crawler(
         make_config(),
-        BTreeSet::new(),
+        BTreeMap::new(),
         [(node1.as_bannable(), ban_end_time)].into_iter().collect(),
         [node1, node2].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     crawler.timer(Duration::from_secs(100), &mut rng);
@@ -591,10 +755,12 @@ fn ban_on_misbehavior_during_handshake(#[case] seed: Seed) {
         CrawlerConfig {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
+            addr_list_request_interval: Default::default(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     let times_step = Duration::from_secs(100);
@@ -667,10 +833,12 @@ fn no_ban_on_connection_error(#[case] seed: Seed) {
         CrawlerConfig {
             ban_duration: BAN_DURATION.into(),
             ban_threshold: ban_threshold.into(),
+            addr_list_request_interval: Default::default(),
         },
-        BTreeSet::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
         [node1, node2].into_iter().collect(),
+        Time::from_duration_since_epoch(Duration::ZERO),
     );
 
     let times_step = Duration::from_secs(100);
@@ -709,11 +877,13 @@ fn no_ban_on_connection_error(#[case] seed: Seed) {
 
 const BAN_DURATION: Duration = Duration::from_secs(1000);
 const BAN_THRESHOLD: u32 = 100;
+const ADDR_LIST_REQUEST_INTERVAL: Duration = Duration::from_secs(1000);
 
 fn make_config() -> CrawlerConfig {
     CrawlerConfig {
         ban_duration: BAN_DURATION.into(),
         ban_threshold: BAN_THRESHOLD.into(),
+        addr_list_request_interval: ADDR_LIST_REQUEST_INTERVAL.into(),
     }
 }
 

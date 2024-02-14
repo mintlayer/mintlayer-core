@@ -15,6 +15,17 @@
 
 use utils::try_as::TryAsRef;
 
+use serialization::{Decode, Encode};
+
+#[derive(Debug, derive_more::Display, Clone, Copy, Encode, Decode, Eq, PartialEq)]
+pub struct StorageVersion(u32);
+
+impl StorageVersion {
+    pub const fn new(val: u32) -> Self {
+        Self(val)
+    }
+}
+
 pub trait TransactionRo {
     fn close(self);
 }
