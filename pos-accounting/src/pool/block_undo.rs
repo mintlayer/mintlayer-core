@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum AccountingBlockUndoError {
+pub enum BlockUndoError {
     #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
     UndoAlreadyExists(Id<Transaction>),
     #[error("PoS undo is missing for transaction `{0}`")]
@@ -32,9 +32,9 @@ pub enum AccountingBlockUndoError {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingBlockRewardUndo(Vec<PoSAccountingUndo>);
+pub struct BlockRewardUndo(Vec<PoSAccountingUndo>);
 
-impl AccountingBlockRewardUndo {
+impl BlockRewardUndo {
     pub fn new(utxos: Vec<PoSAccountingUndo>) -> Self {
         Self(utxos)
     }
@@ -49,9 +49,9 @@ impl AccountingBlockRewardUndo {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingTxUndo(Vec<PoSAccountingUndo>);
+pub struct TxUndo(Vec<PoSAccountingUndo>);
 
-impl AccountingTxUndo {
+impl TxUndo {
     pub fn new(undos: Vec<PoSAccountingUndo>) -> Self {
         Self(undos)
     }
@@ -66,15 +66,15 @@ impl AccountingTxUndo {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingBlockUndo {
-    reward_undos: Option<AccountingBlockRewardUndo>,
-    tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
+pub struct BlockUndo {
+    reward_undos: Option<BlockRewardUndo>,
+    tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
 }
 
-impl AccountingBlockUndo {
+impl BlockUndo {
     pub fn new(
-        reward_undos: Option<AccountingBlockRewardUndo>,
-        tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
+        reward_undos: Option<BlockRewardUndo>,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
     ) -> Self {
         Self {
             reward_undos,
@@ -82,12 +82,7 @@ impl AccountingBlockUndo {
         }
     }
 
-    pub fn consume(
-        self,
-    ) -> (
-        Option<AccountingBlockRewardUndo>,
-        BTreeMap<Id<Transaction>, AccountingTxUndo>,
-    ) {
+    pub fn consume(self) -> (Option<BlockRewardUndo>, BTreeMap<Id<Transaction>, TxUndo>) {
         (self.reward_undos, self.tx_undos)
     }
 }

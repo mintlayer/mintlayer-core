@@ -31,7 +31,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::{AccountingTxUndo, PoSAccountingView};
+use pos_accounting::{PoSAccountingView, TxUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
@@ -442,12 +442,12 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
 
     store
-        .expect_get_accounting_undo()
+        .expect_get_pos_accounting_undo()
         .with(eq(block_undo_source_0))
         .times(2)
         .return_const(Ok(None));
     store
-        .expect_get_accounting_undo()
+        .expect_get_pos_accounting_undo()
         .with(eq(block_undo_source_2))
         .times(1)
         .return_const(Ok(None));
@@ -461,11 +461,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedPoSBlockUndo::new(
-            None,
-            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
-        )
-        .unwrap();
+        let block_undo =
+            CachedPoSBlockUndo::new(None, BTreeMap::from([(tx_id, TxUndo::new(vec![undo]))]))
+                .unwrap();
 
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
@@ -484,11 +482,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedPoSBlockUndo::new(
-            None,
-            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
-        )
-        .unwrap();
+        let block_undo =
+            CachedPoSBlockUndo::new(None, BTreeMap::from([(tx_id, TxUndo::new(vec![undo]))]))
+                .unwrap();
 
         verifier.pos_accounting_block_undo =
             PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
@@ -550,12 +546,12 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     );
 
     // fetch undo
-    assert!(verifier1.get_accounting_undo(block_undo_source_0).unwrap().is_none());
-    assert!(verifier1.get_accounting_undo(block_undo_source_1).unwrap().is_some());
-    assert!(verifier1.get_accounting_undo(block_undo_source_2).unwrap().is_none());
-    assert!(verifier2.get_accounting_undo(block_undo_source_0).unwrap().is_none());
-    assert!(verifier2.get_accounting_undo(block_undo_source_1).unwrap().is_some());
-    assert!(verifier2.get_accounting_undo(block_undo_source_2).unwrap().is_some());
+    assert!(verifier1.get_pos_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier1.get_pos_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier1.get_pos_accounting_undo(block_undo_source_2).unwrap().is_none());
+    assert!(verifier2.get_pos_accounting_undo(block_undo_source_0).unwrap().is_none());
+    assert!(verifier2.get_pos_accounting_undo(block_undo_source_1).unwrap().is_some());
+    assert!(verifier2.get_pos_accounting_undo(block_undo_source_2).unwrap().is_some());
 }
 
 // Create the following hierarchy:

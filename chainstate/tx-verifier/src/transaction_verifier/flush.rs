@@ -92,9 +92,11 @@ where
     // flush pos accounting block undo
     for (tx_source, op) in consumed.pos_accounting_delta_undo {
         match op {
-            CachedOperation::Write(undo) => storage.set_accounting_undo_data(tx_source, &undo)?,
+            CachedOperation::Write(undo) => {
+                storage.set_pos_accounting_undo_data(tx_source, &undo)?
+            }
             CachedOperation::Read(_) => (),
-            CachedOperation::Erase => storage.del_accounting_undo_data(tx_source)?,
+            CachedOperation::Erase => storage.del_pos_accounting_undo_data(tx_source)?,
         }
     }
 

@@ -80,7 +80,7 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{
-    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    BlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
     PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
@@ -472,7 +472,7 @@ where
             self.pos_accounting_block_undo.add_tx_undo(
                 tx_source.into(),
                 tx.get_id(),
-                pos_accounting::AccountingTxUndo::new(tx_undos),
+                pos_accounting::TxUndo::new(tx_undos),
             )?;
         }
 
@@ -512,7 +512,7 @@ where
         // apply undos to accounting
         let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
-                .get_accounting_undo(tx_source)
+                .get_pos_accounting_undo(tx_source)
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         };
         let undos = self.pos_accounting_block_undo.take_tx_undo(
@@ -912,7 +912,7 @@ where
                         reward_distribution_version,
                     )?;
 
-                    AccountingBlockRewardUndo::new(undos)
+                    BlockRewardUndo::new(undos)
                 };
 
                 self.pos_accounting_block_undo
@@ -1021,7 +1021,7 @@ where
             ConsensusData::PoS(_) => {
                 let block_undo_fetcher = |tx_source: TransactionSource| {
                     self.storage
-                        .get_accounting_undo(tx_source)
+                        .get_pos_accounting_undo(tx_source)
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                 };
                 let reward_undo = self.pos_accounting_block_undo.take_block_reward_undo(

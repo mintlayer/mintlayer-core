@@ -112,7 +112,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .map_err(TransactionVerifierStorageError::from)
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
@@ -122,7 +122,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                     .storage
                     .transaction_ro()
                     .unwrap()
-                    .get_accounting_undo(id)?
+                    .get_pos_accounting_undo(id)?
                     .map(CachedPoSBlockUndo::from_block_undo);
                 Ok(undo)
             }

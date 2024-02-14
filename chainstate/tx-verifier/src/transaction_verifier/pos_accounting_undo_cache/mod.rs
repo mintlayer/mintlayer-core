@@ -17,7 +17,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use super::{error::ConnectTransactionError, CachedOperation, TransactionSource};
 use common::{chain::Transaction, primitives::Id};
-use pos_accounting::{AccountingBlockRewardUndo, AccountingBlockUndoError, AccountingTxUndo};
+use pos_accounting::{BlockRewardUndo, BlockUndoError, TxUndo};
 
 mod cached_block_undo;
 pub use cached_block_undo::CachedPoSBlockUndo;
@@ -52,7 +52,7 @@ impl PoSAccountingBlockUndoCache {
     pub fn add_reward_undo(
         &mut self,
         tx_source: TransactionSource,
-        reward_undo: AccountingBlockRewardUndo,
+        reward_undo: BlockRewardUndo,
     ) -> Result<(), ConnectTransactionError> {
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
@@ -79,7 +79,7 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: TransactionSource,
         tx_id: Id<Transaction>,
-        tx_undo: AccountingTxUndo,
+        tx_undo: TxUndo,
     ) -> Result<(), ConnectTransactionError> {
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
@@ -109,7 +109,7 @@ impl PoSAccountingBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<Option<AccountingTxUndo>, ConnectTransactionError>
+    ) -> Result<Option<TxUndo>, ConnectTransactionError>
     where
         F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
         ConnectTransactionError: From<E>,
@@ -143,7 +143,7 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<Option<AccountingBlockRewardUndo>, ConnectTransactionError>
+    ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError>
     where
         F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
         ConnectTransactionError: From<E>,
@@ -177,7 +177,7 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: TransactionSource,
         new_undo: &CachedPoSBlockUndo,
-    ) -> Result<(), AccountingBlockUndoError> {
+    ) -> Result<(), BlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
                 e.insert(CachedOperation::Write(new_undo.clone()));
@@ -194,10 +194,7 @@ impl PoSAccountingBlockUndoCache {
         Ok(())
     }
 
-    pub fn del_undo_data(
-        &mut self,
-        tx_source: TransactionSource,
-    ) -> Result<(), AccountingBlockUndoError> {
+    pub fn del_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), BlockUndoError> {
         self.data.insert(tx_source, CachedOperation::Erase);
         Ok(())
     }

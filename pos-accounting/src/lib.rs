@@ -22,10 +22,7 @@ pub use crate::{
     data::PoSAccountingData,
     error::{Error, Result},
     pool::{
-        block_undo::{
-            AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError,
-            AccountingTxUndo,
-        },
+        block_undo::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo},
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
         helpers::{make_delegation_id, make_pool_id},

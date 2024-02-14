@@ -101,13 +101,13 @@ where
         }
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.pos_accounting_block_undo.data().get(&tx_source) {
             Some(op) => Ok(op.get().cloned()),
-            None => self.storage.get_accounting_undo(tx_source),
+            None => self.storage.get_pos_accounting_undo(tx_source),
         }
     }
 
@@ -218,7 +218,7 @@ where
             .map_err(|e| TransactionVerifierStorageError::UtxoBlockUndoError(e).into())
     }
 
-    fn set_accounting_undo_data(
+    fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
         new_undo: &CachedPoSBlockUndo,
@@ -228,7 +228,7 @@ where
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
 
-    fn del_accounting_undo_data(
+    fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {

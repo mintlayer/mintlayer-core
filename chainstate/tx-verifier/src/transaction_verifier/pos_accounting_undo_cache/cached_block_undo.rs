@@ -16,23 +16,21 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{chain::Transaction, primitives::Id};
-use pos_accounting::{
-    AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo,
-};
+use pos_accounting::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo};
 
 use crate::transaction_verifier::{cached_operation::combine, CachedOperation};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CachedPoSBlockUndo {
-    reward_undos: Option<CachedOperation<AccountingBlockRewardUndo>>,
-    tx_undos: BTreeMap<Id<Transaction>, CachedOperation<AccountingTxUndo>>,
+    reward_undos: Option<CachedOperation<BlockRewardUndo>>,
+    tx_undos: BTreeMap<Id<Transaction>, CachedOperation<TxUndo>>,
 }
 
 impl CachedPoSBlockUndo {
     pub fn new(
-        reward_undo: Option<AccountingBlockRewardUndo>,
-        tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
-    ) -> Result<Self, AccountingBlockUndoError> {
+        reward_undo: Option<BlockRewardUndo>,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+    ) -> Result<Self, BlockUndoError> {
         let mut block_undo = Self::default();
 
         if let Some(reward_undo) = reward_undo {
@@ -45,7 +43,7 @@ impl CachedPoSBlockUndo {
         Ok(block_undo)
     }
 
-    pub fn from_block_undo(undo: AccountingBlockUndo) -> Self {
+    pub fn from_block_undo(undo: BlockUndo) -> Self {
         let (reward_undos, tx_undos) = undo.consume();
 
         let reward_undos = reward_undos.map(CachedOperation::Read);
@@ -61,7 +59,7 @@ impl CachedPoSBlockUndo {
         }
     }
 
-    pub fn consume(self) -> AccountingBlockUndo {
+    pub fn consume(self) -> BlockUndo {
         let reward_undo = self.reward_undos.and_then(|op| op.get().cloned());
 
         let tx_undos = self
@@ -70,7 +68,7 @@ impl CachedPoSBlockUndo {
             .filter_map(|(id, op)| op.get().map(|u| (id, u.clone())))
             .collect::<BTreeMap<_, _>>();
 
-        AccountingBlockUndo::new(reward_undo, tx_undos)
+        BlockUndo::new(reward_undo, tx_undos)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -78,15 +76,15 @@ impl CachedPoSBlockUndo {
             && self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 
-    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, CachedOperation<AccountingTxUndo>> {
+    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, CachedOperation<TxUndo>> {
         &self.tx_undos
     }
 
-    pub fn take_block_reward_undo(&mut self) -> Option<AccountingBlockRewardUndo> {
+    pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
         self.reward_undos.take().and_then(|op| op.take())
     }
 
-    pub fn set_block_reward_undo(&mut self, reward_undo: AccountingBlockRewardUndo) {
+    pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
         debug_assert!(self.reward_undos.is_none());
         self.reward_undos = Some(CachedOperation::Write(reward_undo));
     }
@@ -94,32 +92,31 @@ impl CachedPoSBlockUndo {
     pub fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
-        tx_undo: AccountingTxUndo,
-    ) -> Result<(), AccountingBlockUndoError> {
+        tx_undo: TxUndo,
+    ) -> Result<(), BlockUndoError> {
         match self.tx_undos.entry(tx_id) {
             Entry::Vacant(e) => {
                 e.insert(CachedOperation::Write(tx_undo));
                 Ok(())
             }
-            Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(tx_id)),
+            Entry::Occupied(_) => Err(BlockUndoError::UndoAlreadyExists(tx_id)),
         }
     }
 
     pub fn take_tx_undo(
         &mut self,
         tx_id: &Id<Transaction>,
-    ) -> Result<Option<AccountingTxUndo>, AccountingBlockUndoError> {
+    ) -> Result<Option<TxUndo>, BlockUndoError> {
         if let Some(tx_undo) = self.tx_undos.get_mut(tx_id) {
-            let result =
-                tx_undo.clone().take().ok_or(AccountingBlockUndoError::MissingTxUndo(*tx_id))?;
-            *tx_undo = CachedOperation::<AccountingTxUndo>::Erase;
+            let result = tx_undo.clone().take().ok_or(BlockUndoError::MissingTxUndo(*tx_id))?;
+            *tx_undo = CachedOperation::<TxUndo>::Erase;
             return Ok(Some(result));
         }
 
         Ok(None)
     }
 
-    pub fn combine(&mut self, other: Self) -> Result<(), AccountingBlockUndoError> {
+    pub fn combine(&mut self, other: Self) -> Result<(), BlockUndoError> {
         // combine reward
         match (&mut self.reward_undos, other.reward_undos) {
             (None | Some(_), None) => { /* do nothing */ }
@@ -127,10 +124,7 @@ impl CachedPoSBlockUndo {
                 self.reward_undos = Some(reward_undos);
             }
             (Some(left), Some(right)) => {
-                utils::ensure!(
-                    *left == right,
-                    AccountingBlockUndoError::UndoAlreadyExistsForReward
-                );
+                utils::ensure!(*left == right, BlockUndoError::UndoAlreadyExistsForReward);
             }
         }
 

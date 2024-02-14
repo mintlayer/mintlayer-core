@@ -28,8 +28,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, H256},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoSAccountingStorageRead, PoolData,
+    DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead, PoolData,
 };
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;
@@ -165,7 +164,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         Ok(result)
     }
 
-    fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>> {
+    fn get_pos_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<pos_accounting::BlockUndo>> {
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
 
@@ -381,7 +383,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         Ok(result)
     }
 
-    fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>> {
+    fn get_pos_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<pos_accounting::BlockUndo>> {
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
 

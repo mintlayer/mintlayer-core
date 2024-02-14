@@ -25,7 +25,7 @@ use common::chain::{
     DelegationId,
 };
 use mockall::predicate::eq;
-use pos_accounting::{AccountingTxUndo, DeltaMergeUndo};
+use pos_accounting::{DeltaMergeUndo, TxUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingDeltaUndoData};
@@ -739,14 +739,14 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     store.expect_get_delegation_data().return_const(Ok(None));
 
     store
-        .expect_set_accounting_undo_data()
+        .expect_set_pos_accounting_undo_data()
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_1) && undo.tx_undos().len() == 1
         })
         .times(1)
         .return_const(Ok(()));
     store
-        .expect_set_accounting_undo_data()
+        .expect_set_pos_accounting_undo_data()
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_2) && undo.tx_undos().len() == 1
         })
@@ -770,7 +770,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                AccountingTxUndo::new(vec![undo]),
+                TxUndo::new(vec![undo]),
             )
             .unwrap();
         verifier
@@ -791,7 +791,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id,
-                AccountingTxUndo::new(vec![undo_pool]),
+                TxUndo::new(vec![undo_pool]),
             )
             .unwrap();
         verifier
@@ -846,14 +846,14 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
     store.expect_get_delegation_data().return_const(Ok(None));
 
     store
-        .expect_set_accounting_undo_data()
+        .expect_set_pos_accounting_undo_data()
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_1) && undo.tx_undos().len() == 2
         })
         .times(1)
         .return_const(Ok(()));
     store
-        .expect_set_accounting_undo_data()
+        .expect_set_pos_accounting_undo_data()
         .withf(move |id, undo| {
             *id == TransactionSource::Chain(block_undo_id_2) && undo.tx_undos().len() == 1
         })
@@ -876,7 +876,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                AccountingTxUndo::new(vec![undo]),
+                TxUndo::new(vec![undo]),
             )
             .unwrap();
         verifier
@@ -896,7 +896,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id,
-                AccountingTxUndo::new(vec![undo_pool]),
+                TxUndo::new(vec![undo_pool]),
             )
             .unwrap();
         verifier
@@ -917,7 +917,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                AccountingTxUndo::new(vec![undo_delegation]),
+                TxUndo::new(vec![undo_delegation]),
             )
             .unwrap();
         verifier
@@ -959,12 +959,12 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     store.expect_get_pool_data().return_const(Ok(None));
 
     store
-        .expect_del_accounting_undo_data()
+        .expect_del_pos_accounting_undo_data()
         .with(eq(TransactionSource::Chain(block_undo_id_1)))
         .times(1)
         .return_const(Ok(()));
     store
-        .expect_del_accounting_undo_data()
+        .expect_del_pos_accounting_undo_data()
         .with(eq(TransactionSource::Chain(block_undo_id_2)))
         .times(1)
         .return_const(Ok(()));

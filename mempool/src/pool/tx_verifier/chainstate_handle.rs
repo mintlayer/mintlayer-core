@@ -216,7 +216,7 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         self.call(move |c| c.get_token_aux_data(token_id))
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
         _source: TransactionSource,
     ) -> Result<Option<CachedPoSBlockUndo>, Error> {

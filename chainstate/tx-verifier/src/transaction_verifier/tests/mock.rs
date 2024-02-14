@@ -67,7 +67,7 @@ mockall::mock! {
             token_id: &TokenId,
         ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
 
-        fn get_accounting_undo(
+        fn get_pos_accounting_undo(
             &self,
             tx_source: TransactionSource,
         ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError>;
@@ -109,13 +109,13 @@ mockall::mock! {
         fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &CachedUtxosBlockUndo) -> Result<(), TransactionVerifierStorageError>;
         fn del_utxo_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_accounting_undo_data(
+        fn set_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
             undo: &CachedPoSBlockUndo,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn del_accounting_undo_data(
+        fn del_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;

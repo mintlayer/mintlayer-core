@@ -90,14 +90,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
             .map_err(TransactionVerifierStorageError::from)
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
     ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
-                let undo =
-                    self.db_tx.get_accounting_undo(id)?.map(CachedPoSBlockUndo::from_block_undo);
+                let undo = self
+                    .db_tx
+                    .get_pos_accounting_undo(id)?
+                    .map(CachedPoSBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -250,7 +252,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
-    fn set_accounting_undo_data(
+    fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
         undo: &CachedPoSBlockUndo,
@@ -259,7 +261,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_accounting_undo_data(id, &undo.clone().consume())
+                .set_pos_accounting_undo_data(id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -267,7 +269,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
-    fn del_accounting_undo_data(
+    fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
@@ -275,7 +277,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .del_accounting_undo_data(id)
+                .del_pos_accounting_undo_data(id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
