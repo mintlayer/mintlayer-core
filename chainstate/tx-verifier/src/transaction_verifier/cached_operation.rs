@@ -42,13 +42,16 @@ pub fn combine<T>(
 ) -> Option<CachedOperation<T>> {
     match (left, right) {
         (None, None) => None,
-        (None, Some(v)) | (Some(v), None) => Some(v),
+        (None, Some(v)) => Some(v),
+        (Some(_), None) => panic!("data is missing"),
         (Some(left), Some(right)) => {
             let result = match (left, right) {
                 (CachedOperation::Write(_), CachedOperation::Write(other)) => {
                     CachedOperation::Write(other)
                 }
-                (CachedOperation::Write(_), CachedOperation::Read(_)) => panic!("invariant"),
+                (CachedOperation::Write(_), CachedOperation::Read(_)) => {
+                    panic!("read after data been modified")
+                }
                 (CachedOperation::Write(_), CachedOperation::Erase) => CachedOperation::Erase,
                 (CachedOperation::Read(_), CachedOperation::Write(other)) => {
                     CachedOperation::Write(other)
@@ -62,7 +65,9 @@ pub fn combine<T>(
                     // e.g. if memory limit was raised
                     CachedOperation::Write(other)
                 }
-                (CachedOperation::Erase, CachedOperation::Read(_)) => panic!("invariant"),
+                (CachedOperation::Erase, CachedOperation::Read(_)) => {
+                    panic!("read after data been erased")
+                }
                 (CachedOperation::Erase, CachedOperation::Erase) => CachedOperation::Erase,
             };
             Some(result)

@@ -71,10 +71,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
-                let undo = self
-                    .db_tx
-                    .get_undo_data(id)?
-                    .map(|undo| CachedUtxosBlockUndo::from_utxo_block_undo(undo));
+                let undo =
+                    self.db_tx.get_undo_data(id)?.map(CachedUtxosBlockUndo::from_utxo_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -98,10 +96,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
-                let undo = self
-                    .db_tx
-                    .get_accounting_undo(id)?
-                    .map(|undo| CachedPoSBlockUndo::from_block_undo(undo));
+                let undo =
+                    self.db_tx.get_accounting_undo(id)?.map(CachedPoSBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -119,7 +115,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
                 let undo = self
                     .db_tx
                     .get_tokens_accounting_undo(id)?
-                    .map(|undo| CachedTokensBlockUndo::from_block_undo(undo));
+                    .map(CachedTokensBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {

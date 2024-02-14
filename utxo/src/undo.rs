@@ -93,6 +93,14 @@ impl UtxosTxUndoWithSources {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ConsumedUtxosBlockUndo {
+    pub reward_undo: Option<UtxosBlockRewardUndo>,
+    pub tx_undos: BTreeMap<Id<Transaction>, UtxosTxUndo>,
+    pub child_parent_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+    pub parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+}
+
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct UtxosBlockUndo {
     reward_undo: Option<UtxosBlockRewardUndo>,
@@ -106,7 +114,6 @@ pub struct UtxosBlockUndo {
     parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
 }
 
-// FIXME: clean up the methods
 impl UtxosBlockUndo {
     pub fn new(
         reward_undo: Option<UtxosBlockRewardUndo>,
@@ -138,20 +145,13 @@ impl UtxosBlockUndo {
         }
     }
 
-    pub fn consume(
-        self,
-    ) -> (
-        Option<UtxosBlockRewardUndo>,
-        BTreeMap<Id<Transaction>, UtxosTxUndo>,
-        BTreeSet<(Id<Transaction>, Id<Transaction>)>,
-        BTreeSet<(Id<Transaction>, Id<Transaction>)>,
-    ) {
-        (
-            self.reward_undo,
-            self.tx_undos,
-            self.child_parent_dependencies,
-            self.parent_child_dependencies,
-        )
+    pub fn consume(self) -> ConsumedUtxosBlockUndo {
+        ConsumedUtxosBlockUndo {
+            reward_undo: self.reward_undo,
+            tx_undos: self.tx_undos,
+            child_parent_dependencies: self.child_parent_dependencies,
+            parent_child_dependencies: self.parent_child_dependencies,
+        }
     }
 
     pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, UtxosTxUndo> {

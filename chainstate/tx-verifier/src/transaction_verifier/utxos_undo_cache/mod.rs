@@ -174,21 +174,19 @@ impl UtxosBlockUndoCache {
             },
         };
 
-        let res = block_undo
-            .map(|mut block_undo| {
-                let reward_undo = block_undo.take_block_reward_undo();
+        let res = block_undo.and_then(|mut block_undo| {
+            let reward_undo = block_undo.take_block_reward_undo();
 
-                if reward_undo.is_some() {
-                    // if block undo used up completely then remove it from the db
-                    if block_undo.is_empty() {
-                        self.data.insert(*tx_source, CachedOperation::Erase);
-                    } else {
-                        self.data.insert(*tx_source, CachedOperation::Write(block_undo));
-                    }
+            if reward_undo.is_some() {
+                // if block undo used up completely then remove it from the db
+                if block_undo.is_empty() {
+                    self.data.insert(*tx_source, CachedOperation::Erase);
+                } else {
+                    self.data.insert(*tx_source, CachedOperation::Write(block_undo));
                 }
-                reward_undo
-            })
-            .flatten();
+            }
+            reward_undo
+        });
 
         Ok(res)
     }

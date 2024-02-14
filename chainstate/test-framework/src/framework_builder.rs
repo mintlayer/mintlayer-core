@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use crate::{
     tx_verification_strategy::{
-        self, DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
+        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
     },
     TestFramework, TestStore,
 };

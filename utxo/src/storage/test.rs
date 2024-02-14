@@ -259,7 +259,6 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let expected_utxo = spent_utxos.get(idx);
         assert_eq!(res.ok().as_ref(), expected_utxo);
     });
-    // FIXME: fix this test
 }
 
 #[rstest]

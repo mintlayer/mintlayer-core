@@ -68,7 +68,6 @@ where
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
-    println!("flushing");
     flush_tokens(storage, &consumed.token_issuance_cache)?;
 
     // flush utxo set

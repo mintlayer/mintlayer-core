@@ -207,7 +207,6 @@ where
         &PoSAccountingDelta<A>,
         &TokensAccountingCache<T>,
     > {
-        println!("deriving");
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -776,7 +775,6 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
-        println!("connect tx {:?}", tx.transaction().get_id());
         check_transaction::check_transaction(
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
@@ -973,8 +971,6 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
-        println!("disconnect tx {:?}", tx.transaction().get_id());
-
         let block_undo_fetcher = |tx_source: TransactionSource| {
             self.storage
                 .get_undo_data(tx_source)

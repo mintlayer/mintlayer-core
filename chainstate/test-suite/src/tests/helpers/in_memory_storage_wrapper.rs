@@ -92,7 +92,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                     .transaction_ro()
                     .unwrap()
                     .get_undo_data(id)?
-                    .map(|undo| CachedUtxosBlockUndo::from_utxo_block_undo(undo));
+                    .map(CachedUtxosBlockUndo::from_utxo_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -123,7 +123,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                     .transaction_ro()
                     .unwrap()
                     .get_accounting_undo(id)?
-                    .map(|undo| CachedPoSBlockUndo::from_block_undo(undo));
+                    .map(CachedPoSBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => Ok(None),
@@ -152,7 +152,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                     .transaction_ro()
                     .unwrap()
                     .get_tokens_accounting_undo(id)?
-                    .map(|undo| CachedTokensBlockUndo::from_block_undo(undo));
+                    .map(CachedTokensBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => Ok(None),

@@ -48,7 +48,7 @@ impl CachedPoSBlockUndo {
     pub fn from_block_undo(undo: AccountingBlockUndo) -> Self {
         let (reward_undos, tx_undos) = undo.consume();
 
-        let reward_undos = reward_undos.map(|u| CachedOperation::Read(u));
+        let reward_undos = reward_undos.map(CachedOperation::Read);
 
         let tx_undos = tx_undos
             .into_iter()
@@ -62,7 +62,7 @@ impl CachedPoSBlockUndo {
     }
 
     pub fn consume(self) -> AccountingBlockUndo {
-        let reward_undo = self.reward_undos.map(|op| op.get().cloned()).flatten();
+        let reward_undo = self.reward_undos.and_then(|op| op.get().cloned());
 
         let tx_undos = self
             .tx_undos
@@ -83,7 +83,7 @@ impl CachedPoSBlockUndo {
     }
 
     pub fn take_block_reward_undo(&mut self) -> Option<AccountingBlockRewardUndo> {
-        self.reward_undos.take().map(|op| op.take()).flatten()
+        self.reward_undos.take().and_then(|op| op.take())
     }
 
     pub fn set_block_reward_undo(&mut self, reward_undo: AccountingBlockRewardUndo) {
@@ -122,7 +122,7 @@ impl CachedPoSBlockUndo {
     pub fn combine(&mut self, other: Self) -> Result<(), AccountingBlockUndoError> {
         // combine reward
         match (&mut self.reward_undos, other.reward_undos) {
-            (None, None) | (Some(_), None) => { /* do nothing */ }
+            (None | Some(_), None) => { /* do nothing */ }
             (None, Some(reward_undos)) => {
                 self.reward_undos = Some(reward_undos);
             }

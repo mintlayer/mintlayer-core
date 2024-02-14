@@ -370,10 +370,15 @@ fn reorg_store_coin(#[case] seed: Seed) {
     });
 }
 
+// Create Test framework with disposable strategy.
+// Create a block '1' which spends coins in 2 txs. Check that info is stored in the storage.
+// Create alternative chain with 2 blocks, which causes reorg.
+// Check that info from the block '1' was removed from the storage and the info from block '2' and '3'
+// was written.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn r2eorg_store_coin_2(#[case] seed: Seed) {
+fn reorg_store_coin_disposable(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);

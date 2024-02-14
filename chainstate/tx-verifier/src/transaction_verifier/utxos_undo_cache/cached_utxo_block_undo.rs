@@ -21,7 +21,8 @@ use common::{
     primitives::Id,
 };
 use utxo::{
-    UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError, UtxosTxUndo, UtxosTxUndoWithSources,
+    ConsumedUtxosBlockUndo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError, UtxosTxUndo,
+    UtxosTxUndoWithSources,
 };
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
@@ -55,10 +56,14 @@ impl CachedUtxosBlockUndo {
     }
 
     pub fn from_utxo_block_undo(undo: UtxosBlockUndo) -> Self {
-        let (reward_undo, tx_undos, child_parent_dependencies, parent_child_dependencies) =
-            undo.consume();
+        let ConsumedUtxosBlockUndo {
+            reward_undo,
+            tx_undos,
+            child_parent_dependencies,
+            parent_child_dependencies,
+        } = undo.consume();
 
-        let reward_undo = reward_undo.map(|u| CachedOperation::Read(u));
+        let reward_undo = reward_undo.map(CachedOperation::Read);
 
         let tx_undos = tx_undos
             .into_iter()
@@ -84,7 +89,7 @@ impl CachedUtxosBlockUndo {
     }
 
     pub fn consume(self) -> UtxosBlockUndo {
-        let reward_undo = self.reward_undo.map(|op| op.get().cloned()).flatten();
+        let reward_undo = self.reward_undo.and_then(|op| op.get().cloned());
 
         let tx_undos = self
             .tx_undos
@@ -162,7 +167,7 @@ impl CachedUtxosBlockUndo {
     }
 
     pub fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
-        self.reward_undo.take().map(|op| op.take()).flatten()
+        self.reward_undo.take().and_then(|op| op.take())
     }
 
     pub fn take_tx_undo(
@@ -179,11 +184,7 @@ impl CachedUtxosBlockUndo {
                 self.parent_child_dependencies.insert((*id2, *id1), CachedOperation::Erase);
             });
 
-            let res = self
-                .tx_undos
-                .insert(*tx_id, CachedOperation::Erase)
-                .map(|op| op.take())
-                .flatten();
+            let res = self.tx_undos.insert(*tx_id, CachedOperation::Erase).and_then(|op| op.take());
             Ok(res)
         } else {
             Err(UtxosBlockUndoError::TxUndoWithDependency(*tx_id))
@@ -198,7 +199,7 @@ impl CachedUtxosBlockUndo {
     pub fn combine(&mut self, other: Self) -> Result<(), UtxosBlockUndoError> {
         // combine reward
         match (&mut self.reward_undo, other.reward_undo) {
-            (None, None) | (Some(_), None) => { /* do nothing */ }
+            (None | Some(_), None) => { /* do nothing */ }
             (None, Some(reward_undo)) => {
                 self.reward_undo = Some(reward_undo);
             }
