@@ -20,7 +20,6 @@ rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
-wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }

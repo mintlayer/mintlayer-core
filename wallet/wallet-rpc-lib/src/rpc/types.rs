@@ -39,7 +39,7 @@ pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 use wallet::account::PoolData;
 pub use wallet_controller::types::{Balances, BlockInfo, DecimalAmount};
-use wallet_controller::NodeInterface;
+pub use wallet_controller::{ControllerConfig, NodeInterface};
 
 use crate::service::SubmitError;
 

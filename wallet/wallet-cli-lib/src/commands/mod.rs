@@ -34,17 +34,18 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_options::TxOptionsOverrides;
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, PeerId,
+};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
-use wallet_controller::{
-    types::Balances, ControllerConfig, NodeInterface, PeerId, DEFAULT_ACCOUNT_INDEX,
-};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    ComposedTransaction, CreatedWallet, NewTransaction, NftMetadata, TokenMetadata,
+    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, NewTransaction, NftMetadata,
+    NodeInterface, TokenMetadata,
 };
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use crate::{
     commands::helper_types::{parse_output, parse_token_supply},

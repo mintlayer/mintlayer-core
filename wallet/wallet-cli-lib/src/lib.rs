@@ -31,11 +31,11 @@ use common::chain::{
 use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
-use node_comm::rpc_client::ColdWalletClient;
+use node_comm::{make_cold_wallet_rpc_client, make_rpc_client, rpc_client::ColdWalletClient};
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
-use wallet_controller::NodeInterface;
+use wallet_rpc_lib::types::NodeInterface;
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig};
 
 enum Mode {
@@ -152,7 +152,7 @@ async fn start_hot_wallet(
     let (repl_handle, wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
-    let node_rpc = wallet_controller::make_rpc_client(rpc_address, rpc_auth).await?;
+    let node_rpc = make_rpc_client(rpc_address, rpc_auth).await?;
     cli_event_loop::run(
         &chain_config.clone(),
         event_rx,
@@ -190,7 +190,7 @@ async fn start_cold_wallet(
         event_rx,
         in_top_x_mb,
         cli_event_loop::WalletType::Local {
-            node_rpc: wallet_controller::make_cold_wallet_rpc_client(chain_config),
+            node_rpc: make_cold_wallet_rpc_client(chain_config),
             wallet_rpc_config,
         },
     )

@@ -17,8 +17,8 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
+use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
 use wallet_rpc_lib::{
     config::WalletRpcConfig, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
 };

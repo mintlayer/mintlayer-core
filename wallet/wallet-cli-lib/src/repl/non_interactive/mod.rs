@@ -17,7 +17,7 @@ pub mod log;
 
 use clap::Command;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::NodeInterface;
+use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,

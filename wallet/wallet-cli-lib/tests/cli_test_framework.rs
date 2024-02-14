@@ -16,7 +16,7 @@
 use common::chain::ChainConfig;
 use crypto::random::Rng;
 use tokio::task::JoinHandle;
-use wallet_controller::NodeInterface;
+use wallet_rpc_lib::types::NodeInterface;
 
 use std::{
     sync::{mpsc, Arc},

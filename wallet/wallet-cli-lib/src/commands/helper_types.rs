@@ -16,14 +16,14 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
-use wallet_controller::{NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes};
+use wallet_types::utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
     address::Address,
     chain::{output_value::OutputValue, ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
     primitives::{DecimalAmount, Id, H256},
 };
-use wallet_rpc_lib::types::{PoolInfo, TokenTotalSupply};
+use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
 use wallet_types::with_locked::WithLocked;
 
 use crate::errors::WalletCliError;

@@ -18,14 +18,12 @@ use std::path::PathBuf;
 use crypto::key::hdkd::u31::U31;
 use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
 use wallet::WalletError;
-use wallet_controller::NodeInterface;
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
+use wallet_rpc_lib::types::NodeInterface;
 use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError<N: NodeInterface> {
-    #[error("Controller error: {0}")]
-    Controller(wallet_controller::ControllerError<N>),
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, String),
     #[error(
@@ -40,8 +38,6 @@ pub enum WalletCliError<N: NodeInterface> {
     InvalidCommandInput(clap::Error),
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Invalid mnemonic: {0}")]
-    InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Wallet file already open")]
     WalletFileAlreadyOpen,
     #[error("Please open or create wallet file first")]
