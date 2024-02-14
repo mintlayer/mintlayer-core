@@ -17,8 +17,8 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use utils::make_config_setting;
+use utils_tokio::IpOrSocketAddress;
 
 use crate::{
     ban_config::BanConfig,

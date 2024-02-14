@@ -22,8 +22,8 @@ use p2p::{
     ban_config::BanConfig,
     config::{NodeType, P2pConfig},
     peer_manager::config::PeerManagerConfig,
-    types::ip_or_socket_address::IpOrSocketAddress,
 };
+use utils_tokio::IpOrSocketAddress;
 
 /// A node type.
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, Eq, PartialEq)]

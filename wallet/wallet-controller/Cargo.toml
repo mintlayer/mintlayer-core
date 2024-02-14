@@ -18,6 +18,7 @@ mempool = { path = "../../mempool" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
+utils-tokio = { path = "../../utils/tokio" }
 wallet = { path = ".." }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }

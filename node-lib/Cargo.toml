@@ -20,6 +20,7 @@ storage-lmdb = { path = "../storage/lmdb" }
 subsystem = { path = "../subsystem" }
 test-rpc-functions = { path = "../test-rpc-functions" }
 utils = { path = "../utils" }
+utils-tokio = { path = "../utils/tokio" }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }

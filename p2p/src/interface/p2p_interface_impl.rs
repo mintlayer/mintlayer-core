@@ -20,10 +20,8 @@ use mempool::{
     tx_options::{TxOptions, TxOptionsOverrides},
     tx_origin::LocalTxOrigin,
 };
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use utils_tokio::IpOrSocketAddress;
 
 use crate::{
     error::P2pError,

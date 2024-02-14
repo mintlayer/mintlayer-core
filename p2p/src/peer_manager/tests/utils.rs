@@ -21,10 +21,10 @@ use tokio::sync::mpsc;
 
 use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
 use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, services::Service,
-    socket_address::SocketAddress, PeerId,
+    bannable_address::BannableAddress, services::Service, socket_address::SocketAddress, PeerId,
 };
 use test_utils::assert_matches_return_val;
+use utils_tokio::IpOrSocketAddress;
 
 use crate::{
     config::NodeType,

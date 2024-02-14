@@ -1846,6 +1846,7 @@ dependencies = [
  "trust-dns-client",
  "trust-dns-server",
  "utils",
+ "utils-tokio",
 ]
 
 [[package]]
@@ -3951,6 +3952,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
+ "utils-tokio",
 ]
 
 [[package]]
@@ -4020,6 +4022,7 @@ dependencies = [
  "tokio",
  "toml 0.8.2",
  "utils",
+ "utils-tokio",
 ]
 
 [[package]]
@@ -4448,6 +4451,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utils",
+ "utils-tokio",
 ]
 
 [[package]]
@@ -4498,7 +4502,6 @@ dependencies = [
  "common",
  "parity-scale-codec",
  "serde",
- "serde_test",
  "serialization",
 ]
 
@@ -7368,6 +7371,8 @@ dependencies = [
 name = "utils-tokio"
 version = "0.3.0"
 dependencies = [
+ "serde",
+ "serde_test",
  "tokio",
 ]
 
@@ -7490,6 +7495,7 @@ dependencies = [
  "thiserror",
  "tx-verifier",
  "utils",
+ "utils-tokio",
  "utxo",
  "wallet-storage",
  "wallet-types",
@@ -7571,6 +7577,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utils-tokio",
  "wallet",
  "wallet-rpc-client",
  "wallet-rpc-lib",
@@ -7604,6 +7611,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utils-tokio",
  "wallet",
  "wallet-storage",
  "wallet-types",

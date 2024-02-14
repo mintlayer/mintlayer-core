@@ -20,6 +20,7 @@ p2p = { path = "../../p2p" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
+utils-tokio = { path = "../../utils/tokio" }
 
 async-trait.workspace = true
 base64.workspace = true

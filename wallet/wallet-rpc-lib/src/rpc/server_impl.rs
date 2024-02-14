@@ -23,12 +23,10 @@ use common::{
     },
     primitives::{time::Time, BlockHeight, Id, Idable, H256},
 };
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress, PeerId,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::{fmt::Debug, str::FromStr, time::Duration};
+use utils_tokio::IpOrSocketAddress;
 use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
     version::get_version,

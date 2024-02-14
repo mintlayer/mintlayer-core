@@ -33,12 +33,10 @@ use mempool::{
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
-    types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-        peer_id::PeerId, socket_address::SocketAddress,
-    },
+    types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
 };
 use serialization::hex_encoded::HexEncoded;
+use utils_tokio::IpOrSocketAddress;
 
 use crate::node_traits::NodeInterface;
 

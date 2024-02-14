@@ -18,9 +18,9 @@ use std::{sync::Arc, time::Duration};
 use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    p2p_event::P2pEvent, socket_address::SocketAddress,
+    bannable_address::BannableAddress, p2p_event::P2pEvent, socket_address::SocketAddress,
 };
+use utils_tokio::IpOrSocketAddress;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
