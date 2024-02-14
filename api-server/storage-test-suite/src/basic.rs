@@ -102,7 +102,7 @@ where
     // TODO: add more tests with different variations of rw/ro transactions, where things are done in different orders
 
     // Test setting/getting blocks
-    {
+    let block_id = {
         let mut test_framework = TestFramework::builder(&mut rng).build();
         let chain_config = test_framework.chain_config().clone();
         let mut db_tx = storage.transaction_rw().await.unwrap();
@@ -264,7 +264,9 @@ where
             let block = db_tx.get_block(block_id1).await.unwrap();
             assert_eq!(block.unwrap(), block_info1);
         }
-    }
+
+        block_id1
+    };
 
     // Test setting/getting transactions
     {
@@ -274,7 +276,7 @@ where
         let tx = db_tx.get_transaction(random_tx_id).await.unwrap();
         assert!(tx.is_none());
 
-        let owning_block1 = Id::<Block>::new(H256::random_using(&mut rng));
+        let owning_block1 = block_id;
         let tx1: SignedTransaction = TransactionBuilder::new()
             .add_input(
                 TxInput::Utxo(UtxoOutPoint::new(
@@ -352,22 +354,23 @@ where
         let block = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert!(block.is_none());
 
+        let existing_block_id: Id<Block> = block_id;
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
-        let aux_data1 = BlockAuxData::new(random_block_id, height1, random_block_timestamp);
-        db_tx.set_block_aux_data(random_block_id, &aux_data1).await.unwrap();
+        let aux_data1 = BlockAuxData::new(existing_block_id, height1, random_block_timestamp);
+        db_tx.set_block_aux_data(existing_block_id, &aux_data1).await.unwrap();
 
-        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
+        let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data1));
 
         // Test overwrite
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
-        let aux_data2 = BlockAuxData::new(random_block_id, height2, random_block_timestamp);
-        db_tx.set_block_aux_data(random_block_id, &aux_data2).await.unwrap();
+        let aux_data2 = BlockAuxData::new(existing_block_id, height2, random_block_timestamp);
+        db_tx.set_block_aux_data(existing_block_id, &aux_data2).await.unwrap();
 
-        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
+        let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
 
         db_tx.commit().await.unwrap();

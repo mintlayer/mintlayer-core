@@ -369,10 +369,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // Add ml_blocks indexes on height and timestamp
+        self.just_execute("CREATE INDEX ml_blocks_block_height_index ON ml_blocks (block_height);")
+            .await?;
+        self.just_execute(
+            "CREATE INDEX ml_blocks_block_timestamp_index ON ml_blocks (block_timestamp);",
+        )
+        .await?;
+
         self.just_execute(
             "CREATE TABLE ml_transactions (
                     transaction_id bytea PRIMARY KEY,
-                    owning_block_id bytea,
+                    owning_block_id bytea REFERENCES ml_blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
         )
@@ -413,7 +421,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml_block_aux_data (
-                    block_id bytea PRIMARY KEY,
+                    block_id bytea PRIMARY KEY REFERENCES ml_blocks(block_id),
                     aux_data bytea NOT NULL
                 );",
         )
@@ -440,6 +448,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     spend_destination bytea NOT NULL,
                     PRIMARY KEY (delegation_id, block_height)
                 );",
+        )
+        .await?;
+
+        // index when searching for delegations by address
+        self.just_execute(
+            "CREATE INDEX ml_delegations_spend_destination_index ON ml_delegations (spend_destination);",
         )
         .await?;
 
