@@ -70,7 +70,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -874,6 +874,19 @@ impl<B: storage::Backend> Wallet<B> {
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
             .collect();
         Ok(utxos)
+    }
+
+    pub fn find_unspent_utxo_with_destination(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Option<(TxOutput, Destination)> {
+        self.accounts.values().find_map(|acc: &Account| {
+            let current_block_info = BlockInfo {
+                height: acc.best_block().1,
+                timestamp: self.latest_median_time,
+            };
+            acc.find_unspent_utxo_with_destination(outpoint, current_block_info).ok()
+        })
     }
 
     pub fn pending_transactions(

@@ -1261,6 +1261,7 @@ impl Account {
                 TxInput::Utxo(outpoint) => {
                     // find utxo from cache
                     self.find_unspent_utxo_with_destination(outpoint, current_block_info)
+                        .map(|(out, dest)| (Some(out), Some(dest)))
                 }
                 TxInput::Account(acc_outpoint) => {
                     // find delegation destination
@@ -1296,22 +1297,18 @@ impl Account {
         PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)
     }
 
-    fn find_unspent_utxo_with_destination(
+    pub fn find_unspent_utxo_with_destination(
         &self,
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,
-    ) -> WalletResult<(Option<TxOutput>, Option<Destination>)> {
+    ) -> WalletResult<(TxOutput, Destination)> {
         let (txo, _) =
             self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
 
         Ok((
-            Some(txo.clone()),
-            Some(
-                get_tx_output_destination(txo, &|pool_id| {
-                    self.output_cache.pool_data(*pool_id).ok()
-                })
+            txo.clone(),
+            get_tx_output_destination(txo, &|pool_id| self.output_cache.pool_data(*pool_id).ok())
                 .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
-            ),
         ))
     }
 

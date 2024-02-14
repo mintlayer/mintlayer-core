@@ -727,15 +727,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
-        let utxo = self
-            .rpc_client
+        // search locally for the unspent utxo
+        if let Some(out) = self.wallet.find_unspent_utxo_with_destination(input) {
+            return Ok(out.0);
+        }
+
+        // check the chainstate
+        self.rpc_client
             .get_utxo(input.clone())
             .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        utxo.ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
-            input.clone(),
-        )))
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
+                input.clone(),
+            )))
     }
 
     /// Synchronize the wallet in the background from the node's blockchain.
