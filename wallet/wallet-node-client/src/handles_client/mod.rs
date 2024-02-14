@@ -36,7 +36,7 @@ use p2p::{
     P2pHandle,
 };
 use serialization::hex::HexError;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::node_traits::NodeInterface;
 

@@ -19,7 +19,7 @@ use common::chain::config::create_testnet;
 use tempfile::TempDir;
 
 use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 const CONFIG_NAME: &str = "config.toml";
 

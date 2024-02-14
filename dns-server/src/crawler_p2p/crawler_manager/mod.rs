@@ -49,7 +49,7 @@ use p2p::{
 };
 use tokio::sync::mpsc;
 use utils::ensure;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     crawler_p2p::crawler_manager::storage::AddressInfo, dns_server::DnsServerCommand,

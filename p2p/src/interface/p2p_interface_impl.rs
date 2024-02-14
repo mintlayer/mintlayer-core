@@ -21,7 +21,7 @@ use mempool::{
     tx_origin::LocalTxOrigin,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     error::P2pError,

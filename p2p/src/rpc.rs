@@ -19,7 +19,7 @@ use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use serialization::hex_encoded::HexEncoded;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use rpc::RpcResult;

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use trust_dns_client::rr::Name;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use common::primitives::per_thousand::PerThousand;
 use utils::clap_utils;

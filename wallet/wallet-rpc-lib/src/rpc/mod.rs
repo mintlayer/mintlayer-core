@@ -25,7 +25,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 use utils::{ensure, shallow_clone::ShallowClone};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{PartiallySignedTransaction, PoolData, TransactionToSign, TxInfo},
     WalletError,

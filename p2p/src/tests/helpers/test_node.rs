@@ -31,7 +31,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,

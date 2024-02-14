@@ -24,7 +24,7 @@ use p2p_types::{
     bannable_address::BannableAddress, services::Service, socket_address::SocketAddress, PeerId,
 };
 use test_utils::assert_matches_return_val;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::NodeType,

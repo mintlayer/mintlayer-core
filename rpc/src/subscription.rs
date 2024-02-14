@@ -18,7 +18,7 @@
 
 use jsonrpsee::{PendingSubscriptionAcceptError, SubscriptionMessage};
 
-use utils_tokio::broadcaster;
+use utils_networking::broadcaster;
 
 /// Pending subscription. Use [accept] to get subscription sink.
 pub type Pending = jsonrpsee::PendingSubscriptionSink;

@@ -44,7 +44,7 @@ use common::{
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,

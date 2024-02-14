@@ -23,7 +23,7 @@ use p2p::{
     config::{NodeType, P2pConfig},
     peer_manager::config::PeerManagerConfig,
 };
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 /// A node type.
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, Eq, PartialEq)]

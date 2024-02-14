@@ -20,7 +20,7 @@ use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{
     bannable_address::BannableAddress, p2p_event::P2pEvent, socket_address::SocketAddress,
 };
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 

@@ -47,7 +47,7 @@ use p2p::{
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     crawler_p2p::{

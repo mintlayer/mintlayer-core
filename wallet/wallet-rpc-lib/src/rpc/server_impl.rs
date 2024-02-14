@@ -26,7 +26,7 @@ use common::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use std::{fmt::Debug, str::FromStr, time::Duration};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
     version::get_version,

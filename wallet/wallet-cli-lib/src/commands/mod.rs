@@ -31,7 +31,7 @@ use p2p_types::{
     bannable_address::BannableAddress, PeerId,
 };
 use serialization::hex_encoded::HexEncoded;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use self::helper_types::{
     CliForceReduce, CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState,

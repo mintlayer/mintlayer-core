@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
 use utils::make_config_setting;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     ban_config::BanConfig,

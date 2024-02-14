@@ -1,5 +1,5 @@
 [package]
-name = "utils-tokio"
+name = "utils-networking"
 license.workspace = true
 version.workspace = true
 edition.workspace = true

@@ -22,7 +22,7 @@ use std::{
 use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 

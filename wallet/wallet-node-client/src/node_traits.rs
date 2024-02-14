@@ -30,7 +30,7 @@ use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 #[async_trait::async_trait]
 pub trait NodeInterface {

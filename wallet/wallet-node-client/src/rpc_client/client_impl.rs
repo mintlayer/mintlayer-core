@@ -36,7 +36,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
 };
 use serialization::hex_encoded::HexEncoded;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::node_traits::NodeInterface;
 

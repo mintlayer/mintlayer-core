@@ -19,7 +19,7 @@ storage = { path = "../storage", features = ["inmemory"] }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 chainstate = { path = "../chainstate" }
 utils = { path = "../utils" }
-utils-tokio = { path = "../utils/tokio" }
+utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }

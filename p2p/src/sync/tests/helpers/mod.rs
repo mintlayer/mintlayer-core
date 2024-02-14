@@ -53,7 +53,7 @@ use common::{
 use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},

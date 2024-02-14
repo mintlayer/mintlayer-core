@@ -21,7 +21,7 @@ serialization = { path = "../serialization/" }
 storage = { path = "../storage" }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
-utils-tokio = { path = "../utils/tokio" }
+utils-networking = { path = "../utils/networking" }
 
 async-trait.workspace = true
 bytes.workspace = true

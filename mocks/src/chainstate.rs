@@ -41,7 +41,7 @@ mockall::mock! {
 
     impl ChainstateInterface for ChainstateInterface {
         fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
-        fn subscribe_to_rpc_events(&mut self) -> utils_tokio::broadcaster::Receiver<ChainstateEvent>;
+        fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<ChainstateEvent>;
         fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
         fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
         fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;

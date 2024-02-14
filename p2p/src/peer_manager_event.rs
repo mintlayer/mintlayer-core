@@ -20,7 +20,7 @@ use common::{
     primitives::{time::Time, Id},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     interface::types::ConnectedPeer, peer_manager::PeerManagerInterface,

@@ -25,7 +25,7 @@ use std::{
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use utils::{clap_utils, default_data_dir::default_data_dir_common};
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
 

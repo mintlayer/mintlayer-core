@@ -17,7 +17,7 @@ node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
-utils-tokio = { path = "../../utils/tokio" }
+utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
 wallet-types = { path = "../types" }

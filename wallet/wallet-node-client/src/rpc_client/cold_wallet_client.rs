@@ -30,7 +30,7 @@ use p2p::{
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
-use utils_tokio::IpOrSocketAddress;
+use utils_networking::IpOrSocketAddress;
 
 use crate::node_traits::NodeInterface;
 
