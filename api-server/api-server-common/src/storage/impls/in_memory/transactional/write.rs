@@ -27,9 +27,9 @@ use common::{
 use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead,
-    ApiServerStorageWrite, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
-    TransactionInfo, Utxo,
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo, Delegation,
+    FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -93,7 +93,7 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_mainchain_block(block_id, block_height, block)
     }
@@ -289,6 +289,14 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<BlockAuxData>, TransactionInfo)>, ApiServerStorageError> {
         self.transaction.get_transaction_with_block(transaction_id)
+    }
+
+    async fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        self.transaction.get_transactions_with_block(len, offset)
     }
 
     async fn get_pool_data(

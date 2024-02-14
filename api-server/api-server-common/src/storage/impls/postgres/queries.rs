@@ -34,8 +34,9 @@ use tokio_postgres::NoTls;
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
-        block_aux_data::BlockAuxData, ApiServerStorageError, BlockInfo, Delegation,
-        FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+        block_aux_data::{BlockAuxData, BlockWithExtraData},
+        ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
+        TransactionInfo, Utxo,
     },
 };
 
@@ -359,14 +360,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_main_chain_blocks (
-            block_height bigint PRIMARY KEY,
-            block_id bytea NOT NULL
-        );",
-        )
-        .await?;
-
-        self.just_execute(
             "CREATE TABLE ml_blocks (
                 block_id bytea PRIMARY KEY,
                 block_height bigint,
@@ -376,10 +369,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // Add ml_blocks indexes on height and timestamp
+        self.just_execute("CREATE INDEX ml_blocks_block_height_index ON ml_blocks (block_height);")
+            .await?;
+        self.just_execute(
+            "CREATE INDEX ml_blocks_block_timestamp_index ON ml_blocks (block_timestamp);",
+        )
+        .await?;
+
         self.just_execute(
             "CREATE TABLE ml_transactions (
                     transaction_id bytea PRIMARY KEY,
-                    owning_block_id bytea,
+                    owning_block_id bytea REFERENCES ml_blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
         )
@@ -420,7 +421,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute(
             "CREATE TABLE ml_block_aux_data (
-                    block_id bytea PRIMARY KEY,
+                    block_id bytea PRIMARY KEY REFERENCES ml_blocks(block_id),
                     aux_data bytea NOT NULL
                 );",
         )
@@ -447,6 +448,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     spend_destination bytea NOT NULL,
                     PRIMARY KEY (delegation_id, block_height)
                 );",
+        )
+        .await?;
+
+        // index when searching for delegations by address
+        self.just_execute(
+            "CREATE INDEX ml_delegations_spend_destination_index ON ml_delegations (spend_destination);",
         )
         .await?;
 
@@ -480,7 +487,6 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.just_execute("DROP TABLE ml_misc_data;").await?;
         self.just_execute("DROP TABLE ml_genesis;").await?;
-        self.just_execute("DROP TABLE ml_main_chain_blocks;").await?;
         self.just_execute("DROP TABLE ml_blocks;").await?;
         self.just_execute("DROP TABLE ml_transactions;").await?;
         self.just_execute("DROP TABLE ml_address_balance;").await?;
@@ -611,7 +617,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let height: Option<i64> = row.get(1);
         let height = height.map(|h| BlockHeight::new(h as u64));
 
-        let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
+        let block = BlockWithExtraData::decode_all(&mut data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
                 "Block {} deserialization failed: {}",
                 block_id, e
@@ -653,11 +659,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
-        block: &Block,
+        block: &BlockWithExtraData,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
         let height = Self::block_height_to_postgres_friendly(block_height);
-        let timestamp = Self::block_time_to_postgres_friendly(block.timestamp())?;
+        let timestamp = Self::block_time_to_postgres_friendly(block.block.timestamp())?;
 
         self.tx
             .execute(
@@ -1207,6 +1213,60 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some((block_data, transaction)))
+    }
+
+    pub async fn get_transactions_with_block(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(BlockAuxData, TransactionInfo)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT
+                    t.transaction_data,
+                    b.aux_data
+                FROM
+                    ml_blocks mb
+                INNER JOIN
+                    ml_transactions t ON t.owning_block_id = mb.block_id
+                INNER JOIN
+                    ml_block_aux_data b ON t.owning_block_id = b.block_id
+                ORDER BY mb.block_height DESC
+                OFFSET $1
+                LIMIT $2;
+                "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|data| {
+                let transaction_data: Vec<u8> = data.get(0);
+                let block_data: Vec<u8> = data.get(1);
+
+                let block_data =
+                    BlockAuxData::decode_all(&mut block_data.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Block deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                let transaction = TransactionInfo::decode_all(&mut transaction_data.as_slice())
+                    .map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Transaction deserialization failed: {e}"
+                        ))
+                    })?;
+
+                Ok((block_data, transaction))
+            })
+            .collect()
     }
 
     pub async fn set_transaction(

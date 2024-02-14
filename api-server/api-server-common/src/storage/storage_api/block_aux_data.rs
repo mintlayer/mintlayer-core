@@ -19,6 +19,8 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
+use super::TxAdditionalInfo;
+
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct BlockAuxData {
     block_id: Id<Block>,
@@ -50,4 +52,10 @@ impl BlockAuxData {
     pub fn block_timestamp(&self) -> BlockTimestamp {
         self.block_timestamp
     }
+}
+
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
+pub struct BlockWithExtraData {
+    pub block: Block,
+    pub tx_additional_infos: Vec<TxAdditionalInfo>,
 }

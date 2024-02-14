@@ -13,12 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Sub;
+
+use api_server_common::storage::storage_api::{
+    block_aux_data::BlockAuxData, TransactionInfo, TxAdditionalInfo,
+};
 use common::{
     address::Address,
     chain::{
         block::ConsensusData, output_value::OutputValue, Block, ChainConfig, Transaction, TxOutput,
     },
-    primitives::{Amount, Idable},
+    primitives::{Amount, BlockHeight, Idable},
     Uint256,
 };
 use hex::ToHex;
@@ -140,18 +145,52 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
     }
 }
 
-pub fn tx_to_json(tx: &Transaction, chain_config: &ChainConfig) -> serde_json::Value {
+pub fn tx_to_json(
+    tx: &Transaction,
+    additinal_info: &TxAdditionalInfo,
+    chain_config: &ChainConfig,
+) -> serde_json::Value {
     json!({
     "id": tx.get_id().to_hash().encode_hex::<String>(),
     "version_byte": tx.version_byte(),
     "is_replaceable": tx.is_replaceable(),
     "flags": tx.flags(),
-    // TODO: add fee
-    "fee": amount_to_json(Amount::ZERO),
-    "inputs": tx.inputs(),
+    "fee": amount_to_json(additinal_info.fee),
+    "inputs": tx.inputs().iter().zip(additinal_info.input_utxos.iter()).map(|(inp, utxo)| json!({
+        "input": inp,
+        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config)),
+        })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
-    .iter().map(|out| txoutput_to_json(out, chain_config)).collect::<Vec<_>>()
+            .iter()
+            .map(|out| txoutput_to_json(out, chain_config))
+            .collect::<Vec<_>>()
     })
+}
+
+pub fn to_tx_json_with_block_info(
+    tx: &TransactionInfo,
+    chain_config: &ChainConfig,
+    tip_height: BlockHeight,
+    block: BlockAuxData,
+) -> serde_json::Value {
+    let mut json = tx_to_json(tx.tx.transaction(), &tx.additinal_info, chain_config);
+    let obj = json.as_object_mut().expect("object");
+
+    let confirmations = tip_height.sub(block.block_height());
+
+    obj.insert(
+        "block_id".into(),
+        block.block_id().to_hash().encode_hex::<String>().into(),
+    );
+    obj.insert(
+        "timestamp".into(),
+        block.block_timestamp().to_string().into(),
+    );
+    obj.insert(
+        "confirmations".into(),
+        confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+    );
+    json
 }
 
 pub fn block_header_to_json(block: &Block) -> serde_json::Value {

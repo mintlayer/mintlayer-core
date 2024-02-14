@@ -32,6 +32,7 @@ mod token;
 mod transaction;
 mod transaction_merkle_path;
 mod transaction_submit;
+mod transactions;
 
 use crate::{spawn_webserver, DummyRPC};
 use api_blockchain_scanner_lib::{

@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use crate::{
-    api::json_helpers::{amount_to_json, block_header_to_json, tx_to_json},
+    api::json_helpers::{
+        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+    },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
         ApiServerWebServerNotFoundError, ApiServerWebServerServerError,
@@ -84,6 +86,7 @@ pub fn routes<
     let router = router.route("/feerate", get(feerate));
 
     let router = router
+        .route("/transaction", get(transactions))
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
@@ -145,20 +148,21 @@ pub async fn block<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let block_info = get_block(&block_id, &state).await?;
+    let BlockInfo { block, height } = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
-    "height": block_info.height,
-    "header": block_header_to_json(&block_info.block),
+    "height": height,
+    "header": block_header_to_json(&block.block),
     "body": {
-        "reward": block_info.block.block_reward()
+        "reward": block.block.block_reward()
             .outputs()
             .iter()
             .map(|out| txoutput_to_json(out, &state.chain_config))
             .collect::<Vec<_>>(),
-        "transactions": block_info.block.transactions()
+        "transactions": block.block.transactions()
                             .iter()
-                            .map(|tx| tx_to_json(tx.transaction(), &state.chain_config))
+                            .zip(block.tx_additional_infos.iter())
+                            .map(|(tx, additinal_info)| tx_to_json(tx.transaction(), additinal_info, &state.chain_config))
                             .collect::<Vec<_>>(),
     },
     })))
@@ -171,7 +175,7 @@ pub async fn block_header<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?.block;
 
-    Ok(Json(block_header_to_json(&block)))
+    Ok(Json(block_header_to_json(&block.block)))
 }
 
 #[allow(clippy::unused_async)]
@@ -182,6 +186,7 @@ pub async fn block_reward<T: ApiServerStorage>(
     let block = get_block(&block_id, &state).await?.block;
 
     Ok(Json(json!(block
+        .block
         .block_reward()
         .outputs()
         .iter()
@@ -189,7 +194,6 @@ pub async fn block_reward<T: ApiServerStorage>(
         .collect::<Vec<_>>())))
 }
 
-#[allow(clippy::unused_async)]
 pub async fn block_transaction_ids<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -197,6 +201,7 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
     let block = get_block(&block_id, &state).await?.block;
 
     let transaction_ids = block
+        .block
         .transactions()
         .iter()
         .map(|tx| tx.transaction().get_id())
@@ -226,7 +231,6 @@ pub async fn chain_genesis<T: ApiServerStorage>(
     })))
 }
 
-#[allow(clippy::unused_async)]
 pub async fn chain_at_height<T: ApiServerStorage>(
     Path(block_height): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -258,7 +262,6 @@ pub async fn chain_at_height<T: ApiServerStorage>(
     }
 }
 
-#[allow(clippy::unused_async)]
 pub async fn chain_tip<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
@@ -407,18 +410,62 @@ pub async fn submit_transaction<T: ApiServerStorage>(
     ))
 }
 
+pub async fn transactions<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET: &str = "offset";
+    const ITEMS: &str = "items";
+    const DEFAULT_NUM_ITEMS: u32 = 10;
+
+    let offset = params
+        .get(OFFSET)
+        .map(|offset| u32::from_str(offset))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
+        })?
+        .unwrap_or_default();
+
+    let items = params
+        .get(ITEMS)
+        .map(|items| u32::from_str(items))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+        })?
+        .unwrap_or(DEFAULT_NUM_ITEMS);
+
+    let txs = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_transactions_with_block(items, offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let (tip_height, _) = best_block(&state).await?;
+    let txs = txs
+        .into_iter()
+        .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(txs)))
+}
+
 pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (
-        block,
-        TransactionInfo {
-            tx,
-            fee,
-            input_utxos,
-        },
-    ) = get_transaction(&transaction_id, &state).await?;
+    let (block, TransactionInfo { tx, additinal_info }) =
+        get_transaction(&transaction_id, &state).await?;
 
     let confirmations = if let Some(block) = &block {
         let (tip_height, _) = best_block(&state).await?;
@@ -426,24 +473,31 @@ pub async fn transaction<T: ApiServerStorage>(
     } else {
         None
     };
+    let mut json = tx_to_json(tx.transaction(), &additinal_info, &state.chain_config);
+    let obj = json.as_object_mut().expect("object");
 
-    Ok(Json(json!({
-    "block_id": block.as_ref().map_or("".to_string(), |b| b.block_id().to_hash().encode_hex::<String>()),
-    "timestamp": block.as_ref().map_or("".to_string(), |b| b.block_timestamp().to_string()),
-    "confirmations": confirmations.map_or("".to_string(), |c| c.to_string()),
-    "version_byte": tx.version_byte(),
-    "is_replaceable": tx.is_replaceable(),
-    "flags": tx.flags(),
-    "fee": amount_to_json(fee),
-    "inputs": tx.inputs().iter().zip(input_utxos.iter()).map(|(inp, utxo)| json!({
-        "input": inp,
-        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &state.chain_config)),
-        })).collect::<Vec<_>>(),
-    "outputs": tx.outputs()
-            .iter()
-            .map(|out| txoutput_to_json(out, &state.chain_config))
-            .collect::<Vec<_>>()
-    })))
+    obj.insert(
+        "block_id".into(),
+        block
+            .as_ref()
+            .map_or("".to_string(), |b| {
+                b.block_id().to_hash().encode_hex::<String>()
+            })
+            .into(),
+    );
+    obj.insert(
+        "timestamp".into(),
+        block
+            .as_ref()
+            .map_or("".to_string(), |b| b.block_timestamp().to_string())
+            .into(),
+    );
+    obj.insert(
+        "confirmations".into(),
+        confirmations.map_or("".to_string(), |c| c.to_string()).into(),
+    );
+
+    Ok(Json(json))
 }
 
 pub async fn transaction_merkle_path<T: ApiServerStorage>(
@@ -468,6 +522,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
     };
 
     let transaction_index: u32 = block
+        .block
         .transactions()
         .iter()
         .position(|t| t.transaction().get_id() == transaction.get_id())
@@ -482,6 +537,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         })?;
 
     let merkle_tree = block
+        .block
         .body()
         .merkle_tree_proxy()
         .map_err(|_| {
@@ -502,9 +558,9 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         .collect::<Vec<_>>();
 
     Ok(Json(json!({
-    "block_id": block.get_id(),
+    "block_id": block.block.get_id(),
     "transaction_index": transaction_index,
-    "merkle_root": block.merkle_root().encode_hex::<String>(),
+    "merkle_root": block.block.merkle_root().encode_hex::<String>(),
     "merkle_path": merkle_tree,
     })))
 }

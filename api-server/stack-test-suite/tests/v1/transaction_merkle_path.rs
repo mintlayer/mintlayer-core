@@ -15,7 +15,10 @@
 
 use super::*;
 
-use api_server_common::storage::storage_api::{block_aux_data::BlockAuxData, TransactionInfo};
+use api_server_common::storage::storage_api::{
+    block_aux_data::{BlockAuxData, BlockWithExtraData},
+    TransactionInfo, TxAdditionalInfo,
+};
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block},
     primitives::{Id, H256},
@@ -111,8 +114,10 @@ async fn get_block_failed(#[case] seed: Seed) {
 
                 let tx_info = TransactionInfo {
                     tx: signed_transaction,
-                    fee: Amount::from_atoms(rng.gen_range(0..100)),
-                    input_utxos: vec![],
+                    additinal_info: TxAdditionalInfo {
+                        fee: Amount::from_atoms(rng.gen_range(0..100)),
+                        input_utxos: vec![],
+                    },
                 };
 
                 db_tx.set_transaction(transaction_id, Some(block_id), &tx_info).await.unwrap();
@@ -237,8 +242,10 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
 
                 let tx_info = TransactionInfo {
                     tx: signed_transaction,
-                    fee: Amount::from_atoms(rng.gen_range(0..100)),
-                    input_utxos: vec![],
+                    additinal_info: TxAdditionalInfo {
+                        fee: Amount::from_atoms(rng.gen_range(0..100)),
+                        input_utxos: vec![],
+                    },
                 };
                 db_tx.set_transaction(transaction_id, None, &tx_info).await.unwrap();
                 db_tx.commit().await.unwrap();
@@ -358,6 +365,10 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
                     block.block_reward().clone(),
                 )
                 .unwrap();
+                let empty_block = BlockWithExtraData {
+                    block: empty_block,
+                    tx_additional_infos: vec![],
+                };
 
                 db_tx
                     .set_mainchain_block(
