@@ -121,6 +121,30 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             let (total_fees, tx_additional_infos) =
                 calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
 
+            let block_id = block.get_id();
+
+            let block_with_extras = BlockWithExtraData {
+                block: WithId::take(block),
+                tx_additional_infos,
+            };
+            db_tx
+                .set_mainchain_block(block_id, block_height, &block_with_extras)
+                .await
+                .expect("Unable to set block");
+
+            db_tx
+                .set_block_aux_data(
+                    block_id,
+                    &BlockAuxData::new(block_id, block_height, block_with_extras.block.timestamp()),
+                )
+                .await
+                .expect("Unable to set block aux data");
+
+            let BlockWithExtraData {
+                block,
+                tx_additional_infos,
+            } = block_with_extras;
+
             for (tx, additinal_info) in block.transactions().iter().zip(tx_additional_infos.iter())
             {
                 update_tables_from_transaction(
@@ -151,25 +175,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             )
             .await
             .expect("Unable to update tables from block");
-
-            let block_id = block.get_id();
-
-            db_tx
-                .set_block_aux_data(
-                    block_id,
-                    &BlockAuxData::new(block_id, block_height, block.timestamp()),
-                )
-                .await
-                .expect("Unable to set block aux data");
-
-            let block_with_extras = BlockWithExtraData {
-                block: WithId::take(block),
-                tx_additional_infos,
-            };
-            db_tx
-                .set_mainchain_block(block_id, block_height, &block_with_extras)
-                .await
-                .expect("Unable to set block");
         }
 
         db_tx.commit().await.expect("Unable to commit transaction");
