@@ -19,6 +19,13 @@ use common::{
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CreatedBlockInfo {
+    pub id: Id<GenBlock>,
+    pub height: BlockHeight,
+    pub pool_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BlockInfo {
     pub id: Id<GenBlock>,
     pub height: BlockHeight,

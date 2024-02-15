@@ -19,7 +19,7 @@ mod balances;
 mod block_info;
 
 pub use balances::Balances;
-pub use block_info::BlockInfo;
+pub use block_info::{BlockInfo, CreatedBlockInfo};
 pub use common::primitives::DecimalAmount;
 use common::primitives::H256;
 

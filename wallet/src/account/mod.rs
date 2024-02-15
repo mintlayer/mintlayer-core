@@ -1938,7 +1938,7 @@ impl Account {
         Ok(())
     }
 
-    pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>)> {
+    pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>, PoolId)> {
         self.output_cache
             .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
     }

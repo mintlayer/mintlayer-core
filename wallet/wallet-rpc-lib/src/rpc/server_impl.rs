@@ -34,7 +34,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{BlockInfo, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
@@ -434,7 +434,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn list_created_blocks_ids(
         &self,
         account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<BlockInfo>> {
+    ) -> rpc::RpcResult<Vec<CreatedBlockInfo>> {
         rpc::handle_result(self.list_created_blocks_ids(account_index.index::<N>()?).await)
     }
 

@@ -45,7 +45,7 @@ use wallet_types::{
 };
 
 use crate::{
-    types::{Balances, BlockInfo},
+    types::{Balances, CreatedBlockInfo},
     ControllerError,
 };
 
@@ -267,11 +267,25 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         Ok(delegations)
     }
 
-    pub fn get_created_blocks(&self) -> Result<Vec<BlockInfo>, ControllerError<T>> {
+    pub fn get_created_blocks(&self) -> Result<Vec<CreatedBlockInfo>, ControllerError<T>> {
         self.wallet
             .get_created_blocks(self.account_index)
             .map_err(ControllerError::WalletError)
-            .map(|blocks| blocks.into_iter().map(|(height, id)| BlockInfo { id, height }).collect())
+            .map(|blocks| {
+                blocks
+                    .into_iter()
+                    .map(|(height, id, pool_id)| {
+                        let pool_id =
+                            Address::new(self.chain_config, &pool_id).expect("addressable");
+
+                        CreatedBlockInfo {
+                            height,
+                            id,
+                            pool_id: pool_id.to_string(),
+                        }
+                    })
+                    .collect()
+            })
     }
 
     async fn get_delegation_share(

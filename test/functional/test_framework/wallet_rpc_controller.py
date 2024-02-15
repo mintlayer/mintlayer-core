@@ -52,6 +52,7 @@ class DelegationData:
 class CreatedBlockInfo:
     block_id: str
     block_height: str
+    pool_id: str
 
 class WalletRpcController:
 
@@ -254,7 +255,7 @@ class WalletRpcController:
 
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output = self._write_command("staking_list_created_block_ids", [self.account])['result']
-        return [CreatedBlockInfo(block['id'], block['height']) for block in output]
+        return [CreatedBlockInfo(block['id'], block['height'], block['pool_id']) for block in output]
 
     async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
         return self._write_command("delegation_create", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']
