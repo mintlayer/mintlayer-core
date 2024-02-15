@@ -162,7 +162,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             utxos = await wallet.list_utxos('all', 'unlocked', ['inactive'])
             assert_equal(1, len(utxos))
 
-            # try to compose and sign a transaction with an inactive utxo that is not in chanstate only in the walle
+            # try to compose and sign a transaction with an inactive utxo that is not in chainstate only in the wallet
             output = await wallet.compose_transaction([TxOutput(acc1_address, "0.1")], utxos, True)
             encoded_tx = output.split('\n')[1]
             output = await wallet.sign_raw_transaction(encoded_tx)
