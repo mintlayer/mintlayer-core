@@ -108,9 +108,13 @@ where
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
         // should return genesis block id
-        let (height, block_id) = db_tx.get_best_block().await.unwrap();
-        assert_eq!(height, BlockHeight::new(0));
-        assert_eq!(block_id, chain_config.genesis_block_id());
+        let block_aux = db_tx.get_best_block().await.unwrap();
+        assert_eq!(block_aux.block_height(), BlockHeight::new(0));
+        assert_eq!(block_aux.block_id(), chain_config.genesis_block_id());
+        assert_eq!(
+            block_aux.block_timestamp(),
+            chain_config.genesis_block().timestamp()
+        );
 
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
@@ -204,7 +208,7 @@ where
                     .set_block_aux_data(
                         block_id,
                         &BlockAuxData::new(
-                            block_id,
+                            block_id.into(),
                             BlockHeight::new(block_height),
                             block.timestamp(),
                         ),
@@ -357,7 +361,8 @@ where
         let existing_block_id: Id<Block> = block_id;
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
-        let aux_data1 = BlockAuxData::new(existing_block_id, height1, random_block_timestamp);
+        let aux_data1 =
+            BlockAuxData::new(existing_block_id.into(), height1, random_block_timestamp);
         db_tx.set_block_aux_data(existing_block_id, &aux_data1).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();
@@ -367,7 +372,8 @@ where
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let random_block_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u64>());
-        let aux_data2 = BlockAuxData::new(existing_block_id, height2, random_block_timestamp);
+        let aux_data2 =
+            BlockAuxData::new(existing_block_id.into(), height2, random_block_timestamp);
         db_tx.set_block_aux_data(existing_block_id, &aux_data2).await.unwrap();
 
         let retrieved_aux_data = db_tx.get_block_aux_data(existing_block_id).await.unwrap();

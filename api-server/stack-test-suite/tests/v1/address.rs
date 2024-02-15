@@ -211,6 +211,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                         alice_address.get().to_string(),
                         json!({
                         "coin_balance": amount_to_json(alice_balance),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
@@ -218,6 +219,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                         bob_address.to_string(),
                         json!({
                         "coin_balance": amount_to_json(bob_balance),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),
@@ -432,6 +434,7 @@ async fn ok(#[case] seed: Seed) {
                         alice_address.get().to_string(),
                         json!({
                         "coin_balance": amount_to_json(alice_balance),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
@@ -439,6 +442,7 @@ async fn ok(#[case] seed: Seed) {
                         bob_address.to_string(),
                         json!({
                         "coin_balance": amount_to_json(bob_balance),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),

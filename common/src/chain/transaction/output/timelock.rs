@@ -20,6 +20,7 @@ use crate::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
 #[derive(
     Debug,
     Clone,
+    Copy,
     Ord,
     PartialOrd,
     Eq,

@@ -39,13 +39,14 @@ use common::{
         block::timestamp::BlockTimestamp, tokens::NftIssuance, Block, Destination,
         SignedTransaction, Transaction,
     },
-    primitives::{BlockHeight, CoinOrTokenId, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use hex::ToHex;
 use serde::Deserialize;
 use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
 use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc, time::Duration};
+use utils::ensure;
 
 use crate::ApiServerWebServerState;
 
@@ -268,14 +269,14 @@ pub async fn chain_tip<T: ApiServerStorage>(
     let best_block = best_block(&state).await?;
 
     Ok(Json(json!({
-      "block_height": best_block.0,
-      "block_id": best_block.1,
+      "block_height": best_block.block_height(),
+      "block_id": best_block.block_id().to_hash().encode_hex::<String>(),
     })))
 }
 
 async fn best_block<T: ApiServerStorage>(
     state: &ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>,
-) -> Result<(BlockHeight, Id<common::chain::GenBlock>), ApiServerWebServerError> {
+) -> Result<BlockAuxData, ApiServerWebServerError> {
     state
         .db
         .transaction_ro()
@@ -451,7 +452,7 @@ pub async fn transactions<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
-    let (tip_height, _) = best_block(&state).await?;
+    let tip_height = best_block(&state).await?.block_height();
     let txs = txs
         .into_iter()
         .map(|(block, tx)| to_tx_json_with_block_info(&tx, &state.chain_config, tip_height, block))
@@ -468,7 +469,7 @@ pub async fn transaction<T: ApiServerStorage>(
         get_transaction(&transaction_id, &state).await?;
 
     let confirmations = if let Some(block) = &block {
-        let (tip_height, _) = best_block(&state).await?;
+        let tip_height = best_block(&state).await?.block_height();
         tip_height.sub(block.block_height())
     } else {
         None
@@ -577,59 +578,47 @@ pub async fn address<T: ApiServerStorage>(
         Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
 
-    let coin_balance = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
+    let transaction_history =
+        tx.get_address_transactions(&address.to_string()).await.map_err(|e| {
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
+        })?;
+
+    // if there is no transaction history then return not found
+    ensure!(
+        !transaction_history.is_empty(),
+        ApiServerWebServerError::NotFound(ApiServerWebServerNotFoundError::AddressNotFound,)
+    );
+
+    let coin_balance = tx
         .get_address_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(ApiServerWebServerError::NotFound(
-            ApiServerWebServerNotFoundError::AddressNotFound,
-        ))?;
+        .unwrap_or(Amount::ZERO);
 
-    let transaction_history = state
-        .db
-        .transaction_ro()
+    let locked_coin_balance = tx
+        .get_address_locked_balance(&address.to_string(), CoinOrTokenId::Coin)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_address_transactions(&address.to_string())
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?;
+        .unwrap_or(Amount::ZERO);
 
     Ok(Json(json!({
     "coin_balance": amount_to_json(coin_balance),
+    "locked_coin_balance": amount_to_json(locked_coin_balance),
     "transaction_history": transaction_history
     //TODO "token_balances": destination_summary.token_balances(),
     })))
-
-    // Ok(Json(json!({
-    //     "balance": rng.gen_range(1..100_000_000),
-    //     "tokens": {
-    //         "BTC": rng.gen_range(1..1000),
-    //         "ETH": rng.gen_range(1..1000),
-    //         "USDT": rng.gen_range(1..1000),
-    //         "USDC": rng.gen_range(1..1000),
-    //     },
-    //     "history": (0..rng.gen_range(1..20)).map(|_| { json!({
-    //         "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-    //         "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-    //     })}).collect::<Vec<_>>(),
-    // })))
 }
 
 pub async fn address_utxos<T: ApiServerStorage>(

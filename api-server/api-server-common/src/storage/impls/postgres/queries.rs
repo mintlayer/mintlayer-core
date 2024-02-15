@@ -35,8 +35,8 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
-        TransactionInfo, Utxo,
+        ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo,
+        PoolBlockStats, TransactionInfo, Utxo,
     },
 };
 
@@ -167,6 +167,40 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             )
     }
 
+    pub async fn get_address_locked_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.tx
+            .query_opt(
+                r#"
+                    SELECT amount
+                    FROM ml_address_locked_balance
+                    WHERE address = $1 AND coin_or_token_id = $2
+                    ORDER BY block_height DESC
+                    LIMIT 1;
+                "#,
+                &[&address, &coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .map_or_else(
+                || Ok(None),
+                |row| {
+                    let amount: Vec<u8> = row.get(0);
+                    let amount = Amount::decode_all(&mut amount.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Amount deserialization failed: {}",
+                            e
+                        ))
+                    })?;
+
+                    Ok(Some(amount))
+                },
+            )
+    }
+
     pub async fn del_address_balance_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -176,6 +210,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "DELETE FROM ml_address_balance WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_address_locked_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_address_locked_balance WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -197,6 +248,31 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 r#"
                     INSERT INTO ml_address_balance (address, block_height, coin_or_token_id, amount)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (address, block_height, coin_or_token_id)
+                    DO UPDATE SET amount = $4;
+                "#,
+                &[&address.to_string(), &height, &coin_or_token_id.encode(), &amount.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn set_address_locked_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml_address_locked_balance (address, block_height, coin_or_token_id, amount)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (address, block_height, coin_or_token_id)
                     DO UPDATE SET amount = $4;
@@ -288,15 +364,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
-    pub async fn get_best_block(
-        &mut self,
-    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    pub async fn get_best_block(&mut self) -> Result<BlockAuxData, ApiServerStorageError> {
         let row = self
             .tx
             .query_one(
                 r#"
                 (
-                    SELECT block_height, block_id
+                    SELECT block_height, block_id, block_timestamp
                     FROM ml_blocks
                     WHERE block_height IS NOT NULL
                     ORDER BY block_height DESC
@@ -304,7 +378,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 )
                 UNION ALL
                 (
-                    SELECT block_height, block_id
+                    SELECT block_height, block_id, block_timestamp
                     FROM ml_genesis
                     LIMIT 1
                 )
@@ -318,8 +392,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         let block_height: i64 = row.get(0);
         let block_id: Vec<u8> = row.get(1);
+        let block_timestamp: i64 = row.get(2);
 
         let block_height = BlockHeight::new(block_height as u64);
+        let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp as u64);
         let block_id = Id::<GenBlock>::decode_all(&mut block_id.as_slice()).map_err(|e| {
             ApiServerStorageError::InvalidInitializedState(format!(
                 "BlockId deserialization failed: {}",
@@ -327,7 +403,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             ))
         })?;
 
-        Ok((block_height, block_id))
+        Ok(BlockAuxData::new(block_id, block_height, block_timestamp))
     }
 
     async fn just_execute(&mut self, query: &str) -> Result<(), ApiServerStorageError> {
@@ -354,6 +430,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml_genesis (
             block_height bigint PRIMARY KEY,
             block_id bytea NOT NULL,
+            block_timestamp bigint NOT NULL,
             block_data bytea NOT NULL
         );",
         )
@@ -398,6 +475,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
+            "CREATE TABLE ml_address_locked_balance (
+                    address TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    coin_or_token_id bytea NOT NULL,
+                    amount bytea NOT NULL,
+                    PRIMARY KEY (address, block_height, coin_or_token_id)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
             "CREATE TABLE ml_address_transactions (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
@@ -415,6 +503,19 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     address TEXT NOT NULL,
                     utxo bytea NOT NULL,
                     PRIMARY KEY (outpoint, block_height)
+                );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml_locked_utxo (
+                    outpoint bytea NOT NULL,
+                    block_height bigint,
+                    address TEXT NOT NULL,
+                    utxo bytea NOT NULL,
+                    lock_until_block bigint,
+                    lock_until_timestamp bigint,
+                    PRIMARY KEY outpoint
                 );",
         )
         .await?;
@@ -509,6 +610,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         self.create_tables().await?;
 
+        let timestamp =
+            Self::block_time_to_postgres_friendly(chain_config.genesis_block().timestamp())?;
         // Insert row to the table
         self.tx
             .execute(
@@ -520,10 +623,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_genesis (block_height, block_id, block_data) VALUES ($1, $2, $3)",
+                "INSERT INTO ml_genesis (block_height, block_id, block_timestamp, block_data) VALUES ($1, $2, $3, $4)",
                 &[
                     &(0i64),
                     &chain_config.genesis_block_id().encode(),
+                    &timestamp,
                     &chain_config.genesis_block().encode(),
                 ],
             )
@@ -1363,6 +1467,47 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .collect()
     }
 
+    pub async fn get_locked_utxos_until_now(
+        &self,
+        block_height: BlockHeight,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let block_height = Self::block_height_to_postgres_friendly(block_height);
+        let from_time = Self::block_time_to_postgres_friendly(time_range.0)?;
+        let to_time = Self::block_time_to_postgres_friendly(time_range.1)?;
+
+        let rows = self
+            .tx
+            .query(
+                r#"SELECT outpoint, utxo
+                FROM ml_locked_utxo
+                WHERE lock_until_block = $1 OR lock_until_timestamp BETWEEN $2 AND $3
+                ;"#,
+                &[&block_height, &from_time, &to_time],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let outpoint: Vec<u8> = row.get(0);
+                let utxo: Vec<u8> = row.get(1);
+
+                let outpoint = UtxoOutPoint::decode_all(&mut outpoint.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Outpoint deserialization failed: {e}",
+                    ))
+                })?;
+                let utxo = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo deserialization failed: {e}",
+                    ))
+                })?;
+                Ok((outpoint, utxo))
+            })
+            .collect()
+    }
+
     pub async fn set_utxo_at_height(
         &mut self,
         outpoint: UtxoOutPoint,
@@ -1387,6 +1532,33 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn set_locked_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: LockedUtxo,
+        address: &str,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        logging::log::debug!("Inserting utxo {:?} for outpoint {:?}", utxo, outpoint);
+        let height = Self::block_height_to_postgres_friendly(block_height);
+        let (lock_time, lock_height) = utxo.lock().into_time_and_height();
+        let lock_time = lock_time.map(Self::block_time_to_postgres_friendly).transpose()?;
+        let lock_height = lock_height.map(Self::block_height_to_postgres_friendly);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml_locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (outpoint, block_height) DO UPDATE
+                    SET utxo = $2;",
+                &[&outpoint.encode(), &utxo.into_output().encode(), &lock_time, &lock_height, &address, &height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn del_utxo_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -1395,6 +1567,23 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute("DELETE FROM ml_utxo WHERE block_height > $1;", &[&height])
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_locked_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml_locked_utxo WHERE block_height > $1;",
+                &[&height],
+            )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 

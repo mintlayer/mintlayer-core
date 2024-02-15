@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -44,6 +44,14 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_address_balance(address, coin_or_token_id)
+    }
+
+    async fn get_address_locked_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction.get_address_locked_balance(address, coin_or_token_id)
     }
 
     async fn get_address_transactions(
@@ -131,7 +139,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         Ok(Some(self.transaction.get_storage_version()?))
     }
 
-    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         self.transaction.get_best_block()
     }
 
@@ -168,6 +176,14 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
         self.transaction.get_address_available_utxos(address)
+    }
+
+    async fn get_locked_utxos_until_now(
+        &self,
+        block_height: BlockHeight,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        self.transaction.get_locked_utxos_until_now(block_height, time_range)
     }
 
     async fn get_delegations_from_address(

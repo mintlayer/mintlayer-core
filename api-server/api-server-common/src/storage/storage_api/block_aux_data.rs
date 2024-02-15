@@ -14,23 +14,23 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};
 
 use super::TxAdditionalInfo;
 
-#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Encode, Decode, PartialEq, Eq)]
 pub struct BlockAuxData {
-    block_id: Id<Block>,
+    block_id: Id<GenBlock>,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
 }
 
 impl BlockAuxData {
     pub fn new(
-        block_id: Id<Block>,
+        block_id: Id<GenBlock>,
         block_height: BlockHeight,
         block_timestamp: BlockTimestamp,
     ) -> Self {
@@ -41,7 +41,7 @@ impl BlockAuxData {
         }
     }
 
-    pub fn block_id(&self) -> Id<Block> {
+    pub fn block_id(&self) -> Id<GenBlock> {
         self.block_id
     }
 
