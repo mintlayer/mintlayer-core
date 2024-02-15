@@ -115,8 +115,12 @@ where
         ConsoleCommand::Print(status_text)
     }
 
-    async fn wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
+    async fn non_empty_wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
         self.wallet.get_wallet_with_acc().await.map(|(w, _)| w)
+    }
+
+    async fn wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
+        self.wallet.get_wallet().await
     }
 
     async fn handle_cold_wallet_command<N: NodeInterface>(
@@ -134,8 +138,7 @@ where
                 whether_to_store_seed_phrase,
             } => {
                 let newly_generated_mnemonic = self
-                    .wallet
-                    .get_wallet()
+                    .wallet()
                     .await?
                     .create_wallet(
                         wallet_path,
@@ -165,11 +168,7 @@ where
                 wallet_path,
                 encryption_password,
             } => {
-                self.wallet
-                    .get_wallet()
-                    .await?
-                    .open_wallet(wallet_path, encryption_password)
-                    .await?;
+                self.wallet().await?.open_wallet(wallet_path, encryption_password).await?;
                 self.wallet.update_wallet::<N>().await;
 
                 Ok(ConsoleCommand::SetStatus {
@@ -179,7 +178,7 @@ where
             }
 
             ColdWalletCommand::CloseWallet => {
-                self.wallet.get_wallet().await?.close_wallet().await?;
+                self.wallet().await?.close_wallet().await?;
                 self.wallet.update_wallet::<N>().await;
 
                 Ok(ConsoleCommand::SetStatus {
@@ -189,7 +188,7 @@ where
             }
 
             ColdWalletCommand::EncryptPrivateKeys { password } => {
-                self.wallet().await?.encrypt_private_keys(password).await?;
+                self.non_empty_wallet().await?.encrypt_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully encrypted the private keys of the wallet.".to_owned(),
@@ -197,7 +196,7 @@ where
             }
 
             ColdWalletCommand::RemovePrivateKeysEncryption => {
-                self.wallet().await?.remove_private_key_encryption().await?;
+                self.non_empty_wallet().await?.remove_private_key_encryption().await?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully removed the encryption from the private keys.".to_owned(),
@@ -205,7 +204,7 @@ where
             }
 
             ColdWalletCommand::UnlockPrivateKeys { password } => {
-                self.wallet().await?.unlock_private_keys(password).await?;
+                self.non_empty_wallet().await?.unlock_private_keys(password).await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now unlocked.".to_owned(),
@@ -213,7 +212,7 @@ where
             }
 
             ColdWalletCommand::LockPrivateKeys => {
-                self.wallet().await?.lock_private_key_encryption().await?;
+                self.non_empty_wallet().await?.lock_private_key_encryption().await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now locked.".to_owned(),
@@ -221,7 +220,7 @@ where
             }
 
             ColdWalletCommand::ShowSeedPhrase => {
-                let phrase = self.wallet().await?.get_seed_phrase().await?;
+                let phrase = self.non_empty_wallet().await?.get_seed_phrase().await?;
 
                 let msg = if let Some(phrase) = phrase.seed_phrase {
                     format!("The stored seed phrase is \"{}\"", phrase.join(" "))
@@ -233,7 +232,7 @@ where
             }
 
             ColdWalletCommand::PurgeSeedPhrase => {
-                let phrase = self.wallet().await?.purge_seed_phrase().await?;
+                let phrase = self.non_empty_wallet().await?.purge_seed_phrase().await?;
 
                 let msg = if let Some(phrase) = phrase.seed_phrase {
                     format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
@@ -253,7 +252,10 @@ where
                     None => false,
                 };
 
-                self.wallet().await?.set_lookahead_size(lookahead_size, force_reduce).await?;
+                self.non_empty_wallet()
+                    .await?
+                    .set_lookahead_size(lookahead_size, force_reduce)
+                    .await?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. Lookahead size has been updated, will rescan the blockchain."
@@ -421,7 +423,7 @@ where
                 signed_challenge,
                 address,
             } => {
-                self.wallet()
+                self.non_empty_wallet()
                     .await?
                     .verify_challenge_hex(message, signed_challenge, address)
                     .await?;
@@ -436,7 +438,7 @@ where
                 signed_challenge,
                 address,
             } => {
-                self.wallet()
+                self.non_empty_wallet()
                     .await?
                     .verify_challenge(message, signed_challenge, address)
                     .await?;
@@ -523,7 +525,7 @@ where
             }
 
             WalletCommand::CreateNewAccount { name } => {
-                let new_acc = self.wallet().await?.create_account(name).await?;
+                let new_acc = self.non_empty_wallet().await?.create_account(name).await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -568,7 +570,8 @@ where
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
-                let balance_opt = self.wallet().await?.stake_pool_balance(pool_id).await?;
+                let balance_opt =
+                    self.non_empty_wallet().await?.stake_pool_balance(pool_id).await?;
                 match balance_opt.balance {
                     Some(balance) => Ok(ConsoleCommand::Print(balance)),
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -587,7 +590,7 @@ where
                 do_not_store,
             } => {
                 let new_tx = self
-                    .wallet()
+                    .non_empty_wallet()
                     .await?
                     .submit_raw_transaction(
                         transaction,
@@ -615,7 +618,7 @@ where
                 )?;
 
                 let ComposedTransaction { hex, fees } = self
-                    .wallet()
+                    .non_empty_wallet()
                     .await?
                     .compose_transaction(input_utxos, outputs, only_transaction)
                     .await?;
@@ -764,14 +767,14 @@ where
             }
 
             WalletCommand::Rescan => {
-                self.wallet().await?.rescan().await?;
+                self.non_empty_wallet().await?.rescan().await?;
                 Ok(ConsoleCommand::Print(
                     "Successfully rescanned the blockchain".to_owned(),
                 ))
             }
 
             WalletCommand::SyncWallet => {
-                self.wallet().await?.sync().await?;
+                self.non_empty_wallet().await?.sync().await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 

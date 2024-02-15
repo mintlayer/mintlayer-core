@@ -45,8 +45,10 @@ impl CliWalletState {
     }
 }
 
+/// This struct ensures we keep the local state in sync with the state of the wallet we are
+/// connected to, as it can change through another interface like RPC communication
 pub struct WalletWithState<W> {
-    // the CliController if there is a loaded wallet
+    // the CliWalletState if there is a loaded wallet
     state: Option<CliWalletState>,
     wallet: W,
 }
