@@ -82,7 +82,7 @@ pub async fn run(
     };
 
     let in_top_x_mb = cli_args.in_top_x_mb;
-    if cli_args.connect_to_rpc_wallet_address.is_some() {
+    if cli_args.remote_rpc_wallet_address.is_some() {
         connect_to_rpc_wallet(
             cli_args,
             chain_type,
@@ -210,9 +210,9 @@ async fn connect_to_rpc_wallet(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     let rpc_auth = match (
-        &cli_args.connect_to_rpc_wallet_cookie_file,
-        &cli_args.connect_to_rpc_wallet_username,
-        &cli_args.connect_to_rpc_wallet_password,
+        &cli_args.remote_rpc_wallet_cookie_file,
+        &cli_args.remote_rpc_wallet_username,
+        &cli_args.remote_rpc_wallet_password,
     ) {
         (None, None, None) => {
             let cookie_file_path =
@@ -233,7 +233,7 @@ async fn connect_to_rpc_wallet(
         }
     };
 
-    let remote_socket_address = cli_args.connect_to_rpc_wallet_address.clone().expect("checked");
+    let remote_socket_address = cli_args.remote_rpc_wallet_address.clone().expect("checked");
     let (repl_handle, _wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 

@@ -78,7 +78,7 @@ class WalletCliController:
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
         # if it is a cold wallet or wallet connecting to an RPC wallet no need to specify node address and cookie
-        if "--connect-to-rpc-wallet-address" in self.wallet_args or "--cold-wallet" in self.wallet_args:
+        if "--remote-rpc-wallet-address" in self.wallet_args or "--cold-wallet" in self.wallet_args:
             wallet_args = ["regtest" ] + self.wallet_args + self.chain_config_args
         else:
             wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args

@@ -900,7 +900,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
             .and_then(|tx| {
-                let str = JsonEncoded::new(tx.get_transaction()).to_string();
+                let str = JsonEncoded::new((tx.get_transaction(), tx.state())).to_string();
                 let str = dehexify_all_addresses(self.wallet_rpc.chain_config(), &str);
                 serde_json::from_str::<serde_json::Value>(&str)
                     .map_err(WalletRpcHandlesClientError::SerializationError)

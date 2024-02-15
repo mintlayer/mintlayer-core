@@ -25,7 +25,7 @@ use common::chain::{
 use common::primitives::id::WithId;
 use common::primitives::{BlockHeight, Id, Idable};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Decode, Encode, serde::Serialize)]
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]

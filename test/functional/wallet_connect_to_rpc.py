@@ -81,7 +81,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet1.create_wallet("wallet1")
 
             # open a new CLI wallet that connects to the previous one through RPC
-            async with WalletCliController(node, self.config, self.log, wallet_args=["--connect-to-rpc-wallet-address", "127.0.0.1:23134"]) as wallet2:
+            async with WalletCliController(node, self.config, self.log, wallet_args=["--remote-rpc-wallet-address", "127.0.0.1:23134"]) as wallet2:
 
                 # check it is on genesis
                 best_block_height = await wallet2.get_best_block_height()
@@ -125,7 +125,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert_equal(best_block_id, block_id)
 
                 output = await wallet2.get_transaction(tx_id)
-                output = output["V1"]
+                output = output[0]["V1"]
                 assert_equal(1, len(output["inputs"]))
                 assert_equal(genesis_block_id, output["inputs"][0]["Utxo"]["id"]["BlockReward"])
                 assert_equal(0, output["inputs"][0]["Utxo"]["index"])

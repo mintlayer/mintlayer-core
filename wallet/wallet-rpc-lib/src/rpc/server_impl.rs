@@ -780,7 +780,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             self.get_transaction(account_index.index::<N>()?, transaction_id.take())
                 .await
                 .map(|tx| {
-                    let str = JsonEncoded::new(tx.get_transaction()).to_string();
+                    let str = JsonEncoded::new((tx.get_transaction(), tx.state())).to_string();
                     let str = dehexify_all_addresses(&self.chain_config, &str);
                     serde_json::from_str::<serde_json::Value>(&str)
                 }),
