@@ -23,7 +23,9 @@ pub use balances::Balances;
 pub use block_info::{BlockInfo, CreatedBlockInfo};
 pub use common::primitives::DecimalAmount;
 use common::primitives::H256;
-pub use transaction::{InsepectTransaction, SignatureStats, TransactionToInspect};
+pub use transaction::{
+    InsepectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WalletInfo {

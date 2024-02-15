@@ -26,15 +26,21 @@ pub enum TransactionToInspect {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SignatureStats {
-    pub num_inputs: usize,
+pub struct ValidatedSignatures {
     pub num_valid_signatures: usize,
     pub num_invalid_signatures: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SignatureStats {
+    pub num_inputs: usize,
+    pub total_signatures: usize,
+    pub validated_signatures: Option<ValidatedSignatures>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InsepectTransaction {
     pub tx: HexEncoded<Transaction>,
-    pub fees: Balances,
-    pub signatures: SignatureStats,
+    pub fees: Option<Balances>,
+    pub stats: SignatureStats,
 }

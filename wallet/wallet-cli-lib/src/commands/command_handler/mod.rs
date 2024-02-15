@@ -33,7 +33,7 @@ use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InsepectTransaction,
-    NewTransaction, NftMetadata, SignatureStats, TokenMetadata,
+    NewTransaction, NftMetadata, SignatureStats, TokenMetadata, ValidatedSignatures,
 };
 
 use crate::errors::WalletCliError;
@@ -937,21 +937,43 @@ where
             WalletCommand::InspectTransaction { transaction } => {
                 let InsepectTransaction {
                     tx,
-                    fees,
-                    signatures:
+                    stats:
                         SignatureStats {
                             num_inputs,
-                            num_valid_signatures,
-                            num_invalid_signatures,
+                            total_signatures,
+                            validated_signatures,
                         },
+                    fees,
                 } = self.non_empty_wallet().await?.transaction_inspect(transaction).await?;
 
-                let missing_signatures = num_inputs - num_valid_signatures - num_invalid_signatures;
                 let summary = tx.take().text_summary(chain_config);
-                let mut output_str = format!("{summary}\n\
-                    number of inputs: {num_inputs} of which {num_valid_signatures} have valid signatures, {num_invalid_signatures} with invalid signatures and {missing_signatures} missing signatures\n"
-                );
-                format_fees(&mut output_str, fees, chain_config);
+                let mut output_str = format!("{summary}\n");
+                if let Some(ValidatedSignatures {
+                    num_valid_signatures,
+                    num_invalid_signatures,
+                }) = validated_signatures
+                {
+                    let missing_signatures = num_inputs - total_signatures;
+                    writeln!(
+                        output_str,
+                        "number of inputs: {num_inputs} and total signatures {total_signatures}, of which {num_valid_signatures} have valid signatures, {num_invalid_signatures} with invalid signatures and {missing_signatures} missing signatures\n"
+                    )
+                    .expect("Writing to a memory buffer should not fail");
+                } else {
+                    let missing_signatures = num_inputs - total_signatures;
+                    writeln!(
+                        output_str,
+                        "number of inputs: {num_inputs} and total signatures {total_signatures} with {missing_signatures} missing signatures\nThe signatures could not be verified because the UTXOs were spend or not found"
+                    )
+                    .expect("Writing to a memory buffer should not fail");
+                }
+
+                if let Some(fees) = fees {
+                    format_fees(&mut output_str, fees, chain_config);
+                } else {
+                    writeln!(output_str, "Could not calcualte fees")
+                        .expect("Writing to a memory buffer should not fail");
+                }
 
                 Ok(ConsoleCommand::Print(output_str))
             }
