@@ -40,7 +40,7 @@ pub enum WalletCliError<N: NodeInterface> {
     InvalidInput(String),
     #[error("Wallet file already open")]
     WalletFileAlreadyOpen,
-    #[error("Please open or create wallet file first")]
+    #[error("Please open or create a wallet file first")]
     NoWallet,
     #[error("Please select an account to use")]
     NoSelectedAccount,
@@ -60,4 +60,10 @@ pub enum WalletCliError<N: NodeInterface> {
     WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
     #[error("{0}")]
     WalletClientRpcError(#[from] WalletRpcError),
+    #[error("A new wallet has been opened between commands")]
+    NewWalletWasOpened,
+    #[error("A different wallet than the existing one has been opened between commands")]
+    DifferentWalletWasOpened,
+    #[error("The wallet has been closed between commands")]
+    ExistingWalletWasClosed,
 }

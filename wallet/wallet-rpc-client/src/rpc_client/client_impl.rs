@@ -32,7 +32,10 @@ use p2p_types::{
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
-use wallet_controller::{types::Balances, ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes};
+use wallet_controller::{
+    types::{Balances, WalletInfo},
+    ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
+};
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
@@ -101,8 +104,8 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn account_names(&self) -> Result<Vec<Option<String>>, Self::Error> {
-        WalletRpcClient::account_names(&self.http_client)
+    async fn wallet_info(&self) -> Result<WalletInfo, Self::Error> {
+        WalletRpcClient::wallet_info(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }

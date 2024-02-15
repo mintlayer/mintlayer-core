@@ -20,7 +20,10 @@ use common::{
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
-use wallet_controller::{types::BlockInfo, ConnectedPeer};
+use wallet_controller::{
+    types::{BlockInfo, WalletInfo},
+    ConnectedPeer,
+};
 use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
@@ -59,8 +62,8 @@ trait WalletRpc {
     #[method(name = "wallet_close")]
     async fn close_wallet(&self) -> rpc::RpcResult<()>;
 
-    #[method(name = "wallet_account_names")]
-    async fn account_names(&self) -> rpc::RpcResult<Vec<Option<String>>>;
+    #[method(name = "wallet_info")]
+    async fn wallet_info(&self) -> rpc::RpcResult<WalletInfo>;
 
     #[method(name = "wallet_sync")]
     async fn sync(&self) -> rpc::RpcResult<()>;

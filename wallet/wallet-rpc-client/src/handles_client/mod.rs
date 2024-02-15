@@ -35,7 +35,7 @@ use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
     version::get_version,
 };
-use wallet_controller::{ConnectedPeer, ControllerConfig};
+use wallet_controller::{types::WalletInfo, ConnectedPeer, ControllerConfig};
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
@@ -141,9 +141,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn account_names(&self) -> Result<Vec<Option<String>>, Self::Error> {
+    async fn wallet_info(&self) -> Result<WalletInfo, Self::Error> {
         self.wallet_rpc
-            .account_names()
+            .wallet_info()
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

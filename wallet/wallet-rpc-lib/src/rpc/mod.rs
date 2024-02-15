@@ -51,7 +51,7 @@ use common::{
 pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
-    types::{Balances, BlockInfo},
+    types::{Balances, BlockInfo, WalletInfo},
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
@@ -1185,17 +1185,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet.call(move |controller| controller.delete_seed_phrase()).await?
     }
 
-    pub async fn number_of_accounts(&self) -> WRpcResult<usize, N> {
+    pub async fn wallet_info(&self) -> WRpcResult<WalletInfo, N> {
         self.wallet
-            .call(move |controller| Ok::<_, RpcError<N>>(controller.account_names().count()))
-            .await?
-    }
-
-    pub async fn account_names(&self) -> WRpcResult<Vec<Option<String>>, N> {
-        self.wallet
-            .call(move |controller| {
-                Ok::<_, RpcError<N>>(controller.account_names().cloned().collect())
-            })
+            .call(move |controller| Ok::<_, RpcError<N>>(controller.wallet_info()))
             .await?
     }
 

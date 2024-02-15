@@ -21,3 +21,10 @@ mod block_info;
 pub use balances::Balances;
 pub use block_info::BlockInfo;
 pub use common::primitives::DecimalAmount;
+use common::primitives::H256;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WalletInfo {
+    pub wallet_id: H256,
+    pub account_names: Vec<Option<String>>,
+}

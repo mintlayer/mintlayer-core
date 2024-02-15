@@ -34,7 +34,8 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::BlockInfo, ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
+    types::{BlockInfo, WalletInfo},
+    ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -108,8 +109,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.close_wallet().await)
     }
 
-    async fn account_names(&self) -> rpc::RpcResult<Vec<Option<String>>> {
-        rpc::handle_result(self.account_names().await)
+    async fn wallet_info(&self) -> rpc::RpcResult<WalletInfo> {
+        rpc::handle_result(self.wallet_info().await)
     }
 
     async fn rescan(&self) -> rpc::RpcResult<()> {

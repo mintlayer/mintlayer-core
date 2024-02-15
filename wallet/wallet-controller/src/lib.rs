@@ -33,7 +33,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use types::Balances;
+use types::{Balances, WalletInfo};
 
 use read::ReadOnlyController;
 use sync::InSync;
@@ -108,6 +108,10 @@ pub enum ControllerError<T: NodeInterface> {
     NodeNotInSyncYet,
     #[error("Lookahead size cannot be 0")]
     InvalidLookaheadSize,
+    #[error("Wallet file already open")]
+    WalletFileAlreadyOpen,
+    #[error("Please open or create wallet file first")]
+    NoWallet,
 }
 
 #[derive(Clone, Copy)]
@@ -376,8 +380,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {
-        self.wallet.account_names()
+    pub fn wallet_info(&self) -> WalletInfo {
+        let (wallet_id, account_names) = self.wallet.wallet_info();
+        WalletInfo {
+            wallet_id,
+            account_names,
+        }
     }
 
     pub async fn get_token_number_of_decimals(

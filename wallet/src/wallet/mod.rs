@@ -46,8 +46,8 @@ use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
 };
-use common::primitives::id::WithId;
-use common::primitives::{Amount, BlockHeight, Id};
+use common::primitives::id::{hash_encoded, WithId};
+use common::primitives::{Amount, BlockHeight, Id, H256};
 use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -688,8 +688,10 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.len()
     }
 
-    pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {
-        self.accounts.values().map(|acc| acc.name())
+    pub fn wallet_info(&self) -> (H256, Vec<Option<String>>) {
+        let acc_id = self.accounts.values().next().expect("not empty").get_account_id();
+        let names = self.accounts.values().map(|acc| acc.name().clone()).collect();
+        (hash_encoded(&acc_id), names)
     }
 
     fn create_next_unused_account(

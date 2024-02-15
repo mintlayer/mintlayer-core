@@ -75,21 +75,21 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--wallet-rpc-bind-address", "127.0.0.1:23134", "--enable-wallet-rpc-interface", "--wallet-rpc-no-authentication"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, wallet_args=["--wallet-rpc-bind-address", "127.0.0.1:23134", "--enable-wallet-rpc-interface", "--wallet-rpc-no-authentication"]) as wallet1:
 
             # new wallet
-            await wallet.create_wallet()
+            await wallet1.create_wallet("wallet1")
 
             # open a new CLI wallet that connects to the previous one through RPC
-            async with WalletCliController(node, self.config, self.log, wallet_args=["--connect-to-rpc-wallet-address", "127.0.0.1:23134"]) as rpc_wallet:
+            async with WalletCliController(node, self.config, self.log, wallet_args=["--connect-to-rpc-wallet-address", "127.0.0.1:23134"]) as wallet2:
 
                 # check it is on genesis
-                best_block_height = await rpc_wallet.get_best_block_height()
+                best_block_height = await wallet2.get_best_block_height()
                 self.log.info(f"best block height = {best_block_height}")
                 assert_equal(best_block_height, '0')
 
                 # new address
-                pub_key_bytes = await rpc_wallet.new_public_key()
+                pub_key_bytes = await wallet2.new_public_key()
                 assert_equal(len(pub_key_bytes), 33)
 
                 # Get chain tip
@@ -106,7 +106,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
                 self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
-                assert_in("No transaction found", await rpc_wallet.get_transaction(tx_id))
+                assert_in("No transaction found", await wallet2.get_transaction(tx_id))
 
                 node.mempool_submit_transaction(encoded_tx, {})
                 assert node.mempool_contains_tx(tx_id)
@@ -115,16 +115,16 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert not node.mempool_contains_tx(tx_id)
 
                 # sync the wallet
-                assert_in("Success", await rpc_wallet.sync())
+                assert_in("Success", await wallet2.sync())
 
                 # check wallet best block if it is synced
-                best_block_height = await rpc_wallet.get_best_block_height()
+                best_block_height = await wallet2.get_best_block_height()
                 assert_equal(best_block_height, '1')
 
-                best_block_id = await rpc_wallet.get_best_block()
+                best_block_id = await wallet2.get_best_block()
                 assert_equal(best_block_id, block_id)
 
-                output = await rpc_wallet.get_transaction(tx_id)
+                output = await wallet2.get_transaction(tx_id)
                 output = output["V1"]
                 assert_equal(1, len(output["inputs"]))
                 assert_equal(genesis_block_id, output["inputs"][0]["Utxo"]["id"]["BlockReward"])
@@ -134,15 +134,35 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert_equal(coins_to_send * ATOMS_PER_COIN, output["outputs"][0]["Transfer"][0]["Coin"]["val"])
 
                 # check the raw encoding
-                output = await rpc_wallet.get_raw_signed_transaction(tx_id)
+                output = await wallet2.get_raw_signed_transaction(tx_id)
                 assert_equal(output, encoded_tx)
 
                 # same balance from both wallets
-                assert_in(f"Coins amount: {coins_to_send}", await rpc_wallet.get_balance())
-                assert_in(f"Coins amount: {coins_to_send}", await wallet.get_balance())
+                assert_in(f"Coins amount: {coins_to_send}", await wallet2.get_balance())
+                assert_in(f"Coins amount: {coins_to_send}", await wallet1.get_balance())
 
-                address = await rpc_wallet.new_address()
-                output = await rpc_wallet.send_to_address(address, 1)
+
+                # ==== Try to close/open the wallet from wallet1 and check that wallet2 will report the change
+                # close and create a new wallet
+                await wallet1.close_wallet()
+                await wallet1.create_wallet("wallet2")
+                # first command will error as the wallet is not the same
+                assert_in("A different wallet than the existing one has been opened between commands", await wallet2.get_balance())
+                # second command will work fine
+                assert_in(f"Coins amount: 0", await wallet2.get_balance())
+
+                # close the wallet
+                await wallet1.close_wallet()
+                assert_in(f"The wallet has been closed between commands", await wallet2.get_balance())
+                assert_in(f"Please open or create a wallet file first", await wallet2.get_balance())
+
+                await wallet1.open_wallet("wallet1")
+                assert_in(f"A new wallet has been opened between commands", await wallet2.get_balance())
+                assert_in(f"Coins amount: {coins_to_send}", await wallet2.get_balance())
+                assert_in(f"Coins amount: {coins_to_send}", await wallet1.get_balance())
+
+                address = await wallet2.new_address()
+                output = await wallet2.send_to_address(address, 1)
                 assert_in("The transaction was submitted successfully", output)
 
 

@@ -27,7 +27,7 @@ use p2p_types::{
 };
 use serialization::hex_encoded::HexEncoded;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
-use wallet_controller::{ConnectedPeer, ControllerConfig};
+use wallet_controller::{types::WalletInfo, ConnectedPeer, ControllerConfig};
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
@@ -66,7 +66,7 @@ pub trait WalletInterface {
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;
 
-    async fn account_names(&self) -> Result<Vec<Option<String>>, Self::Error>;
+    async fn wallet_info(&self) -> Result<WalletInfo, Self::Error>;
 
     async fn sync(&self) -> Result<(), Self::Error>;
 
