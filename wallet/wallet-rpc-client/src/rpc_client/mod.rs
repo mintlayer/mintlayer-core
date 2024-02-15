@@ -14,22 +14,18 @@
 // limitations under the License.
 
 pub mod client_impl;
-pub mod cold_wallet_client;
 
-use std::sync::Arc;
-
-use common::chain::ChainConfig;
 use rpc::new_http_client;
 use rpc::ClientError;
 use rpc::RpcAuthData;
 use rpc::RpcHttpClient;
 
-use crate::node_traits::NodeInterface;
+use crate::wallet_rpc_traits::WalletInterface;
 
 #[derive(thiserror::Error, Debug)]
-pub enum NodeRpcError {
+pub enum WalletRpcError {
     #[error("Initialization error: {0}")]
-    InitializationError(Box<NodeRpcError>),
+    InitializationError(Box<WalletRpcError>),
     #[error("Decoding error: {0}")]
     DecodingError(#[from] serialization::hex::HexError),
     #[error("Client creation error: {0}")]
@@ -39,37 +35,26 @@ pub enum NodeRpcError {
 }
 
 #[derive(Clone, Debug)]
-pub struct ColdWalletClient {
-    chain_config: Arc<ChainConfig>,
-}
-
-impl ColdWalletClient {
-    pub fn new(chain_config: Arc<ChainConfig>) -> Self {
-        Self { chain_config }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct NodeRpcClient {
+pub struct ClientWalletRpc {
     http_client: RpcHttpClient,
 }
 
-impl NodeRpcClient {
+impl ClientWalletRpc {
     pub async fn new(
         remote_socket_address: String,
         rpc_auth: RpcAuthData,
-    ) -> Result<Self, NodeRpcError> {
+    ) -> Result<Self, WalletRpcError> {
         let host = format!("http://{remote_socket_address}");
 
         let http_client =
-            new_http_client(host, rpc_auth).map_err(NodeRpcError::ClientCreationError)?;
+            new_http_client(host, rpc_auth).map_err(WalletRpcError::ClientCreationError)?;
 
         let client = Self { http_client };
 
         client
-            .get_best_block_id()
+            .version()
             .await
-            .map_err(|e| NodeRpcError::InitializationError(Box::new(e)))?;
+            .map_err(|e| WalletRpcError::InitializationError(Box::new(e)))?;
 
         Ok(client)
     }

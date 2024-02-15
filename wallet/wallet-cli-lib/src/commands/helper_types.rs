@@ -16,19 +16,15 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
-use wallet_controller::{NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes};
+use wallet_types::utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
     address::Address,
-    chain::{
-        output_value::OutputValue,
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, TokenTotalSupply},
-        ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint,
-    },
-    primitives::{Amount, DecimalAmount, Id, H256},
+    chain::{output_value::OutputValue, ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
+    primitives::{DecimalAmount, Id, H256},
 };
-use wallet_rpc_lib::types::PoolInfo;
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
+use wallet_types::with_locked::WithLocked;
 
 use crate::errors::WalletCliError;
 
@@ -139,10 +135,10 @@ pub enum CliStoreSeedPhrase {
 }
 
 impl CliStoreSeedPhrase {
-    pub fn to_walet_type(self) -> StoreSeedPhrase {
+    pub fn to_bool(self) -> bool {
         match self {
-            Self::StoreSeedPhrase => StoreSeedPhrase::Store,
-            Self::DoNotStoreSeedPhrase => StoreSeedPhrase::DoNotStore,
+            Self::StoreSeedPhrase => true,
+            Self::DoNotStoreSeedPhrase => false,
         }
     }
 }
@@ -277,11 +273,13 @@ fn parse_fixed_token_supply<N: NodeInterface>(
     }
 }
 
-pub fn parse_token_amount<N: NodeInterface>(
+fn parse_token_amount<N: NodeInterface>(
     token_number_of_decimals: u8,
     value: &str,
-) -> Result<Amount, WalletCliError<N>> {
-    Amount::from_fixedpoint_str(value, token_number_of_decimals)
+) -> Result<DecimalAmount, WalletCliError<N>> {
+    DecimalAmount::from_str(value)
+        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?
+        .with_decimals(token_number_of_decimals)
         .ok_or_else(|| WalletCliError::<N>::InvalidInput(value.to_owned()))
 }
 
@@ -337,10 +335,10 @@ pub enum CliIsFreezable {
 }
 
 impl CliIsFreezable {
-    pub fn to_wallet_types(self) -> IsTokenFreezable {
+    pub fn to_bool(self) -> bool {
         match self {
-            Self::Freezable => IsTokenFreezable::Yes,
-            Self::NotFreezable => IsTokenFreezable::No,
+            Self::Freezable => true,
+            Self::NotFreezable => false,
         }
     }
 }
@@ -352,10 +350,10 @@ pub enum CliIsUnfreezable {
 }
 
 impl CliIsUnfreezable {
-    pub fn to_wallet_types(self) -> IsTokenUnfreezable {
+    pub fn to_bool(self) -> bool {
         match self {
-            Self::Unfreezable => IsTokenUnfreezable::Yes,
-            Self::NotUnfreezable => IsTokenUnfreezable::No,
+            Self::Unfreezable => true,
+            Self::NotUnfreezable => false,
         }
     }
 }

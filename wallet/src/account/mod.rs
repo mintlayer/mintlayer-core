@@ -30,6 +30,7 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
+use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
@@ -96,6 +97,15 @@ pub struct CurrentFeeRate {
 pub enum TransactionToSign {
     Tx(Transaction),
     Partial(PartiallySignedTransaction),
+}
+
+impl TransactionToSign {
+    pub fn to_hex(self) -> String {
+        match self {
+            Self::Tx(tx) => HexEncoded::new(tx).to_string(),
+            Self::Partial(tx) => HexEncoded::new(tx).to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -1251,6 +1261,7 @@ impl Account {
                 TxInput::Utxo(outpoint) => {
                     // find utxo from cache
                     self.find_unspent_utxo_with_destination(outpoint, current_block_info)
+                        .map(|(out, dest)| (Some(out), Some(dest)))
                 }
                 TxInput::Account(acc_outpoint) => {
                     // find delegation destination
@@ -1286,22 +1297,18 @@ impl Account {
         PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)
     }
 
-    fn find_unspent_utxo_with_destination(
+    pub fn find_unspent_utxo_with_destination(
         &self,
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,
-    ) -> WalletResult<(Option<TxOutput>, Option<Destination>)> {
+    ) -> WalletResult<(TxOutput, Destination)> {
         let (txo, _) =
             self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
 
         Ok((
-            Some(txo.clone()),
-            Some(
-                get_tx_output_destination(txo, &|pool_id| {
-                    self.output_cache.pool_data(*pool_id).ok()
-                })
+            txo.clone(),
+            get_tx_output_destination(txo, &|pool_id| self.output_cache.pool_data(*pool_id).ok())
                 .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
-            ),
         ))
     }
 
@@ -1617,8 +1624,9 @@ impl Account {
 
         for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
-            wallet_events.del_transaction(&tx_id);
-            self.output_cache.remove_tx(&tx_id.into_item_id())?;
+            let source = tx_id.into_item_id();
+            self.output_cache.remove_tx(&source)?;
+            wallet_events.del_transaction(self.account_index(), source);
         }
 
         Ok(())
@@ -1658,7 +1666,7 @@ impl Account {
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
-            wallet_events.set_transaction(&id, &tx);
+            wallet_events.set_transaction(self.account_index(), &tx);
             self.output_cache.add_tx(id.into_item_id(), tx)?;
             Ok(true)
         } else {

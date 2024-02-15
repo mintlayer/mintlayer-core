@@ -48,10 +48,10 @@ use common::{
         Idable,
     },
 };
-pub use interface::WalletRpcServer;
+pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
-    types::{Balances, BlockInfo},
+    types::{Balances, BlockInfo, WalletInfo},
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
@@ -159,7 +159,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet.call(|w| w.lock_wallet()).await?
     }
 
-    async fn best_block(&self) -> WRpcResult<BlockInfo, N> {
+    pub async fn best_block(&self) -> WRpcResult<BlockInfo, N> {
         let res = self.wallet.call(|w| Ok::<_, RpcError<N>>(w.best_block())).await??;
         Ok(BlockInfo::from_tuple(res))
     }
@@ -1185,17 +1185,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet.call(move |controller| controller.delete_seed_phrase()).await?
     }
 
-    pub async fn number_of_accounts(&self) -> WRpcResult<usize, N> {
+    pub async fn wallet_info(&self) -> WRpcResult<WalletInfo, N> {
         self.wallet
-            .call(move |controller| Ok::<_, RpcError<N>>(controller.account_names().count()))
-            .await?
-    }
-
-    pub async fn account_names(&self) -> WRpcResult<Vec<Option<String>>, N> {
-        self.wallet
-            .call(move |controller| {
-                Ok::<_, RpcError<N>>(controller.account_names().cloned().collect())
-            })
+            .call(move |controller| Ok::<_, RpcError<N>>(controller.wallet_info()))
             .await?
     }
 
@@ -1306,9 +1298,11 @@ pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
         auth_credentials,
     } = config;
 
+    let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
     rpc::Builder::new(bind_addr, auth_credentials)
         .with_method_list("list_methods")
-        .register(WalletRpc::new(wallet_handle, node_rpc, chain_config).into_rpc())
+        .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
+        .register(WalletEventsRpcServer::into_rpc(wallet_rpc))
         .build()
         .await
 }

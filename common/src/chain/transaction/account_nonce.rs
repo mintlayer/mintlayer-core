@@ -18,7 +18,19 @@ use serialization::{Decode, Encode};
 /// An incremental value that represents sequential number of spending from an account.
 /// It's equivalent to the nonce in Ethereum and helps preserving order of transactions and
 /// avoid transaction replay.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct AccountNonce(#[codec(compact)] u64);
 
 impl AccountNonce {

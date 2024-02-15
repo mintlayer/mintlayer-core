@@ -17,8 +17,11 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::{ControllerConfig, NodeInterface};
-use wallet_rpc_lib::config::WalletRpcConfig;
+use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
+use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
+use wallet_rpc_lib::{
+    config::WalletRpcConfig, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
+};
 
 use crate::{
     commands::{CommandHandler, ConsoleCommand, WalletCommand},
@@ -33,34 +36,95 @@ pub enum Event<N: NodeInterface> {
     },
 }
 
+pub enum WalletType<N> {
+    Local {
+        node_rpc: N,
+        wallet_rpc_config: Option<WalletRpcConfig>,
+    },
+    Remote {
+        remote_socket_address: String,
+        rpc_auth: rpc::RpcAuthData,
+    },
+}
+
 pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
     chain_config: &Arc<ChainConfig>,
     mut event_rx: mpsc::UnboundedReceiver<Event<N>>,
     in_top_x_mb: usize,
-    node_rpc: N,
-    wallet_rpc_config: Option<WalletRpcConfig>,
+    wallet_type: WalletType<N>,
 ) -> Result<(), WalletCliError<N>> {
-    let mut command_handler = CommandHandler::new(
-        ControllerConfig { in_top_x_mb },
-        chain_config.clone(),
-        node_rpc,
-        wallet_rpc_config,
-    )
-    .await?;
+    match wallet_type {
+        WalletType::Local {
+            node_rpc,
+            wallet_rpc_config,
+        } => {
+            let wallet_service = WalletService::start(chain_config.clone(), None, node_rpc)
+                .await
+                .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 
-    loop {
-        tokio::select! {
-            cmd = event_rx.recv() => {
-                if let Some(Event::HandleCommand { command, res_tx }) = cmd {
-                    let res = command_handler.handle_wallet_command(chain_config, command).await;
-                    let _ = res_tx.send(res);
-                } else {
-                    return Ok(());
+            let wallet_handle = wallet_service.handle();
+            let node_rpc = wallet_service.node_rpc().clone();
+            let chain_config = wallet_service.chain_config().clone();
+
+            let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
+            let server_rpc = if let Some(rpc_config) = wallet_rpc_config {
+                Some(
+                    rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
+                        .with_method_list("list_methods")
+                        .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
+                        .register(WalletEventsRpcServer::into_rpc(wallet_rpc.clone()))
+                        .build()
+                        .await
+                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
+                )
+            } else {
+                None
+            };
+            let wallet = WalletRpcHandlesClient::new(wallet_rpc, server_rpc);
+
+            let mut command_handler =
+                CommandHandler::new(ControllerConfig { in_top_x_mb }, wallet).await;
+
+            loop {
+                tokio::select! {
+                    cmd = event_rx.recv() => {
+                        if let Some(Event::HandleCommand { command, res_tx }) = cmd {
+                            let res = command_handler.handle_wallet_command(&chain_config, command).await;
+                            let _ = res_tx.send(res);
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    _ = command_handler.rpc_completed() => {
+                            return Ok(());
+                    }
                 }
             }
-            _ = command_handler.rpc_completed() => {
-                    return Ok(());
+        }
+        WalletType::Remote {
+            rpc_auth,
+            remote_socket_address,
+        } => {
+            let wallet = ClientWalletRpc::new(remote_socket_address, rpc_auth).await?;
+
+            let mut command_handler =
+                CommandHandler::new(ControllerConfig { in_top_x_mb }, wallet).await;
+
+            loop {
+                tokio::select! {
+                    cmd = event_rx.recv() => {
+                        if let Some(Event::HandleCommand { command, res_tx }) = cmd {
+                            let res = command_handler.handle_wallet_command(chain_config, command).await;
+                            let _ = res_tx.send(res);
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    _ = command_handler.rpc_completed() => {
+                            return Ok(());
+                    }
+                }
             }
         }
-    }
+    };
 }

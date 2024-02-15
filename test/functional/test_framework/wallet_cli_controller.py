@@ -16,6 +16,7 @@
 #  limitations under the License.
 """A wrapper around a CLI wallet instance"""
 
+import json
 import os
 import asyncio
 import re
@@ -76,7 +77,11 @@ class WalletCliController:
     async def __aenter__(self):
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
-        wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args
+        # if it is a cold wallet or wallet connecting to an RPC wallet no need to specify node address and cookie
+        if "--remote-rpc-wallet-address" in self.wallet_args or "--cold-wallet" in self.wallet_args:
+            wallet_args = ["regtest" ] + self.wallet_args + self.chain_config_args
+        else:
+            wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 
@@ -95,12 +100,12 @@ class WalletCliController:
         self.wallet_log_file.close()
         self.wallet_commands_file.close()
 
-    async def _read_available_output(self) -> str:
+    async def _read_available_output(self, can_be_empty: bool) -> str:
         result = ''
         output_buf = bytes([])
         num_tries = 0
         try:
-            while not result and num_tries < 5:
+            while num_tries < 5:
                 output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=READ_TIMEOUT_SEC)
                 self.wallet_commands_file.write(output)
                 output_buf = output_buf + output
@@ -113,6 +118,9 @@ class WalletCliController:
                     result = output_buf.decode()
                 except:
                     pass
+
+                if result.strip() or can_be_empty:
+                    break
 
 
             try:
@@ -131,13 +139,13 @@ class WalletCliController:
             self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''
 
-    async def _write_command(self, cmd: str) -> str:
+    async def _write_command(self, cmd: str, can_be_empty: bool = False) -> str:
         encoded_cmd = cmd.encode()
         self.wallet_commands_file.write(b"writing command: ")
         self.wallet_commands_file.write(encoded_cmd)
         self.process.stdin.write(encoded_cmd)
         await self.process.stdin.drain()
-        return (await self._read_available_output()).strip()
+        return (await self._read_available_output(can_be_empty)).strip()
 
     async def create_wallet(self, name: str = "wallet", mnemonic: Optional[str] = None) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
@@ -207,12 +215,16 @@ class WalletCliController:
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
 
-        pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{([^}]*)\}[^}]*index:\s*(\d+)'
-        matches = re.findall(pattern, output, re.DOTALL)
-        return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
+        j = json.loads(output)
 
-    async def get_transaction(self, tx_id: str) -> str:
-        return await self._write_command(f"transaction-get {tx_id}\n")
+        return [UtxoOutpoint(id=match["outpoint"]["id"]["Transaction"], index=int(match["outpoint"]["index"])) for match in j]
+
+    async def get_transaction(self, tx_id: str):
+        out = await self._write_command(f"transaction-get {tx_id}\n")
+        try:
+            return json.loads(out)
+        except:
+            return out
 
     async def get_raw_signed_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-get-signed-raw {tx_id}\n")
@@ -316,7 +328,7 @@ class WalletCliController:
         return await self._write_command(f"node-submit-transaction {transaction} {store_tx}\n")
 
     async def list_pool_ids(self) -> List[PoolData]:
-        output = await self._write_command("staking-list-pool-ids\n")
+        output = await self._write_command("staking-list-pool-ids\n", can_be_empty=True)
         self.log.info(f"pools: {output}");
         pattern = r"Pool Id: ([a-zA-Z0-9]+), Balance: (\d+[.]?\d+), Creation Block heigh: (\d+), timestamp: (\d+), staker ([a-zA-Z0-9]+), decommission_key ([a-zA-Z0-9]+), vrf_public_key ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
@@ -342,7 +354,7 @@ class WalletCliController:
         return await self._write_command(f"delegation-stake {amount} {delegation_id}\n")
 
     async def list_delegation_ids(self) -> List[DelegationData]:
-        output = await self._write_command("delegation-list-ids\n")
+        output = await self._write_command("delegation-list-ids\n", can_be_empty=True)
         pattern = r'Delegation Id: ([a-zA-Z0-9]+), Balance: (\d+)'
         matches = re.findall(pattern, output)
         return [DelegationData(delegation_id, balance) for delegation_id, balance in matches]
@@ -382,7 +394,7 @@ class WalletCliController:
 
     async def list_pending_transactions(self) -> List[str]:
         output = await self._write_command(f"transaction-list-pending\n")
-        pattern = r'id: Id<Transaction>\{([^}]*)\}'
+        pattern = r'Id<Transaction>\{([^}]*)\}'
         return re.findall(pattern, output)
 
     async def list_transactions_by_address(self, address: Optional[str] = None, limit: int = 100) -> List[str]:

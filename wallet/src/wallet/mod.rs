@@ -46,8 +46,8 @@ use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
 };
-use common::primitives::id::WithId;
-use common::primitives::{Amount, BlockHeight, Id};
+use common::primitives::id::{hash_encoded, WithId};
+use common::primitives::{Amount, BlockHeight, Id, H256};
 use common::size_estimation::SizeEstimationError;
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -70,7 +70,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, KeyPurpose, KeychainUsageState};
+use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -688,8 +688,10 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.len()
     }
 
-    pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {
-        self.accounts.values().map(|acc| acc.name())
+    pub fn wallet_info(&self) -> (H256, Vec<Option<String>>) {
+        let acc_id = self.accounts.values().next().expect("not empty").get_account_id();
+        let names = self.accounts.values().map(|acc| acc.name().clone()).collect();
+        (hash_encoded(&acc_id), names)
     }
 
     fn create_next_unused_account(
@@ -874,6 +876,19 @@ impl<B: storage::Backend> Wallet<B> {
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
             .collect();
         Ok(utxos)
+    }
+
+    pub fn find_unspent_utxo_with_destination(
+        &self,
+        outpoint: &UtxoOutPoint,
+    ) -> Option<(TxOutput, Destination)> {
+        self.accounts.values().find_map(|acc: &Account| {
+            let current_block_info = BlockInfo {
+                height: acc.best_block().1,
+                timestamp: self.latest_median_time,
+            };
+            acc.find_unspent_utxo_with_destination(outpoint, current_block_info).ok()
+        })
     }
 
     pub fn pending_transactions(

@@ -131,12 +131,17 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             timestamp = block['block']['V1']['header']['block_header']['timestamp']['timestamp']
 
             output = await wallet.get_transaction(tx_id)
-            expected_tx_inputs = f"inputs: [Utxo(UtxoOutPoint {{ id: BlockReward(Id<GenBlock>{{{genesis_block_id}}}), index: 0 }})]"
-            assert_in(expected_tx_inputs, output)
-            expected_tx_outputs = f"outputs: [Transfer(Coin(Amount {{ val: {coins_to_send * ATOMS_PER_COIN} }})"
-            assert_in(expected_tx_outputs, output)
-            expected_tx_state = f"state: Confirmed(BlockHeight(1), BlockTimestamp {{ timestamp: {timestamp} }}, 0)"
-            assert_in(expected_tx_state, output)
+            tx_output = output[0]["V1"]
+            assert_equal(1, len(tx_output["inputs"]))
+            assert_equal(genesis_block_id, tx_output["inputs"][0]["Utxo"]["id"]["BlockReward"])
+            assert_equal(0, tx_output["inputs"][0]["Utxo"]["index"])
+
+            assert_equal(1, len(tx_output["outputs"]))
+            assert_equal(coins_to_send * ATOMS_PER_COIN, tx_output["outputs"][0]["Transfer"][0]["Coin"]["val"])
+
+            assert_equal(int(best_block_height), output[1]['Confirmed'][0])
+            assert_equal(timestamp, output[1]['Confirmed'][1]['timestamp'])
+            assert_equal(0, output[1]['Confirmed'][2])
 
             # check the raw encoding
             output = await wallet.get_raw_signed_transaction(tx_id)

@@ -18,7 +18,7 @@ pub mod non_interactive;
 
 use clap::{Command, FromArgMatches, Subcommand};
 use tokio::sync::mpsc;
-use wallet_controller::NodeInterface;
+use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{
     cli_event_loop::Event,

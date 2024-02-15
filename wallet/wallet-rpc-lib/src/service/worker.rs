@@ -163,6 +163,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
     }
 
     pub fn close_wallet(&mut self) -> Result<(), ControllerError<N>> {
+        utils::ensure!(self.controller.is_some(), ControllerError::NoWallet);
         self.controller = None;
         Ok(())
     }
@@ -172,6 +173,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         wallet_path: PathBuf,
         password: Option<String>,
     ) -> Result<(), ControllerError<N>> {
+        utils::ensure!(
+            self.controller.is_none(),
+            ControllerError::WalletFileAlreadyOpen
+        );
         let wallet =
             WalletController::open_wallet(self.chain_config.clone(), wallet_path, password)?;
 
@@ -193,6 +198,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         whether_to_store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
     ) -> Result<CreatedWallet, RpcError<N>> {
+        utils::ensure!(
+            self.controller.is_none(),
+            ControllerError::WalletFileAlreadyOpen
+        );
         // TODO: Support other languages
         let language = wallet::wallet::Language::English;
         let newly_generated_mnemonic = mnemonic.is_none();

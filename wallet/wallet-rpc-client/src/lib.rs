@@ -13,18 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support types for presenting data in user-facing settings
-
-mod balances;
-mod block_info;
-
-pub use balances::Balances;
-pub use block_info::BlockInfo;
-pub use common::primitives::DecimalAmount;
-use common::primitives::H256;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct WalletInfo {
-    pub wallet_id: H256,
-    pub account_names: Vec<Option<String>>,
-}
+pub mod handles_client;
+pub mod rpc_client;
+pub mod wallet_rpc_traits;

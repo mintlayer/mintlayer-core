@@ -57,7 +57,7 @@ class WalletSignMessage(BitcoinTestFramework):
         if use_hex:
             message = message.encode().hex()
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true", "--cold-wallet"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 

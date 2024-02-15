@@ -20,12 +20,13 @@ rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
-wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
+wallet-rpc-client = { path = "../wallet-rpc-client" }
 
 clap = { workspace = true, features = ["derive"] }
+async-trait.workspace = true
 crossterm.workspace = true
 directories.workspace = true
 humantime.workspace = true

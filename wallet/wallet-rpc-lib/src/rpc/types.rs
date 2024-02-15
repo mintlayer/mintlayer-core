@@ -39,7 +39,7 @@ pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 use wallet::account::PoolData;
 pub use wallet_controller::types::{Balances, BlockInfo, DecimalAmount};
-use wallet_controller::NodeInterface;
+pub use wallet_controller::{ControllerConfig, NodeInterface};
 
 use crate::service::SubmitError;
 
@@ -92,6 +92,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("{0}")]
     DestinationSigError(#[from] DestinationSigError),
+
+    #[error("Invalid hex data deposit")]
+    InvalidHexData,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -112,6 +115,14 @@ pub struct AccountIndexArg {
 impl AccountIndexArg {
     pub fn index<N: NodeInterface>(&self) -> Result<U31, RpcError<N>> {
         U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
+    }
+}
+
+impl From<U31> for AccountIndexArg {
+    fn from(value: U31) -> Self {
+        Self {
+            account: value.into_u32(),
+        }
     }
 }
 
@@ -312,7 +323,7 @@ impl NftMetadata {
 }
 
 #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
-enum TokenTotalSupply {
+pub enum TokenTotalSupply {
     Fixed(DecimalAmount),
     Lockable,
     Unlimited,
@@ -340,8 +351,8 @@ pub struct TokenMetadata {
     pub token_ticker: String,
     pub number_of_decimals: u8,
     pub metadata_uri: String,
-    token_supply: TokenTotalSupply,
-    is_freezable: bool,
+    pub token_supply: TokenTotalSupply,
+    pub is_freezable: bool,
 }
 
 impl TokenMetadata {
@@ -407,4 +418,22 @@ impl StakingStatus {
             Self::NotStaking
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum CreatedWallet {
+    UserProvidedMenmonic,
+    NewlyGeneratedMnemonic(String),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ComposedTransaction {
+    pub hex: String,
+    pub fees: Balances,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MaybeSignedTransaction {
+    pub hex: String,
+    pub is_complete: bool,
 }

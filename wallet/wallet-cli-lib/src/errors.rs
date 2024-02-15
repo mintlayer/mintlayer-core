@@ -18,13 +18,12 @@ use std::path::PathBuf;
 use crypto::key::hdkd::u31::U31;
 use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
 use wallet::WalletError;
-use wallet_controller::NodeInterface;
+use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
+use wallet_rpc_lib::types::NodeInterface;
 use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError<N: NodeInterface> {
-    #[error("Controller error: {0}")]
-    Controller(wallet_controller::ControllerError<N>),
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, String),
     #[error(
@@ -39,11 +38,9 @@ pub enum WalletCliError<N: NodeInterface> {
     InvalidCommandInput(clap::Error),
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Invalid mnemonic: {0}")]
-    InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Wallet file already open")]
     WalletFileAlreadyOpen,
-    #[error("Please open or create wallet file first")]
+    #[error("Please open or create a wallet file first")]
     NoWallet,
     #[error("Please select an account to use")]
     NoSelectedAccount,
@@ -59,4 +56,14 @@ pub enum WalletCliError<N: NodeInterface> {
     WalletRpcError(#[from] RpcError<N>),
     #[error("Failed to convert to signed transaction: {0}")]
     FailedToConvertToSignedTransaction(#[from] WalletError),
+    #[error("{0}")]
+    WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
+    #[error("{0}")]
+    WalletClientRpcError(#[from] WalletRpcError),
+    #[error("A new wallet has been opened between commands")]
+    NewWalletWasOpened,
+    #[error("A different wallet than the existing one has been opened between commands")]
+    DifferentWalletWasOpened,
+    #[error("The wallet has been closed between commands")]
+    ExistingWalletWasClosed,
 }

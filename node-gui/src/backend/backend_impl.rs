@@ -158,9 +158,10 @@ impl Backend {
 
     fn get_account_info(controller: &GuiController, account_index: U31) -> AccountInfo {
         let name = controller
-            .account_names()
+            .wallet_info()
+            .account_names
+            .into_iter()
             .nth(account_index.into_u32() as usize)
-            .cloned()
             .flatten();
         let controller = controller.readonly_controller(account_index);
         let transaction_list = controller

@@ -45,6 +45,10 @@ impl PeerId {
     pub const fn from_u64(n: u64) -> Self {
         Self(n)
     }
+
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for PeerId {

@@ -109,7 +109,7 @@ pub struct CliArgs {
     pub in_top_x_mb: usize,
 
     /// use the wallet without a connection to a node
-    #[clap(long)]
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
     pub cold_wallet: bool,
 
     /// enable the RPC interface of the wallet (i.e., run a wallet RPC server with the CLI)
@@ -135,6 +135,25 @@ pub struct CliArgs {
     /// Enable running the wallet service without RPC authentication (assuming wallet RPC server is enabled)
     #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]))]
     pub wallet_rpc_no_authentication: bool,
+
+    /// Optionally, the wallet CLI can only be an interface to another remote wallet, accessible through RPC.
+    /// So, you can start an RPC daemon, and make this CLI connect to it to control it.
+    /// This is useful for servers, where the RPC wallet can be left staking,
+    /// and the wallet CLI is used to control its state.
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    pub remote_rpc_wallet_address: Option<String>,
+
+    /// For a remote RPC wallet, this is the path to the RPC cookie file. If not set, the value is read from the default cookie file location.
+    #[clap(long)]
+    pub remote_rpc_wallet_cookie_file: Option<String>,
+
+    /// For a remote RPC wallet, this is the RPC username (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub remote_rpc_wallet_username: Option<String>,
+
+    /// For a remote RPC wallet, this is the RPC password (either provide a username and password, or use a cookie file. You cannot use both)
+    #[clap(long)]
+    pub remote_rpc_wallet_password: Option<String>,
 }
 
 impl From<&Network> for ChainType {
