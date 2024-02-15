@@ -22,7 +22,7 @@ test-rpc-functions = { path = "../test-rpc-functions" }
 utils = { path = "../utils" }
 
 anyhow.workspace = true
-clap = { workspace = true, features = ["derive", "env"] }
+clap = { workspace = true, features = ["derive"] }
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false }
 serde = { workspace = true, features = ["derive"] }

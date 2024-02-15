@@ -150,6 +150,7 @@ flate2 = "1.0"
 fs4 = "0.7"
 futures = { version = "0.3", default-features = false }
 generic-array = "0.14"
+heck = "0.4"
 hex = "0.4"
 hex-literal = "0.4"
 hmac = "0.12"

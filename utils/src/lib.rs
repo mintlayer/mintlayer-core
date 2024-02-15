@@ -17,6 +17,7 @@ pub mod array_2d;
 pub mod atomics;
 pub mod blockuntilzero;
 pub mod bloom_filters;
+pub mod clap_utils;
 pub mod config_setting;
 pub mod const_value;
 pub mod cookie;

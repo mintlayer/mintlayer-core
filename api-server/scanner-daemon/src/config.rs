@@ -13,30 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::{Network, PostgresConfig};
-use clap::Parser;
 use std::net::SocketAddr;
 
+use clap::Parser;
+
+use api_server_common::{Network, PostgresConfig};
+use utils::clap_utils;
+
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
 pub struct ApiServerScannerArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// Optional RPC address
-    #[clap(long, env = "MINTLAYER_RPC_ADDRESS")]
+    #[clap(long)]
     pub rpc_address: Option<SocketAddr>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
-    #[clap(long, env = "MINTLAYER_RPC_COOKIE_FILE")]
+    #[clap(long)]
     pub rpc_cookie_file: Option<String>,
 
     /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long, env = "MINTLAYER_RPC_USERNAME")]
+    #[clap(long)]
     pub rpc_username: Option<String>,
 
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long, env = "MINTLAYER_RPC_PASSWORD")]
+    #[clap(long)]
     pub rpc_password: Option<String>,
 
     /// Postgres config values

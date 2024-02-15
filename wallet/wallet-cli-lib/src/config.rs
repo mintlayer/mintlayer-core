@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+use utils::clap_utils;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
@@ -35,6 +36,7 @@ pub struct RegtestOptions {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("WALLET")))]
 #[clap(version)]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {
@@ -58,54 +60,54 @@ impl WalletCliArgs {
 #[derive(Args, Clone, Debug)]
 pub struct CliArgs {
     /// Optional path to the wallet file
-    #[clap(long, env = "MINTLAYER_WALLET_FILE")]
+    #[clap(long)]
     pub wallet_file: Option<PathBuf>,
 
     /// Optional password for a locked wallet
-    #[clap(long, env = "MINTLAYER_WALLET_PASSWORD")]
+    #[clap(long)]
     pub wallet_password: Option<String>,
 
     /// Start staking after the start
-    #[clap(long, env = "MINTLAYER_START_STAKING")]
+    #[clap(long)]
     pub start_staking: bool,
 
     /// Optional RPC address
-    #[clap(long, env = "MINTLAYER_NODE_RPC_ADDRESS")]
+    #[clap(long)]
     pub node_rpc_address: Option<String>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
-    #[clap(long, env = "MINTLAYER_NODE_RPC_COOKIE_FILE")]
+    #[clap(long)]
     pub node_rpc_cookie_file: Option<String>,
 
     /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long, env = "MINTLAYER_NODE_RPC_USERNAME")]
+    #[clap(long)]
     pub node_rpc_username: Option<String>,
 
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long, env = "MINTLAYER_NODE_RPC_PASSWORD")]
+    #[clap(long)]
     pub node_rpc_password: Option<String>,
 
     /// Run commands from the file
-    #[clap(long, env = "MINTLAYER_COMMANDS_FILE")]
+    #[clap(long)]
     pub commands_file: Option<PathBuf>,
 
     /// Preserve history file between application runs.
     /// This can be very insecure as it also stores things like the seed-phrase, use at your own risk!
-    #[clap(long, env = "MINTLAYER_HISTORY_FILE")]
+    #[clap(long)]
     pub history_file: Option<PathBuf>,
 
     /// Exit on error. The default is true in non-interactive mode and false in interactive mode.
-    #[clap(long, env = "MINTLAYER_EXIT_ON_ERROR")]
+    #[clap(long)]
     pub exit_on_error: Option<bool>,
 
     /// vi input mode
-    #[clap(long, env = "MINTLAYER_VI_MODE")]
+    #[clap(long)]
     pub vi_mode: bool,
 
     /// In which top N MB should we aim for our transactions to be in the mempool
     /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
     /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
-    #[arg(long, default_value_t = 5, env = "MINTLAYER_IN_TOP_X_MB")]
+    #[arg(long, default_value_t = 5)]
     pub in_top_x_mb: usize,
 
     /// use the wallet without a connection to a node
@@ -113,31 +115,27 @@ pub struct CliArgs {
     pub cold_wallet: bool,
 
     /// enable the RPC interface of the wallet (i.e., run a wallet RPC server with the CLI)
-    #[clap(long, env = "MINTLAYER_ENABLE_WALLET_RPC_INTERFACE")]
+    #[clap(long)]
     pub enable_wallet_rpc_interface: bool,
 
     /// Address to bind the RPC server to (assuming wallet RPC server is enabled)
-    #[arg(long, value_name("ADDR"), env = "MINTLAYER_WALLET_RPC_BIND_ADDRESS")]
+    #[arg(long, value_name("ADDR"))]
     pub wallet_rpc_bind_address: Option<String>,
 
     /// Path to the wallet RPC cookie file (assuming wallet RPC server is enabled). If not set, the value is read from the default cookie file location.
-    #[clap(long, env = "MINTLAYER_WALLET_RPC_COOKIE_FILE")]
+    #[clap(long)]
     pub wallet_rpc_cookie_file: Option<PathBuf>,
 
     /// RPC username (assuming wallet RPC server is enabled) (either provide a username and password, or use a cookie file, or disable auth)
-    #[clap(long, env = "MINTLAYER_WALLET_RPC_USERNAME")]
+    #[clap(long)]
     pub wallet_rpc_username: Option<String>,
 
     /// RPC password (assuming wallet RPC server is enabled) (either provide a username and password, or use a cookie file, or disable auth)
-    #[clap(long, env = "MINTLAYER_WALLET_RPC_PASSWORD")]
+    #[clap(long)]
     pub wallet_rpc_password: Option<String>,
 
     /// Enable running the wallet service without RPC authentication (assuming wallet RPC server is enabled)
-    #[arg(
-        long,
-        conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]),
-        env = "MINTLAYER_WALLET_NO_AUTHENTICATION"
-    )]
+    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file"]))]
     pub wallet_rpc_no_authentication: bool,
 
     /// Optionally, the wallet CLI can only be an interface to another remote wallet, accessible through RPC.

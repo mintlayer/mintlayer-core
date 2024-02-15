@@ -17,7 +17,8 @@ use logging::log;
 use wallet_rpc_lib::{cmdline, error::RunError};
 
 async fn run() -> Result<(), RunError> {
-    let (ws_config, rpc_config) = <cmdline::Args as clap::Parser>::parse().into_config()?;
+    let (ws_config, rpc_config) =
+        <cmdline::WalletRpcDaemonArgs as clap::Parser>::parse().into_config()?;
 
     wallet_rpc_lib::run(ws_config, rpc_config).await?;
 

@@ -22,12 +22,13 @@ use rpc::{
     rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
 };
-use utils::ensure;
+use utils::{clap_utils, ensure};
 
 use crate::config::{WalletRpcConfig, WalletServiceConfig};
 
 /// Service providing an RPC interface to a wallet
 #[derive(Parser)]
+#[clap(mut_args(clap_utils::env_adder("WALLET_RPC_DAEMON")))]
 #[command(
     version,
     about,
@@ -37,7 +38,7 @@ use crate::config::{WalletRpcConfig, WalletServiceConfig};
             .required(true)
     ),
 )]
-pub struct Args {
+pub struct WalletRpcDaemonArgs {
     /// The wallet file to operate on
     #[arg()]
     wallet_path: Option<PathBuf>,
@@ -47,89 +48,58 @@ pub struct Args {
         long,
         value_name("TYPE"),
         value_parser(parse_chain_type),
-        default_value("mainnet"),
-        env = "MINTLAYER_CHAIN_TYPE"
+        default_value("mainnet")
     )]
     chain_type: ChainType,
 
     /// RPC address of the node to connect to
-    #[arg(long, value_name("ADDR"), env = "MINTLAYER_NODE_RPC_ADDRESS")]
+    #[arg(long, value_name("ADDR"))]
     node_rpc_address: Option<String>,
 
     /// Node RPC authentication cookie file path
     #[arg(
         long,
         value_name("PATH"),
-        conflicts_with_all(["node_username", "node_password"]),
-        env = "MINTLAYER_NODE_COOKIE_FILE"
+        conflicts_with_all(["node_username", "node_password"])
     )]
     node_cookie_file: Option<PathBuf>,
 
     /// Node login user name
-    #[arg(
-        long,
-        value_name("NAME"),
-        requires("node_password"),
-        env = "MINTLAYER_NODE_USERNAME"
-    )]
+    #[arg(long, value_name("NAME"), requires("node_password"))]
     node_username: Option<String>,
 
     /// Node login password
-    #[arg(
-        long,
-        value_name("PASS"),
-        requires("node_username"),
-        env = "MINTLAYER_NODE_PASSWORD"
-    )]
+    #[arg(long, value_name("PASS"), requires("node_username"))]
     node_password: Option<String>,
 
     /// Address to bind the wallet RPC interface to
-    #[arg(long, value_name("ADDR"), env = "MINTLAYER_RPC_BIND_ADDRESS")]
+    #[arg(long, value_name("ADDR"))]
     rpc_bind_address: Option<String>,
 
     /// Custom file path for the RPC cookie file.
     /// If not set, the cookie file is created in the data dir.
-    #[arg(
-        long,
-        value_name("PATH"),
-        conflicts_with_all(["rpc_username", "rpc_password"]),
-        env = "MINTLAYER_RPC_COOKIE_FILE"
-    )]
+    #[arg(long, value_name("PATH"), conflicts_with_all(["rpc_username", "rpc_password"]))]
     rpc_cookie_file: Option<PathBuf>,
 
     /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
-    #[arg(
-        long,
-        value_name("USER"),
-        requires("rpc_password"),
-        env = "MINTLAYER_RPC_USERNAME"
-    )]
+    #[arg(long, value_name("USER"), requires("rpc_password"))]
     rpc_username: Option<String>,
 
     /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
-    #[arg(
-        long,
-        value_name("PASS"),
-        requires("rpc_username"),
-        env = "MINTLAYER_RPC_PASSWORD"
-    )]
+    #[arg(long, value_name("PASS"), requires("rpc_username"))]
     rpc_password: Option<String>,
 
     /// Enable running the wallet service without RPC authentication
-    #[arg(
-        long,
-        conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]),
-        env = "MINTLAYER_RPC_NO_AUTHENTICATION"
-    )]
+    #[arg(long, conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]))]
     rpc_no_authentication: bool,
 
     #[clap(flatten)]
     chain_config: ChainConfigOptions,
 }
 
-impl Args {
+impl WalletRpcDaemonArgs {
     pub fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
             wallet_path: wallet_file,

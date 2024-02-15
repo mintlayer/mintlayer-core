@@ -20,6 +20,7 @@ use trust_dns_client::rr::Name;
 
 use common::primitives::per_thousand::PerThousand;
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+use utils::clap_utils;
 
 use crate::dns_server::MinSameSoftwareVersionNodesRatio;
 
@@ -30,13 +31,14 @@ pub enum Network {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("DNS_SRV")))]
 pub struct DnsServerConfig {
     /// Optional path to the data directory
-    #[clap(long, env = "MINTLAYER_DATADIR")]
+    #[clap(long)]
     pub datadir: Option<PathBuf>,
 
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// UDP socket addresses to listen on.
@@ -45,28 +47,27 @@ pub struct DnsServerConfig {
         long,
         default_values_t = vec!["[::]:53".to_string()],
         value_delimiter(','),
-        env = "MINTLAYER_BIND_ADDR"
     )]
     pub bind_addr: Vec<String>,
 
     /// Reserved node addresses to connect.
     /// Can be specified multiple times and/or be a comma-separated list.
-    #[clap(long, value_delimiter(','), env = "MINTLAYER_RESERVED_NODES")]
+    #[clap(long, value_delimiter(','))]
     pub reserved_nodes: Vec<IpOrSocketAddress>,
 
     /// Hostname of the DNS seed
-    #[clap(long, env = "MINTLAYER_HOST")]
+    #[clap(long)]
     pub host: Name,
 
     /// Hostname of the nameserver.
     /// If set, the NS record will be added.
-    #[clap(long, env = "MINTLAYER_NAMESERVER")]
+    #[clap(long)]
     pub nameserver: Option<Name>,
 
     /// Email address reported in SOA records.
     /// `@` symbol should be replaced with `.`.
     /// If set, the SOA record will be added.
-    #[clap(long, env = "MINTLAYER_MBOX")]
+    #[clap(long)]
     pub mbox: Option<Name>,
 
     /// When publishing addresses, we give preference to nodes that have the same software version

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use clap::{Parser, ValueEnum};
+
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::config::{Builder, ChainType};
@@ -21,7 +22,7 @@ use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::u31::U31;
 use crypto::key::hdkd::{child_number::ChildNumber, derivable::Derivable};
-use utils::ensure;
+use utils::{clap_utils, ensure};
 use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::WalletError;
 use wallet::{
@@ -61,23 +62,19 @@ impl std::fmt::Display for Network {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("WALLET_ADDR_GEN")))]
 #[clap(version)]
 pub struct CliArgs {
     /// The network, for which addresses will be generated
-    #[arg(long, value_enum, default_value_t = Network::Mainnet, env = "MINTLAYER_NETWORK")]
+    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// Number of addresses to generate and display
-    #[clap(
-        long,
-        short = 'n',
-        default_value_t = 1,
-        env = "MINTLAYER_ADDRESS_COUNT"
-    )]
+    #[clap(long, short = 'n', default_value_t = 1)]
     pub address_count: u8,
 
     /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
-    #[clap(long, env = "MINTLAYER_MNEMONIC")]
+    #[clap(long)]
     #[arg(hide = true)]
     pub mnemonic: Option<String>,
 }

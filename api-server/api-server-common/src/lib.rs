@@ -40,27 +40,27 @@ impl From<Network> for ChainType {
 #[derive(Parser, Debug)]
 pub struct PostgresConfig {
     /// Postgres host
-    #[clap(long, default_value = "localhost", env = "MINTLAYER_POSTGRES_HOST")]
+    #[clap(long, default_value = "localhost")]
     pub postgres_host: String,
 
     /// Postgres port
-    #[clap(long, default_value = "5432", env = "MINTLAYER_POSTGRES_PORT")]
+    #[clap(long, default_value = "5432")]
     pub postgres_port: u16,
 
     /// Postgres user
-    #[clap(long, default_value = "postgres", env = "MINTLAYER_POSTGRES_USER")]
+    #[clap(long, default_value = "postgres")]
     pub postgres_user: String,
 
     /// Postgres password
-    #[clap(long, env = "MINTLAYER_POSTGRES_PASSWORD")]
+    #[clap(long)]
     pub postgres_password: Option<String>,
 
     /// Postgres database
-    #[clap(long, env = "MINTLAYER_POSTGRES_DATABASE")]
+    #[clap(long)]
     pub postgres_database: Option<String>,
 
     /// Postgres max connections
-    #[clap(long, default_value = "10", env = "MINTLAYER_POSTGRES_MAX_CONNECTIONS")]
+    #[clap(long, default_value = "10")]
     pub postgres_max_connections: u32,
 }
 

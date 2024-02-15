@@ -25,7 +25,7 @@ wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-rpc-client = { path = "../wallet-rpc-client" }
 
-clap = { workspace = true, features = ["derive", "env"] }
+clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
 crossterm.workspace = true
 directories.workspace = true
