@@ -13,14 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-use api_server_common::{Network, PostgresConfig};
-use utils_networking::NetworkAddressWithPort;
-
 use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
 use utils::clap_utils;
+use utils_networking::NetworkAddressWithPort;
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
