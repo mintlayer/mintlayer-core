@@ -881,6 +881,7 @@ where
         }
 
         if Self::should_load_addresses_from(peer_role) {
+            log::debug!("Asking peer {peer_id} for addresses");
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -1227,6 +1228,12 @@ where
             needed_outbound_full_relay_conn_count,
         );
 
+        log::debug!(
+            "Need to establish {} full relay connection(s); selected addresses: {:?}",
+            needed_outbound_full_relay_conn_count,
+            new_full_relay_conn_addresses
+        );
+
         // TODO: in bitcoin they also try to create an extra outbound full relay connection
         // to an address in a reachable network in which there are no outbound full relay or
         // manual connections (see CConnman::MaybePickPreferredNetwork for reference).
@@ -1261,6 +1268,12 @@ where
             needed_outbound_block_relay_conn_count,
         );
 
+        log::debug!(
+            "Need to establish {} block relay connection(s); selected addresses: {:?}",
+            needed_outbound_block_relay_conn_count,
+            new_block_relay_conn_addresses
+        );
+
         for address in &new_block_relay_conn_addresses {
             self.connect(
                 *address,
@@ -1280,6 +1293,11 @@ where
                     PeerRole::OutboundReserved,
                 )
         });
+
+        log::debug!(
+            "Need to establish connections to these reserved addresses: {:?}",
+            new_reserved_conn_addresses
+        );
 
         for address in &new_reserved_conn_addresses {
             self.connect(*address, OutboundConnectType::Reserved);
@@ -1396,6 +1414,11 @@ where
         peer_id: PeerId,
         addresses: Vec<PeerAddress>,
     ) -> crate::Result<()> {
+        log::debug!(
+            "[peer id = {peer_id}] Handling addr list response, address count = {}",
+            addresses.len()
+        );
+
         let peer = self
             .peers
             .get_mut(&peer_id)

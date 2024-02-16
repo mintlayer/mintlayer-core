@@ -362,20 +362,3 @@ impl CliIsUnfreezable {
 pub enum CliForceReduce {
     IKnowWhatIAmDoing,
 }
-
-#[derive(Debug, Clone)]
-pub struct Duration(std::time::Duration);
-
-impl FromStr for Duration {
-    type Err = humantime::DurationError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Duration(humantime::parse_duration(s)?))
-    }
-}
-
-impl From<Duration> for std::time::Duration {
-    fn from(value: Duration) -> Self {
-        value.0
-    }
-}

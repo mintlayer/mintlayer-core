@@ -1132,7 +1132,7 @@ where
                 Ok(ConsoleCommand::Print(msg))
             }
             WalletCommand::Ban { address, duration } => {
-                self.wallet().await?.ban_address(address, duration.into()).await?;
+                self.wallet().await?.ban_address(address, duration).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::Unban { address } => {
