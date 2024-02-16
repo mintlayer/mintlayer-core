@@ -91,7 +91,6 @@ pub async fn handle_message_processing_result(
         // Some of these errors aren't technically fatal,
         // but they shouldn't occur in the sync manager.
         e @ (P2pError::DialError(_)
-        | P2pError::ConversionError(_)
         | P2pError::PeerError(_)
         | P2pError::NoiseHandshakeError(_)
         | P2pError::InvalidConfigurationValue(_)

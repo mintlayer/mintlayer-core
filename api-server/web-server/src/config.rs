@@ -22,6 +22,7 @@ use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
 use utils::clap_utils;
+use utils_networking::NetworkAddressWithPort;
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
@@ -51,7 +52,7 @@ pub struct ApiServerWebServerConfig {
 
     /// Optional RPC address
     #[clap(long)]
-    pub rpc_address: Option<SocketAddr>,
+    pub rpc_address: Option<NetworkAddressWithPort>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]

@@ -17,6 +17,7 @@ node-comm = { path = "../../wallet/wallet-node-client" }
 node-lib = { path = "../../node-lib" }
 rpc = { path = "../../rpc" }
 utils = { path = "../../utils" }
+utils-networking = { path = "../../utils/networking" }
 
 clap = { workspace = true, features = ["derive"] }
 thiserror.workspace = true

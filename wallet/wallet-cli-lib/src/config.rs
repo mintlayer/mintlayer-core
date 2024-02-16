@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use utils::clap_utils;
+use utils_networking::NetworkAddressWithPort;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
@@ -73,7 +74,7 @@ pub struct CliArgs {
 
     /// Optional RPC address
     #[clap(long)]
-    pub node_rpc_address: Option<String>,
+    pub node_rpc_address: Option<NetworkAddressWithPort>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]

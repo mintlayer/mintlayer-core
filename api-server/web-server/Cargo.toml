@@ -15,6 +15,7 @@ crypto = { path = "../../crypto/" }
 logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
+utils-networking = { path = "../../utils/networking" }
 rpc = { path = "../../rpc" }
 node-comm = { path = "../../wallet/wallet-node-client" }
 node-lib = { path = "../../node-lib" }

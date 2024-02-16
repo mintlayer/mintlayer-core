@@ -20,7 +20,10 @@ pub mod console;
 pub mod errors;
 mod repl;
 
-use std::sync::Arc;
+use std::{
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
+};
 
 use cli_event_loop::Event;
 use commands::WalletCommand;
@@ -145,14 +148,18 @@ async fn start_hot_wallet(
     };
 
     let rpc_address = {
-        let default_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
-        cli_args.node_rpc_address.clone().unwrap_or_else(default_addr)
+        let default_addr = SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::LOCALHOST,
+            chain_config.default_rpc_port(),
+        ))
+        .into();
+        cli_args.node_rpc_address.clone().unwrap_or(default_addr)
     };
 
     let (repl_handle, wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
-    let node_rpc = make_rpc_client(rpc_address, rpc_auth).await?;
+    let node_rpc = make_rpc_client(rpc_address.to_string(), rpc_auth).await?;
     cli_event_loop::run(
         &chain_config.clone(),
         event_rx,

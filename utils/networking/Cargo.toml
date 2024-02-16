@@ -6,10 +6,13 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-serde.workspace = true
+addr.workspace = true
+itertools.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
-
-tokio = { workspace = true, features = ["sync", "macros", "test-util"] }
 serde_test.workspace = true
+test-utils = {path = '../../test-utils'}
+tokio = { workspace = true, features = ["macros", "net", "sync", "test-util"] }

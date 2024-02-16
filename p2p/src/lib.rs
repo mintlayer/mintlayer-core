@@ -59,7 +59,7 @@ use types::socket_address::SocketAddress;
 
 use crate::{
     config::P2pConfig,
-    error::{ConversionError, P2pError},
+    error::P2pError,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -228,30 +228,24 @@ pub fn make_p2p_transport_unencrypted() -> TcpTransportSocket {
     TcpTransportSocket::new()
 }
 
-fn get_p2p_bind_addresses<S: AsRef<str>>(
-    bind_addresses: &[S],
+fn get_p2p_bind_addresses(
+    bind_addresses: &[SocketAddr],
     p2p_port: u16,
     proxy_used: bool,
-) -> Result<Vec<SocketAddress>> {
+) -> Vec<SocketAddress> {
     if !bind_addresses.is_empty() {
         bind_addresses
             .iter()
-            .map(|address| {
-                address.as_ref().parse::<SocketAddress>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(
-                        address.as_ref().to_owned(),
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>>>()
+            .map(|address| SocketAddress::new(*address))
+            .collect::<Vec<_>>()
     } else if !proxy_used {
         // Bind to default addresses if none are specified by the user
-        Ok(vec![
+        vec![
             SocketAddress::new(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port)),
             SocketAddress::new(SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port)),
-        ])
+        ]
     } else {
-        Ok(Vec::new())
+        Vec::new()
     }
 }
 
@@ -364,7 +358,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
         &p2p_config.bind_addresses,
         chain_config.p2p_port(),
         p2p_config.socks5_proxy.is_some(),
-    )?;
+    );
 
     if let Some(true) = p2p_config.disable_noise {
         ensure!(

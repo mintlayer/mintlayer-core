@@ -19,8 +19,10 @@ use std::{
     str::FromStr,
 };
 
+use serde_with::{DeserializeFromStr, SerializeDisplay};
+
 /// IP or socket address
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, DeserializeFromStr, SerializeDisplay)]
 pub enum IpOrSocketAddress {
     Ip(IpAddr),
     Socket(SocketAddr),
@@ -66,28 +68,6 @@ impl IpOrSocketAddress {
             IpOrSocketAddress::Ip(ip) => *ip,
             IpOrSocketAddress::Socket(addr) => addr.ip(),
         }
-    }
-}
-
-impl serde::Serialize for IpOrSocketAddress {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.to_string().serialize(serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for IpOrSocketAddress {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = IpOrSocketAddress;
-            fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                fmt.write_str("IP or socket address")
-            }
-            fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<Self::Value, E> {
-                s.parse().map_err(serde::de::Error::custom)
-            }
-        }
-        d.deserialize_str(Visitor)
     }
 }
 

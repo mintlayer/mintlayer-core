@@ -98,7 +98,7 @@ fn read_config_override_values() {
     let blockprod_skip_ibd_check = true;
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
-    let p2p_addr = "address";
+    let p2p_bind_addr = "127.0.0.1:44444".parse::<SocketAddr>().unwrap();
     let p2p_socks5_proxy = "socks5_proxy";
     let p2p_disable_noise = false;
     let p2p_boot_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
@@ -112,7 +112,7 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let p2p_force_dns_query_if_no_global_addresses_known = true;
-    let rpc_bind_address = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let rpc_bind_address = "127.0.0.1:5432".parse().unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
     let max_tip_age = 1000;
@@ -129,7 +129,7 @@ fn read_config_override_values() {
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
-        p2p_bind_addresses: Some(vec![p2p_addr.to_owned()]),
+        p2p_bind_addresses: Some(vec![p2p_bind_addr]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
         p2p_disable_noise: Some(p2p_disable_noise),
         p2p_boot_nodes: Some(vec![p2p_boot_node.clone()]),
@@ -187,7 +187,7 @@ fn read_config_override_values() {
 
     assert_eq!(
         config.p2p.clone().unwrap().bind_addresses,
-        Some(vec!(p2p_addr.to_owned()))
+        Some(vec!(p2p_bind_addr))
     );
     assert_eq!(
         config.p2p.clone().unwrap().socks5_proxy,

@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
-
 use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
 use utils::clap_utils;
+use utils_networking::NetworkAddressWithPort;
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
@@ -29,7 +28,7 @@ pub struct ApiServerScannerArgs {
 
     /// Optional RPC address
     #[clap(long)]
-    pub rpc_address: Option<SocketAddr>,
+    pub rpc_address: Option<NetworkAddressWithPort>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]

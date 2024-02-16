@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
@@ -68,7 +68,7 @@ impl From<NodeType> for Services {
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
-    pub bind_addresses: Vec<String>,
+    pub bind_addresses: Vec<SocketAddr>,
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
     /// Disable p2p encryption (for tests only).
