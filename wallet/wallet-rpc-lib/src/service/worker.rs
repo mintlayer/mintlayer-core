@@ -20,7 +20,7 @@ use futures::{future::BoxFuture, never::Never};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
-use utils_tokio::broadcaster::Broadcaster;
+use utils_networking::broadcaster::Broadcaster;
 use wallet::wallet::Mnemonic;
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::seed_phrase::StoreSeedPhrase;
@@ -35,7 +35,7 @@ pub type WalletController<N> = wallet_controller::RpcController<N, super::Wallet
 pub type WalletControllerError<N> = wallet_controller::ControllerError<N>;
 pub type CommandReceiver<N> = mpsc::UnboundedReceiver<WalletCommand<N>>;
 pub type CommandSender<N> = mpsc::UnboundedSender<WalletCommand<N>>;
-pub type EventStream = utils_tokio::broadcaster::Receiver<Event>;
+pub type EventStream = utils_networking::broadcaster::Receiver<Event>;
 
 type CommandFn<N> = dyn Send + FnOnce(&mut Option<WalletController<N>>) -> BoxFuture<()>;
 type ManageFn<N> = dyn Send + FnOnce(&mut WalletWorker<N>) -> BoxFuture<()>;

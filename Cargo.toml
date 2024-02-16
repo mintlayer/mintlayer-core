@@ -55,7 +55,7 @@ members = [
   "test-utils",                         # Various utilities for tests.
   "tokens-accounting",                  # Tokens accounting
   "utils",                              # Various utilities.
-  "utils/tokio",                        # Various async/tokio utilities.
+  "utils/networking",                        # Various async/tokio utilities.
   "utxo",                               # Utxo and related utilities (cache, undo, etc.).
   "wallet",                             # Wallet primitives.
   "wallet/wallet-cli",                  # Wallet CLI/REPL binary.

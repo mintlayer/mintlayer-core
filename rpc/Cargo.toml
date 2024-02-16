@@ -13,7 +13,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils/" }
-utils-tokio = { path = "../utils/tokio" }
+utils-networking = { path = "../utils/networking" }
 
 anyhow.workspace = true
 async-trait.workspace = true

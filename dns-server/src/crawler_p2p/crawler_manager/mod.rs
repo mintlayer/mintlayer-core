@@ -43,12 +43,13 @@ use p2p::{
         peerdb_common::{storage::update_db, StorageVersion, TransactionRo, TransactionRw},
     },
     types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-        peer_address::PeerAddress, peer_id::PeerId, socket_address::SocketAddress, IsGlobalIp,
+        bannable_address::BannableAddress, peer_address::PeerAddress, peer_id::PeerId,
+        socket_address::SocketAddress, IsGlobalIp,
     },
 };
 use tokio::sync::mpsc;
 use utils::ensure;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     crawler_p2p::crawler_manager::storage::AddressInfo, dns_server::DnsServerCommand,

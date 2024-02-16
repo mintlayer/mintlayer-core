@@ -21,11 +21,9 @@ use common::{
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::hdkd::u31::U31;
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress, PeerId,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
+use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{CreatedBlockInfo, WalletInfo},

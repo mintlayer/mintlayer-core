@@ -28,11 +28,9 @@ use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
-    types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-        socket_address::SocketAddress, PeerId,
-    },
+    types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
+use utils_networking::IpOrSocketAddress;
 
 use crate::node_traits::NodeInterface;
 

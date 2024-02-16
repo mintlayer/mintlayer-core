@@ -19,10 +19,8 @@ use common::{
     chain::{Block, Transaction},
     primitives::{time::Time, Id},
 };
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     interface::types::ConnectedPeer, peer_manager::PeerManagerInterface,

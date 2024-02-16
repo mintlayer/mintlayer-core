@@ -17,9 +17,9 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use trust_dns_client::rr::Name;
+use utils_networking::IpOrSocketAddress;
 
 use common::primitives::per_thousand::PerThousand;
-use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use utils::clap_utils;
 
 use crate::dns_server::MinSameSoftwareVersionNodesRatio;

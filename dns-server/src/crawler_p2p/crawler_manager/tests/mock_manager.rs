@@ -40,13 +40,14 @@ use p2p::{
     },
     testing_utils::{TestAddressMaker, TEST_PROTOCOL_VERSION},
     types::{
-        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-        peer_id::PeerId, services::Services, socket_address::SocketAddress,
+        bannable_address::BannableAddress, peer_id::PeerId, services::Services,
+        socket_address::SocketAddress,
     },
     P2pEventHandler,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     crawler_p2p::{

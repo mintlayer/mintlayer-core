@@ -16,7 +16,7 @@ pos-accounting = { path = '../pos-accounting/' }
 subsystem = { path = "../subsystem/" }
 tokens-accounting = { path = '../tokens-accounting/' }
 utils = { path = "../utils/" }
-utils-tokio = { path = "../utils/tokio" }
+utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo/" }
 p2p-types = { path = "../p2p/types" }
 

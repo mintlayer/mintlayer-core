@@ -41,7 +41,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
-use utils_tokio::broadcaster;
+use utils_networking::broadcaster;
 use utxo::{Utxo, UtxosView};
 
 pub struct ChainstateInterfaceImpl<S, V> {

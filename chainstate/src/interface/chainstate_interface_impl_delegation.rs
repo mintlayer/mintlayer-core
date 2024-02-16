@@ -32,7 +32,7 @@ use common::{
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
-use utils_tokio::broadcaster;
+use utils_networking::broadcaster;
 use utxo::Utxo;
 
 use crate::{

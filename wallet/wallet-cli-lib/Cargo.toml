@@ -19,6 +19,7 @@ node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
+utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }

@@ -31,6 +31,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
@@ -49,7 +50,6 @@ use crate::{
     protocol::ProtocolVersion,
     sync::SyncManager,
     testing_utils::peerdb_inmemory_store,
-    types::ip_or_socket_address::IpOrSocketAddress,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };

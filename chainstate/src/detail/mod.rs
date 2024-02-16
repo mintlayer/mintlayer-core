@@ -30,7 +30,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
-use utils_tokio::broadcaster;
+use utils_networking::broadcaster;
 
 use self::{
     block_invalidation::BlockInvalidator,

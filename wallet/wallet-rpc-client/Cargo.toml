@@ -8,20 +8,21 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../../common" }
 chainstate = { path = "../../chainstate" }
+common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+node-comm = { path = "../wallet-node-client" }
 node-lib = { path = "../../node-lib" }
+p2p-types = { path = "../../p2p/types" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
+utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
+wallet-controller = { path = "../wallet-controller" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-types = { path = "../types" }
-wallet-controller = { path = "../wallet-controller" }
-node-comm = { path = "../wallet-node-client" }
-p2p-types = { path = "../../p2p/types" }
 
 hex.workspace = true
 async-trait.workspace = true

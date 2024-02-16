@@ -1,14 +1,15 @@
 [package]
-name = "utils-tokio"
+name = "utils-networking"
 license.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
+serde.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 
 tokio = { workspace = true, features = ["sync", "macros", "test-util"] }
+serde_test.workspace = true

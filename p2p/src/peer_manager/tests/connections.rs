@@ -29,8 +29,9 @@ use tokio::{
 
 use crypto::random::Rng;
 use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout, P2pBasicTestTimeGetter};
-use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
+use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,

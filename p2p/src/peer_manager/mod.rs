@@ -32,10 +32,7 @@ use std::{
 };
 
 use futures::never::Never;
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress, IsGlobalIp,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
 use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
@@ -47,6 +44,7 @@ use common::{
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,

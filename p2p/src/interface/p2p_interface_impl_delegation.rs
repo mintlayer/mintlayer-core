@@ -21,10 +21,8 @@ use std::{
 
 use common::{chain::SignedTransaction, primitives::time::Time};
 use mempool::tx_options::TxOptionsOverrides;
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use utils_networking::IpOrSocketAddress;
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 

@@ -16,10 +16,10 @@
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
 use common::chain::config::create_testnet;
-use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use tempfile::TempDir;
 
 use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
+use utils_networking::IpOrSocketAddress;
 
 const CONFIG_NAME: &str = "config.toml";
 

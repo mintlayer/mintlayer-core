@@ -28,10 +28,7 @@ use tokio::{
 
 use crypto::random::Rng;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use test_utils::random::Seed;
 
 use chainstate::{
@@ -56,6 +53,7 @@ use common::{
 use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
+use utils_networking::IpOrSocketAddress;
 
 use crate::{
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},

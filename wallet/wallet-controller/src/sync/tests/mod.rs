@@ -40,13 +40,11 @@ use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
+use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 

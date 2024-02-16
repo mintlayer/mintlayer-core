@@ -26,11 +26,9 @@ use common::{
 };
 use crypto::key::hdkd::u31::U31;
 use node_comm::node_traits::NodeInterface;
-use p2p_types::{
-    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
-    socket_address::SocketAddress, PeerId,
-};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
+use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
     version::get_version,
