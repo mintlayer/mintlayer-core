@@ -22,6 +22,7 @@ use heck::ToShoutySnakeCase;
 /// The name of the environment variable will be based on the "long" name of the argument;
 /// if the argument has no long name, "env" won't be set. E.g.
 /// ```
+/// # use utils::clap_utils::add_env;
 /// #[derive(clap::Parser)]
 /// #[clap(mut_args(|arg| add_env("FOO", arg)))]
 /// pub struct MyOptions {
