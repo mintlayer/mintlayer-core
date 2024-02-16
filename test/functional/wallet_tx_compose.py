@@ -195,6 +195,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             encoded_tx = output.split('\n')[1]
             output = await wallet.sign_raw_transaction(encoded_tx)
             assert_in("The transaction has been fully signed and is ready to be broadcast to network.", output)
+            signed_tx2 = output.split('\n')[2]
 
             transactions = node.mempool_transactions()
             assert_in(signed_tx, transactions)
@@ -209,6 +210,18 @@ class WalletComposeTransaction(BitcoinTestFramework):
             await wallet.select_account(1)
             assert_in(f"Coins amount: {num_outputs * coins_to_send + coins_to_send-1}", await wallet.get_balance())
             assert_equal(num_outputs + 1, len(await wallet.list_utxos()))
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx2))
+            self.generate_block()
+
+            # even though the UTXOs are spent and can't be found in the Node's chainstate they can be found in the wallet's cache
+            assert_in("Success", await wallet.sync())
+            output = await wallet.inspect_transaction(signed_tx2)
+            assert_in(f"Transfer({acc1_address}, 0.1)", output)
+            assert_in(f"Could not calcualte fees", output)
+            assert_in(f"number of inputs: 1", output)
+            assert_in(f"total signatures 1", output)
+            assert_in(f"The signatures could not be verified because the UTXOs were spend or not found", output)
 
 
 if __name__ == '__main__':
