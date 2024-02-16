@@ -7640,6 +7640,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
+ "utils-networking",
  "wallet",
  "wallet-controller",
  "wallet-rpc-lib",

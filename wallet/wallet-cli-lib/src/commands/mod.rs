@@ -27,9 +27,7 @@ use common::{
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
-use p2p_types::{
-    bannable_address::BannableAddress, PeerId,
-};
+use p2p_types::{bannable_address::BannableAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 
