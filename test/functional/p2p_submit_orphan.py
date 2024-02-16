@@ -32,7 +32,7 @@ class MempoolOrphanSubmissionTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 3
-        self.extra_args = self.num_nodes * [['--p2p-disable-noise=true']]
+        self.extra_args = self.num_nodes * [['--p2p-disable-noise']]
 
     def setup_network(self):
         self.setup_nodes()

@@ -66,7 +66,7 @@ class BlockprodIBDGenesisFailsButSkipSucceedsTest(BitcoinTestFramework):
             "--blockprod-min-peers-to-produce-blocks=0",
             "--max-tip-age={}".format(MAX_TIP_AGE),
             "--chain-genesis-block-timestamp=0",
-            "--blockprod-skip-ibd-check=true",
+            "--blockprod-skip-ibd-check",
         ]]
 
     def run_test(self):

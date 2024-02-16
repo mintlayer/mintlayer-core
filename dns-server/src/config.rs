@@ -20,6 +20,7 @@ use trust_dns_client::rr::Name;
 
 use common::primitives::per_thousand::PerThousand;
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+use utils::clap_utils;
 
 use crate::dns_server::MinSameSoftwareVersionNodesRatio;
 
@@ -30,6 +31,7 @@ pub enum Network {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("DNS_SRV")))]
 pub struct DnsServerConfig {
     /// Optional path to the data directory
     #[clap(long)]
@@ -39,13 +41,19 @@ pub struct DnsServerConfig {
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
-    /// UDP socket address to listen on. Can be specified multiple times.
-    #[clap(long, default_values_t = vec!["[::]:53".to_string()])]
+    /// UDP socket addresses to listen on.
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(
+        long,
+        default_values_t = vec!["[::]:53".to_string()],
+        value_delimiter(','),
+    )]
     pub bind_addr: Vec<String>,
 
-    /// Reserved node address to connect. Can be specified multiple times.
-    #[clap(long)]
-    pub reserved_node: Vec<IpOrSocketAddress>,
+    /// Reserved node addresses to connect.
+    /// Can be specified multiple times and/or be a comma-separated list.
+    #[clap(long, value_delimiter(','))]
+    pub reserved_nodes: Vec<IpOrSocketAddress>,
 
     /// Hostname of the DNS seed
     #[clap(long)]

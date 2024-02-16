@@ -10,13 +10,15 @@ crypto = { path = "../crypto/" }
 logging = {path = '../logging'}
 serialization = { path = "../serialization" }
 
+clap = { workspace = true, features = ["env", "string"] }
 directories.workspace = true
+heck.workspace = true
 num-traits.workspace = true
+parity-scale-codec.workspace = true
 probabilistic-collections.workspace = true
 qrcodegen.workspace = true
 slave-pool.workspace = true
 thiserror.workspace = true
-parity-scale-codec.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]

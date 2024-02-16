@@ -13,11 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::{Network, PostgresConfig};
-use clap::Parser;
 use std::net::SocketAddr;
 
+use clap::Parser;
+
+use api_server_common::{Network, PostgresConfig};
+use utils::clap_utils;
+
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("API_SCANNER_DAEMON")))]
 pub struct ApiServerScannerArgs {
     /// Network
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]

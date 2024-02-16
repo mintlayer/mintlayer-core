@@ -141,7 +141,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never> {
     }?;
 
     let crawler_mgr_config = CrawlerManagerConfig {
-        reserved_nodes: config.reserved_node.clone(),
+        reserved_nodes: config.reserved_nodes.clone(),
         default_p2p_port: chain_config.p2p_port(),
     };
 

@@ -22,12 +22,13 @@ use rpc::{
     rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
 };
-use utils::ensure;
+use utils::{clap_utils, ensure};
 
 use crate::config::{WalletRpcConfig, WalletServiceConfig};
 
 /// Service providing an RPC interface to a wallet
 #[derive(Parser)]
+#[clap(mut_args(clap_utils::env_adder("WALLET_RPC_DAEMON")))]
 #[command(
     version,
     about,
@@ -37,7 +38,7 @@ use crate::config::{WalletRpcConfig, WalletServiceConfig};
             .required(true)
     ),
 )]
-pub struct Args {
+pub struct WalletRpcDaemonArgs {
     /// The wallet file to operate on
     #[arg()]
     wallet_path: Option<PathBuf>,
@@ -59,7 +60,7 @@ pub struct Args {
     #[arg(
         long,
         value_name("PATH"),
-        conflicts_with_all(["node_username", "node_password"]),
+        conflicts_with_all(["node_username", "node_password"])
     )]
     node_cookie_file: Option<PathBuf>,
 
@@ -98,7 +99,7 @@ pub struct Args {
     chain_config: ChainConfigOptions,
 }
 
-impl Args {
+impl WalletRpcDaemonArgs {
     pub fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
             wallet_path: wallet_file,

@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+use utils::clap_utils;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
@@ -35,6 +36,7 @@ pub struct RegtestOptions {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("WALLET")))]
 #[clap(version)]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {

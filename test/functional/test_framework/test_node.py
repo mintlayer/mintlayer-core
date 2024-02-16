@@ -114,7 +114,7 @@ class TestNode():
             f"--datadir={datadir}",
             "regtest",
             f"--rpc-bind-address={rpc_bind_address}",
-            f"--p2p-bind-address={p2p_bind_address}",
+            f"--p2p-bind-addresses={p2p_bind_address}",
             f"--max-tip-age={max_tip_age}",
             f"--min-tx-relay-fee-rate={min_tx_relay_fee_rate}",
             #"-X",

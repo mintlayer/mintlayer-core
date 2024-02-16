@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use clap::{Parser, ValueEnum};
+
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::config::{Builder, ChainType};
@@ -21,7 +22,7 @@ use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::u31::U31;
 use crypto::key::hdkd::{child_number::ChildNumber, derivable::Derivable};
-use utils::ensure;
+use utils::{clap_utils, ensure};
 use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::WalletError;
 use wallet::{
@@ -61,6 +62,7 @@ impl std::fmt::Display for Network {
 }
 
 #[derive(Parser, Debug)]
+#[clap(mut_args(clap_utils::env_adder("WALLET_ADDR_GEN")))]
 #[clap(version)]
 pub struct CliArgs {
     /// The network, for which addresses will be generated

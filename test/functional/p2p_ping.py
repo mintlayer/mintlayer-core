@@ -40,7 +40,7 @@ class PingPongTest(BitcoinTestFramework):
         self.extra_args = [[
             '--p2p-ping-timeout={}'.format(TIMEOUT_INTERVAL),
             '--p2p-ping-check-period={}'.format(PING_INTERVAL),
-            '--p2p-disable-noise=true',
+            '--p2p-disable-noise',
             '--p2p-sync-stalling-timeout={}'.format(SYNC_TIMEOUT)
         ]]
 
