@@ -156,6 +156,10 @@ impl PartiallySignedTransaction {
         &self.tx
     }
 
+    pub fn take_tx(self) -> Transaction {
+        self.tx
+    }
+
     pub fn input_utxos(&self) -> &[Option<TxOutput>] {
         self.input_utxos.as_ref()
     }

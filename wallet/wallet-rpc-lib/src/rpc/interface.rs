@@ -21,7 +21,7 @@ use common::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -160,6 +160,10 @@ trait WalletRpc {
         change_address: Option<String>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction>;
+
+    #[method(name = "transaction_inspect")]
+    async fn transaction_inspect(&self, transaction: String)
+        -> rpc::RpcResult<InsepectTransaction>;
 
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(

@@ -24,7 +24,11 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
-use futures::{never::Never, stream::FuturesUnordered, TryStreamExt};
+use futures::{
+    never::Never,
+    stream::{FuturesOrdered, FuturesUnordered},
+    TryStreamExt,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -33,7 +37,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use types::{Balances, WalletInfo};
+use types::{
+    Balances, InsepectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
+    WalletInfo,
+};
 
 use read::ReadOnlyController;
 use sync::InSync;
@@ -42,9 +49,13 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::signature_hash,
+        },
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{
         time::{get_time, Time},
@@ -621,6 +632,179 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         )
     }
 
+    pub async fn inspect_transaction(
+        &self,
+        tx: TransactionToInspect,
+    ) -> Result<InsepectTransaction, ControllerError<T>> {
+        let result = match tx {
+            TransactionToInspect::Tx(tx) => self.inspect_tx(tx).await?,
+            TransactionToInspect::Partial(ptx) => self.inspect_partial_tx(ptx).await?,
+            TransactionToInspect::Signed(stx) => self.inspect_signed_tx(stx).await?,
+        };
+
+        Ok(result)
+    }
+
+    async fn inspect_signed_tx(
+        &self,
+        stx: SignedTransaction,
+    ) -> Result<InsepectTransaction, ControllerError<T>> {
+        let (fees, num_valid_signatures) =
+            match self.calculate_fees_and_valid_signatures(&stx).await {
+                Ok((fees, num_valid_signatures)) => (Some(fees), Some(num_valid_signatures)),
+                Err(_) => (None, None),
+            };
+
+        let num_inputs = stx.inputs().len();
+        let total_signatures = stx.signatures().len();
+        let validated_signatures = num_valid_signatures.map(|num_valid_signatures| {
+            let num_invalid_signatures = total_signatures - num_valid_signatures;
+            ValidatedSignatures {
+                num_valid_signatures,
+                num_invalid_signatures,
+            }
+        });
+
+        Ok(InsepectTransaction {
+            tx: stx.take_transaction().into(),
+            fees,
+            stats: SignatureStats {
+                num_inputs,
+                total_signatures,
+                validated_signatures,
+            },
+        })
+    }
+
+    async fn calculate_fees_and_valid_signatures(
+        &self,
+        stx: &SignedTransaction,
+    ) -> Result<(Balances, usize), ControllerError<T>> {
+        let tasks: FuturesOrdered<_> =
+            stx.inputs().iter().map(|input| self.fetch_opt_utxo(input)).collect();
+        let input_utxos: Vec<Option<TxOutput>> = tasks.try_collect().await?;
+        let only_input_utxos: Vec<_> = input_utxos.clone().into_iter().flatten().collect();
+        let fees = self.get_fees(&only_input_utxos, stx.outputs()).await?;
+        let inputs_utxos_refs: Vec<_> = input_utxos.iter().map(|out| out.as_ref()).collect();
+        let destinations = inputs_utxos_refs
+            .iter()
+            .map(|txo| {
+                txo.map(|txo| {
+                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                    })
+                })
+                .transpose()
+            })
+            .collect::<Result<Vec<_>, WalletError>>()
+            .map_err(ControllerError::WalletError)?;
+        let num_valid_signatures = stx
+            .signatures()
+            .iter()
+            .enumerate()
+            .zip(destinations)
+            .filter(|((input_num, w), d)| match (w, d) {
+                (InputWitness::NoSignature(_), None) => true,
+                (InputWitness::NoSignature(_), Some(_)) => false,
+                (InputWitness::Standard(_), None) => false,
+                (InputWitness::Standard(sig), Some(dest)) => self.verify_tx_signature(
+                    sig,
+                    stx.transaction(),
+                    &inputs_utxos_refs,
+                    *input_num,
+                    dest,
+                ),
+            })
+            .count();
+        Ok((fees, num_valid_signatures))
+    }
+
+    async fn inspect_partial_tx(
+        &self,
+        ptx: PartiallySignedTransaction,
+    ) -> Result<InsepectTransaction, ControllerError<T>> {
+        let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
+        let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
+        let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
+        let signatures_status: Vec<_> = ptx
+            .witnesses()
+            .iter()
+            .enumerate()
+            .zip(ptx.destinations())
+            .filter_map(|((input_num, w), d)| match (w, d) {
+                (Some(InputWitness::NoSignature(_)), None) => Some(true),
+                (Some(InputWitness::NoSignature(_)), Some(_)) => Some(false),
+                (Some(InputWitness::Standard(_)), None) => None,
+                (Some(InputWitness::Standard(sig)), Some(dest)) => Some(self.verify_tx_signature(
+                    sig,
+                    ptx.tx(),
+                    &inputs_utxos_refs,
+                    input_num,
+                    dest,
+                )),
+                (None, _) => None,
+            })
+            .collect();
+        let num_valid_signatures = signatures_status.iter().copied().filter(|x| *x).count();
+        let num_invalid_signatures = signatures_status.iter().copied().filter(|x| !*x).count();
+        let num_inputs = ptx.count_inputs();
+        let total_signatures = num_valid_signatures + num_invalid_signatures;
+        Ok(InsepectTransaction {
+            tx: ptx.take_tx().into(),
+            fees: Some(fees),
+            stats: SignatureStats {
+                num_inputs,
+                total_signatures,
+                validated_signatures: Some(ValidatedSignatures {
+                    num_valid_signatures,
+                    num_invalid_signatures,
+                }),
+            },
+        })
+    }
+
+    async fn inspect_tx(&self, tx: Transaction) -> Result<InsepectTransaction, ControllerError<T>> {
+        let inputs: Vec<_> = tx
+            .inputs()
+            .iter()
+            .filter_map(|inp| match inp {
+                TxInput::Utxo(utxo) => Some(utxo.clone()),
+                TxInput::Account(_) => None,
+                TxInput::AccountCommand(_, _) => None,
+            })
+            .collect();
+        let fees = match self.fetch_utxos(&inputs).await {
+            Ok(input_utxos) => Some(self.get_fees(&input_utxos, tx.outputs()).await?),
+            Err(_) => None,
+        };
+        let num_inputs = tx.inputs().len();
+        Ok(InsepectTransaction {
+            tx: tx.into(),
+            fees,
+            stats: SignatureStats {
+                num_inputs,
+                total_signatures: 0,
+                validated_signatures: Some(ValidatedSignatures {
+                    num_valid_signatures: 0,
+                    num_invalid_signatures: 0,
+                }),
+            },
+        })
+    }
+
+    fn verify_tx_signature(
+        &self,
+        sig: &StandardInputSignature,
+        tx: &Transaction,
+        inputs_utxos_refs: &[Option<&TxOutput>],
+        input_num: usize,
+        dest: &Destination,
+    ) -> bool {
+        signature_hash(sig.sighash_type(), tx, inputs_utxos_refs, input_num)
+            .and_then(|sighash| sig.verify_signature(&self.chain_config, dest, &sighash))
+            .is_ok()
+    }
+
     pub async fn compose_transaction(
         &self,
         inputs: Vec<UtxoOutPoint>,
@@ -628,8 +812,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         only_transaction: bool,
     ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
-        let fees = self.get_fees(&input_utxos, &outputs)?;
-        let fees = into_balances(&self.rpc_client, &self.chain_config, fees).await?;
+        let fees = self.get_fees(&input_utxos, &outputs).await?;
 
         let num_inputs = inputs.len();
         let inputs = inputs.into_iter().map(TxInput::Utxo).collect();
@@ -664,11 +847,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok((tx, fees))
     }
 
-    fn get_fees(
+    async fn get_fees(
         &self,
         inputs: &[TxOutput],
         outputs: &[TxOutput],
-    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+    ) -> Result<Balances, ControllerError<T>> {
         let mut inputs = self.group_inputs(inputs)?;
         let outputs = self.group_outpus(outputs)?;
 
@@ -686,7 +869,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         }
         // add any leftover inputs
         fees.extend(inputs);
-        Ok(fees)
+
+        into_balances(&self.rpc_client, &self.chain_config, fees).await
     }
 
     fn group_outpus(
@@ -728,8 +912,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         inputs: &[UtxoOutPoint],
     ) -> Result<Vec<TxOutput>, ControllerError<T>> {
-        let tasks: FuturesUnordered<_> =
-            inputs.iter().map(|input| self.fetch_utxo(input)).collect();
+        let tasks: FuturesOrdered<_> = inputs.iter().map(|input| self.fetch_utxo(input)).collect();
         let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
         Ok(input_utxos)
     }
@@ -748,6 +931,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
                 input.clone(),
             )))
+    }
+
+    async fn fetch_opt_utxo(
+        &self,
+        input: &TxInput,
+    ) -> Result<Option<TxOutput>, ControllerError<T>> {
+        match input {
+            TxInput::Utxo(utxo) => self.fetch_utxo(utxo).await.map(Some),
+            TxInput::Account(_) => Ok(None),
+            TxInput::AccountCommand(_, _) => Ok(None),
+        }
     }
 
     /// Synchronize the wallet in the background from the node's blockchain.

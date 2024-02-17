@@ -34,7 +34,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{CreatedBlockInfo, WalletInfo},
+    types::{CreatedBlockInfo, InsepectTransaction, WalletInfo},
     ConnectedPeer, ControllerConfig,
 };
 use wallet_rpc_lib::{
@@ -342,6 +342,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
                 hex: HexEncoded::new(tx).to_string(),
                 fees,
             })
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn transaction_inspect(
+        &self,
+        transaction: String,
+    ) -> Result<InsepectTransaction, Self::Error> {
+        self.wallet_rpc
+            .transaction_inspect(transaction)
+            .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

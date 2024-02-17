@@ -49,7 +49,10 @@ use common::{
 pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
-    types::{Balances, BlockInfo, CreatedBlockInfo, WalletInfo},
+    types::{
+        Balances, BlockInfo, CreatedBlockInfo, InsepectTransaction, TransactionToInspect,
+        WalletInfo,
+    },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
@@ -541,6 +544,33 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .request_send_to_address(address, amount, selected_utxo, change_address)
                         .await
                         .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
+    pub async fn transaction_inspect(&self, raw_tx: String) -> WRpcResult<InsepectTransaction, N> {
+        let hex_bytes = hex::decode(raw_tx).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let mut bytes = hex_bytes.as_slice();
+        let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
+        let tx: TransactionToInspect = if bytes.is_empty() {
+            TransactionToInspect::Tx(tx)
+        } else {
+            let mut bytes = hex_bytes.as_slice();
+            if let Ok(ptx) = PartiallySignedTransaction::decode_all(&mut bytes) {
+                TransactionToInspect::Partial(ptx)
+            } else {
+                let mut bytes = hex_bytes.as_slice();
+                let stx = SignedTransaction::decode_all(&mut bytes)
+                    .map_err(|_| RpcError::InvalidPartialTransaction)?;
+                TransactionToInspect::Signed(stx)
+            }
+        };
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller.inspect_transaction(tx).await.map_err(RpcError::Controller)
                 })
             })
             .await?

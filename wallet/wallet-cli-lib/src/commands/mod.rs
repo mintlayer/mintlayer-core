@@ -421,6 +421,13 @@ pub enum WalletCommand {
         change_address: Option<String>,
     },
 
+    /// Print the summary of the transaction
+    #[clap(name = "transaction-inspect")]
+    InspectTransaction {
+        /// Hex encoded transaction or PartiallySignedTransaction.
+        transaction: String,
+    },
+
     /// Store data on the blockchain, the data is provided as hex encoded string.
     /// Note that there is a high fee for storing data on the blockchain.
     #[clap(name = "address-deposit-data")]
