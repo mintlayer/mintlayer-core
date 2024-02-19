@@ -52,7 +52,10 @@ impl MasterKeyChain {
         Ok((
             root_key,
             root_vrf_key,
-            SerializableSeedPhrase::new(mnemonic),
+            SerializableSeedPhrase::new(
+                mnemonic,
+                zeroize::Zeroizing::new(passphrase.map(|p| p.to_owned())),
+            ),
         ))
     }
 

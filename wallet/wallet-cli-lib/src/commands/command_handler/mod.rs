@@ -136,6 +136,7 @@ where
                 wallet_path,
                 mnemonic,
                 whether_to_store_seed_phrase,
+                passphrase,
             } => {
                 let newly_generated_mnemonic = self
                     .wallet()
@@ -144,15 +145,29 @@ where
                         wallet_path,
                         whether_to_store_seed_phrase.to_bool(),
                         mnemonic,
+                        passphrase,
                     )
                     .await?;
 
                 self.wallet.update_wallet::<N>().await;
 
                 let msg = match newly_generated_mnemonic {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => format!(
-                    "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
-                , mnemonic),
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                        let passphrase = if let Some(passphrase) = passphrase {
+                            format!("passphrase: {passphrase}\n")
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
+                        Please write it somewhere safe to be able to restore your wallet. \
+                        It's recommended that you attempt to recover the wallet now as practice\
+                        to check that you arrive at the same addresses, \
+                        to ensure that you have done everything correctly.
+                        ",
+                            mnemonic
+                        )
+                    }
                     CreatedWallet::UserProvidedMenmonic => {
                         "New wallet created successfully".to_owned()
                     }
@@ -222,8 +237,19 @@ where
             ColdWalletCommand::ShowSeedPhrase => {
                 let phrase = self.non_empty_wallet().await?.get_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase.seed_phrase {
-                    format!("The stored seed phrase is \"{}\"", phrase.join(" "))
+                let msg = if let Some(phrase) = phrase {
+                    if let Some(passphrase) = phrase.passphrase {
+                        format!(
+                            "The stored seed phrase is \"{}\" with passphrase \"{}\"",
+                            phrase.seed_phrase.join(" "),
+                            passphrase
+                        )
+                    } else {
+                        format!(
+                            "The stored seed phrase is \"{}\"",
+                            phrase.seed_phrase.join(" ")
+                        )
+                    }
                 } else {
                     "No stored seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase stored elsewhere when you created the wallet.".into()
                 };
@@ -234,8 +260,12 @@ where
             ColdWalletCommand::PurgeSeedPhrase => {
                 let phrase = self.non_empty_wallet().await?.purge_seed_phrase().await?;
 
-                let msg = if let Some(phrase) = phrase.seed_phrase {
-                    format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.join(" "))
+                let msg = if let Some(phrase) = phrase {
+                    if let Some(passphrase) = phrase.passphrase {
+                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\" with passphrase \"{}\"", phrase.seed_phrase.join(" "), passphrase)
+                    } else {
+                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.seed_phrase.join(" "))
+                    }
                 } else {
                     "No stored seed phrase for this wallet.".into()
                 };

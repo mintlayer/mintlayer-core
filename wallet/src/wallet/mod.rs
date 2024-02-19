@@ -78,7 +78,8 @@ pub const WALLET_VERSION_V2: u32 = 2;
 pub const WALLET_VERSION_V3: u32 = 3;
 pub const WALLET_VERSION_V4: u32 = 4;
 pub const WALLET_VERSION_V5: u32 = 5;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V5;
+pub const WALLET_VERSION_V6: u32 = 6;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V6;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -433,6 +434,19 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    fn migration_v6(db: &Store<B>, _chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None)?;
+        // nothing to do the seed phrase na passphrase are backwards compatible
+        db_tx.set_storage_version(WALLET_VERSION_V6)?;
+        db_tx.commit()?;
+
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V6
+        );
+        Ok(())
+    }
+
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
         db: &Store<B>,
@@ -458,6 +472,10 @@ impl<B: storage::Backend> Wallet<B> {
             WALLET_VERSION_V4 => {
                 pre_migration(WALLET_VERSION_V4)?;
                 Self::migration_v5(db, chain_config.clone())?;
+            }
+            WALLET_VERSION_V5 => {
+                pre_migration(WALLET_VERSION_V5)?;
+                Self::migration_v6(db, chain_config.clone())?;
             }
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {

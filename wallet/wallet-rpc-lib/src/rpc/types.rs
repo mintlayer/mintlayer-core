@@ -375,11 +375,6 @@ impl TokenMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SeedPhrase {
-    pub seed_phrase: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StakePoolBalance {
     pub balance: Option<String>,
 }
@@ -425,7 +420,7 @@ impl StakingStatus {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CreatedWallet {
     UserProvidedMenmonic,
-    NewlyGeneratedMnemonic(String),
+    NewlyGeneratedMnemonic(String, Option<String>),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

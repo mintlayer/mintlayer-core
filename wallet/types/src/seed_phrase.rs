@@ -54,6 +54,8 @@ impl SeedPhraseLanguage {
 pub enum SerializableSeedPhrase {
     #[codec(index = 0)]
     V0(SeedPhraseLanguage, SeedPhrase),
+    #[codec(index = 1)]
+    V1(SeedPhraseLanguage, SeedPhrase, PassPhrase),
 }
 
 impl SerializableSeedPhrase {
@@ -66,11 +68,44 @@ impl SerializableSeedPhrase {
         )
     }
 
-    pub fn new(mnemonic: zeroize::Zeroizing<bip39::Mnemonic>) -> Self {
-        Self::V0(
+    pub fn new(
+        mnemonic: zeroize::Zeroizing<bip39::Mnemonic>,
+        passphrase: zeroize::Zeroizing<Option<String>>,
+    ) -> Self {
+        Self::V1(
             SeedPhraseLanguage::new(mnemonic.language()),
             SeedPhrase::new(mnemonic),
+            PassPhrase::new(passphrase),
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PassPhrase {
+    passphrase: zeroize::Zeroizing<Option<String>>,
+}
+
+impl PassPhrase {
+    pub fn new(passphrase: zeroize::Zeroizing<Option<String>>) -> Self {
+        Self { passphrase }
+    }
+
+    pub fn take(mut self) -> Option<String> {
+        self.passphrase.take()
+    }
+}
+
+impl Encode for PassPhrase {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
+        self.passphrase.encode_to(dest)
+    }
+}
+
+impl Decode for PassPhrase {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        Ok(Self {
+            passphrase: zeroize::Zeroizing::new(Option::<String>::decode(input)?),
+        })
     }
 }
 

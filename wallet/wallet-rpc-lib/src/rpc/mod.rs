@@ -50,8 +50,8 @@ pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, InsepectTransaction, TransactionToInspect,
-        WalletInfo,
+        Balances, BlockInfo, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase,
+        TransactionToInspect, WalletInfo,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
@@ -102,11 +102,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         path: PathBuf,
         store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
-                    wallet_manager.create_wallet(path, store_seed_phrase, mnemonic).await
+                    wallet_manager
+                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase)
+                        .await
                 })
             })
             .await?
@@ -1205,11 +1208,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn get_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>, N> {
+    pub async fn get_seed_phrase(&self) -> WRpcResult<Option<SeedWithPassPhrase>, N> {
         self.wallet.call(move |controller| controller.seed_phrase()).await?
     }
 
-    pub async fn purge_seed_phrase(&self) -> WRpcResult<Option<Vec<String>>, N> {
+    pub async fn purge_seed_phrase(&self) -> WRpcResult<Option<SeedWithPassPhrase>, N> {
         self.wallet.call(move |controller| controller.delete_seed_phrase()).await?
     }
 

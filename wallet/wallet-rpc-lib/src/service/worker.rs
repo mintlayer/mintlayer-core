@@ -54,7 +54,7 @@ pub enum WalletCommand<N> {
 
 pub enum CreatedWallet {
     UserProvidedMenmonic,
-    NewlyGeneratedMnemonic(Mnemonic),
+    NewlyGeneratedMnemonic(Mnemonic, Option<String>),
 }
 
 /// Represents the wallet worker task. It handles external commands and keeps the wallet in sync.
@@ -197,6 +197,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         wallet_path: PathBuf,
         whether_to_store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -210,6 +211,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 .map_err(RpcError::InvalidMnemonic)?,
             None => wallet_controller::mnemonic::generate_new_mnemonic(language),
         };
+        let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
         let wallet = if newly_generated_mnemonic {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
@@ -217,7 +219,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 self.chain_config.clone(),
                 wallet_path,
                 mnemonic.clone(),
-                None,
+                passphrase_ref,
                 whether_to_store_seed_phrase,
                 info.best_block_height,
                 info.best_block_id,
@@ -227,7 +229,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 self.chain_config.clone(),
                 wallet_path,
                 mnemonic.clone(),
-                None,
+                passphrase_ref,
                 whether_to_store_seed_phrase,
             )
         }
@@ -245,7 +247,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         self.controller.replace(controller);
 
         let result = match newly_generated_mnemonic {
-            true => CreatedWallet::NewlyGeneratedMnemonic(mnemonic),
+            true => CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase),
             false => CreatedWallet::UserProvidedMenmonic,
         };
         Ok(result)

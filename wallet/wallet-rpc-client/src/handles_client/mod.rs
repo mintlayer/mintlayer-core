@@ -34,16 +34,15 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{CreatedBlockInfo, InsepectTransaction, WalletInfo},
+    types::{CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, SeedPhrase,
-        StakePoolBalance, StakingStatus, TokenMetadata, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
+        StakingStatus, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
@@ -104,6 +103,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         path: PathBuf,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
+        passphrase: Option<String>,
     ) -> Result<CreatedWallet, Self::Error> {
         let whether_to_store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
@@ -111,14 +111,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             StoreSeedPhrase::DoNotStore
         };
         self.wallet_rpc
-            .create_wallet(path, whether_to_store_seed_phrase, mnemonic)
+            .create_wallet(path, whether_to_store_seed_phrase, mnemonic, passphrase)
             .await
             .map(|res| match res {
                 wallet_rpc_lib::CreatedWallet::UserProvidedMenmonic => {
                     CreatedWallet::UserProvidedMenmonic
                 }
-                wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
+                wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
                 }
             })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -163,19 +163,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn get_seed_phrase(&self) -> Result<SeedPhrase, Self::Error> {
+    async fn get_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
         self.wallet_rpc
             .get_seed_phrase()
             .await
-            .map(|seed_phrase| SeedPhrase { seed_phrase })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn purge_seed_phrase(&self) -> Result<SeedPhrase, Self::Error> {
+    async fn purge_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
         self.wallet_rpc
             .purge_seed_phrase()
             .await
-            .map(|seed_phrase| SeedPhrase { seed_phrase })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
