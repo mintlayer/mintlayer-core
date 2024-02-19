@@ -523,7 +523,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
         total_fees = total_fees.combine(fee.clone()).expect("no overflow");
 
         let input_tasks: FuturesOrdered<_> =
-            tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
+            tx.inputs().iter().map(|input| fetch_utxo(input, &new_outputs, db_tx)).collect();
         let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
 
         let tx_info = TxAdditionalInfo {
@@ -540,11 +540,21 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
 
 async fn fetch_utxo<T: ApiServerStorageRead>(
     input: &TxInput,
+    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
     db_tx: &T,
 ) -> Result<Option<TxOutput>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            Ok(db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output()))
+            let utxo = if let Some(utxo) = new_outputs.get(outpoint) {
+                (*utxo).clone()
+            } else {
+                db_tx
+                    .get_utxo(outpoint.clone())
+                    .await?
+                    .map(|utxo| utxo.into_output())
+                    .expect("must be present")
+            };
+            Ok(Some(utxo))
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) => Ok(None),
     }
