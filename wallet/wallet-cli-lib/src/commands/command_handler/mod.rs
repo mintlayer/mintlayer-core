@@ -240,7 +240,7 @@ where
                 let msg = if let Some(phrase) = phrase {
                     if let Some(passphrase) = phrase.passphrase {
                         format!(
-                            "The stored seed phrase is \"{}\" with passphrase \"{}\"",
+                            "The stored seed phrase is \"{}\"\nwith passphrase \"{}\"",
                             phrase.seed_phrase.join(" "),
                             passphrase
                         )
@@ -261,11 +261,12 @@ where
                 let phrase = self.non_empty_wallet().await?.purge_seed_phrase().await?;
 
                 let msg = if let Some(phrase) = phrase {
-                    if let Some(passphrase) = phrase.passphrase {
-                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\" with passphrase \"{}\"", phrase.seed_phrase.join(" "), passphrase)
+                    let passphrase = if let Some(passphrase) = phrase.passphrase {
+                        format!("\nwith passphrase: \"{passphrase}\"")
                     } else {
-                        format!("The seed phrase has been deleted, you can store it if you haven't do so yet: \"{}\"", phrase.seed_phrase.join(" "))
-                    }
+                        String::new()
+                    };
+                    format!("The seed phrase has been deleted, you can store it if you haven't done so yet: \"{}\"{passphrase}", phrase.seed_phrase.join(" "))
                 } else {
                     "No stored seed phrase for this wallet.".into()
                 };
