@@ -111,7 +111,7 @@ async fn ok(#[case] seed: Seed) {
                             &chain_config,
                             BlockHeight::new(n_blocks as u64),
                             BlockAuxData::new(
-                                block_id,
+                                block_id.into(),
                                 BlockHeight::new((n_blocks - idx) as u64),
                                 block.timestamp(),
                             ),

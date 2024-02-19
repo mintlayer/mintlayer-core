@@ -17,13 +17,14 @@ use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiServerTransactionRw, Delegation, FungibleTokenData, TransactionInfo, TxAdditionalInfo, Utxo,
+    ApiServerTransactionRw, Delegation, FungibleTokenData, LockedUtxo, TransactionInfo,
+    TxAdditionalInfo, Utxo, UtxoLock,
 };
 use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use common::{
     address::Address,
     chain::{
-        block::ConsensusData,
+        block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
         output_value::OutputValue,
         tokens::{make_token_id, IsTokenFrozen, TokenIssuance},
@@ -98,7 +99,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
         let db_tx = self.storage.transaction_ro().await.expect("Unable to connect to database");
         let best_block = db_tx.get_best_block().await.expect("Unable to get best block");
-        Ok(best_block)
+        Ok((best_block.block_height(), best_block.block_id()))
     }
 
     async fn scan_blocks(
@@ -112,9 +113,22 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             .await
             .expect("Unable to disconnect tables");
 
+        let mut previous_timestamp = db_tx.get_best_block().await?.block_timestamp();
+
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+            let block_timestamp = block.timestamp();
+
+            update_locked_amounts_for_current_block(
+                &mut db_tx,
+                &self.chain_config,
+                block_height,
+                previous_timestamp,
+                block_timestamp,
+            )
+            .await?;
+            previous_timestamp = block_timestamp;
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
@@ -135,7 +149,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             db_tx
                 .set_block_aux_data(
                     block_id,
-                    &BlockAuxData::new(block_id, block_height, block_with_extras.block.timestamp()),
+                    &BlockAuxData::new(block_id.into(), block_height, block_timestamp),
                 )
                 .await
                 .expect("Unable to set block aux data");
@@ -151,6 +165,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
                     block_height,
+                    block_timestamp,
                     tx,
                 )
                 .await
@@ -184,20 +199,94 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     }
 }
 
+// Find locked UTXOs that are unlocked at this height or time and update address balances
+async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    previous_timestamp: BlockTimestamp,
+    block_timestamp: BlockTimestamp,
+) -> Result<(), ApiServerStorageError> {
+    let locked_utxos = db_tx
+        .get_locked_utxos_until_now(block_height, (previous_timestamp, block_timestamp))
+        .await?;
+
+    for (outpoint, locked_utxo) in locked_utxos {
+        set_utxo(
+            outpoint.source_id(),
+            outpoint.output_index() as usize,
+            &locked_utxo,
+            db_tx,
+            block_height,
+            false,
+            chain_config,
+        )
+        .await;
+
+        match &locked_utxo {
+            TxOutput::LockThenTransfer(outvalue, destination, _) => {
+                let address = Address::<Destination>::new(chain_config, destination)
+                    .expect("Unable to encode destination");
+
+                match outvalue {
+                    OutputValue::Coin(amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
+                        decrease_address_locked_amount(
+                            db_tx,
+                            address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
+                    }
+                    OutputValue::TokenV0(_) => {}
+                    OutputValue::TokenV1(token_id, amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::TokenId(*token_id),
+                            block_height,
+                        )
+                        .await;
+                        decrease_address_locked_amount(
+                            db_tx,
+                            address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
+                    }
+                }
+            }
+            _ => panic!("locked utxo not lock then transfer output"),
+        }
+    }
+
+    Ok(())
+}
+
 async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     block_height: BlockHeight,
 ) -> Result<(), ApiServerStorageError> {
-    if db_tx.get_best_block().await.expect("Unable to get best block").0 > block_height {
-        logging::log::info!("Disconnecting blocks above: {:?}", block_height);
-        db_tx
-            .del_main_chain_blocks_above_height(block_height)
-            .await
-            .expect("Unable to disconnect block");
-    }
-
+    logging::log::info!("Disconnecting blocks above: {:?}", block_height);
     db_tx
         .del_address_balance_above_height(block_height)
+        .await
+        .expect("Unable to disconnect address balance");
+
+    db_tx
+        .del_address_locked_balance_above_height(block_height)
         .await
         .expect("Unable to disconnect address balance");
 
@@ -210,6 +299,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
         .del_utxo_above_height(block_height)
         .await
         .expect("Unable to disconnect UTXOs");
+
+    db_tx
+        .del_locked_utxo_above_height(block_height)
+        .await
+        .expect("Unable to disconnect locked UTXOs");
 
     db_tx
         .del_delegations_above_height(block_height)
@@ -230,6 +324,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
         .del_nft_issuance_above_height(block_height)
         .await
         .expect("Unable to disconnect nft issuances");
+
+    db_tx
+        .del_main_chain_blocks_above_height(block_height)
+        .await
+        .expect("Unable to disconnect block");
 
     Ok(())
 }
@@ -647,6 +746,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
+    block_timestamp: BlockTimestamp,
     transaction: &SignedTransaction,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_transaction_inputs(
@@ -663,6 +763,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         Arc::clone(&chain_config),
         db_tx,
         block_height,
+        block_timestamp,
         transaction.transaction().get_id(),
         transaction.transaction().inputs(),
         transaction.transaction().outputs(),
@@ -937,6 +1038,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
+    block_timestamp: BlockTimestamp,
     transaction_id: Id<Transaction>,
     inputs: &[TxInput],
     outputs: &[TxOutput],
@@ -1087,8 +1189,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
             }
-            TxOutput::Transfer(output_value, destination)
-            | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
+            TxOutput::Transfer(output_value, destination) => match destination {
                 Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                     let address = Address::<Destination>::new(&chain_config, destination)
                         .expect("Unable to encode destination");
@@ -1144,6 +1245,65 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 }
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             },
+            TxOutput::LockThenTransfer(output_value, destination, lock) => match destination {
+                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
+                    let address = Address::<Destination>::new(&chain_config, destination)
+                        .expect("Unable to encode destination");
+
+                    address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                    let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
+                    let utxo = LockedUtxo::new(output.clone(), lock);
+                    let outpoint = UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx as u32,
+                    );
+                    db_tx
+                        .set_locked_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .await
+                        .expect("Unable to set locked utxo");
+
+                    match output_value {
+                        OutputValue::Coin(amount) => {
+                            increase_locked_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
+                        }
+                        OutputValue::TokenV0(_) => {}
+                        OutputValue::TokenV1(token_id, amount) => {
+                            increase_locked_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
+                    }
+                }
+                Destination::AnyoneCanSpend => {
+                    // for tests
+                    let address = Address::<Destination>::new(&chain_config, destination)
+                        .expect("Unable to encode destination");
+                    let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
+                    let utxo = LockedUtxo::new(output.clone(), lock);
+                    let outpoint = UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(transaction_id),
+                        idx as u32,
+                    );
+                    db_tx
+                        .set_locked_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .await
+                        .expect("Unable to set locked utxo");
+                }
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
+            },
         }
     }
 
@@ -1186,6 +1346,32 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
         .expect("Unable to update balance")
 }
 
+async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: &Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_locked_balance(address.get(), coin_or_token_id)
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_locked_balance_at_height(
+            address.get(),
+            new_amount,
+            coin_or_token_id,
+            block_height,
+        )
+        .await
+        .expect("Unable to update balance")
+}
+
 async fn decrease_address_amount<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     address: Address<Destination>,
@@ -1203,6 +1389,32 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
 
     db_tx
         .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
+        .await
+        .expect("Unable to update balance")
+}
+
+async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
+    db_tx: &mut T,
+    address: Address<Destination>,
+    amount: &Amount,
+    coin_or_token_id: CoinOrTokenId,
+    block_height: BlockHeight,
+) {
+    let current_balance = db_tx
+        .get_address_locked_balance(address.get(), coin_or_token_id)
+        .await
+        .expect("Unable to get balance")
+        .unwrap_or(Amount::ZERO);
+
+    let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
+
+    db_tx
+        .set_address_locked_balance_at_height(
+            address.get(),
+            new_amount,
+            coin_or_token_id,
+            block_height,
+        )
         .await
         .expect("Unable to update balance")
 }
@@ -1235,7 +1447,7 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::CreateDelegationId(d, _)
         | TxOutput::IssueNft(_, _, d)
         | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-        TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+        TxOutput::CreateStakePool(_, data) => Some(data.decommission_key()),
         TxOutput::IssueFungibleToken(_)
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)

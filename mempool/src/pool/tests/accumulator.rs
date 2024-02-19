@@ -340,7 +340,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(900_000_000)),
                 Destination::AnyoneCanSpend,
-                timelock.clone(),
+                timelock,
             ))
             .build()
     };

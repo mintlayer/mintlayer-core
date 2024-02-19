@@ -126,7 +126,7 @@ async fn get_block_failed(#[case] seed: Seed) {
                     .set_block_aux_data(
                         block_id,
                         &BlockAuxData::new(
-                            block_id,
+                            block_id.into(),
                             BlockHeight::new(rng.gen::<u32>() as u64),
                             BlockTimestamp::from_int_seconds(rng.gen::<u64>()),
                         ),

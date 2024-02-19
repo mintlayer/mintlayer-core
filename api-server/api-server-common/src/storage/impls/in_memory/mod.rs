@@ -17,15 +17,14 @@ pub mod transactional;
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, PoolBlockStats,
-    TransactionInfo, Utxo,
+    ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
+    TransactionInfo, Utxo, UtxoLock,
 };
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -43,6 +42,8 @@ struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
+    address_locked_balance_table:
+        BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
@@ -50,9 +51,11 @@ struct ApiServerInMemoryStorage {
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, TransactionInfo)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
+    locked_utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, LockedUtxo>>,
+    address_locked_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
-    best_block: (BlockHeight, Id<GenBlock>),
+    best_block: BlockAuxData,
     storage_version: u32,
 }
 
@@ -62,6 +65,7 @@ impl ApiServerInMemoryStorage {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
             address_balance_table: BTreeMap::new(),
+            address_locked_balance_table: BTreeMap::new(),
             address_transactions_table: BTreeMap::new(),
             delegation_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
@@ -69,9 +73,15 @@ impl ApiServerInMemoryStorage {
             transaction_table: BTreeMap::new(),
             utxo_table: BTreeMap::new(),
             address_utxos: BTreeMap::new(),
+            locked_utxo_table: BTreeMap::new(),
+            address_locked_utxos: BTreeMap::new(),
             fungible_token_issuances: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
-            best_block: (0.into(), chain_config.genesis_block_id()),
+            best_block: BlockAuxData::new(
+                chain_config.genesis_block_id(),
+                0.into(),
+                chain_config.genesis_block().timestamp(),
+            ),
             storage_version: super::CURRENT_STORAGE_VERSION,
         };
         result
@@ -90,6 +100,19 @@ impl ApiServerInMemoryStorage {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.address_balance_table.get(address).map_or_else(
+            || Ok(None),
+            |balance| {
+                Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
+            },
+        )
+    }
+
+    fn get_address_locked_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.address_locked_balance_table.get(address).map_or_else(
             || Ok(None),
             |balance| {
                 Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
@@ -138,7 +161,7 @@ impl ApiServerInMemoryStorage {
                 block.block.transactions().iter().zip(block.tx_additional_infos.iter()).map(
                     |(tx, additinal_data)| {
                         (
-                            block_aux.clone(),
+                            *block_aux,
                             TransactionInfo {
                                 tx: tx.clone(),
                                 additinal_info: additinal_data.clone(),
@@ -187,7 +210,7 @@ impl ApiServerInMemoryStorage {
         Ok(version_table_handle)
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         Ok(self.best_block)
     }
 
@@ -200,7 +223,7 @@ impl ApiServerInMemoryStorage {
             Some(data) => data,
             None => return Ok(None),
         };
-        Ok(Some(block_aux_data.clone()))
+        Ok(Some(*block_aux_data))
     }
 
     fn get_block_range_from_time_range(
@@ -393,6 +416,26 @@ impl ApiServerInMemoryStorage {
         Ok(result)
     }
 
+    fn get_locked_utxos_until_now(
+        &self,
+        block_height: BlockHeight,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let result = self
+            .locked_utxo_table
+            .iter()
+            .map(|(outpoint, by_height)| (outpoint, by_height.values().last().expect("not empty")))
+            .filter_map(|(outpint, locked_utxo)| {
+                match locked_utxo.lock() {
+                    UtxoLock::UntilHeight(height) => height == block_height,
+                    UtxoLock::UntilTime(time) => time > time_range.0 && time <= time_range.1,
+                }
+                .then_some((outpint.clone(), locked_utxo.output().clone()))
+            })
+            .collect();
+        Ok(result)
+    }
+
     fn get_delegations_from_address(
         &self,
         address: &Destination,
@@ -432,9 +475,8 @@ impl ApiServerInMemoryStorage {
 impl ApiServerInMemoryStorage {
     fn initialize_storage(
         &mut self,
-        chain_config: &ChainConfig,
+        _chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        self.best_block = (0.into(), chain_config.genesis_block_id());
         self.storage_version = CURRENT_STORAGE_VERSION;
 
         Ok(())
@@ -447,6 +489,7 @@ impl ApiServerInMemoryStorage {
         self.block_table.clear();
         self.block_aux_data_table.clear();
         self.address_balance_table.clear();
+        self.address_locked_balance_table.clear();
         self.address_transactions_table.clear();
         self.delegation_table.clear();
         self.main_chain_blocks_table.clear();
@@ -467,6 +510,26 @@ impl ApiServerInMemoryStorage {
         // Inefficient, but acceptable for testing with InMemoryStorage
 
         self.address_balance_table.iter_mut().for_each(|(_, balance)| {
+            balance
+                .range((Excluded(block_height), Unbounded))
+                .map(|b| b.0.into_int())
+                .collect::<Vec<_>>()
+                .iter()
+                .for_each(|&b| {
+                    balance.remove(&BlockHeight::new(b));
+                })
+        });
+
+        Ok(())
+    }
+
+    fn del_address_locked_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        // Inefficient, but acceptable for testing with InMemoryStorage
+
+        self.address_locked_balance_table.iter_mut().for_each(|(_, balance)| {
             balance
                 .range((Excluded(block_height), Unbounded))
                 .map(|b| b.0.into_int())
@@ -517,6 +580,23 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn set_address_locked_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.address_locked_balance_table
+            .entry(address.to_string())
+            .or_default()
+            .entry(block_height)
+            .or_default()
+            .insert(coin_or_token_id, amount);
+
+        Ok(())
+    }
+
     fn set_address_transactions_at_height(
         &mut self,
         address: &str,
@@ -540,10 +620,10 @@ impl ApiServerInMemoryStorage {
         self.block_table.insert(block_id, block.clone());
         self.block_aux_data_table.insert(
             block_id,
-            BlockAuxData::new(block_id, block_height, block.block.timestamp()),
+            BlockAuxData::new(block_id.into(), block_height, block.block.timestamp()),
         );
         self.main_chain_blocks_table.insert(block_height, block_id);
-        self.best_block = (block_height, block_id.into());
+        self.best_block = BlockAuxData::new(block_id.into(), block_height, block.block.timestamp());
         Ok(())
     }
 
@@ -576,7 +656,7 @@ impl ApiServerInMemoryStorage {
         block_id: Id<Block>,
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
-        self.block_aux_data_table.insert(block_id, block_aux_data.clone());
+        self.block_aux_data_table.insert(block_id, *block_aux_data);
         Ok(())
     }
 
@@ -644,6 +724,21 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn set_locked_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: LockedUtxo,
+        address: &str,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.locked_utxo_table
+            .entry(outpoint.clone())
+            .or_default()
+            .insert(block_height, utxo);
+        self.address_locked_utxos.entry(address.into()).or_default().insert(outpoint);
+        Ok(())
+    }
+
     fn del_utxo_above_height(
         &mut self,
         block_height: BlockHeight,
@@ -652,6 +747,24 @@ impl ApiServerInMemoryStorage {
             v.retain(|k, _| k <= &block_height);
             if v.is_empty() {
                 self.address_utxos.retain(|_, v| {
+                    v.remove(outpoint);
+                    !v.is_empty()
+                });
+            }
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn del_locked_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.locked_utxo_table.retain(|outpoint, v| {
+            v.retain(|k, _| k <= &block_height);
+            if v.is_empty() {
+                self.address_locked_utxos.retain(|_, v| {
                     v.remove(outpoint);
                     !v.is_empty()
                 });

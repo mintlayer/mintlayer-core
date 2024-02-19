@@ -18,12 +18,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
+        timelock::OutputTimeLock,
         tokens::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
             TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -118,6 +119,62 @@ impl Delegation {
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UtxoLock {
+    UntilHeight(BlockHeight),
+    UntilTime(BlockTimestamp),
+}
+
+impl UtxoLock {
+    pub fn from_output_lock(
+        lock: OutputTimeLock,
+        block_timestamp: BlockTimestamp,
+        block_height: BlockHeight,
+    ) -> Self {
+        match lock {
+            OutputTimeLock::UntilTime(time) => UtxoLock::UntilTime(time),
+            OutputTimeLock::UntilHeight(height) => UtxoLock::UntilHeight(height),
+            OutputTimeLock::ForSeconds(time) => {
+                UtxoLock::UntilTime(block_timestamp.add_int_seconds(time).expect("no overflow"))
+            }
+            OutputTimeLock::ForBlockCount(height) => {
+                UtxoLock::UntilHeight(block_height.checked_add(height).expect("no overflow"))
+            }
+        }
+    }
+
+    pub fn into_time_and_height(self) -> (Option<BlockTimestamp>, Option<BlockHeight>) {
+        match self {
+            Self::UntilHeight(height) => (None, Some(height)),
+            Self::UntilTime(time) => (Some(time), None),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LockedUtxo {
+    output: TxOutput,
+    lock: UtxoLock,
+}
+
+impl LockedUtxo {
+    pub fn new(output: TxOutput, lock: UtxoLock) -> Self {
+        Self { output, lock }
+    }
+
+    pub fn output(&self) -> &TxOutput {
+        &self.output
+    }
+
+    pub fn into_output(self) -> TxOutput {
+        self.output
+    }
+
+    pub fn lock(&self) -> UtxoLock {
+        self.lock
     }
 }
 
@@ -223,12 +280,18 @@ pub trait ApiServerStorageRead: Sync {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
 
+    async fn get_address_locked_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError>;
+
     async fn get_address_transactions(
         &self,
         address: &str,
     ) -> Result<Vec<Id<Transaction>>, ApiServerStorageError>;
 
-    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
+    async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
 
     async fn get_block(
         &self,
@@ -309,6 +372,12 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
 
+    async fn get_locked_utxos_until_now(
+        &self,
+        block_height: BlockHeight,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+
     async fn get_delegations_from_address(
         &self,
         address: &Destination,
@@ -342,12 +411,25 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn del_address_locked_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn del_address_transactions_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_address_locked_balance_at_height(
         &mut self,
         address: &str,
         amount: Amount,
@@ -419,7 +501,20 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
+    async fn set_locked_utxo_at_height(
+        &mut self,
+        outpoint: UtxoOutPoint,
+        utxo: LockedUtxo,
+        address: &str,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
     async fn del_utxo_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_locked_utxo_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

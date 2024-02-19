@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, PoolId, Transaction},
+    chain::{Block, ChainConfig, PoolId, Transaction},
     primitives::{BlockHeight, Id},
 };
 use pos_accounting::PoolData;
@@ -88,9 +88,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
-    pub async fn get_best_block(
-        &mut self,
-    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    pub async fn get_best_block(&mut self) -> Result<BlockAuxData, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 

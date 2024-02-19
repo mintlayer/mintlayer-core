@@ -676,7 +676,7 @@ async fn sync_and_compare(
         .get_best_block()
         .await
         .unwrap()
-        .0;
+        .block_height();
     local_state.scan_blocks(block_height, vec![block]).await.unwrap();
 
     let node_data = tf.chainstate.get_stake_pool_data(pool_id).unwrap().unwrap();

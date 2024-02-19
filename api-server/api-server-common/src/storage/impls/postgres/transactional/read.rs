@@ -17,7 +17,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        DelegationId, Destination, GenBlock, PoolId, TxOutput,
+        DelegationId, Destination, PoolId, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -63,6 +63,17 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_address_locked_balance(
+        &self,
+        address: &str,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_locked_balance(address, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
     async fn get_address_transactions(
         &self,
         address: &str,
@@ -73,7 +84,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
-    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 
@@ -236,6 +247,17 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_available_utxos(address).await?;
+
+        Ok(res)
+    }
+
+    async fn get_locked_utxos_until_now(
+        &self,
+        block_height: BlockHeight,
+        time_range: (BlockTimestamp, BlockTimestamp),
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_locked_utxos_until_now(block_height, time_range).await?;
 
         Ok(res)
     }
