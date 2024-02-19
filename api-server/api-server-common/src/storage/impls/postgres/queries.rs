@@ -515,7 +515,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     utxo bytea NOT NULL,
                     lock_until_block bigint,
                     lock_until_timestamp bigint,
-                    PRIMARY KEY outpoint
+                    PRIMARY KEY (outpoint)
                 );",
         )
         .await?;
