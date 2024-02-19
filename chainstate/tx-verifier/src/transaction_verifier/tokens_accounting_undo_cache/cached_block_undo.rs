@@ -44,6 +44,7 @@ impl CachedTokensBlockUndo {
         Self { tx_undos }
     }
 
+    /// Consume the data from the struct and move it into a type that is suitable fot storing in the db
     pub fn consume(self) -> BlockUndo {
         let tx_undos = self
             .tx_undos
@@ -54,7 +55,8 @@ impl CachedTokensBlockUndo {
         BlockUndo::new(tx_undos)
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Indicates whether reward and all transactions were used while disconnecting leaving this object empty
+    pub(super) fn is_empty(&self) -> bool {
         self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 
@@ -62,7 +64,8 @@ impl CachedTokensBlockUndo {
         &self.tx_undos
     }
 
-    pub fn insert_tx_undo(
+    /// Insert new undo for transaction
+    pub(super) fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
         tx_undo: TxUndo,
@@ -76,7 +79,8 @@ impl CachedTokensBlockUndo {
         }
     }
 
-    pub fn take_tx_undo(
+    /// Take tx undo object out if available
+    pub(super) fn take_tx_undo(
         &mut self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TxUndo>, BlockUndoError> {
@@ -89,7 +93,9 @@ impl CachedTokensBlockUndo {
         Ok(None)
     }
 
-    pub fn combine(&mut self, other: Self) -> Result<(), BlockUndoError> {
+    /// Combine two objects into one.
+    /// All operations inside are made in terms of flushing data in transaction verifier hierarchy.
+    pub(super) fn combine(&mut self, other: Self) -> Result<(), BlockUndoError> {
         other.tx_undos.into_iter().for_each(|(id, op)| {
             let result = combine(self.tx_undos.get(&id).cloned(), Some(op));
             if let Some(result) = result {

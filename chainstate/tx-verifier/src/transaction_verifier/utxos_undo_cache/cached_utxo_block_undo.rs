@@ -88,6 +88,7 @@ impl CachedUtxosBlockUndo {
         }
     }
 
+    /// Consume the data from the struct and move it into a type that is suitable fot storing in the db
     pub fn consume(self) -> UtxosBlockUndo {
         let reward_undo = self.reward_undo.and_then(|op| op.get().cloned());
 
@@ -117,12 +118,14 @@ impl CachedUtxosBlockUndo {
         )
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Indicates whether reward and all transactions were used while disconnecting leaving this object empty
+    pub(super) fn is_empty(&self) -> bool {
         !self.reward_undo.as_ref().is_some_and(|u| u.get().is_some())
             && self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
 
-    pub fn insert_tx_undo(
+    /// Insert new undo for transaction
+    pub(super) fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
         tx_undo: UtxosTxUndoWithSources,
@@ -150,8 +153,8 @@ impl CachedUtxosBlockUndo {
         Ok(())
     }
 
-    pub fn has_children_of(&self, tx_id: &Id<Transaction>) -> bool {
-        // Check if the tx is a dependency for other txs.
+    /// Check if a tx is a dependency for other txs.
+    pub(super) fn has_children_of(&self, tx_id: &Id<Transaction>) -> bool {
         self.parent_child_dependencies
             .iter()
             .filter(|((id, _), _)| id == tx_id)
@@ -166,11 +169,13 @@ impl CachedUtxosBlockUndo {
             .collect()
     }
 
-    pub fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
+    /// Take reward undo object out if available
+    pub(super) fn take_block_reward_undo(&mut self) -> Option<UtxosBlockRewardUndo> {
         self.reward_undo.take().and_then(|op| op.take())
     }
 
-    pub fn take_tx_undo(
+    /// Take tx undo object out if available
+    pub(super) fn take_tx_undo(
         &mut self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<UtxosTxUndo>, UtxosBlockUndoError> {
@@ -191,12 +196,15 @@ impl CachedUtxosBlockUndo {
         }
     }
 
-    pub fn set_block_reward_undo(&mut self, reward_undo: UtxosBlockRewardUndo) {
+    /// Set undo for reward
+    pub(super) fn set_block_reward_undo(&mut self, reward_undo: UtxosBlockRewardUndo) {
         debug_assert!(self.reward_undo.is_none());
         self.reward_undo = Some(CachedOperation::Write(reward_undo));
     }
 
-    pub fn combine(&mut self, other: Self) -> Result<(), UtxosBlockUndoError> {
+    /// Combine two objects into one.
+    /// All operations inside are made in terms of flushing data in transaction verifier hierarchy.
+    pub(super) fn combine(&mut self, other: Self) -> Result<(), UtxosBlockUndoError> {
         // combine reward
         match (&mut self.reward_undo, other.reward_undo) {
             (None | Some(_), None) => { /* do nothing */ }

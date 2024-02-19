@@ -24,6 +24,16 @@ pub use cached_utxo_block_undo::CachedUtxosBlockUndo;
 
 pub type CachedUtxoBlockUndoOp = CachedOperation<CachedUtxosBlockUndo>;
 
+/// Struct that can hold utxo undo data for blocks/mempool.
+///
+/// There is now restriction on how many blocks a TransactionVerifier can be used on,
+/// so this struct has to work with an arbitrary number of items.
+/// Furthermore every block consists of an arbitrary number of transactions. So one of the jobs here
+/// is to initialize BlockUndo structure when the first transaction arrives and erase
+///
+/// On every level of its nested structure the `CachedOperation` is used to keep the information
+/// about whether data should be eventually added or erased from the db after hierarchy of verifiers
+/// fold.
 #[derive(Debug, Eq, PartialEq)]
 pub struct UtxosBlockUndoCache {
     data: BTreeMap<TransactionSource, CachedUtxoBlockUndoOp>,
@@ -49,16 +59,19 @@ impl UtxosBlockUndoCache {
         self.data
     }
 
-    pub fn get_block_undo<F, E>(
+    /// Check whether transaction can be disconnected.
+    /// An undo object must be available and no other tx must be dependant on the current one.
+    pub fn can_disconnect_transaction<F, E>(
         &self,
         tx_source: &TransactionSource,
+        tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<Option<CachedUtxosBlockUndo>, ConnectTransactionError>
+    ) -> Result<bool, ConnectTransactionError>
     where
         F: Fn(TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        match self.data.get(tx_source) {
+        let block_undo = match self.data.get(tx_source) {
             Some(op) => match op {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
                     Ok(Some(undo.clone()))
@@ -66,9 +79,13 @@ impl UtxosBlockUndoCache {
                 CachedOperation::Erase => Ok(None),
             },
             None => fetcher_func(*tx_source).map_err(ConnectTransactionError::from),
-        }
+        }?;
+
+        Ok(block_undo.map_or(false, |undo| !undo.has_children_of(tx_id)))
     }
 
+    /// Add undo object for a transaction.
+    /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_tx_undo(
         &mut self,
         tx_source: TransactionSource,
@@ -98,6 +115,8 @@ impl UtxosBlockUndoCache {
         Ok(())
     }
 
+    /// Add undo object for a reward.
+    /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_reward_undo(
         &mut self,
         tx_source: TransactionSource,
@@ -124,6 +143,8 @@ impl UtxosBlockUndoCache {
         Ok(())
     }
 
+    /// Take tx undo object out if available.
+    /// If the block is fully disconnected the block undo object is erased.
     pub fn take_tx_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
@@ -139,7 +160,9 @@ impl UtxosBlockUndoCache {
                 .ok_or(ConnectTransactionError::MissingBlockUndo(*tx_source))?,
             Entry::Occupied(entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => undo.clone(),
-                CachedOperation::Erase => panic!("already empty"),
+                CachedOperation::Erase => panic!(
+                    "Attempt to undo utxo in a transaction for a block that has been fully disconnected."
+                ),
             },
         };
 
@@ -157,6 +180,8 @@ impl UtxosBlockUndoCache {
         Ok(res)
     }
 
+    /// Take reward undo object out if available.
+    /// If the block is fully disconnected the block undo object is erased.
     pub fn take_block_reward_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
@@ -191,6 +216,8 @@ impl UtxosBlockUndoCache {
         Ok(res)
     }
 
+    // Set undo data for a particular block or mempool.
+    // If there is some data already then it's combined with the new one.
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,

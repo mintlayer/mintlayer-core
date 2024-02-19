@@ -59,6 +59,7 @@ impl CachedPoSBlockUndo {
         }
     }
 
+    /// Consume the data from the struct and move it into a type that is suitable fot storing in the db
     pub fn consume(self) -> BlockUndo {
         let reward_undo = self.reward_undos.and_then(|op| op.get().cloned());
 
@@ -71,7 +72,8 @@ impl CachedPoSBlockUndo {
         BlockUndo::new(reward_undo, tx_undos)
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Indicates whether reward and all transactions were used while disconnecting leaving this object empty
+    pub(super) fn is_empty(&self) -> bool {
         !self.reward_undos.as_ref().is_some_and(|u| u.get().is_some())
             && self.tx_undos.iter().all(|(_, op)| op.get().is_none())
     }
@@ -80,16 +82,19 @@ impl CachedPoSBlockUndo {
         &self.tx_undos
     }
 
-    pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
+    /// Take reward undo object out if available
+    pub(super) fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
         self.reward_undos.take().and_then(|op| op.take())
     }
 
-    pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
+    /// Set undo for reward
+    pub(super) fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
         debug_assert!(self.reward_undos.is_none());
         self.reward_undos = Some(CachedOperation::Write(reward_undo));
     }
 
-    pub fn insert_tx_undo(
+    /// Insert new undo for transaction
+    pub(super) fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
         tx_undo: TxUndo,
@@ -103,7 +108,8 @@ impl CachedPoSBlockUndo {
         }
     }
 
-    pub fn take_tx_undo(
+    /// Take tx undo object out if available
+    pub(super) fn take_tx_undo(
         &mut self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TxUndo>, BlockUndoError> {
@@ -116,7 +122,9 @@ impl CachedPoSBlockUndo {
         Ok(None)
     }
 
-    pub fn combine(&mut self, other: Self) -> Result<(), BlockUndoError> {
+    /// Combine two objects into one.
+    /// All operations inside are made in terms of flushing data in transaction verifier hierarchy.
+    pub(super) fn combine(&mut self, other: Self) -> Result<(), BlockUndoError> {
         // combine reward
         match (&mut self.reward_undos, other.reward_undos) {
             (None | Some(_), None) => { /* do nothing */ }

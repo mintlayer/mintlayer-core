@@ -24,6 +24,9 @@ pub use cached_block_undo::CachedTokensBlockUndo;
 
 pub type CachedTokensBlockUndoOp = CachedOperation<CachedTokensBlockUndo>;
 
+/// Struct that can hold tokens accounting undo data for blocks/mempool.
+///
+/// See `UtxosBlockUndoCache` for a general info
 #[derive(Debug, Eq, PartialEq)]
 pub struct TokensAccountingBlockUndoCache {
     data: BTreeMap<TransactionSource, CachedOperation<CachedTokensBlockUndo>>,
@@ -51,6 +54,8 @@ impl TokensAccountingBlockUndoCache {
         self.data
     }
 
+    /// Add undo object for a transaction.
+    /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_tx_undo(
         &mut self,
         tx_source: TransactionSource,
@@ -80,6 +85,8 @@ impl TokensAccountingBlockUndoCache {
         Ok(())
     }
 
+    /// Take tx undo object out if available.
+    /// If the block is fully disconnected the block undo object is erased.
     pub fn take_tx_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
@@ -94,7 +101,9 @@ impl TokensAccountingBlockUndoCache {
             Entry::Vacant(_) => fetcher_func(*tx_source)?,
             Entry::Occupied(entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
-                CachedOperation::Erase => panic!("already empty"),
+                CachedOperation::Erase => panic!(
+                    "Attempt to undo tokens in a transaction for a block that has been fully disconnected."
+                ),
             },
         };
 
@@ -115,6 +124,8 @@ impl TokensAccountingBlockUndoCache {
         Ok(None)
     }
 
+    // Set undo data for a particular block or mempool.
+    // If there is some data already then it's combined with the new one.
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,

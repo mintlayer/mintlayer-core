@@ -953,16 +953,18 @@ where
                 if current_block_height < best_block_height {
                     Ok(false)
                 } else {
-                    Ok(!self
-                        .utxo_block_undo
-                        .get_block_undo(tx_source, block_undo_fetcher)?
-                        .map_or(false, |undo| undo.has_children_of(tx_id)))
+                    self.utxo_block_undo.can_disconnect_transaction(
+                        tx_source,
+                        tx_id,
+                        block_undo_fetcher,
+                    )
                 }
             }
-            TransactionSource::Mempool => Ok(!self
-                .utxo_block_undo
-                .get_block_undo(tx_source, block_undo_fetcher)?
-                .map_or(false, |undo| undo.has_children_of(tx_id))),
+            TransactionSource::Mempool => self.utxo_block_undo.can_disconnect_transaction(
+                tx_source,
+                tx_id,
+                block_undo_fetcher,
+            ),
         }
     }
 

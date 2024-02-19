@@ -24,6 +24,9 @@ pub use cached_block_undo::CachedPoSBlockUndo;
 
 pub type CachedPoSBlockUndoOp = CachedOperation<CachedPoSBlockUndo>;
 
+/// Struct that can hold PoS accounting undo data for blocks/mempool.
+///
+/// See `UtxosBlockUndoCache` for a general info
 #[derive(Debug, Eq, PartialEq)]
 pub struct PoSAccountingBlockUndoCache {
     data: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>,
@@ -49,6 +52,8 @@ impl PoSAccountingBlockUndoCache {
         self.data
     }
 
+    /// Add undo object for a reward.
+    /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_reward_undo(
         &mut self,
         tx_source: TransactionSource,
@@ -75,6 +80,8 @@ impl PoSAccountingBlockUndoCache {
         Ok(())
     }
 
+    /// Add undo object for a transaction.
+    /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_tx_undo(
         &mut self,
         tx_source: TransactionSource,
@@ -104,6 +111,8 @@ impl PoSAccountingBlockUndoCache {
         Ok(())
     }
 
+    /// Take tx undo object out if available.
+    /// If the block is fully disconnected the block undo object is erased.
     pub fn take_tx_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
@@ -118,7 +127,9 @@ impl PoSAccountingBlockUndoCache {
             Entry::Vacant(_) => fetcher_func(*tx_source)?,
             Entry::Occupied(entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
-                CachedOperation::Erase => panic!("already empty"),
+                CachedOperation::Erase => panic!(
+                    "Attempt to undo pos a transaction for a block that has been fully disconnected."
+                ),
             },
         };
 
@@ -139,6 +150,8 @@ impl PoSAccountingBlockUndoCache {
         Ok(None)
     }
 
+    /// Take reward undo object out if available.
+    /// If the block is fully disconnected the block undo object is erased.
     pub fn take_block_reward_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
@@ -173,6 +186,8 @@ impl PoSAccountingBlockUndoCache {
         Ok(res)
     }
 
+    // Set undo data for a particular block or mempool.
+    // If there is some data already then it's combined with the new one.
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
