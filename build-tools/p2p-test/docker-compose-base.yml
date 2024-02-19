@@ -3,11 +3,18 @@ services:
     build:
       context: ../..
       dockerfile: build-tools/p2p-test/Dockerfile
+
+    # Note: the node in SPECIAL_NODE is supposed to be started earlier than everything else, so it
+    # won't have any peers on the first start and will have to perform an early dns seed query.
+    # The other nodes will obtain remote peer addresses from the "special" one.
+    # Also note that we pass it as a reserved node; this is needed because for non-reserved
+    # addresses only one outbound connection is allowed per address group and all our nodes
+    # are in the same address group.
     command: bash -c "
         node-daemon testnet \
-            --rpc-bind-address 0.0.0.0:$RPC_PORT \
-            $(dig +short $NODES_LIST | xargs printf '--p2p-boot-node %s ') \
-            --p2p-force-dns-query-if-no-global-addresses-known \
+            $COMMON_NODE_ARGS \
+            $(dig +short $ORDINARY_NODES_LIST | xargs printf '--p2p-boot-node %s ') \
+            --p2p-reserved-node $(dig +short $SPECIAL_NODE) \
       "
     environment:
       - RUST_LOG

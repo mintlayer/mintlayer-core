@@ -18,7 +18,7 @@ mod helper_types;
 
 pub use command_handler::CommandHandler;
 
-use std::{fmt::Debug, path::PathBuf};
+use std::{fmt::Debug, path::PathBuf, time::Duration};
 
 use clap::Parser;
 
@@ -587,8 +587,8 @@ pub enum WalletCommand {
         address: BannableAddress,
         /// Duration of the ban, e.g. 1M (1 month) or "1y 3M 10d 6h 30m 45s"
         /// (1 year 3 months 10 days 6 hours 30 minutes 45 seconds).
-        #[arg(value_parser = clap::value_parser!(helper_types::Duration))]
-        duration: helper_types::Duration,
+        #[arg(value_parser(humantime::parse_duration))]
+        duration: Duration,
     },
 
     /// Unban address in the node
