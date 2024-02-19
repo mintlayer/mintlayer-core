@@ -152,9 +152,22 @@ where
                 self.wallet.update_wallet::<N>().await;
 
                 let msg = match newly_generated_mnemonic {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => format!(
-                    "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
-                , mnemonic),
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                        let passphrase = if let Some(passphrase) = passphrase {
+                            format!("passphrase: {passphrase}\n")
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
+                        Please write it somewhere safe to be able to restore your wallet. \
+                        It's recommended that you attempt to recover the wallet now as practice\
+                        to check that you arrive at the same addresses, \
+                        to ensure that you have done everything correctly.
+                        ",
+                            mnemonic
+                        )
+                    }
                     CreatedWallet::UserProvidedMenmonic => {
                         "New wallet created successfully".to_owned()
                     }

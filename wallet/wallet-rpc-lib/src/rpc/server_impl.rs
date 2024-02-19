@@ -96,8 +96,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             .await
             .map(|res| match res {
                 crate::CreatedWallet::UserProvidedMenmonic => CreatedWallet::UserProvidedMenmonic,
-                crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
+                crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
                 }
             }),
         )

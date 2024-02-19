@@ -20,6 +20,7 @@ use crate::{
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
+use serialization::hex::HexEncode;
 use serialization::Encode;
 use std::{collections::BTreeSet, num::NonZeroUsize};
 
@@ -523,6 +524,76 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     // Now the seed phrase doesn't exist in the wallet anymore
     let seed_phrase = wallet.seed_phrase().unwrap();
     assert!(seed_phrase.is_none());
+}
+
+#[test]
+fn wallet_seed_phrase_check_address() {
+    let chain_config = Arc::new(create_mainnet());
+
+    // create wallet with saving the seed phrase
+    let db = create_wallet_in_memory().unwrap();
+    let genesis_block_id = chain_config.genesis_block_id();
+    let wallet_passphrase: Option<String> = None;
+    let mut wallet = Wallet::create_new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        wallet_passphrase.as_ref().map(|p| p.as_ref()),
+        StoreSeedPhrase::Store,
+        BlockHeight::new(0),
+        genesis_block_id,
+    )
+    .unwrap();
+
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pk = wallet
+        .find_public_key(
+            DEFAULT_ACCOUNT_INDEX,
+            address.1.decode_object(&chain_config).unwrap(),
+        )
+        .unwrap();
+
+    // m/44'/19788'/0'/0/0 for MNEMONIC
+    let expected_pk = "03bf6f8d52dade77f95e9c6c9488fd8492a99c09ff23095caffb2e6409d1746ade";
+    assert_eq!(expected_pk, pk.hex_encode().strip_prefix("00").unwrap());
+
+    let db = create_wallet_in_memory().unwrap();
+    let wallet_passphrase: Option<String> = Some("phrase123".into());
+    let mut wallet = Wallet::create_new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        wallet_passphrase.as_ref().map(|p| p.as_ref()),
+        StoreSeedPhrase::Store,
+        BlockHeight::new(0),
+        genesis_block_id,
+    )
+    .unwrap();
+
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(address.0, ChildNumber::from_index_with_hardened_bit(0));
+    let pk = wallet
+        .find_public_key(
+            DEFAULT_ACCOUNT_INDEX,
+            address.1.decode_object(&chain_config).unwrap(),
+        )
+        .unwrap();
+
+    // m/44'/19788'/0'/0/0 for MNEMONIC with passphrase: phrase123
+    let expected_pk = "03f5afc96d42babad096261c743398ecad90bfd5dbf59dea840ef276a1bc2a62fb";
+    assert_eq!(expected_pk, pk.hex_encode().strip_prefix("00").unwrap());
+
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(address.0, ChildNumber::from_index_with_hardened_bit(1));
+    let pk = wallet
+        .find_public_key(
+            DEFAULT_ACCOUNT_INDEX,
+            address.1.decode_object(&chain_config).unwrap(),
+        )
+        .unwrap();
+    // m/44'/19788'/0'/0/1 for MNEMONIC with passphrase: phrase123
+    let expected_pk2 = "0284857ecbeb0c19f078f4224313d9f43a86fcc875ffa6e00feca621bdc200d14a";
+    assert_eq!(expected_pk2, pk.hex_encode().strip_prefix("00").unwrap());
 }
 
 #[test]

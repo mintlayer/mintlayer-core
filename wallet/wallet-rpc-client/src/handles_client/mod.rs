@@ -117,8 +117,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
                 wallet_rpc_lib::CreatedWallet::UserProvidedMenmonic => {
                     CreatedWallet::UserProvidedMenmonic
                 }
-                wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic) => {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string())
+                wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
                 }
             })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
