@@ -509,6 +509,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
     }
 
+    pub fn update_account_name(
+        &mut self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> Result<(U31, Option<String>), ControllerError<T>> {
+        self.wallet
+            .set_account_name(account_index, name)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
         log::info!("Stop staking, account_index: {}", account_index);
         self.staking_started.remove(&account_index);

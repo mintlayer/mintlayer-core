@@ -230,6 +230,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn rename_account(
+        &self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> Result<NewAccountInfo, Self::Error> {
+        self.wallet_rpc
+            .update_account_name(account_index, name)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

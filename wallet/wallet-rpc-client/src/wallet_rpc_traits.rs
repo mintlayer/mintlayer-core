@@ -96,6 +96,12 @@ pub trait WalletInterface {
 
     async fn create_account(&self, name: Option<String>) -> Result<NewAccountInfo, Self::Error>;
 
+    async fn rename_account(
+        &self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> Result<NewAccountInfo, Self::Error>;
+
     async fn get_issued_addresses(
         &self,
         options: U31,

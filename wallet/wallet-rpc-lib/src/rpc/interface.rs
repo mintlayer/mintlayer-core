@@ -107,6 +107,14 @@ trait WalletRpc {
         options: EmptyArgs,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
+    #[method(name = "account_rename")]
+    async fn rename_account(
+        &self,
+        account_index: AccountIndexArg,
+        name: Option<String>,
+        options: EmptyArgs,
+    ) -> rpc::RpcResult<NewAccountInfo>;
+
     #[method(name = "address_show")]
     async fn get_issued_addresses(
         &self,

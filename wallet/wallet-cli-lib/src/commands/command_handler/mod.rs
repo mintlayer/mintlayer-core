@@ -202,6 +202,21 @@ where
                 })
             }
 
+            ColdWalletCommand::WalletInfo => {
+                let info = self.non_empty_wallet().await?.wallet_info().await?;
+                let names = info
+                    .account_names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, name)| {
+                        let name = name.map_or("None".into(), |name| format!("\"{name}\""));
+                        format!("Account index: {idx}, Name: {name}")
+                    })
+                    .join("\n");
+
+                Ok(ConsoleCommand::Print(format!("Wallet Accounts:\n{names}")))
+            }
+
             ColdWalletCommand::EncryptPrivateKeys { password } => {
                 self.non_empty_wallet().await?.encrypt_private_keys(password).await?;
 
@@ -564,6 +579,16 @@ where
                         "Success, the new account index is: {}",
                         new_acc.account,
                     ),
+                })
+            }
+
+            WalletCommand::RenameAccount { name } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                wallet.rename_account(selected_account, name).await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: "Success, the account name has been successfully renamed".into(),
                 })
             }
 

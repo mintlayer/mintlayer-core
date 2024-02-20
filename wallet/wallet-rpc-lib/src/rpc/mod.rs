@@ -201,6 +201,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
+    pub async fn update_account_name(
+        &self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> WRpcResult<NewAccountInfo, N> {
+        let (num, name) =
+            self.wallet.call(move |w| w.update_account_name(account_index, name)).await??;
+        Ok(NewAccountInfo::new(num, name))
+    }
+
     pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
         let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
         let (child_number, destination) = self

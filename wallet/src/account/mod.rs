@@ -1936,10 +1936,10 @@ impl Account {
         &mut self,
         name: Option<String>,
         db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> WalletResult<()> {
+    ) -> WalletResult<(U31, &Option<String>)> {
         self.account_info.set_name(name);
         db_tx.set_account(&self.get_account_id(), &self.account_info)?;
-        Ok(())
+        Ok((self.account_index(), self.name()))
     }
 
     pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>, PoolId)> {

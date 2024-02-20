@@ -184,6 +184,16 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn rename_account(
+        &self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> Result<NewAccountInfo, Self::Error> {
+        WalletRpcClient::rename_account(&self.http_client, account_index.into(), name, EmptyArgs {})
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

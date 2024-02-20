@@ -129,6 +129,8 @@ BASE_SCRIPTS = [
     'p2p_relay_transactions.py',
     'feature_db_reinit.py',
     'feature_lmdb_backend_test.py',
+    'wallet_account_info.py',
+    'wallet_account_info_rpc.py',
     'wallet_conflict.py',
     'wallet_list_txs.py',
     'wallet_sign_message.py',
