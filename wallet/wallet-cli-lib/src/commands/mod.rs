@@ -254,8 +254,8 @@ pub enum WalletCommand {
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
 
-    /// Renames the selected account with an optional name, if the name is not specified it will
-    /// remove any existing name for the account.
+    /// Renames the selected account with an optional name.
+    /// If the name is not specified, it will remove any existing name for the account.
     #[clap(name = "account-rename")]
     RenameAccount { name: Option<String> },
 
