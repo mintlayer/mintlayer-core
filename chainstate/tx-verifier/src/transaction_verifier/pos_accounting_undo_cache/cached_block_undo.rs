@@ -34,7 +34,7 @@ impl CachedPoSBlockUndo {
         let mut block_undo = Self::default();
 
         if let Some(reward_undo) = reward_undo {
-            block_undo.set_block_reward_undo(reward_undo);
+            block_undo.set_block_reward_undo(reward_undo)?;
         }
 
         tx_undos
@@ -88,9 +88,16 @@ impl CachedPoSBlockUndo {
     }
 
     /// Set undo for reward
-    pub(super) fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
-        debug_assert!(self.reward_undos.is_none());
+    pub(super) fn set_block_reward_undo(
+        &mut self,
+        reward_undo: BlockRewardUndo,
+    ) -> Result<(), BlockUndoError> {
+        utils::ensure!(
+            self.reward_undos.is_none(),
+            BlockUndoError::UndoAlreadyExistsForReward
+        );
         self.reward_undos = Some(CachedOperation::Write(reward_undo));
+        Ok(())
     }
 
     /// Insert new undo for transaction

@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hierarchy_pos_accounting_undo;
 mod hierarchy_read;
+mod hierarchy_tokens_accounting_undo;
 mod hierarchy_utxo_undo;
 mod hierarchy_write;
 mod mock;

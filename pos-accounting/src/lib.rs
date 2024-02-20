@@ -25,7 +25,7 @@ pub use crate::{
         block_undo::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo},
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
-        helpers::{make_delegation_id, make_pool_id},
+        helpers::{make_delegation_id, make_pool_id, random_undo_for_test},
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
         storage::PoSAccountingDB,

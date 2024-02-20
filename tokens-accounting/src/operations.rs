@@ -19,8 +19,9 @@ use common::{
         tokens::{IsTokenUnfreezable, TokenId},
         Destination,
     },
-    primitives::Amount,
+    primitives::{Amount, H256},
 };
+use crypto::random::Rng;
 use serialization::{Decode, Encode};
 use variant_count::VariantCount;
 
@@ -78,6 +79,14 @@ pub enum TokenAccountingUndo {
     FreezeToken(FreezeTokenUndo),
     UnfreezeToken(UnfreezeTokenUndo),
     ChangeTokenAuthority(ChangeTokenAuthorityUndo),
+}
+
+pub fn random_undo_for_test(rng: &mut impl Rng) -> TokenAccountingUndo {
+    // TODO: make it random?
+    let id: TokenId = H256::random_using(rng).into();
+    let amount_to_add = Amount::from_atoms(rng.gen_range(0..100_000));
+
+    TokenAccountingUndo::MintTokens(MintTokenUndo { id, amount_to_add })
 }
 
 pub trait TokensAccountingOperations {
