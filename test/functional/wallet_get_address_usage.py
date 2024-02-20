@@ -199,6 +199,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
                 assert_equal(line, expected_line)
 
             pools = await wallet.list_pool_ids()
+            assert_equal(pools[0].pledge, '40000')
             assert_equal(pools[0].balance, '40000')
             assert_equal(pools[0].creation_block_height, 2)
             assert_equal(pools[0].vrf_public_key, vrf_public_key)
@@ -219,6 +220,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
                 assert_equal(line, expected_line)
 
             pools = await wallet.list_pool_ids()
+            assert_equal(pools[0].pledge, '40000')
             assert_equal(pools[0].balance, '40000')
             assert_equal(pools[0].creation_block_height, 2)
             assert_equal(pools[0].vrf_public_key, vrf_public_key)

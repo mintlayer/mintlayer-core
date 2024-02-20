@@ -1166,11 +1166,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|pools: Vec<(PoolId, PoolData, Amount)>| {
+            .map(|pools: Vec<(PoolId, PoolData, Amount, Amount)>| {
                 pools
                     .into_iter()
-                    .map(|(pool_id, pool_data, balance)| {
-                        PoolInfo::new(pool_id, pool_data, balance, &self.chain_config)
+                    .map(|(pool_id, pool_data, balance, pledge)| {
+                        PoolInfo::new(pool_id, pool_data, balance, pledge, &self.chain_config)
                     })
                     .collect()
             })

@@ -303,6 +303,7 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
             pools = await wallet.list_pool_ids()
             self.log.info(f"parsed pools: {pools}")
             assert_equal(len(pools), 1)
+            assert_equal(pools[0].pledge, '40000')
             assert_equal(pools[0].balance, '40000')
             tip_id_with_genesis_pool = node.chainstate_best_block_id()
 

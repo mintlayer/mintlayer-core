@@ -41,6 +41,7 @@ class UtxoOutpoint:
 @dataclass
 class PoolData:
     pool_id: str
+    pledge: str
     balance: str
 
 @dataclass
@@ -251,7 +252,7 @@ class WalletRpcController:
 
     async def list_pool_ids(self) -> List[PoolData]:
         pools = self._write_command("staking_list_pool_ids", [self.account])['result']
-        return [PoolData(pool['pool_id'], pool['balance']) for pool in pools]
+        return [PoolData(pool['pool_id'], pool['pledge'], pool['balance']) for pool in pools]
 
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output = self._write_command("staking_list_created_block_ids", [self.account])['result']

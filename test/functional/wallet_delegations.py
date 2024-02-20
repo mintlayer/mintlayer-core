@@ -346,6 +346,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 1)
+            assert_equal(pools[0].pledge, '40000')
             assert_equal(pools[0].balance, '40000')
             pool_id = pools[0].pool_id
 
@@ -375,6 +376,12 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_equal(delegations[0].balance, '1000')
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            pools = await wallet.list_pool_ids()
+            assert_equal(len(pools), 1)
+            assert_equal(pools[0].pledge, '40000')
+            # balance will contain the delegation as well
+            assert_equal(pools[0].balance, '41000')
+
             created_block_ids = await wallet.list_created_blocks_ids()
             # no created block by us yet
             assert_equal(0, len(created_block_ids))
