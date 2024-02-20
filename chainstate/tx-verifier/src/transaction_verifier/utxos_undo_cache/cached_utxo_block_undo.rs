@@ -46,7 +46,7 @@ impl CachedUtxosBlockUndo {
         let mut block_undo = CachedUtxosBlockUndo::default();
 
         if let Some(reward_undo) = reward_undo {
-            block_undo.set_block_reward_undo(reward_undo);
+            block_undo.set_block_reward_undo(reward_undo)?;
         }
 
         tx_undos
@@ -197,9 +197,16 @@ impl CachedUtxosBlockUndo {
     }
 
     /// Set undo for reward
-    pub(super) fn set_block_reward_undo(&mut self, reward_undo: UtxosBlockRewardUndo) {
-        debug_assert!(self.reward_undo.is_none());
+    pub(super) fn set_block_reward_undo(
+        &mut self,
+        reward_undo: UtxosBlockRewardUndo,
+    ) -> Result<(), UtxosBlockUndoError> {
+        utils::ensure!(
+            self.reward_undo.is_none(),
+            UtxosBlockUndoError::UndoAlreadyExistsForReward
+        );
         self.reward_undo = Some(CachedOperation::Write(reward_undo));
+        Ok(())
     }
 
     /// Combine two objects into one.

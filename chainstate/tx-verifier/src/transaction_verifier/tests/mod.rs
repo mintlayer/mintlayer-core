@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod hierarchy_read;
+mod hierarchy_utxo_undo;
 mod hierarchy_write;
 mod mock;
 

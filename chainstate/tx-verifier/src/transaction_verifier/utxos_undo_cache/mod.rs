@@ -126,7 +126,7 @@ impl UtxosBlockUndoCache {
             Entry::Occupied(mut entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
                     let mut block_undo = undo.clone();
-                    block_undo.set_block_reward_undo(reward_undo);
+                    block_undo.set_block_reward_undo(reward_undo)?;
                     entry.insert(CachedOperation::Write(block_undo));
                 }
                 CachedOperation::Erase => {
