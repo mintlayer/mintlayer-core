@@ -102,7 +102,7 @@ impl CliUtxoState {
 
 pub fn format_pool_info(pool_info: PoolInfo) -> String {
     format!(
-        "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}, staker {}, decommission_key {}, vrf_public_key {}",
+        "Pool Id: {}, Balance: {}, Creation Block Height: {}, Timestamp: {}, Staker: {}, Decommission Key: {}, VRF Public Key: {}",
         pool_info.pool_id, pool_info.balance, pool_info.height, pool_info.block_timestamp, pool_info.staker, pool_info.decommission_key, pool_info.vrf_public_key
     )
 }
