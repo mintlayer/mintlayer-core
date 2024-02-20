@@ -58,7 +58,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
             node_rpc,
             wallet_rpc_config,
         } => {
-            let wallet_service = WalletService::start(chain_config.clone(), None, node_rpc)
+            let wallet_service = WalletService::start(chain_config.clone(), None, vec![], node_rpc)
                 .await
                 .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 

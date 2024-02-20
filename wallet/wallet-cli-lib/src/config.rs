@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+use crypto::key::hdkd::u31::U31;
 use utils::clap_utils;
 use utils_networking::NetworkAddressWithPort;
 
@@ -68,9 +69,14 @@ pub struct CliArgs {
     #[clap(long)]
     pub wallet_password: Option<String>,
 
-    /// Start staking after the start
-    #[clap(long)]
+    /// DEPRECATED: use start_staking_for_account instead!
+    /// Start staking for the DEFAULT account after starting the wallet
+    #[clap(long, requires("wallet_file"))]
     pub start_staking: bool,
+
+    /// Start staking for the specified account after starting the wallet
+    #[clap(long, requires("wallet_file"))]
+    pub start_staking_for_account: Vec<U31>,
 
     /// Optional RPC address
     #[clap(long)]

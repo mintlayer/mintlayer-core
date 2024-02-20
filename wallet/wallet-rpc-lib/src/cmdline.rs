@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
+use crypto::key::hdkd::u31::U31;
 use rpc::{
     rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
@@ -52,6 +53,10 @@ pub struct WalletRpcDaemonArgs {
         default_value("mainnet")
     )]
     chain_type: ChainType,
+
+    /// Start staking for the specified account after starting the wallet
+    #[arg(long, value_name("ACC_NUMBER"), requires("wallet_path"))]
+    start_staking_for_account: Vec<U31>,
 
     /// RPC address of the node to connect to
     #[arg(long, value_name("ADDR"))]
@@ -106,6 +111,7 @@ impl WalletRpcDaemonArgs {
             wallet_path: wallet_file,
             rpc_bind_address: wallet_rpc_address,
             chain_type,
+            start_staking_for_account,
             node_rpc_address,
             node_cookie_file,
             node_username,
@@ -126,13 +132,18 @@ impl WalletRpcDaemonArgs {
                 _ => panic!("Should not happen due to arg constraints"),
             };
 
-            WalletServiceConfig::new(chain_type, wallet_file, chain_config)
-                .map_err(|err| ConfigError::InvalidChainConfigOption(err.to_string()))?
-                .apply_option(
-                    WalletServiceConfig::with_node_rpc_address,
-                    node_rpc_address.map(|addr| addr.to_string()),
-                )
-                .with_node_credentials(node_credentials)
+            WalletServiceConfig::new(
+                chain_type,
+                wallet_file,
+                start_staking_for_account,
+                chain_config,
+            )
+            .map_err(|err| ConfigError::InvalidChainConfigOption(err.to_string()))?
+            .apply_option(
+                WalletServiceConfig::with_node_rpc_address,
+                node_rpc_address.map(|addr| addr.to_string()),
+            )
+            .with_node_credentials(node_credentials)
         };
 
         let rpc_config = make_wallet_config(

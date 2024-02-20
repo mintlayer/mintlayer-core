@@ -298,6 +298,25 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
         startup_command_futures.push(res_rx);
     }
 
+    for account_index in args.start_staking_for_account {
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        event_tx
+            .send(Event::HandleCommand {
+                command: WalletCommand::SelectAccount { account_index },
+                res_tx,
+            })
+            .expect("should not fail");
+        startup_command_futures.push(res_rx);
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
+        event_tx
+            .send(Event::HandleCommand {
+                command: WalletCommand::StartStaking,
+                res_tx,
+            })
+            .expect("should not fail");
+        startup_command_futures.push(res_rx);
+    }
+
     let wallet_rpc_config = if args.enable_wallet_rpc_interface {
         Some(make_wallet_config(
             args.wallet_rpc_cookie_file,
