@@ -961,7 +961,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
                 if let Ok(block) = generate_res {
                     log::info!(
-                        "New block generated successfully, block id: {}",
+                        "New block generated successfully, with block id: {:x}",
                         block.get_id()
                     );
 
