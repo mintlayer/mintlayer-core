@@ -848,3 +848,124 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         tf.best_block_id()
     );
 }
+
+// Create additional pool in block_a at height 1.
+// Produce 2 branches from a common genesis using PoS. Each branch uses separate staking keys.
+// Branch 1: genesis <- a <= b
+// Build block `c` from block a but do not submit it
+// Branch 2 : genesis <- a <- d <- e
+// Then append block_c to block_b
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+    let (vrf_sk_2, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let (chain_config_builder, _) =
+        chainstate_test_framework::create_chain_config_with_default_staking_pool(
+            &mut rng, staker_pk, vrf_pk,
+        );
+    let chain_config = chain_config_builder.build();
+    let target_block_time = chain_config.target_block_spacing();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+    // produce block `a` at height 1 and create additional pool
+    let (stake_pool_data_2, staker_sk_2) = create_stake_pool_data_with_all_reward_to_staker(
+        &mut rng,
+        chain_config.min_stake_pool_pledge(),
+        vrf_pk_2,
+    );
+    let genesis_outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let stake_pool_2_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_2_id,
+            Box::new(stake_pool_data_2),
+        ))
+        .build();
+    let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(stake_pool_2_tx)
+        .with_block_signing_key(staker_sk.clone())
+        .with_stake_spending_key(staker_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+    let block_a_id = tf.best_block_id();
+
+    // Produce block_b
+    let block_b_index = tf
+        .make_pos_block_builder(&mut rng)
+        .with_block_signing_key(staker_sk.clone())
+        .with_stake_spending_key(staker_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+    let block_b_id: Id<GenBlock> = (*block_b_index.block_id()).into();
+    assert_eq!(block_a_id, *block_b_index.prev_block_id());
+    assert_eq!(block_b_id, tf.best_block_id());
+
+    // Build block_c but do not process it
+    let block_c = tf
+        .make_pos_block_builder(&mut rng)
+        .with_stake_pool(pool_2_id)
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_block_signing_key(staker_sk_2.clone())
+        .with_stake_spending_key(staker_sk_2.clone())
+        .with_vrf_key(vrf_sk_2.clone())
+        .build();
+    let block_c_id = block_c.get_id();
+
+    // Produce block_d from block_a as an alternative chain with second pool
+    let block_d = tf
+        .make_pos_block_builder(&mut rng)
+        .with_parent(block_a_id)
+        .with_stake_pool(pool_2_id)
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_block_signing_key(staker_sk_2.clone())
+        .with_stake_spending_key(staker_sk_2.clone())
+        .with_vrf_key(vrf_sk_2.clone())
+        .build();
+    let block_d_id = block_d.get_id().into();
+    assert_eq!(block_a_id, block_d.prev_block_id());
+    tf.process_block(block_d.clone(), BlockSource::Local).unwrap();
+
+    assert_eq!(block_b_id, tf.best_block_id());
+
+    // Produce block_e and check that reorg happened
+    let block_e = tf
+        .make_pos_block_builder(&mut rng)
+        .with_parent(block_d_id)
+        .with_stake_pool(pool_2_id)
+        .with_kernel_input(UtxoOutPoint::new(block_d_id.into(), 0))
+        .with_block_signing_key(staker_sk_2.clone())
+        .with_stake_spending_key(staker_sk_2)
+        .with_vrf_key(vrf_sk_2)
+        .build();
+    let block_e_id = block_e.get_id();
+    tf.process_block(block_e.clone(), BlockSource::Local).unwrap();
+
+    assert_eq!(block_d_id, block_e.prev_block_id());
+    assert_eq!(block_e_id, tf.best_block_id());
+
+    // Submit block_c that was saved and check that it's valid and reorg happened because it's a denser chain
+    tf.chainstate.preliminary_header_check(block_c.header().clone()).unwrap();
+    let block_c = tf.chainstate.preliminary_block_check(block_c).unwrap();
+    assert_eq!(block_b_id, block_c.prev_block_id());
+    tf.process_block(block_c, BlockSource::Local).unwrap().unwrap();
+
+    assert_eq!(<Id<GenBlock>>::from(block_c_id), tf.best_block_id());
+}

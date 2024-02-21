@@ -38,6 +38,10 @@ pub enum ConsensusPoSError {
     TimestampViolation(BlockTimestamp, BlockTimestamp),
     #[error("Kernel inputs are empty")]
     NoKernel,
+    #[error("Kernel utxo is missing")]
+    MissingKernelUtxo,
+    #[error("Kernel outpoint must be a utxo")]
+    KernelOutpointMustBeUtxo,
     #[error("Only one kernel allowed")]
     MultipleKernels,
     #[error("Bits to target conversion failed {0:?}")]
