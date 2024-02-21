@@ -85,8 +85,6 @@ def build_instances(version, docker_hub_user, num_jobs):
                         f"{docker_hub_user}/api-blockchain-scanner-daemon", version)
     build_docker_image("build-tools/docker/Dockerfile.api-web-server",
                         f"{docker_hub_user}/api-web-server", version)
-    build_docker_image("build-tools/docker/Dockerfile.wallet-cli",
-                        f"{docker_hub_user}/wallet-cli", version)
     build_docker_image("build-tools/docker/Dockerfile.wallet-rpc-daemon",
                         f"{docker_hub_user}/wallet-rpc-daemon", version)
     build_docker_image("build-tools/docker/Dockerfile.dns-server",
@@ -98,7 +96,6 @@ def push_instances(docker_hub_user, version, latest):
     push_docker_image(f"{docker_hub_user}/node-daemon", version, latest)
     push_docker_image(f"{docker_hub_user}/api-blockchain-scanner-daemon", version, latest)
     push_docker_image(f"{docker_hub_user}/api-web-server", version, latest)
-    push_docker_image(f"{docker_hub_user}/wallet-cli", version, latest)
     push_docker_image(f"{docker_hub_user}/wallet-rpc-daemon", version, latest)
     push_docker_image(f"{docker_hub_user}/dns-server", version, latest)
 

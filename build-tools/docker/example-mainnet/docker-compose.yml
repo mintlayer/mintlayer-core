@@ -14,14 +14,14 @@ services:
       # do it for consistency and in order to specify the port explicitly (for extra readability).
       # The latter has the additional benefit that it'll be easier to adapt this 'example-mainnet'
       # for the testnet, which uses different ports by default.
-      # We use the same approach in other ".yml" files too.
       - ML_MAINNET_NODE_RPC_BIND_ADDRESS=0.0.0.0:3030
       - ML_MAINNET_NODE_P2P_BIND_ADDRESSES=0.0.0.0:3031
-      # wallet-cli can be run from this container as well; specify the rpc port for it explicitly too.
+      # wallet-cli can be run from this container as well, so we specify the rpc port for it
+      # explicitly too.
       - ML_WALLET_NODE_RPC_ADDRESS=localhost:3030
       - RUST_LOG
     ports:
-      # Note: this is only needed if you want to access the node from the host system.
+      # Note: these are only needed if you want to access the node from the host system.
       - "$NODE_RPC_HOST_PORT:3030"
       - "$NODE_P2P_HOST_PORT:3031"
 

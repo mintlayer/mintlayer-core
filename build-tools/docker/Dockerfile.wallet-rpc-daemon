@@ -14,7 +14,7 @@ RUN mkdir /home/mintlayer && \
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/target/release/wallet-rpc-daemon /usr/bin/wallet-rpc-daemon
+COPY --from=builder /usr/src/target/release/wallet-rpc-daemon /usr/bin
 
 # Define mintlayer directory as a volume
 VOLUME ["/home/mintlayer"]
