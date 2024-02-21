@@ -1,13 +1,12 @@
 # Build Stage
 FROM mintlayer-builder:latest AS builder
 
-
 # Runtime Stage
 FROM debian:bookworm-slim
 
 # Create a new user and group
-RUN groupadd -r mintlayer && \
-    useradd -r -g mintlayer -d /home/mintlayer -s /bin/bash -c "Mintlayer User" mintlayer
+RUN groupadd -g 1000 mintlayer && \
+    useradd -u 1000 -g mintlayer -d /home/mintlayer -s /bin/bash -c "Mintlayer User" mintlayer
 
 # Create and set the home directory for the new user
 RUN mkdir /home/mintlayer && \
@@ -23,8 +22,5 @@ USER mintlayer
 
 # Set the working directory
 WORKDIR /home/mintlayer
-
-# By default bind port 3000
-EXPOSE 3000
 
 CMD ["api-web-server"]

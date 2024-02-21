@@ -12,9 +12,7 @@ RUN groupadd -g 1000 mintlayer && \
 RUN mkdir /home/mintlayer && \
     chown mintlayer:mintlayer /home/mintlayer
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /usr/src/target/release/wallet-cli /usr/bin/wallet-cli
+COPY --from=builder /usr/src/target/release/dns-server /usr/bin
 
 # Define mintlayer directory as a volume
 VOLUME ["/home/mintlayer"]
@@ -25,4 +23,4 @@ USER mintlayer
 # Set the working directory
 WORKDIR /home/mintlayer
 
-CMD ["wallet-cli"]
+CMD ["dns-server"]

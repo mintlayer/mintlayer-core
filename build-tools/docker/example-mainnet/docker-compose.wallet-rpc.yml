@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  wallet-rpc-daemon:
+    image: $DOCKERHUB_USERNAME/wallet-rpc-daemon:$ML_SOFTWARE_VERSION
+    volumes:
+      - node_data:/home/mintlayer
+    command: wallet-rpc-daemon
+    depends_on:
+      - node-daemon
+    environment:
+      - ML_WALLET_RPC_DAEMON_NODE_RPC_ADDRESS=node-daemon:3030
+      # FIXME: should wallet-rpc-daemon use the default cookie path automatically, like wallet-cli does?
+      - ML_WALLET_RPC_DAEMON_NODE_COOKIE_FILE=/home/mintlayer/.mintlayer/mainnet/.cookie
+      - ML_WALLET_RPC_DAEMON_RPC_BIND_ADDRESS=0.0.0.0:3034
+      - ML_WALLET_RPC_DAEMON_RPC_USERNAME=$WALLET_RPC_DAEMON_USERNAME
+      - ML_WALLET_RPC_DAEMON_RPC_PASSWORD=$WALLET_RPC_DAEMON_PASSWORD
+      - RUST_LOG
+    ports:
+      - "$WALLET_RPC_DAEMON_HOST_PORT:3034"
+  

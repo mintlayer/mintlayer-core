@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  node-daemon:
+    image: $DOCKERHUB_USERNAME/node-daemon:$ML_SOFTWARE_VERSION
+    volumes:
+      - node_data:/home/mintlayer
+    command: node-daemon mainnet
+    environment:
+      # Note:
+      # The default rpc bind address is '127.0.0.1', so it'll only be reachable from the same
+      # container; to make it reachable from other containers, we need to set it to '0.0.0.0'.
+      # For p2p, the default address is already '0.0.0.0', so this is not strictly needed; we
+      # do it for consistency and in order to specify the port explicitly (for extra readability).
+      # The latter has the additional benefit that it'll be easier to adapt this 'example-mainnet'
+      # for the testnet, which uses different ports by default.
+      # We use the same approach in other ".yml" files too.
+      - ML_MAINNET_NODE_RPC_BIND_ADDRESS=0.0.0.0:3030
+      - ML_MAINNET_NODE_P2P_BIND_ADDRESSES=0.0.0.0:3031
+      - RUST_LOG
+    ports:
+      # Note: this is only needed if you want to access the node from the host system.
+      - "$NODE_RPC_HOST_PORT:3030"
+      - "$NODE_P2P_HOST_PORT:3031"
+
+volumes:
+  node_data:

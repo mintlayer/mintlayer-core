@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Arg;
+use clap::{Arg, Command};
 use heck::ToShoutySnakeCase;
 
 /// This function can be used with clap's `mut_args` to add the "env" attribute
@@ -46,4 +46,13 @@ pub fn add_env(infix: &str, mut arg: Arg) -> Arg {
 /// A convenience function to make the corresponding calls to `mut_args` less noisy.
 pub fn env_adder(infix: &str) -> impl FnMut(Arg) -> Arg + '_ {
     |arg| add_env(infix, arg)
+}
+
+// FIXME remove?
+pub fn add_env_to_cmd(infix: &str, cmd: Command) -> Command {
+    cmd.mut_args(env_adder(infix))
+}
+
+pub fn sub_cmd_env_adder(infix: &str) -> impl FnMut(Command) -> Command + '_ {
+    |cmd| add_env_to_cmd(infix, cmd)
 }

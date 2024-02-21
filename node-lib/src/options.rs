@@ -49,10 +49,13 @@ pub struct Options {
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the mainnet node.
+    #[clap(mut_args(clap_utils::env_adder("MAINNET_NODE")))]
     Mainnet(RunOptions),
     /// Run the testnet node.
+    #[clap(mut_args(clap_utils::env_adder("TESTNET_NODE")))]
     Testnet(RunOptions),
     /// Run the regtest node.
+    #[clap(mut_args(clap_utils::env_adder("REGTEST_NODE")))]
     Regtest(Box<RegtestOptions>),
 }
 

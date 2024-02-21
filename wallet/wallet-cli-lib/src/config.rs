@@ -23,9 +23,13 @@ use utils_networking::NetworkAddressWithPort;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
+    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET")))]
     Mainnet(CliArgs),
+    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET")))]
     Testnet(CliArgs),
+    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET")))]
     Regtest(Box<RegtestOptions>),
+    #[clap(mut_args(clap_utils::env_adder("SIGNET_WALLET")))]
     Signet(CliArgs),
 }
 
