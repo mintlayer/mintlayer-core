@@ -17,6 +17,8 @@ services:
       # We use the same approach in other ".yml" files too.
       - ML_MAINNET_NODE_RPC_BIND_ADDRESS=0.0.0.0:3030
       - ML_MAINNET_NODE_P2P_BIND_ADDRESSES=0.0.0.0:3031
+      # wallet-cli can be run from this container as well; specify the rpc port for it explicitly too.
+      - ML_WALLET_NODE_RPC_ADDRESS=localhost:3030
       - RUST_LOG
     ports:
       # Note: this is only needed if you want to access the node from the host system.

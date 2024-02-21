@@ -12,7 +12,7 @@ RUN groupadd -g 1000 mintlayer && \
 RUN mkdir /home/mintlayer && \
     chown mintlayer:mintlayer /home/mintlayer
 
-COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
+COPY --from=builder /usr/src/target/release/node-daemon /usr/src/target/release/wallet-cli /usr/bin/
 
 # Define mintlayer directory as a volume
 VOLUME ["/home/mintlayer"]

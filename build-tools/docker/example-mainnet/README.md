@@ -30,13 +30,5 @@ commenting out services that you won't need. Edit values in `.env` according to 
 3. It's also possible to run `wallet-cli` interactively in a docker container as well.
     To do so, run
     ```
-    docker compose -f docker-compose.wallet-cli.yml -f docker-compose.yml run --rm wallet-cli
+    docker compose exec node-daemon wallet-cli
     ```
-    Note that here you use `run` instead of `up` (and `--rm` tells docker compose to remove
-    the container once it's exited).
-
-    Also note that `yml` files have to be specified explicitly in this case -
-    `docker-compose.wallet-cli.yml` is needed because it's where the `wallet-cli` is defined and
-    `docker-compose.yml` is needed because `wallet-cli` depends on other services, namely `node-daemon`
-    (but docker compose won't start `node-daemon` again if it's already running).
-    
