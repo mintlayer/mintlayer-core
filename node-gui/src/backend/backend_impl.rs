@@ -662,6 +662,25 @@ impl Backend {
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
                 );
 
+                match controller.get_addresses_with_usage() {
+                    Ok(addresses) => {
+                        for (index, (address, _)) in addresses {
+                            Self::send_event(
+                                &self.low_priority_event_tx,
+                                BackendEvent::NewAddress(Ok(AddressInfo {
+                                    wallet_id: *wallet_id,
+                                    account_id: *account_id,
+                                    index,
+                                    address,
+                                })),
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Address usage loading failed: {err}");
+                    }
+                }
+
                 // GuiWalletEvents will notify about stake pool balance update
                 // (when a new wallet block is added/removed from the DB)
                 account_data.update_pool_balance_and_delegations = true;
