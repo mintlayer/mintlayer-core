@@ -905,11 +905,12 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
     let verifier3 = {
         let mut verifier = verifier2.derive_child();
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let delegation_id = make_delegation_id(&outpoint2);
 
-        let (_, undo_delegation) = verifier
+        let undo_delegation = verifier
             .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
-            .create_delegation_id(pool_id_1, Destination::AnyoneCanSpend, &outpoint2)
+            .create_delegation_id(delegation_id, pool_id_1, Destination::AnyoneCanSpend)
             .unwrap();
 
         verifier

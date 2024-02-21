@@ -80,8 +80,8 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{
-    BlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
-    PoSAccountingUndo, PoSAccountingView,
+    make_delegation_id, BlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData,
+    PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -395,15 +395,15 @@ where
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     match input_utxo_outpoint {
                         Some(input_utxo_outpoint) => {
+                            let delegation_id = make_delegation_id(input_utxo_outpoint);
                             let res = self
                                 .pos_accounting_adapter
                                 .operations(tx_source.into())
                                 .create_delegation_id(
+                                    delegation_id,
                                     *target_pool,
                                     spend_destination.clone(),
-                                    input_utxo_outpoint,
                                 )
-                                .map(|(_, undo)| undo)
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }

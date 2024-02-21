@@ -38,9 +38,9 @@ use crypto::{
 };
 use itertools::Itertools;
 use pos_accounting::{
-    make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
-    PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
-    PoolData,
+    make_delegation_id, make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB,
+    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
+    PoSAccountingView, PoolData,
 };
 use test_utils::nft_utils::*;
 use tokens_accounting::{
@@ -49,26 +49,38 @@ use tokens_accounting::{
 };
 use utxo::Utxo;
 
+// TODO: currently this returns random pool from store but only if it exists in delta. This gives None more often.
+//       There should be a way to return random result after delta is accounted.
+//       Same applies for delegation.
 fn get_random_pool_data<'a>(
     rng: &mut impl Rng,
     storage: &'a InMemoryPoSAccounting,
+    tip_view: &impl PoSAccountingView,
 ) -> Option<(&'a PoolId, &'a PoolData)> {
     let all_pool_data = storage.all_pool_data();
     (!all_pool_data.is_empty())
         .then(|| all_pool_data.iter().nth(rng.gen_range(0..all_pool_data.len())).unwrap())
+        .and_then(|(id, data)| tip_view.pool_exists(*id).unwrap().then_some((id, data)))
 }
 
 fn get_random_delegation_data<'a>(
     rng: &mut impl Rng,
     storage: &'a InMemoryPoSAccounting,
+    tip_view: &impl PoSAccountingView,
 ) -> Option<(&'a DelegationId, &'a DelegationData)> {
     let all_delegation_data = storage.all_delegation_data();
-    (!all_delegation_data.is_empty()).then(|| {
-        all_delegation_data
-            .iter()
-            .nth(rng.gen_range(0..all_delegation_data.len()))
-            .unwrap()
-    })
+    (!all_delegation_data.is_empty())
+        .then(|| {
+            {
+                all_delegation_data
+                    .iter()
+                    .nth(rng.gen_range(0..all_delegation_data.len()))
+                    .unwrap()
+            }
+        })
+        .and_then(|(id, data)| {
+            tip_view.get_delegation_data(*id).unwrap().is_some().then_some((id, data))
+        })
 }
 
 pub struct RandomTxMaker<'a> {
@@ -535,12 +547,9 @@ impl<'a> RandomTxMaker<'a> {
                     .unwrap();
             }
             TxOutput::CreateDelegationId(destination, pool_id) => {
+                let delegation_id = make_delegation_id(result_inputs[0].utxo_outpoint().unwrap());
                 let _ = pos_accounting_cache
-                    .create_delegation_id(
-                        *pool_id,
-                        destination.clone(),
-                        result_inputs[0].utxo_outpoint().unwrap(),
-                    )
+                    .create_delegation_id(delegation_id, *pool_id, destination.clone())
                     .unwrap();
             }
             TxOutput::IssueNft(dummy_token_id, _, _) => {
@@ -632,9 +641,11 @@ impl<'a> RandomTxMaker<'a> {
                     } else {
                         if rng.gen_bool(0.3) {
                             // Send coins to random delegation
-                            if let Some((delegation_id, _)) =
-                                get_random_delegation_data(rng, self.pos_accounting_store)
-                            {
+                            if let Some((delegation_id, _)) = get_random_delegation_data(
+                                rng,
+                                self.pos_accounting_store,
+                                &pos_accounting_cache,
+                            ) {
                                 let _ = pos_accounting_cache
                                     .delegate_staking(*delegation_id, new_value)
                                     .unwrap();
@@ -652,7 +663,9 @@ impl<'a> RandomTxMaker<'a> {
 
             // Occasionally create new delegation id
             if rng.gen_bool(0.3) && self.delegation_can_be_created {
-                if let Some((pool_id, _)) = get_random_pool_data(rng, &self.pos_accounting_store) {
+                if let Some((pool_id, _)) =
+                    get_random_pool_data(rng, &self.pos_accounting_store, &pos_accounting_cache)
+                {
                     self.delegation_can_be_created = false;
 
                     new_outputs.push(TxOutput::CreateDelegationId(

@@ -26,8 +26,8 @@ use crypto::{
 };
 
 use crate::{
-    error::Error, make_pool_id, storage::in_memory::InMemoryPoSAccounting, DelegationData,
-    PoSAccountingOperations, PoSAccountingUndo, PoolData,
+    error::Error, make_delegation_id, make_pool_id, storage::in_memory::InMemoryPoSAccounting,
+    DelegationData, PoSAccountingOperations, PoSAccountingUndo, PoolData,
 };
 
 mod delta_tests;
@@ -92,8 +92,9 @@ fn create_delegation_id(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );
-    op.create_delegation_id(target_pool, destination.clone(), &outpoint)
-        .map(|(id, undo)| (id, destination, undo))
+    let delegation_id = make_delegation_id(&outpoint);
+    op.create_delegation_id(delegation_id, target_pool, destination.clone())
+        .map(|undo| (delegation_id, destination, undo))
 }
 
 fn create_storage_with_pool(

@@ -30,6 +30,7 @@ use super::{
 };
 
 use crate::{
+    make_delegation_id,
     pool::{delta::PoSAccountingDelta, storage::PoSAccountingDB, view::FlushablePoSAccountingView},
     storage::in_memory::InMemoryPoSAccounting,
     Error, PoSAccountingOperations,
@@ -196,15 +197,17 @@ fn create_delegation_twice(#[case] seed: Seed) {
         0,
     );
     let destination = new_pub_key_destination(&mut rng);
+    let delegation_id = make_delegation_id(&outpoint);
 
     let mut db = PoSAccountingDB::new(&mut storage);
-    let _ = db.create_delegation_id(pool_id, destination.clone(), &outpoint).unwrap();
+    let _ = db.create_delegation_id(delegation_id, pool_id, destination.clone()).unwrap();
 
     // using db
     {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
-            db.create_delegation_id(pool_id, destination.clone(), &outpoint).unwrap_err(),
+            db.create_delegation_id(delegation_id, pool_id, destination.clone(),)
+                .unwrap_err(),
             Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
         );
     }
@@ -214,7 +217,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta.create_delegation_id(pool_id, destination, &outpoint).unwrap_err(),
+            delta.create_delegation_id(delegation_id, pool_id, destination,).unwrap_err(),
             Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
         );
     }
@@ -233,11 +236,13 @@ fn create_delegation_id_unknown_pool(#[case] seed: Seed) {
         0,
     );
     let pool_id = new_pool_id(rng.next_u64());
+    let delegation_id = make_delegation_id(&outpoint);
 
     {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
-            db.create_delegation_id(pool_id, destination.clone(), &outpoint).unwrap_err(),
+            db.create_delegation_id(delegation_id, pool_id, destination.clone(),)
+                .unwrap_err(),
             Error::DelegationCreationFailedPoolDoesNotExist
         );
     }
@@ -246,7 +251,7 @@ fn create_delegation_id_unknown_pool(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta.create_delegation_id(pool_id, destination, &outpoint).unwrap_err(),
+            delta.create_delegation_id(delegation_id, pool_id, destination,).unwrap_err(),
             Error::DelegationCreationFailedPoolDoesNotExist
         );
     }

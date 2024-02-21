@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
+    chain::{DelegationId, Destination, PoolId},
     primitives::Amount,
 };
 
@@ -22,7 +22,6 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             DelegationDataUndo, DeleteDelegationIdUndo, IncreaseStakerRewardsUndo,
@@ -110,15 +109,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
 
     fn create_delegation_id(
         &mut self,
+        delegation_id: DelegationId,
         target_pool: PoolId,
         spend_key: Destination,
-        input0_outpoint: &UtxoOutPoint,
-    ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
+    ) -> Result<PoSAccountingUndo, Error> {
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
-
-        let delegation_id = make_delegation_id(input0_outpoint);
 
         if self.store.get_delegation_data(delegation_id)?.is_some() {
             // This should never happen since it's based on an unspent input
@@ -129,12 +126,11 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
 
         self.store.set_delegation_data(delegation_id, &delegation_data)?;
 
-        Ok((
-            delegation_id,
-            PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
+        Ok(PoSAccountingUndo::CreateDelegationId(
+            CreateDelegationIdUndo {
                 delegation_id,
                 data_undo: DelegationDataUndo::Data(Box::new(delegation_data)),
-            }),
+            },
         ))
     }
 
