@@ -60,6 +60,7 @@ impl UtxosBlockUndoCache {
     }
 
     /// Check whether transaction can be disconnected.
+    ///
     /// An undo object must be available and no other tx must be dependant on the current one.
     pub fn can_disconnect_transaction<F, E>(
         &self,
@@ -73,18 +74,17 @@ impl UtxosBlockUndoCache {
     {
         let block_undo = match self.data.get(tx_source) {
             Some(op) => match op {
-                CachedOperation::Write(undo) | CachedOperation::Read(undo) => {
-                    Ok(Some(undo.clone()))
-                }
-                CachedOperation::Erase => Ok(None),
+                CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
+                CachedOperation::Erase => None,
             },
-            None => fetcher_func(*tx_source).map_err(ConnectTransactionError::from),
-        }?;
+            None => fetcher_func(*tx_source).map_err(ConnectTransactionError::from)?,
+        };
 
         Ok(block_undo.map_or(false, |undo| !undo.has_children_of(tx_id)))
     }
 
     /// Add undo object for a transaction.
+    ///
     /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_tx_undo(
         &mut self,
@@ -116,6 +116,7 @@ impl UtxosBlockUndoCache {
     }
 
     /// Add undo object for a reward.
+    ///
     /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_reward_undo(
         &mut self,
@@ -144,6 +145,7 @@ impl UtxosBlockUndoCache {
     }
 
     /// Take tx undo object out if available.
+    ///
     /// If the block is fully disconnected the block undo object is erased.
     pub fn take_tx_undo<F, E>(
         &mut self,
@@ -181,6 +183,7 @@ impl UtxosBlockUndoCache {
     }
 
     /// Take reward undo object out if available.
+    ///
     /// If the block is fully disconnected the block undo object is erased.
     pub fn take_block_reward_undo<F, E>(
         &mut self,
@@ -216,8 +219,9 @@ impl UtxosBlockUndoCache {
         Ok(res)
     }
 
-    // Set undo data for a particular block or mempool.
-    // If there is some data already then it's combined with the new one.
+    /// Set undo data for a particular block or mempool.
+    ///
+    /// If there is some data already then it's combined with the new one.
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,

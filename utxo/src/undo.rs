@@ -137,6 +137,13 @@ impl UtxosBlockUndo {
         child_parent_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
         parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
     ) -> Self {
+        child_parent_dependencies.iter().for_each(|(child, parent)| {
+            debug_assert!(parent_child_dependencies.contains(&(*parent, *child)));
+        });
+        parent_child_dependencies.iter().for_each(|(parent, child)| {
+            debug_assert!(child_parent_dependencies.contains(&(*child, *parent)));
+        });
+
         Self {
             reward_undo,
             tx_undos,

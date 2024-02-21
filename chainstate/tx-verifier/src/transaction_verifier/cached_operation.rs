@@ -45,7 +45,7 @@ pub fn combine<T: Debug + PartialEq>(
     match (left, right) {
         (None, None) => None,
         (None, Some(v)) => Some(v),
-        (Some(_), None) => panic!("data is missing"),
+        (Some(v), None) => Some(v),
         (Some(left), Some(right)) => {
             let result = match (left, right) {
                 (CachedOperation::Write(left), CachedOperation::Write(right)) => {

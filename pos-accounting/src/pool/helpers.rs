@@ -51,10 +51,10 @@ pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
 }
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> PoSAccountingUndo {
-    // TODO: make it random?
     let delegation_target: DelegationId = H256::random_using(rng).into();
     let amount_to_delegate = Amount::from_atoms(rng.gen_range(0..100_000));
 
+    // TODO: return other undo types
     PoSAccountingUndo::DelegateStaking(DelegateStakingUndo {
         delegation_target,
         amount_to_delegate,

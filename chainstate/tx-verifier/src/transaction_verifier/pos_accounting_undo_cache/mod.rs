@@ -53,6 +53,7 @@ impl PoSAccountingBlockUndoCache {
     }
 
     /// Add undo object for a reward.
+    ///
     /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_reward_undo(
         &mut self,
@@ -81,6 +82,7 @@ impl PoSAccountingBlockUndoCache {
     }
 
     /// Add undo object for a transaction.
+    ///
     /// If it's the first undo in the block then the BlockUndo struct is initialized.
     pub fn add_tx_undo(
         &mut self,
@@ -112,6 +114,7 @@ impl PoSAccountingBlockUndoCache {
     }
 
     /// Take tx undo object out if available.
+    ///
     /// If the block is fully disconnected the block undo object is erased.
     pub fn take_tx_undo<F, E>(
         &mut self,
@@ -151,6 +154,7 @@ impl PoSAccountingBlockUndoCache {
     }
 
     /// Take reward undo object out if available.
+    ///
     /// If the block is fully disconnected the block undo object is erased.
     pub fn take_block_reward_undo<F, E>(
         &mut self,
@@ -186,8 +190,9 @@ impl PoSAccountingBlockUndoCache {
         Ok(res)
     }
 
-    // Set undo data for a particular block or mempool.
-    // If there is some data already then it's combined with the new one.
+    /// Set undo data for a particular block or mempool.
+    ///
+    /// If there is some data already then it's combined with the new one.
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,

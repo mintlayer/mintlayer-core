@@ -82,10 +82,10 @@ pub enum TokenAccountingUndo {
 }
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> TokenAccountingUndo {
-    // TODO: make it random?
     let id: TokenId = H256::random_using(rng).into();
     let amount_to_add = Amount::from_atoms(rng.gen_range(0..100_000));
 
+    // TODO: return other undo types
     TokenAccountingUndo::MintTokens(MintTokenUndo { id, amount_to_add })
 }
 
