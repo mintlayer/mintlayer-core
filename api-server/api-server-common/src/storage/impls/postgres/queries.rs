@@ -1548,9 +1548,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "INSERT INTO ml_locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (outpoint, block_height) DO UPDATE
-                    SET utxo = $2;",
+                    VALUES ($1, $2, $3, $4, $5, $6);",
                 &[&outpoint.encode(), &utxo.into_output().encode(), &lock_time, &lock_height, &address, &height],
             )
             .await
