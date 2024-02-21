@@ -218,8 +218,18 @@ pub fn produce_kernel_signature(
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
-        [kernel_outpoint.output_index() as usize];
+    let utxo = match block_outputs.get(&kernel_outpoint.source_id()) {
+        Some(outputs) => outputs[kernel_outpoint.output_index() as usize].clone(),
+        None => {
+            // if it's not in the block try find output in the utxo set
+            tf.chainstate
+                .utxo(&kernel_outpoint)
+                .expect("ok")
+                .expect("some")
+                .output()
+                .clone()
+        }
+    };
 
     let kernel_inputs = vec![kernel_outpoint.into()];
 
@@ -230,7 +240,7 @@ pub fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
+        std::iter::once(Some(&utxo)).collect::<Vec<_>>().as_slice(),
         0,
     )
     .unwrap()

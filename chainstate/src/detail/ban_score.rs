@@ -331,6 +331,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
             ConsensusPoSError::NoKernel => 100,
+            ConsensusPoSError::KernelOutpointMustBeUtxo => 100,
+            ConsensusPoSError::MissingKernelUtxo => 100,
             ConsensusPoSError::NoEpochData => 0,
             ConsensusPoSError::MultipleKernels => 100,
             ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
