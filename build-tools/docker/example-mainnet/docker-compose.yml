@@ -34,7 +34,7 @@ services:
       - node-daemon
     environment:
       - ML_WALLET_RPC_DAEMON_NODE_RPC_ADDRESS=node-daemon:3030
-      # FIXME: should wallet-rpc-daemon use the default cookie path automatically, like wallet-cli does?
+      # TODO: should wallet-rpc-daemon use the default cookie path automatically, like wallet-cli does?
       - ML_WALLET_RPC_DAEMON_NODE_COOKIE_FILE=/home/mintlayer/.mintlayer/mainnet/.cookie
       - ML_WALLET_RPC_DAEMON_RPC_BIND_ADDRESS=0.0.0.0:3034
       - ML_WALLET_RPC_DAEMON_RPC_USERNAME=$WALLET_RPC_DAEMON_USERNAME
