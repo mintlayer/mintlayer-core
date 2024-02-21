@@ -268,6 +268,17 @@ impl<M> Mempool<M> {
     }
 }
 
+enum TxProcessingContext {
+    /// Newly incoming transaction
+    Fresh,
+
+    /// Transaction from the orphan pool
+    Orphan,
+
+    /// Re-checking a transaction after a reorg
+    Reorg,
+}
+
 /// Result of transaction validation
 enum ValidationOutcome {
     /// Transaction is valid for acceptance to mempool
@@ -1058,14 +1069,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             }
             Ok(TxStatus::InOrphanPool) => {
                 // In orphan pool, the transaction has not been accepted or rejected yet
-            },
+            }
             Err(err) => {
                 let evt = event::TransactionProcessed::rejected(tx_id, err, origin);
                 self.subsystem_events.broadcast(evt.into());
             }
         }
-
-        // TODO(PR): Dispatch the RPC event
     }
 
     pub fn on_new_tip(
