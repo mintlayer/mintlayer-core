@@ -794,7 +794,7 @@ impl<B: storage::Backend> Wallet<B> {
         name: Option<String>,
     ) -> WalletResult<(U31, Option<String>)> {
         self.for_account_rw(account_index, |acc, db_tx| {
-            acc.set_name(name, db_tx).map(|(index, name)| (index, name.clone()))
+            acc.set_name(name, db_tx).map(|()| (acc.account_index(), acc.name().clone()))
         })
     }
 
