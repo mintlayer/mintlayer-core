@@ -92,6 +92,10 @@ class WalletCliController:
             stdout=asyncio.subprocess.PIPE,
             stderr=self.wallet_log_file,
         )
+
+        # read any initial input from the wallet
+        (await self._read_available_output(can_be_empty=True, timeout=0.1)).strip()
+
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -101,13 +105,13 @@ class WalletCliController:
         self.wallet_log_file.close()
         self.wallet_commands_file.close()
 
-    async def _read_available_output(self, can_be_empty: bool) -> str:
+    async def _read_available_output(self, can_be_empty: bool, timeout=READ_TIMEOUT_SEC) -> str:
         result = ''
         output_buf = bytes([])
         num_tries = 0
         try:
             while num_tries < 5:
-                output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=READ_TIMEOUT_SEC)
+                output = await asyncio.wait_for(self.process.stdout.read(TEN_MB), timeout=timeout)
                 self.wallet_commands_file.write(output)
                 output_buf = output_buf + output
                 num_tries = num_tries + 1

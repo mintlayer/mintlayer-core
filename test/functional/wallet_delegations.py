@@ -49,7 +49,7 @@ from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, CreatedB
 
 import asyncio
 import sys
-import time, re
+import time, re, os
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
@@ -288,9 +288,10 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
+        wallet_name = "wallet"
         async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new wallet
-            await wallet.create_wallet()
+            await wallet.create_wallet(wallet_name)
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
@@ -306,8 +307,9 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
+            coins_to_send = 100_000
             output = {
-                    'Transfer': [ { 'Coin': 50_000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': coins_to_send * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
@@ -323,13 +325,13 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_in(best_block_height, '1')
 
             balance = await wallet.get_balance()
-            assert_in("Coins amount: 50000", balance)
+            assert_in(f"Coins amount: {coins_to_send}", balance)
 
             assert_in("Success", await wallet.create_new_account())
             assert_in("Success", await wallet.select_account(1))
             acc1_address = await wallet.new_address()
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
-            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 5000))
+            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 55000))
             assert_in("Success", await wallet.select_account(1))
             transactions = node.mempool_transactions()
 
@@ -351,7 +353,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
             assert_in("Success", await wallet.select_account(1))
             balance = await wallet.get_balance()
-            assert_in("Coins amount: 5000", balance)
+            assert_in("Coins amount: 55000", balance)
             delegation_id = await wallet.create_delegation(acc1_address, pool_id)
             assert delegation_id is not None
             transactions = node.mempool_transactions()
@@ -373,6 +375,10 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 1)
             assert_equal(delegations[0].balance, '1000')
+
+            # create another pool in account 1
+            decommission_address_acc1 = await wallet.new_address()
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_address_acc1))
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             created_block_ids = await wallet.list_created_blocks_ids()
@@ -437,7 +443,19 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             delegations = await wallet.list_delegation_ids()
             assert_equal(len(delegations), 2)
             assert delegation_id in [delegation.delegation_id for delegation in delegations]
+        # close the wallet and try to open it again with staking started for account 0
 
+        wallet_path = os.path.join(node.datadir, wallet_name)
+        # check that we can start the wallet with staking enabled for account 0 and 1
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--wallet-file", wallet_path, "--start-staking-for-account", "0", "--start-staking-for-account", "1"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            # check both accounts have staking active
+            assert_equal("Staking", (await wallet.staking_status()).splitlines()[-1])
+            assert_in("Success", await wallet.select_account(1))
+            assert_equal("Staking", await wallet.staking_status())
+            assert_in("Success", await wallet.stop_staking())
+            assert_in("Not staking", await wallet.staking_status())
+
+            # stop staking and decommission the stake pool for acc 0
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("Success", await wallet.stop_staking())
             assert_in("Not staking", await wallet.staking_status())
