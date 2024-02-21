@@ -1339,6 +1339,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ml_transactions t ON t.owning_block_id = mb.block_id
                 INNER JOIN
                     ml_block_aux_data b ON t.owning_block_id = b.block_id
+                WHERE mb.block_height IS NOT NULL
                 ORDER BY mb.block_height DESC
                 OFFSET $1
                 LIMIT $2;
