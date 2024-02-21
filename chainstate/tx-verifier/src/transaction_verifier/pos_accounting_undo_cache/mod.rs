@@ -214,3 +214,6 @@ impl PoSAccountingBlockUndoCache {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

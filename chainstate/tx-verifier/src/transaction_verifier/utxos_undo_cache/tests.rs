@@ -15,13 +15,26 @@
 
 use super::*;
 
-use common::{chain::config::Builder as ConfigBuilder, primitives::H256};
-use mockall::predicate::eq;
+use crate::{
+    transaction_verifier::{
+        flush,
+        storage::TransactionVerifierStorageRef,
+        tests::{create_utxo, mock},
+    },
+    TransactionVerifier,
+};
+
+use common::{
+    chain::{config::Builder as ConfigBuilder, Block},
+    primitives::H256,
+};
 use pos_accounting::DeltaMergeUndo;
-use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::TokensAccountingDeltaUndoData;
 use utxo::{UtxosBlockRewardUndo, UtxosTxUndoWithSources};
+
+use mockall::predicate::eq;
+use rstest::rstest;
 
 #[rstest]
 #[trace]

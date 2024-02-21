@@ -13,12 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod hierarchy_pos_accounting_undo;
 mod hierarchy_read;
-mod hierarchy_tokens_accounting_undo;
-mod hierarchy_utxo_undo;
 mod hierarchy_write;
-mod mock;
+pub mod mock;
 
 use super::*;
 use common::{
@@ -35,7 +32,10 @@ use crypto::{
 };
 use utxo::Utxo;
 
-fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {
+pub fn create_utxo(
+    rng: &mut (impl Rng + CryptoRng),
+    value: UnsignedIntType,
+) -> (UtxoOutPoint, Utxo) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
         0,

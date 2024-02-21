@@ -152,3 +152,6 @@ impl TokensAccountingBlockUndoCache {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

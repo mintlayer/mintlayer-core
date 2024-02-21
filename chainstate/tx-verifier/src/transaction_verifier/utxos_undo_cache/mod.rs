@@ -247,3 +247,6 @@ impl UtxosBlockUndoCache {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
