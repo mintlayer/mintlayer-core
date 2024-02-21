@@ -232,6 +232,7 @@ pub struct TransactionOptions {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PoolInfo {
     pub pool_id: String,
+    pub pledge: DecimalAmount,
     pub balance: DecimalAmount,
     pub height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
@@ -245,14 +246,17 @@ impl PoolInfo {
         pool_id: PoolId,
         pool_data: PoolData,
         balance: Amount,
+        pledge: Amount,
         chain_config: &ChainConfig,
     ) -> Self {
         let decimals = chain_config.coin_decimals();
         let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+        let pledge = DecimalAmount::from_amount_minimal(pledge, decimals);
 
         Self {
             pool_id: Address::new(chain_config, &pool_id).expect("addressable").to_string(),
             balance,
+            pledge,
             height: pool_data.creation_block.height,
             block_timestamp: pool_data.creation_block.timestamp,
             vrf_public_key: Address::new(chain_config, &pool_data.vrf_public_key)

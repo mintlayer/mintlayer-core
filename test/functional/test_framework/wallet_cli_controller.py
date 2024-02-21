@@ -48,6 +48,7 @@ class TxOutput:
 @dataclass
 class PoolData:
     pool_id: str
+    pledge: str
     balance: str
     creation_block_height: int
     timestamp: int
@@ -334,9 +335,9 @@ class WalletCliController:
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("staking-list-pool-ids\n", can_be_empty=True)
         self.log.info(f"pools: {output}");
-        pattern = r"Pool Id: ([a-zA-Z0-9]+), Balance: (\d+[.]?\d+), Creation Block Height: (\d+), Timestamp: (\d+), Staker: ([a-zA-Z0-9]+), Decommission Key: ([a-zA-Z0-9]+), VRF Public Key: ([a-zA-Z0-9]+)"
+        pattern = r"Pool Id: ([a-zA-Z0-9]+), Pledge: (\d+[.]?\d+), Balance: (\d+[.]?\d+), Creation Block Height: (\d+), Timestamp: (\d+), Staker: ([a-zA-Z0-9]+), Decommission Key: ([a-zA-Z0-9]+), VRF Public Key: ([a-zA-Z0-9]+)"
         matches = re.findall(pattern, output)
-        return [PoolData(pool_id, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
+        return [PoolData(pool_id, pledge, balance, int(height), timestamp, staker, decommission_key, vrf_public_key) for pool_id, pledge, balance, height, timestamp, staker, decommission_key, vrf_public_key in matches]
 
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:
         output =  await self._write_command("staking-list-created-block-ids\n")

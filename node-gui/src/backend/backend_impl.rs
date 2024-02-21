@@ -712,7 +712,7 @@ impl Backend {
                                 BTreeMap::from_iter(
                                     staking_balance
                                         .into_iter()
-                                        .map(|(id, data, balance)| (id, (data, balance))),
+                                        .map(|(id, data, balance, _pledge)| (id, (data, balance))),
                                 ),
                             ),
                         );

@@ -209,7 +209,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
 
     pub async fn get_pool_ids(
         &self,
-    ) -> Result<Vec<(PoolId, PoolData, Amount)>, ControllerError<T>> {
+    ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
             .get_pool_ids(self.account_index, WalletPoolsFilter::All)
@@ -227,8 +227,9 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         &self,
         pool_id: PoolId,
         pool_data: PoolData,
-    ) -> Result<(PoolId, PoolData, Amount), ControllerError<T>> {
-        self.rpc_client
+    ) -> Result<(PoolId, PoolData, Amount, Amount), ControllerError<T>> {
+        let balance = self
+            .rpc_client
             .get_stake_pool_balance(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)
@@ -238,7 +239,19 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                     Address::new(self.chain_config, &pool_id)?
                 )))
             })
-            .map(|balance| (pool_id, pool_data, balance))
+            .log_err()?;
+
+        self.rpc_client
+            .get_staker_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .and_then(|balance| {
+                balance.ok_or(ControllerError::SyncError(format!(
+                    "Pool id {} from wallet not found in node",
+                    Address::new(self.chain_config, &pool_id)?
+                )))
+            })
+            .map(|pledge| (pool_id, pool_data, balance, pledge))
             .log_err()
     }
 
