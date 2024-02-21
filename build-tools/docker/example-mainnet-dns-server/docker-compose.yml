@@ -4,7 +4,7 @@ services:
   dns-server:
     image: $DOCKERHUB_USERNAME/dns-server:$ML_SOFTWARE_VERSION
     volumes:
-      - node_data:/home/mintlayer
+      - ./container_home:/home/mintlayer
     command: dns-server
     environment:
       # Note: mainnet is the default network and 53 is the default port, so no need to specify them
@@ -19,6 +19,3 @@ services:
       - RUST_LOG
     ports:
       - "$DNS_SERVER_HOST_PORT:53/udp"
-
-volumes:
-  node_data:

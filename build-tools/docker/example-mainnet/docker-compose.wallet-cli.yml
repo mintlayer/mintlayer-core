@@ -4,11 +4,10 @@ services:
   wallet-cli:
     image: $DOCKERHUB_USERNAME/wallet-cli:$ML_SOFTWARE_VERSION
     volumes:
-      - node_data:/home/mintlayer
+      - ./container_home:/home/mintlayer
     command: wallet-cli
     depends_on:
       - node-daemon
     environment:
       - ML_WALLET_NODE_RPC_ADDRESS=node-daemon:3030
       - RUST_LOG
-
