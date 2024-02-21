@@ -29,6 +29,8 @@ use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
 use wallet::account::{currency_grouper::Currency, transaction_list::TransactionList, PoolData};
 
+use crate::main_window::ImportOrCreate;
+
 use super::BackendError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -156,6 +158,7 @@ pub enum BackendRequest {
     RecoverWallet {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
+        import: ImportOrCreate,
     },
     CloseWallet(WalletId),
 
