@@ -32,3 +32,5 @@ pub use {config::MempoolConfig, pool::feerate_points::find_interpolated_value, p
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 
 pub type Result<T> = core::result::Result<T, error::Error>;
+
+use pool::TxProcessingContext;

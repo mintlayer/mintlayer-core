@@ -205,7 +205,8 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
         let origin = LocalTxOrigin::PastBlock.into();
-        if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
+        let context = crate::TxProcessingContext::ReorgFromBlock;
+        if let Err(e) = mempool.add_transaction(tx, origin, context, work_queue) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
@@ -213,7 +214,8 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     // Re-populate the verifier with transactions from mempool
     for tx in old_transactions {
         let tx_id = *tx.tx_id();
-        if let Err(e) = mempool.add_transaction_entry(tx) {
+        let context = crate::TxProcessingContext::ReorgFromMempool;
+        if let Err(e) = mempool.add_transaction_entry(tx, context) {
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }
     }

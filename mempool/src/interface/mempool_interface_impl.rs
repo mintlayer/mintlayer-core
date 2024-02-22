@@ -138,6 +138,7 @@ impl MempoolInterface for MempoolImpl {
         let status = self.mempool.add_transaction_with_options(
             tx,
             origin.into(),
+            crate::TxProcessingContext::Fresh,
             options,
             &mut self.work_queue,
         )?;
@@ -154,8 +155,13 @@ impl MempoolInterface for MempoolImpl {
         origin: RemoteTxOrigin,
         options: TxOptions,
     ) -> Result<TxStatus, Error> {
-        self.mempool
-            .add_transaction_with_options(tx, origin.into(), options, &mut self.work_queue)
+        self.mempool.add_transaction_with_options(
+            tx,
+            origin.into(),
+            crate::TxProcessingContext::Fresh,
+            options,
+            &mut self.work_queue,
+        )
     }
 
     fn get_all(&self) -> Vec<SignedTransaction> {

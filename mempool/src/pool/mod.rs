@@ -268,15 +268,19 @@ impl<M> Mempool<M> {
     }
 }
 
-enum TxProcessingContext {
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum TxProcessingContext {
     /// Newly incoming transaction
     Fresh,
 
     /// Transaction from the orphan pool
     Orphan,
 
-    /// Re-checking a transaction after a reorg
-    Reorg,
+    /// Coming from a block that was reorged out
+    ReorgFromBlock,
+
+    /// Re-checking a mempool transaction after a reorg
+    ReorgFromMempool,
 }
 
 /// Result of transaction validation
@@ -918,10 +922,11 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         tx: SignedTransaction,
         origin: TxOrigin,
+        context: TxProcessingContext,
         work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
         let options = TxOptions::default_for(origin);
-        self.add_transaction_with_options(tx, origin, options, work_queue)
+        self.add_transaction_with_options(tx, origin, context, options, work_queue)
     }
 
     /// Add a transaction to mempool with custom options
@@ -929,6 +934,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         tx: SignedTransaction,
         origin: TxOrigin,
+        context: TxProcessingContext,
         options: TxOptions,
         work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
@@ -945,17 +951,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             TxTrustPolicy::Untrusted => (),
         }
 
-        self.add_transaction_and_descendants(entry, work_queue)
-    }
-
-    /// Add given transaction entry and potentially its descendants sourced from the orphan pool
-    fn add_transaction_and_descendants(
-        &mut self,
-        entry: TxEntry,
-        work_queue: &mut WorkQueue,
-    ) -> Result<TxStatus, Error> {
         let tx_id = *entry.tx_id();
-        let status = self.add_transaction_entry(entry)?;
+        let status = self.add_transaction_entry(entry, context)?;
         self.enqueue_children(&tx_id, work_queue);
         Ok(status)
     }
@@ -973,7 +970,11 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         }
     }
 
-    fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
+    fn add_transaction_entry(
+        &mut self,
+        tx: TxEntry,
+        context: TxProcessingContext,
+    ) -> Result<TxStatus, Error> {
         // Note: it's not a good idea to use anything above "trace" here, even to log the
         // transaction id, because this may make our test logs huge,
         // see https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
@@ -1007,7 +1008,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             }
         };
 
-        self.broadcast_tx_processed(tx_id, origin, relay_policy, result.clone());
+        self.broadcast_tx_processed(tx_id, origin, relay_policy, result.clone(), context);
 
         result
     }
@@ -1059,7 +1060,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         tx_id: Id<Transaction>,
         origin: TxOrigin,
         relay_policy: crate::tx_options::TxRelayPolicy,
-        result: Result<TxStatus, Error>, /* TODO context */
+        result: Result<TxStatus, Error>,
+        context: TxProcessingContext,
     ) {
         // Dispatch the subsystem event first
         match result {
@@ -1183,7 +1185,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             if orphan.is_ready() {
                 // Take the transaction out of orphan pool and pass it to mempool processing code.
                 let orphan = orphan.take().map_origin(TxOrigin::from);
-                let result = self.add_transaction_entry(orphan);
+                let result = self.add_transaction_entry(orphan, TxProcessingContext::Orphan);
                 log::debug!("Orphan tx {orphan_id:?} processed: {result:?}");
             } else {
                 // Not all prerequisites are satisfied. The tx stays in the orphan pool.
