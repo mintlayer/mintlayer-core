@@ -25,7 +25,8 @@ use api_server_common::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
-        BlockInfo, Delegation, FungibleTokenData, TransactionInfo, TxAdditionalInfo, Utxo,
+        BlockInfo, Delegation, FungibleTokenData, LockedUtxo, TransactionInfo, TxAdditionalInfo,
+        Utxo, UtxoLock,
     },
 };
 use crypto::{
@@ -412,6 +413,72 @@ where
 
         let utxo = Utxo::new(output.clone(), false);
         let block_height = BlockHeight::new(rng.gen_range(1..100));
+
+        // set one and get it
+        {
+            let locked_utxo = LockedUtxo::new(
+                output.clone(),
+                UtxoLock::UntilHeight(block_height.next_height()),
+            );
+            db_tx
+                .set_locked_utxo_at_height(
+                    outpoint.clone(),
+                    locked_utxo,
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            let block_timestamp = BlockTimestamp::from_int_seconds(0);
+            let bob_utxos = db_tx
+                .get_locked_utxos_until_now(block_height, (block_timestamp, block_timestamp))
+                .await
+                .unwrap();
+            assert!(bob_utxos.is_empty());
+
+            let bob_utxos = db_tx
+                .get_locked_utxos_until_now(
+                    block_height.next_height(),
+                    (block_timestamp, block_timestamp),
+                )
+                .await
+                .unwrap();
+            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+
+            db_tx
+                .del_locked_utxo_above_height(block_height.prev_height().unwrap())
+                .await
+                .unwrap();
+
+            let next_block_timestamp = block_timestamp.add_int_seconds(10).unwrap();
+            let locked_utxo =
+                LockedUtxo::new(output.clone(), UtxoLock::UntilTime(next_block_timestamp));
+            db_tx
+                .set_locked_utxo_at_height(
+                    outpoint.clone(),
+                    locked_utxo,
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            let bob_utxos = db_tx
+                .get_locked_utxos_until_now(block_height, (block_timestamp, block_timestamp))
+                .await
+                .unwrap();
+            assert!(bob_utxos.is_empty());
+
+            let bob_utxos = db_tx
+                .get_locked_utxos_until_now(
+                    block_height.next_height(),
+                    (block_timestamp, next_block_timestamp),
+                )
+                .await
+                .unwrap();
+            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+        }
 
         // set one and get it
         {

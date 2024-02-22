@@ -1339,6 +1339,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ml_transactions t ON t.owning_block_id = mb.block_id
                 INNER JOIN
                     ml_block_aux_data b ON t.owning_block_id = b.block_id
+                WHERE mb.block_height IS NOT NULL
                 ORDER BY mb.block_height DESC
                 OFFSET $1
                 LIMIT $2;
@@ -1548,9 +1549,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 "INSERT INTO ml_locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (outpoint, block_height) DO UPDATE
-                    SET utxo = $2;",
+                    VALUES ($1, $2, $3, $4, $5, $6);",
                 &[&outpoint.encode(), &utxo.into_output().encode(), &lock_time, &lock_height, &address, &height],
             )
             .await
