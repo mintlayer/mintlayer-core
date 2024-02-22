@@ -21,16 +21,45 @@
 pub enum TxStatus {
     /// Transaction is in mempool
     InMempool,
+
+    /// Transaction has already been in the mempool, duplicate insertion
+    InMempoolDuplicate,
+
     /// Transaction is in orphan pool
     InOrphanPool,
+
+    /// Transaction has already been in the orphan pool, duplicate insertion
+    InOrphanPoolDuplicate,
 }
 
 impl TxStatus {
+    /// Transaction is in mempool, whether freshly inserted or not
     pub fn in_mempool(&self) -> bool {
-        self == &TxStatus::InMempool
+        match self {
+            TxStatus::InMempool => true,
+            TxStatus::InMempoolDuplicate => true,
+            TxStatus::InOrphanPool => false,
+            TxStatus::InOrphanPoolDuplicate => false,
+        }
     }
 
+    /// Transaction is in orphan pool, whether freshly inserted or not
     pub fn in_orphan_pool(&self) -> bool {
-        self == &TxStatus::InOrphanPool
+        match self {
+            TxStatus::InMempool => false,
+            TxStatus::InMempoolDuplicate => false,
+            TxStatus::InOrphanPool => true,
+            TxStatus::InOrphanPoolDuplicate => true,
+        }
+    }
+
+    /// The transaction was already in mempool or orphan pool
+    pub fn is_duplicate(&self) -> bool {
+        match self {
+            TxStatus::InMempool => false,
+            TxStatus::InMempoolDuplicate => true,
+            TxStatus::InOrphanPool => false,
+            TxStatus::InOrphanPoolDuplicate => true,
+        }
     }
 }

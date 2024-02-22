@@ -143,7 +143,7 @@ impl MempoolInterface for MempoolImpl {
 
         // TODO The following assertion could be avoided by parametrizing the above
         // `add_transaction` by the origin type and have the return type depend on it.
-        assert_eq!(status, TxStatus::InMempool);
+        assert!(status.in_mempool());
         Ok(())
     }
 

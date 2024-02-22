@@ -445,7 +445,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     // Cheap mempool policy checks that run before anything else
     fn check_preliminary_mempool_policy(&self, entry: &TxEntry) -> Result<(), MempoolPolicyError> {
         let tx = entry.transaction();
-        let tx_id = entry.tx_id();
 
         ensure!(
             !tx.transaction().inputs().is_empty(),
@@ -460,12 +459,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         ensure!(
             entry.size().get() <= self.chain_config.max_tx_size_for_mempool(),
             MempoolPolicyError::ExceedsMaxBlockSize,
-        );
-
-        // TODO: Taken from the previous implementation. Is this correct?
-        ensure!(
-            !self.contains_transaction(tx_id),
-            MempoolPolicyError::TransactionAlreadyInMempool,
         );
 
         Ok(())
@@ -978,6 +971,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let origin = tx.origin();
         let relay_policy = tx.options().relay_policy();
 
+        if self.contains_transaction(&tx_id) {
+            return Ok(TxStatus::InMempoolDuplicate);
+        }
+
         match self.validate_transaction(tx) {
             Ok(ValidationOutcome::Valid {
                 transaction,
@@ -997,8 +994,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 Ok(TxStatus::InMempool)
             }
             Ok(ValidationOutcome::Orphan { transaction }) => {
-                self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?;
-                Ok(TxStatus::InOrphanPool)
+                Ok(self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?)
             }
             Err(err) => {
                 log::warn!("Transaction {tx_id} rejected: {err}");
