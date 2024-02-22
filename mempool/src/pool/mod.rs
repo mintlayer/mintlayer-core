@@ -33,7 +33,7 @@ use chainstate::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction,
+        Transaction, TxInput,
     },
     primitives::{amount::Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
@@ -50,7 +50,6 @@ use self::{
     feerate::{INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
     orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
-    spends_unconfirmed::SpendsUnconfirmed,
     store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
 use crate::{
@@ -77,7 +76,6 @@ pub mod memory_usage_estimator;
 mod orphans;
 mod reorg;
 mod rolling_fee_rate;
-mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
 mod work_queue;
@@ -579,6 +577,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
         entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
+
+    fn spends_unconfirmed(&self, input: &TxInput) -> bool {
+        // TODO: if TxInput spends from an account there is no way to know tx_id
+        match input {
+            TxInput::Utxo(outpoint) => outpoint
+                .source_id()
+                .get_tx_id()
+                .map_or(false, |tx_id| self.contains_transaction(tx_id)),
+            TxInput::Account(..) | TxInput::AccountCommand(..) => false,
+        }
+    }
 }
 
 // RBF checks
@@ -715,7 +724,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let spends_new_unconfirmed = tx.transaction().inputs().iter().any(|input| {
             // input spends an unconfirmed output
-            let unconfirmed = input.spends_unconfirmed(self);
+            let unconfirmed = self.spends_unconfirmed(input);
             // this unconfirmed output is not spent by one of the conflicts
             let new = !inputs_spent_by_conflicts.contains(input);
             unconfirmed && new
