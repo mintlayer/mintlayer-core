@@ -538,33 +538,45 @@ impl<'a> RandomTxMaker<'a> {
         }
 
         // now that the inputs are in place calculate the ids and replace dummy values
-        result_outputs.iter_mut().for_each(|output| match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::DataDeposit(_) => { /* do nothing */ }
-            TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
-                let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
-                *dummy_pool_id = pool_id;
-                let _ = pos_accounting_cache
-                    .create_pool(pool_id, pool_data.as_ref().clone().into())
-                    .unwrap();
-            }
-            TxOutput::CreateDelegationId(destination, pool_id) => {
-                let delegation_id = make_delegation_id(result_inputs[0].utxo_outpoint().unwrap());
-                let _ = pos_accounting_cache
-                    .create_delegation_id(delegation_id, *pool_id, destination.clone())
-                    .unwrap();
-            }
-            TxOutput::IssueNft(dummy_token_id, _, _) => {
-                *dummy_token_id =
-                    make_token_id(&[result_inputs[0].utxo_outpoint().unwrap().clone().into()])
+        let result_outputs = result_outputs
+            .into_iter()
+            .filter_map(|mut output| match &mut output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::DataDeposit(_) => Some(output),
+                TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
+                    let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
+                    *dummy_pool_id = pool_id;
+                    let _ = pos_accounting_cache
+                        .create_pool(pool_id, pool_data.as_ref().clone().into())
                         .unwrap();
-            }
-        });
+                    Some(output)
+                }
+                TxOutput::CreateDelegationId(destination, pool_id) => {
+                    let delegation_id =
+                        make_delegation_id(result_inputs[0].utxo_outpoint().unwrap());
+
+                    if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
+                        let _ = pos_accounting_cache
+                            .create_delegation_id(delegation_id, *pool_id, destination.clone())
+                            .unwrap();
+                        Some(output)
+                    } else {
+                        None // if a pool was decommissioned in this tx then skip creating a delegation
+                    }
+                }
+                TxOutput::IssueNft(dummy_token_id, _, _) => {
+                    *dummy_token_id =
+                        make_token_id(&[result_inputs[0].utxo_outpoint().unwrap().clone().into()])
+                            .unwrap();
+                    Some(output)
+                }
+            })
+            .collect();
 
         (result_inputs, result_outputs)
     }

@@ -21,8 +21,6 @@ use chainstate_test_framework::TxVerificationStrategy;
 #[case(Seed::from_entropy(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
-        logging::init_logging();
-
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_chainstate_config(chainstate::ChainstateConfig {

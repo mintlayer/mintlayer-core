@@ -149,11 +149,11 @@ impl<'f> BlockBuilder<'f> {
             .make(rng);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
-            // flush new tokens info to the in memory store
+            // flush new tokens info to the in-memory store
             let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
             tokens_db.merge_with_delta(new_tokens_delta).unwrap();
 
-            // flush new pos accounting info to the in memory store
+            // flush new pos accounting info to the in-memory store
             let mut pos_db = PoSAccountingDB::new(&mut self.pos_accounting_store);
             pos_db.merge_with_delta(new_pos_accounting_delta).unwrap();
 
