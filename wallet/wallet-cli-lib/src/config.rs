@@ -75,7 +75,7 @@ pub struct CliArgs {
     pub start_staking: bool,
 
     /// Start staking for the specified account after starting the wallet
-    #[clap(long, requires("wallet_file"))]
+    #[clap(long, requires("wallet_file"), value_delimiter(','))]
     pub start_staking_for_account: Vec<U31>,
 
     /// Optional RPC address
