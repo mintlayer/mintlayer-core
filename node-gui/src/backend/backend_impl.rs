@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
+use chainstate::ChainstateError;
 use common::{
     address::Address,
     chain::{ChainConfig, GenBlock},
@@ -36,6 +37,8 @@ use wallet_controller::{
     HandlesController, UtxoState, WalletHandlesClient,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+
+use crate::main_window::ImportOrCreate;
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -128,6 +131,7 @@ impl Backend {
         &mut self,
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
+        import: ImportOrCreate,
     ) -> Result<WalletInfo, BackendError> {
         log::debug!("Try to create wallet file {file_path:?}...");
 
@@ -137,13 +141,34 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
-        let wallet = GuiController::recover_wallet(
-            Arc::clone(&self.chain_config),
-            file_path.clone(),
-            mnemonic,
-            None,
-            StoreSeedPhrase::Store,
-        )
+        let wallet = match import {
+            ImportOrCreate::Import => GuiController::recover_wallet(
+                Arc::clone(&self.chain_config),
+                file_path.clone(),
+                mnemonic,
+                None,
+                StoreSeedPhrase::Store,
+            ),
+            ImportOrCreate::Create => {
+                let (best_block_height, best_block_id) = self
+                    .controller
+                    .chainstate
+                    .call(|c| Ok((c.get_best_block_height()?, c.get_best_block_id()?)))
+                    .await
+                    .map_err(|e| BackendError::RpcError(e.to_string()))?
+                    .map_err(|e: ChainstateError| BackendError::RpcError(e.to_string()))?;
+
+                GuiController::create_wallet(
+                    Arc::clone(&self.chain_config),
+                    file_path.clone(),
+                    mnemonic,
+                    None,
+                    StoreSeedPhrase::Store,
+                    best_block_height,
+                    best_block_id,
+                )
+            }
+        }
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         self.add_wallet(file_path, wallet).await
@@ -555,8 +580,9 @@ impl Backend {
             BackendRequest::RecoverWallet {
                 mnemonic,
                 file_path,
+                import,
             } => {
-                let import_res = self.recover_wallet(mnemonic, file_path).await;
+                let import_res = self.recover_wallet(mnemonic, file_path, import).await;
                 Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {
@@ -661,6 +687,25 @@ impl Backend {
                     &self.low_priority_event_tx,
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
                 );
+
+                match controller.get_addresses_with_usage() {
+                    Ok(addresses) => {
+                        for (index, (address, _)) in addresses {
+                            Self::send_event(
+                                &self.low_priority_event_tx,
+                                BackendEvent::NewAddress(Ok(AddressInfo {
+                                    wallet_id: *wallet_id,
+                                    account_id: *account_id,
+                                    index,
+                                    address,
+                                })),
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Address usage loading failed: {err}");
+                    }
+                }
 
                 // GuiWalletEvents will notify about stake pool balance update
                 // (when a new wallet block is added/removed from the DB)

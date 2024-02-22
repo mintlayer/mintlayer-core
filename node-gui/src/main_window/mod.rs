@@ -132,6 +132,12 @@ pub struct MainWindow {
     file_dialog_active: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ImportOrCreate {
+    Import,
+    Create,
+}
+
 #[derive(Debug, Clone)]
 pub enum MainWindowMessage {
     MenuMessage(main_menu::MenuMessage),
@@ -145,10 +151,12 @@ pub enum MainWindowMessage {
 
     ImportWalletMnemonic {
         mnemonic: String,
+        import: ImportOrCreate,
     },
     ImportWalletFileSelected {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
+        import: ImportOrCreate,
     },
     ImportWalletFileCanceled,
 
@@ -595,7 +603,7 @@ impl MainWindow {
                 Command::none()
             }
 
-            MainWindowMessage::ImportWalletMnemonic { mnemonic } => {
+            MainWindowMessage::ImportWalletMnemonic { mnemonic, import } => {
                 let mnemonic_res =
                     wallet_controller::mnemonic::parse_mnemonic(self.language, &mnemonic);
                 match mnemonic_res {
@@ -609,6 +617,7 @@ impl MainWindow {
                                     MainWindowMessage::ImportWalletFileSelected {
                                         mnemonic,
                                         file_path: file.path().to_owned(),
+                                        import,
                                     }
                                 } else {
                                     MainWindowMessage::ImportWalletFileCanceled
@@ -626,11 +635,13 @@ impl MainWindow {
             MainWindowMessage::ImportWalletFileSelected {
                 mnemonic,
                 file_path,
+                import,
             } => {
                 self.file_dialog_active = false;
                 backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
                     file_path,
+                    import,
                 });
                 Command::none()
             }
@@ -700,14 +711,20 @@ impl MainWindow {
 
                 ActiveDialog::WalletCreate { generated_mnemonic } => wallet_mnemonic_dialog(
                     Some(generated_mnemonic.clone()),
-                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
+                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                        mnemonic,
+                        import: ImportOrCreate::Create,
+                    }),
                     Box::new(|| MainWindowMessage::CloseDialog),
                 )
                 .into(),
 
                 ActiveDialog::WalletImport => wallet_mnemonic_dialog(
                     None,
-                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
+                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                        mnemonic,
+                        import: ImportOrCreate::Import,
+                    }),
                     Box::new(|| MainWindowMessage::CloseDialog),
                 )
                 .into(),
