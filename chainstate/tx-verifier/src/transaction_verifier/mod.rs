@@ -443,10 +443,7 @@ where
                     let _ = self
                         .pos_accounting_adapter
                         .accounting_delta()
-                        .get_delegation_balance(delegation_id)?
-                        .ok_or(ConnectTransactionError::DelegationDataNotFound(
-                            delegation_id,
-                        ))?;
+                        .get_delegation_balance(delegation_id)?;
                 }
             }
             AccountsBalancesCheckVersion::V1 => {
@@ -458,10 +455,7 @@ where
                     let _ = self
                         .pos_accounting_adapter
                         .accounting_delta()
-                        .get_delegation_balance(delegation_id)?
-                        .ok_or(ConnectTransactionError::DelegationDataNotFound(
-                            delegation_id,
-                        ))?;
+                        .get_delegation_balance(delegation_id)?;
                 }
             }
         }

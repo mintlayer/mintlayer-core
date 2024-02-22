@@ -71,7 +71,6 @@ impl OrphanType {
             | CTE::UndoFetchFailure
             | CTE::TxVerifierStorage
             | CTE::DestinationRetrievalError(_)
-            | CTE::DelegationDataNotFound(_)
             | CTE::OutputTimelockError(_)
             | CTE::NotEnoughPledgeToCreateStakePool(..)
             | CTE::MissingTransactionNonce(_)

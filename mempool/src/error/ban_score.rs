@@ -177,7 +177,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
-            ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,

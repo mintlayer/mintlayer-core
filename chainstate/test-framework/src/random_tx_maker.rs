@@ -176,6 +176,7 @@ impl<'a> RandomTxMaker<'a> {
         let (account_inputs, account_outputs) = self.create_account_spending(
             rng,
             &mut tokens_cache,
+            &pos_db,
             &mut pos_delta,
             &account_inputs,
             fee_inputs,
@@ -242,11 +243,18 @@ impl<'a> RandomTxMaker<'a> {
             })
     }
 
+    // This function accepts 2 PoS accounting views:
+    //     - latest state including modifications from current tx
+    //     - state before current tx.
+    // It's important because spending from delegation accounts must be based on balance that
+    // does not include top-ups made in current transaction.
     fn create_account_spending(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
-        pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
+        pos_accounting_before_tx: &impl PoSAccountingView,
+        pos_accounting_latest: &mut (impl PoSAccountingView
+                  + PoSAccountingOperations<PoSAccountingUndo>),
         accounts: &[AccountType],
         mut fee_inputs: Vec<TxInput>,
     ) -> (Vec<TxInput>, Vec<TxOutput>) {
@@ -256,7 +264,7 @@ impl<'a> RandomTxMaker<'a> {
         for account_type in accounts.iter().copied() {
             match account_type {
                 AccountType::Delegation(delegation_id) => {
-                    let balance = pos_accounting_cache
+                    let balance = pos_accounting_before_tx
                         .get_delegation_balance(delegation_id)
                         .unwrap()
                         .unwrap();
@@ -275,7 +283,7 @@ impl<'a> RandomTxMaker<'a> {
                             OutputTimeLock::ForBlockCount(1),
                         ));
 
-                        let _ = pos_accounting_cache
+                        let _ = pos_accounting_latest
                             .spend_share_from_delegation_id(delegation_id, to_spend)
                             .unwrap();
                     }
@@ -317,7 +325,6 @@ impl<'a> RandomTxMaker<'a> {
             return (Vec::new(), Vec::new());
         }
 
-        // FIXME: can it be none?
         let token_data = tokens_cache.get_token_data(&token_id).unwrap().unwrap();
         let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
 
@@ -462,7 +469,7 @@ impl<'a> RandomTxMaker<'a> {
                             unimplemented!("deprecated tokens version")
                         }
                         OutputValue::TokenV1(token_id, amount) => {
-                            let token_data = tokens_cache.get_token_data(&token_id).unwrap();
+                            let token_data = tokens_cache.get_token_data(token_id).unwrap();
                             if let Some(token_data) = token_data {
                                 let tokens_accounting::TokenData::FungibleToken(token_data) =
                                     token_data;
@@ -618,6 +625,12 @@ impl<'a> RandomTxMaker<'a> {
             }
         } else {
             // transfer coins
+            let num_outputs = if num_outputs > coins.into_atoms() {
+                1
+            } else {
+                num_outputs
+            };
+
             let mut new_outputs = (0..num_outputs)
                 .map(|_| {
                     let new_value = Amount::from_atoms(coins.into_atoms() / num_outputs);
@@ -664,7 +677,7 @@ impl<'a> RandomTxMaker<'a> {
             // Occasionally create new delegation id
             if rng.gen_bool(0.3) && self.delegation_can_be_created {
                 if let Some((pool_id, _)) =
-                    get_random_pool_data(rng, &self.pos_accounting_store, &pos_accounting_cache)
+                    get_random_pool_data(rng, self.pos_accounting_store, &pos_accounting_cache)
                 {
                     self.delegation_can_be_created = false;
 
