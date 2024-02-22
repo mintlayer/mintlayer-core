@@ -167,6 +167,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.create_account(name).await)
     }
 
+    async fn rename_account(
+        &self,
+        account_index: AccountIndexArg,
+        name: Option<String>,
+        _options: EmptyArgs,
+    ) -> rpc::RpcResult<NewAccountInfo> {
+        rpc::handle_result(self.update_account_name(account_index.index::<N>()?, name).await)
+    }
+
     async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo> {
         rpc::handle_result(self.issue_address(account_index.index::<N>()?).await)
     }

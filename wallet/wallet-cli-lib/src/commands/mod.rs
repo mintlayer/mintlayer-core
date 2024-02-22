@@ -73,6 +73,10 @@ pub enum ColdWalletCommand {
     #[clap(name = "wallet-close")]
     CloseWallet,
 
+    /// Check the current wallet's number of accounts and their names
+    #[clap(name = "wallet-info")]
+    WalletInfo,
+
     /// Encrypts the private keys with a new password, expects the wallet to be unlocked
     #[clap(name = "wallet-encrypt-private-keys")]
     EncryptPrivateKeys {
@@ -249,6 +253,11 @@ pub enum WalletCommand {
     /// Returns an error if the last created account does not have a transaction history.
     #[clap(name = "account-create")]
     CreateNewAccount { name: Option<String> },
+
+    /// Renames the selected account with an optional name.
+    /// If the name is not specified, it will remove any existing name for the account.
+    #[clap(name = "account-rename")]
+    RenameAccount { name: Option<String> },
 
     /// Switch to a given wallet account.
     #[clap(name = "account-select")]

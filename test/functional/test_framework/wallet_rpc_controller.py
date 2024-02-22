@@ -55,6 +55,11 @@ class CreatedBlockInfo:
     block_height: str
     pool_id: str
 
+@dataclass
+class AccountInfo:
+    index: int
+    name: Optional[str]
+
 class WalletRpcController:
 
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -68,13 +73,14 @@ class WalletRpcController:
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
 
+        port = 23034 + int(self.node.url.split(':')[3])
+        url = "127.0.0.1"
+        bind_addr = f"{url}:{port}"
         self.log.info(f"node url: {self.node.url}")
         wallet_rpc = os.path.join(self.config["environment"]["BUILDDIR"], "test_rpc_wallet"+self.config["environment"]["EXEEXT"] )
-        wallet_args = ["--chain-type", "regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-cookie-file", cookie_file, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
-        self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
-        self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
-        url = "127.0.0.1"
-        port = 23034
+        wallet_args = ["--chain-type", "regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+        self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
+        self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
 
         self.process = await asyncio.create_subprocess_exec(
             wallet_rpc, *wallet_args,
@@ -129,7 +135,11 @@ class WalletRpcController:
         return "Success"
 
     async def close_wallet(self) -> str:
-        return self._write_command("wallet-close", [])
+        return self._write_command("wallet_close", [])['result']
+
+    async def wallet_info(self) -> List[AccountInfo]:
+        result = self._write_command("wallet_info", [])['result']
+        return [AccountInfo(idx, name) for idx, name in enumerate(result['account_names'])]
 
     async def get_best_block_height(self) -> str:
         return str(self._write_command("wallet_best_block", [{}])['result']['height'])
@@ -138,8 +148,12 @@ class WalletRpcController:
         return self._write_command("wallet_best_block", [{}])['result']['id']
 
     async def create_new_account(self, name: Optional[str] = None) -> str:
-        self._write_command("account_create", [name, {}])
-        return "Success"
+        result = self._write_command("account_create", [name, {}])['result']
+        return f"Success, the new account index is: {result['account']}"
+
+    async def rename_account(self, name: Optional[str] = None) -> str:
+        self._write_command("account_rename", [self.account, name, {}])
+        return "Success, the account name has been successfully renamed"
 
     async def select_account(self, account_index: int) -> str:
         self.account = {'account': account_index}
@@ -248,6 +262,10 @@ class WalletRpcController:
 
     async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
         self._write_command("staking_decommission_pool", [self.account, pool_id, address, {'in_top_x_mb': 5}])['result']
+        return "The transaction was submitted successfully"
+
+    async def submit_transaction(self, transaction: str, do_not_store: bool = False) -> str:
+        self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])['result']
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:

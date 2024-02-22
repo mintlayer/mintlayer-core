@@ -788,6 +788,16 @@ impl<B: storage::Backend> Wallet<B> {
         Ok((next_account_index, name))
     }
 
+    pub fn set_account_name(
+        &mut self,
+        account_index: U31,
+        name: Option<String>,
+    ) -> WalletResult<(U31, Option<String>)> {
+        self.for_account_rw(account_index, |acc, db_tx| {
+            acc.set_name(name, db_tx).map(|()| (acc.account_index(), acc.name().clone()))
+        })
+    }
+
     pub fn database(&self) -> &Store<B> {
         &self.db
     }

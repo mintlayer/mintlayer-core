@@ -67,6 +67,11 @@ class CreatedBlockInfo:
     block_height: str
     pool_id: str
 
+@dataclass
+class AccountInfo:
+    index: int
+    name: Optional[str]
+
 class WalletCliController:
 
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
@@ -165,6 +170,12 @@ class WalletCliController:
     async def close_wallet(self) -> str:
         return await self._write_command("wallet-close\n")
 
+    async def wallet_info(self) -> List[AccountInfo]:
+        output = await self._write_command(f"wallet-info\n")
+        pattern = r"Account index: (\d+), Name: (.+)"
+        matches = re.findall(pattern, output)
+        return [AccountInfo(int(idx), name.strip('"') if name != "None" else None) for idx, name in matches]
+
     async def show_seed_phrase(self) -> Optional[str]:
         output = await self._write_command("wallet-show-seed-phrase\n")
         if output.startswith("The stored seed phrase is"):
@@ -193,6 +204,9 @@ class WalletCliController:
 
     async def create_new_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-create {name}\n")
+
+    async def rename_account(self, name: Optional[str] = '') -> str:
+        return await self._write_command(f"account-rename {name}\n")
 
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"account-select {account_index}\n")
