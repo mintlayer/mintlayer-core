@@ -26,7 +26,7 @@ use common::{
 };
 use thiserror::Error;
 
-use crate::{timelock_check, CheckTransactionError};
+use crate::{timelock_check, CheckTransactionError, TransactionSource};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
@@ -50,14 +50,12 @@ pub enum ConnectTransactionError {
     MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
-    #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
-    MissingBlockUndo(Id<Block>),
+    #[error("While disconnecting a block, block undo info doesn't exist for block `{0:?}`")]
+    MissingBlockUndo(TransactionSource),
     #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("While disconnecting a mempool tx, undo info is missing")]
     MissingMempoolTxsUndo,
-    #[error("Trying to take TxUndo for a tx `{0}` with a dependency")]
-    TxUndoWithDependency(Id<Transaction>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Block reward inputs and outputs value mismatch (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -91,7 +89,7 @@ pub enum ConnectTransactionError {
     #[error("utxo BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("PoS accounting BlockUndo error: {0}")]
-    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
+    AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]

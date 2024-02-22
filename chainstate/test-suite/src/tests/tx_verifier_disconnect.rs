@@ -29,8 +29,9 @@ use common::{
 };
 use crypto::random::CryptoRng;
 
-use tx_verifier::transaction_verifier::{
-    TransactionSource, TransactionSourceForConnect, TransactionVerifier,
+use tx_verifier::{
+    flush_to_storage,
+    transaction_verifier::{TransactionSource, TransactionSourceForConnect, TransactionVerifier},
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
@@ -163,37 +164,6 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp())
             .unwrap();
 
-        {
-            // derived verifier that didn't connect a tx should not be able to disconnect it
-            let mut child_verifier = verifier.derive_child();
-            assert_eq!(
-                child_verifier
-                    .can_disconnect_transaction(
-                        &TransactionSource::Mempool,
-                        &tx1.transaction().get_id(),
-                    )
-                    .unwrap_err(),
-                ConnectTransactionError::MissingMempoolTxsUndo,
-            );
-            assert_eq!(
-                child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-                Err(ConnectTransactionError::MissingMempoolTxsUndo)
-            );
-            assert_eq!(
-                child_verifier
-                    .can_disconnect_transaction(
-                        &TransactionSource::Mempool,
-                        &tx2.transaction().get_id()
-                    )
-                    .unwrap_err(),
-                ConnectTransactionError::MissingMempoolTxsUndo,
-            );
-            assert_eq!(
-                child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2),
-                Err(ConnectTransactionError::MissingMempoolTxsUndo)
-            );
-        }
-
         // disconnect should work in proper order only: tx2 and then tx1
         assert!(!verifier
             .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
@@ -204,8 +174,8 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-            Err(ConnectTransactionError::TxUndoWithDependency(
-                tx1.transaction().get_id()
+            Err(ConnectTransactionError::UtxoBlockUndoError(
+                utxo::UtxosBlockUndoError::TxUndoWithDependency(tx1.transaction().get_id())
             ))
         );
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();
@@ -214,5 +184,109 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
             .unwrap());
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1).unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (chain_config, storage, mut tf) = setup(&mut rng);
+
+        // create a block with a single tx based on genesis
+        let tx0 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1000)),
+                anyonecanspend_address(),
+            ))
+            .build();
+        let tx0_id = tx0.transaction().get_id();
+
+        let best_block = tf
+            .make_block_builder()
+            .add_transaction(tx0)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let best_block_idx = best_block.into();
+        let tx_source = TransactionSourceForConnect::for_mempool(&best_block_idx);
+
+        // create and connect a tx from mempool based on best block
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx0_id), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        verifier
+            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp())
+            .unwrap();
+
+        // create and connect a tx from mempool based on previous tx from mempool
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(10)),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        verifier
+            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp())
+            .unwrap();
+
+        // disconnect should work in proper order only: tx2 and then tx1
+        let mut child_verifier = verifier.derive_child();
+
+        assert!(!child_verifier
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
+            .unwrap());
+        assert!(child_verifier
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id())
+            .unwrap());
+
+        assert_eq!(
+            child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
+            Err(ConnectTransactionError::UtxoBlockUndoError(
+                utxo::UtxosBlockUndoError::TxUndoWithDependency(tx1.transaction().get_id())
+            ))
+        );
+        child_verifier
+            .disconnect_transaction(&TransactionSource::Mempool, &tx2)
+            .unwrap();
+
+        let consumed = child_verifier.consume().unwrap();
+        flush_to_storage(&mut verifier, consumed).unwrap();
+
+        let mut child_verifier = verifier.derive_child();
+
+        assert!(child_verifier
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
+            .unwrap());
+        child_verifier
+            .disconnect_transaction(&TransactionSource::Mempool, &tx1)
+            .unwrap();
+
+        let consumed = child_verifier.consume().unwrap();
+        flush_to_storage(&mut verifier, consumed).unwrap();
     });
 }

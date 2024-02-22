@@ -26,8 +26,8 @@ pub use crate::{
     error::Error,
     storage::{in_memory::UtxosDBInMemoryImpl, UtxosDB, UtxosStorageRead, UtxosStorageWrite},
     undo::{
-        UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError, UtxosTxUndo,
-        UtxosTxUndoWithSources,
+        ConsumedUtxosBlockUndo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError,
+        UtxosTxUndo, UtxosTxUndoWithSources,
     },
     utxo::{Utxo, UtxoSource},
     view::{flush_to_base, FlushableUtxoView, UtxosView},

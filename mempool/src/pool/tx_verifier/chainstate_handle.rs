@@ -16,23 +16,26 @@
 use std::collections::BTreeMap;
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, tx_verifier::TransactionVerifierStorageRef,
+    chainstate_interface::ChainstateInterface,
+    tx_verifier::{
+        transaction_verifier::{CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
+        TransactionSource, TransactionVerifierStorageRef,
+    },
     ChainstateError,
 };
 use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{AccountingBlockUndo, DelegationData, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
-use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosView};
+use utxo::{Utxo, UtxosStorageRead, UtxosView};
 
 /// Chainstate handle error includes errors coming from chainstate and inter-subprocess
 /// communication errors.
@@ -125,10 +128,6 @@ impl UtxosStorageRead for ChainstateHandle {
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Error> {
         self.call(|c| c.get_best_block_id())
     }
-
-    fn get_undo_data(&self, _id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Error> {
-        panic!("Mempool should not undo stuff in chainstate")
-    }
 }
 
 impl PoSAccountingView for ChainstateHandle {
@@ -183,6 +182,13 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         self.call(move |c| c.get_token_id_from_issuance_tx(&tx_id))
     }
 
+    fn get_undo_data(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, Error> {
+        panic!("Mempool should not undo stuff in chainstate")
+    }
+
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
@@ -210,8 +216,11 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         self.call(move |c| c.get_token_aux_data(token_id))
     }
 
-    fn get_accounting_undo(&self, _id: Id<Block>) -> Result<Option<AccountingBlockUndo>, Error> {
-        panic!("Mempool should not undo stuff in chainstate")
+    fn get_pos_accounting_undo(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, Error> {
+        Ok(None)
     }
 
     fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {
@@ -220,9 +229,9 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
 
     fn get_tokens_accounting_undo(
         &self,
-        _id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, Error> {
-        panic!("Mempool should not undo stuff in chainstate")
+        _source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, Error> {
+        Ok(None)
     }
 }
 

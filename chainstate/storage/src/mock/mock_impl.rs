@@ -28,9 +28,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
-};
+use pos_accounting::{DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData};
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
@@ -62,6 +60,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -76,7 +76,7 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -99,7 +99,6 @@ mockall::mock! {
         type Error = crate::Error;
         fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
     impl PoSAccountingStorageReadTip for Store {
@@ -171,6 +170,9 @@ mockall::mock! {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
@@ -183,8 +185,8 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
-        fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &pos_accounting::BlockUndo) -> crate::Result<()>;
+        fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(
             &mut self,
@@ -214,9 +216,6 @@ mockall::mock! {
         fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     impl PoSAccountingStorageWriteTip for Store {
@@ -330,6 +329,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
         fn get_block_tree_by_height(
@@ -339,7 +340,7 @@ mockall::mock! {
 
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
 
-        fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -362,7 +363,6 @@ mockall::mock! {
         type Error = crate::Error;
         fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
     impl PoSAccountingStorageReadTip for StoreTxRo {
@@ -442,6 +442,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
+
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
@@ -450,7 +452,7 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -473,7 +475,6 @@ mockall::mock! {
         type Error = crate::Error;
         fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
     impl PoSAccountingStorageReadTip for StoreTxRw {
@@ -543,6 +544,9 @@ mockall::mock! {
             block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
         fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
         fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
@@ -557,8 +561,8 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
-        fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &pos_accounting::BlockUndo) -> crate::Result<()>;
+        fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(
             &mut self,
@@ -588,9 +592,6 @@ mockall::mock! {
         fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     impl PoSAccountingStorageWriteTip for StoreTxRw {

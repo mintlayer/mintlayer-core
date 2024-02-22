@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 
 use crate::PoSAccountingUndo;
 
@@ -22,15 +22,19 @@ use serialization::{Decode, Encode};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum AccountingBlockUndoError {
+pub enum BlockUndoError {
     #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
     UndoAlreadyExists(Id<Transaction>),
+    #[error("PoS undo is missing for transaction `{0}`")]
+    MissingTxUndo(Id<Transaction>),
+    #[error("Attempted to insert a reward in undo that already exists")]
+    UndoAlreadyExistsForReward,
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingBlockRewardUndo(Vec<PoSAccountingUndo>);
+pub struct BlockRewardUndo(Vec<PoSAccountingUndo>);
 
-impl AccountingBlockRewardUndo {
+impl BlockRewardUndo {
     pub fn new(utxos: Vec<PoSAccountingUndo>) -> Self {
         Self(utxos)
     }
@@ -45,9 +49,9 @@ impl AccountingBlockRewardUndo {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingTxUndo(Vec<PoSAccountingUndo>);
+pub struct TxUndo(Vec<PoSAccountingUndo>);
 
-impl AccountingTxUndo {
+impl TxUndo {
     pub fn new(undos: Vec<PoSAccountingUndo>) -> Self {
         Self(undos)
     }
@@ -62,15 +66,15 @@ impl AccountingTxUndo {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode)]
-pub struct AccountingBlockUndo {
-    reward_undos: Option<AccountingBlockRewardUndo>,
-    tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
+pub struct BlockUndo {
+    reward_undos: Option<BlockRewardUndo>,
+    tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
 }
 
-impl AccountingBlockUndo {
+impl BlockUndo {
     pub fn new(
-        tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
-        reward_undos: Option<AccountingBlockRewardUndo>,
+        reward_undos: Option<BlockRewardUndo>,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
     ) -> Self {
         Self {
             reward_undos,
@@ -78,54 +82,7 @@ impl AccountingBlockUndo {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.reward_undos.is_none() && self.tx_undos.is_empty()
-    }
-
-    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, AccountingTxUndo> {
-        &self.tx_undos
-    }
-
-    pub fn reward_undos(&self) -> Option<&AccountingBlockRewardUndo> {
-        self.reward_undos.as_ref()
-    }
-
-    pub fn set_reward_undo(&mut self, undo: AccountingBlockRewardUndo) {
-        self.reward_undos = Some(undo);
-    }
-
-    pub fn insert_tx_undo(
-        &mut self,
-        tx_id: Id<Transaction>,
-        tx_undo: AccountingTxUndo,
-    ) -> Result<(), AccountingBlockUndoError> {
-        match self.tx_undos.entry(tx_id) {
-            Entry::Vacant(e) => {
-                e.insert(tx_undo);
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(tx_id)),
-        }
-    }
-
-    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<AccountingTxUndo> {
-        self.tx_undos.remove(tx_id)
-    }
-
-    pub fn take_reward_undos(&mut self) -> Option<AccountingBlockRewardUndo> {
-        self.reward_undos.take()
-    }
-
-    pub fn combine(&mut self, other: AccountingBlockUndo) -> Result<(), AccountingBlockUndoError> {
-        other
-            .tx_undos
-            .into_iter()
-            .try_for_each(|(id, u)| match self.tx_undos.entry(id) {
-                Entry::Vacant(e) => {
-                    e.insert(u);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(id)),
-            })
+    pub fn consume(self) -> (Option<BlockRewardUndo>, BTreeMap<Id<Transaction>, TxUndo>) {
+        (self.reward_undos, self.tx_undos)
     }
 }

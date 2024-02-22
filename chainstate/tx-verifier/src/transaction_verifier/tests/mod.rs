@@ -15,7 +15,7 @@
 
 mod hierarchy_read;
 mod hierarchy_write;
-mod mock;
+pub mod mock;
 
 use super::*;
 use common::{
@@ -32,7 +32,10 @@ use crypto::{
 };
 use utxo::Utxo;
 
-fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {
+pub fn create_utxo(
+    rng: &mut (impl Rng + CryptoRng),
+    value: UnsignedIntType,
+) -> (UtxoOutPoint, Utxo) {
     let outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
         0,

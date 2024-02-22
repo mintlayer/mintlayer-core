@@ -29,7 +29,7 @@ pub use {
         TokensAccountingDeltaUndoData,
     },
     error::Error,
-    operations::{TokenAccountingUndo, TokensAccountingOperations},
+    operations::{random_undo_for_test, TokenAccountingUndo, TokensAccountingOperations},
     storage::{
         db::TokensAccountingDB, in_memory::InMemoryTokensAccounting, TokensAccountingStorageRead,
         TokensAccountingStorageWrite,

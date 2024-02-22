@@ -25,6 +25,7 @@ utxo = { path = "../../utxo" }
 
 rstest.workspace = true
 itertools.workspace = true
+variant_count.workspace = true
 
 [dev-dependencies]
 consensus = { path = "../../consensus" }

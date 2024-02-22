@@ -57,7 +57,7 @@ storage::decl_schema! {
         pub DBTokensAccountingBlockUndo: Map<Id<Block>, tokens_accounting::BlockUndo>,
 
         /// Store for accounting BlockUndo
-        pub DBAccountingBlockUndo: Map<Id<Block>, pos_accounting::AccountingBlockUndo>,
+        pub DBAccountingBlockUndo: Map<Id<Block>, pos_accounting::BlockUndo>,
         /// Store for accounting deltas per epoch
         pub DBAccountingEpochDelta: Map<EpochIndex, PoSAccountingDeltaData>,
         /// Store for accounting undo deltas per epoch

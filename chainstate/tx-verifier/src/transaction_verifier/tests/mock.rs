@@ -17,15 +17,20 @@ use std::collections::BTreeMap;
 
 use crate::transaction_verifier::TransactionSource;
 
-use super::storage::{
-    TransactionVerifierStorageError, TransactionVerifierStorageMut, TransactionVerifierStorageRef,
+use super::{
+    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    storage::{
+        TransactionVerifierStorageError, TransactionVerifierStorageMut,
+        TransactionVerifierStorageRef,
+    },
+    tokens_accounting_undo_cache::CachedTokensBlockUndo,
+    CachedUtxosBlockUndo,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -45,6 +50,8 @@ mockall::mock! {
     impl TransactionVerifierStorageRef for Store {
         type Error = TransactionVerifierStorageError;
 
+        fn get_undo_data(&self, tx_source: TransactionSource) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError>;
+
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: Id<Transaction>,
@@ -60,15 +67,15 @@ mockall::mock! {
             token_id: &TokenId,
         ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
 
-        fn get_accounting_undo(
+        fn get_pos_accounting_undo(
             &self,
-            id: Id<Block>,
-        ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
+            tx_source: TransactionSource,
+        ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError>;
 
         fn get_tokens_accounting_undo(
             &self,
-            id: Id<Block>,
-        ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError>;
+            tx_source: TransactionSource,
+        ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError>;
 
         fn get_account_nonce_count(
             &self,
@@ -99,16 +106,16 @@ mockall::mock! {
             issuance_tx_id: &Id<Transaction>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &utxo::UtxosBlockUndo) -> Result<(), TransactionVerifierStorageError>;
+        fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &CachedUtxosBlockUndo) -> Result<(), TransactionVerifierStorageError>;
         fn del_utxo_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_accounting_undo_data(
+        fn set_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &pos_accounting::AccountingBlockUndo,
+            undo: &CachedPoSBlockUndo,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn del_accounting_undo_data(
+        fn del_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;
@@ -132,7 +139,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &CachedTokensBlockUndo,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_tokens_accounting_undo_data(
@@ -145,7 +152,6 @@ mockall::mock! {
         type Error = storage_result::Error;
         fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error>;
-        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;
     }
 
     impl FlushableUtxoView for Store {

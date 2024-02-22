@@ -15,9 +15,14 @@
 
 use common::{
     chain::{DelegationId, PoolId, UtxoOutPoint},
-    primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
+    primitives::{
+        id::{hash_encoded_to, DefaultHashAlgoStream},
+        Amount, H256,
+    },
 };
-use crypto::hash::StreamHasher;
+use crypto::{hash::StreamHasher, random::Rng};
+
+use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
 
 pub fn pool_id_preimage_suffix() -> u32 {
     // arbitrary, we use this to create different values when hashing with no security requirements
@@ -43,4 +48,15 @@ pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
     // 1 is arbitrary here, we use this as prefix to use this information again
     hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
     DelegationId::new(hasher.finalize().into())
+}
+
+pub fn random_undo_for_test(rng: &mut impl Rng) -> PoSAccountingUndo {
+    let delegation_target: DelegationId = H256::random_using(rng).into();
+    let amount_to_delegate = Amount::from_atoms(rng.gen_range(0..100_000));
+
+    // TODO: return other undo types
+    PoSAccountingUndo::DelegateStaking(DelegateStakingUndo {
+        delegation_target,
+        amount_to_delegate,
+    })
 }

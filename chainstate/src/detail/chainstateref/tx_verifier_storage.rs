@@ -28,21 +28,23 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
         Transaction,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData,
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
     TokensAccountingStorageRead,
 };
-use tx_verifier::transaction_verifier::TransactionSource;
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
+use tx_verifier::transaction_verifier::{
+    CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo, TransactionSource,
+};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, V>
@@ -63,6 +65,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
     }
 
+    fn get_undo_data(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo =
+                    self.db_tx.get_undo_data(id)?.map(CachedUtxosBlockUndo::from_utxo_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
+    }
+
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -72,22 +90,40 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
             .map_err(TransactionVerifierStorageError::from)
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_pos_accounting_undo(id)?
+                    .map(CachedPoSBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_tokens_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_tokens_accounting_undo(id)?
+                    .map(CachedTokensBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 
     fn get_account_nonce_count(
@@ -129,13 +165,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error> {
         self.db_tx.get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
-        self.db_tx.get_undo_data(id)
     }
 }
 
@@ -194,13 +223,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &UtxosBlockUndo,
+        undo: &CachedUtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_undo_data(id, undo)
+                .set_undo_data(id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -223,16 +252,16 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
-    fn set_accounting_undo_data(
+    fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &AccountingBlockUndo,
+        undo: &CachedPoSBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_accounting_undo_data(id, undo)
+                .set_pos_accounting_undo_data(id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -240,7 +269,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
-    fn del_accounting_undo_data(
+    fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
@@ -248,7 +277,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .del_accounting_undo_data(id)
+                .del_pos_accounting_undo_data(id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
@@ -311,13 +340,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &tokens_accounting::BlockUndo,
+        undo: &CachedTokensBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
-                .set_tokens_accounting_undo_data(id, undo)
+                .set_tokens_accounting_undo_data(id, &undo.clone().consume())
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")

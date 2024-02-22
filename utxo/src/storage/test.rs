@@ -19,14 +19,14 @@ use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::*,
-    FlushableUtxoView, UtxoSource, UtxosView,
+    FlushableUtxoView, UtxoSource, UtxosBlockUndo, UtxosView,
 };
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        OutPointSourceId, Transaction, TxInput,
+        Block, OutPointSourceId, Transaction, TxInput,
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
@@ -211,14 +211,6 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(db.utxo(input.utxo_outpoint().unwrap()), Ok(None));
     });
 
-    // save the undo data to the db.
-    {
-        db.set_undo_data(block.get_id(), &block_undo).unwrap();
-        // check that the block_undo retrieved from db is the same as the one being stored.
-        let block_undo_from_db = db.get_undo_data(block.get_id()).unwrap();
-        assert_eq!(block_undo_from_db.as_ref(), Some(&block_undo));
-    }
-
     // check that the inputs of the block do not exist in the utxo column.
     {
         block.transactions().iter().for_each(|tx| {
@@ -235,12 +227,6 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
         // the current best_block_id should be the block id..
         assert_eq!(&current_best_block_id, &block.get_id());
-
-        // get the block_undo.
-        let block_undo = db
-            .get_undo_data(Id::new(current_best_block_id.to_hash()))
-            .expect("query should not fail")
-            .expect("should return the undo file");
 
         // check that the block_undo's size is the same as the expected tx inputs.
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
@@ -264,10 +250,6 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         // flush the view to the db.
         let consumed_cache = cache.consume();
         db.batch_write(consumed_cache).unwrap();
-
-        // remove the block undo file
-        db.del_undo_data(block.get_id()).unwrap();
-        assert_eq!(db.get_undo_data(block.get_id()), Ok(None));
     }
 
     // check that all the expected_tx_inputs exists, and the same utxo is saved.

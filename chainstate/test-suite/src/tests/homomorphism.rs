@@ -22,11 +22,14 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
+        timelock::OutputTimeLock,
         tokens::{make_token_id, TokenIssuance},
         AccountCommand, AccountNonce, Destination, OutPointSourceId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use test_utils::nft_utils::random_token_issuance_v1;
 
 // These tests prove that TransactionVerifiers hierarchy has homomorphic property: f(ab) == f(a)f(b)
@@ -47,6 +50,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .build();
 
         let chainstate_config = tf.chainstate.get_chainstate_config();
+        let genesis_id = tf.genesis().get_id().into();
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -98,6 +102,11 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .build();
 
         tf.make_block_builder()
+            .with_reward(vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(u64::MAX),
+            )])
             .add_transaction(tx_1.clone())
             .add_transaction(tx_2.clone())
             .add_transaction(tx_3.clone())
@@ -106,9 +115,38 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap();
 
         tf2.make_block_builder()
+            .with_reward(vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(u64::MAX),
+            )])
             .add_transaction(tx_1)
             .add_transaction(tx_2)
             .add_transaction(tx_3)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
+
+        // create alternative chains that triggers reorg
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1_id = block_1.get_id();
+        tf.process_block(block_1, BlockSource::Local).unwrap();
+        tf.make_block_builder()
+            .with_parent(block_1_id.into())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2_id = block_2.get_id();
+        tf2.process_block(block_2, BlockSource::Local).unwrap();
+        tf2.make_block_builder()
+            .with_parent(block_2_id.into())
             .build_and_process()
             .unwrap()
             .unwrap();
@@ -134,6 +172,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .build();
 
         let chainstate_config = tf.chainstate.get_chainstate_config();
+        let genesis_id = tf.genesis().get_id().into();
 
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
@@ -190,6 +229,158 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         tf2.make_block_builder()
             .add_transaction(tx_1)
             .add_transaction(tx_2)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
+
+        // create alternative chains that triggers reorg
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1_id = block_1.get_id();
+        tf.process_block(block_1, BlockSource::Local).unwrap();
+        tf.make_block_builder()
+            .with_parent(block_1_id.into())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2_id = block_2.get_id();
+        tf2.process_block(block_2, BlockSource::Local).unwrap();
+        tf2.make_block_builder()
+            .with_parent(block_2_id.into())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_accounting_homomorphism(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let storage1 = TestStore::new_empty().unwrap();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage1.clone())
+            .with_tx_verification_strategy(TxVerificationStrategy::Default)
+            .build();
+
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+        let genesis_id = tf.genesis().get_id().into();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let min_stake_pool_pledge = tf.chainstate.get_chain_config().min_stake_pool_pledge();
+        let (stake_pool_data, _) = helpers::pos::create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            min_stake_pool_pledge,
+            vrf_pk,
+        );
+        let genesis_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id), 0);
+        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+
+        let storage2 = TestStore::new_empty().unwrap();
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(chainstate_config)
+            .with_storage(storage2.clone())
+            .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
+            .build();
+
+        let tx_1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                    1,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..2000))),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        let delegation_id = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
+            tx_1.transaction().get_id().into(),
+            1,
+        ));
+        let tx_3 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::Transaction(tx_2.transaction().get_id()),
+                    1,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::DelegateStaking(
+                Amount::from_atoms(rng.gen_range(100..200)),
+                delegation_id,
+            ))
+            .build();
+
+        tf.make_block_builder()
+            .add_transaction(tx_1.clone())
+            .add_transaction(tx_2.clone())
+            .add_transaction(tx_3.clone())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        tf2.make_block_builder()
+            .add_transaction(tx_1)
+            .add_transaction(tx_2)
+            .add_transaction(tx_3)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            storage1.transaction_ro().unwrap().dump_raw(),
+            storage2.transaction_ro().unwrap().dump_raw()
+        );
+
+        // create alternative chains that triggers reorg
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1_id = block_1.get_id();
+        tf.process_block(block_1, BlockSource::Local).unwrap();
+        tf.make_block_builder()
+            .with_parent(block_1_id.into())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2_id = block_2.get_id();
+        tf2.process_block(block_2, BlockSource::Local).unwrap();
+        tf2.make_block_builder()
+            .with_parent(block_2_id.into())
             .build_and_process()
             .unwrap()
             .unwrap();

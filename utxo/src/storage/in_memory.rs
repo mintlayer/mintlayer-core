@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use super::{UtxosStorageRead, UtxosStorageWrite};
-use crate::{Utxo, UtxosBlockUndo, UtxosView};
+use crate::{Utxo, UtxosView};
 use chainstate_types::storage_result::{self, Error};
 use common::{
-    chain::{Block, GenBlock, UtxoOutPoint},
+    chain::{GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 use std::collections::BTreeMap;
@@ -25,7 +25,6 @@ use std::collections::BTreeMap;
 #[derive(Clone)]
 pub struct UtxosDBInMemoryImpl {
     store: BTreeMap<UtxoOutPoint, Utxo>,
-    undo_store: BTreeMap<Id<Block>, UtxosBlockUndo>,
     best_block_id: Id<GenBlock>,
 }
 
@@ -33,7 +32,6 @@ impl UtxosDBInMemoryImpl {
     pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<UtxoOutPoint, Utxo>) -> Self {
         Self {
             store: initial_utxos,
-            undo_store: BTreeMap::new(),
             best_block_id: best_block,
         }
     }
@@ -44,11 +42,6 @@ impl UtxosStorageRead for UtxosDBInMemoryImpl {
 
     fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Error> {
         let res = self.store.get(outpoint);
-        Ok(res.cloned())
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Error> {
-        let res = self.undo_store.get(&id);
         Ok(res.cloned())
     }
 
@@ -68,16 +61,6 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
     }
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Error> {
         self.best_block_id = *block_id;
-        Ok(())
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Error> {
-        self.undo_store.insert(id, undo.clone());
-        Ok(())
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
-        self.undo_store.remove(&id);
         Ok(())
     }
 }

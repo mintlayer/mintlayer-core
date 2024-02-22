@@ -26,7 +26,9 @@ use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{CryptoRng, Rng};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
+use variant_count::VariantCount;
 
+#[derive(VariantCount)]
 pub enum TxVerificationStrategy {
     Default,
     Disposable,
@@ -48,7 +50,7 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new(_rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = common::chain::config::create_unit_test_config();
         let chainstate_config = ChainstateConfig {
             max_db_commit_attempts: Default::default(),
@@ -59,8 +61,15 @@ impl TestFrameworkBuilder {
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
         let time_value = None;
-        let tx_verification_strategy = TxVerificationStrategy::Default;
         let initial_time_since_genesis = 0;
+
+        assert_eq!(TxVerificationStrategy::VARIANT_COUNT, 3);
+        let tx_verification_strategy = match rng.gen_range(0..3) {
+            0 => TxVerificationStrategy::Default,
+            1 => TxVerificationStrategy::Disposable,
+            2 => TxVerificationStrategy::Randomized(Seed::from_u64(rng.next_u64())),
+            _ => unreachable!(),
+        };
 
         TestFrameworkBuilder {
             chain_config,
@@ -80,6 +89,7 @@ impl TestFrameworkBuilder {
         let chainstate_storage = tf.storage;
         let time_getter = Some(tf.time_getter);
         let time_value = tf.time_value;
+        // TODO: get strategy from `tf`
         let tx_verification_strategy = TxVerificationStrategy::Default;
         let initial_time_since_genesis = 0;
 

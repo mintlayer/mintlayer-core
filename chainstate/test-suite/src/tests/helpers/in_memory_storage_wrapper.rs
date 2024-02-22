@@ -23,13 +23,17 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
         Transaction,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
 use tokens_accounting::TokensAccountingStorageRead;
+use tx_verifier::{
+    transaction_verifier::{CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
+    TransactionSource,
+};
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -77,6 +81,26 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         }
     }
 
+    fn get_undo_data(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_undo_data(id)?
+                    .map(CachedUtxosBlockUndo::from_utxo_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
+    }
+
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -88,15 +112,22 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .map_err(TransactionVerifierStorageError::from)
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
-        self.storage
-            .transaction_ro()
-            .unwrap()
-            .get_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_pos_accounting_undo(id)?
+                    .map(CachedPoSBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => Ok(None),
+        }
     }
 
     fn get_account_nonce_count(
@@ -112,13 +143,20 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
-        self.storage
-            .transaction_ro()
-            .unwrap()
-            .get_tokens_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_tokens_accounting_undo(id)?
+                    .map(CachedTokensBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => Ok(None),
+        }
     }
 }
 
@@ -134,13 +172,6 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error> {
         self.storage.transaction_ro().unwrap().get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error> {
-        self.storage.transaction_ro().unwrap().get_undo_data(id)
     }
 }
 

@@ -16,31 +16,33 @@
 use std::collections::BTreeMap;
 
 use super::{
+    pos_accounting_undo_cache::CachedPoSBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
+    tokens_accounting_undo_cache::CachedTokensBlockUndo,
+    utxos_undo_cache::CachedUtxosBlockUndo,
     CachedOperation, TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData,
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
     TokensAccountingStorageRead, TokensAccountingView,
 };
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
 impl<
         C,
@@ -75,6 +77,16 @@ where
         self.storage.get_gen_block_index(block_id)
     }
 
+    fn get_undo_data(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.utxo_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_undo_data(tx_source),
+        }
+    }
+
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -89,24 +101,23 @@ where
         }
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        match self.pos_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_accounting_undo(id),
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.pos_accounting_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_pos_accounting_undo(tx_source),
         }
     }
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
-    {
-        match self.tokens_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_tokens_accounting_undo(id),
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.tokens_accounting_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_tokens_accounting_undo(tx_source),
         }
     }
 
@@ -138,13 +149,6 @@ where
 
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         Ok(self.best_block)
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
-        match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
-            Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_undo_data(id),
-        }
     }
 }
 
@@ -198,7 +202,7 @@ where
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &UtxosBlockUndo,
+        new_undo: &CachedUtxosBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.utxo_block_undo
             .set_undo_data(tx_source, new_undo)
@@ -214,17 +218,17 @@ where
             .map_err(|e| TransactionVerifierStorageError::UtxoBlockUndoError(e).into())
     }
 
-    fn set_accounting_undo_data(
+    fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &AccountingBlockUndo,
+        new_undo: &CachedPoSBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.pos_accounting_block_undo
             .set_undo_data(tx_source, new_undo)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
 
-    fn del_accounting_undo_data(
+    fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
@@ -264,7 +268,7 @@ where
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &tokens_accounting::BlockUndo,
+        new_undo: &CachedTokensBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.tokens_accounting_block_undo
             .set_undo_data(tx_source, new_undo)

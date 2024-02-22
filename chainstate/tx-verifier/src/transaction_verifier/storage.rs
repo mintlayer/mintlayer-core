@@ -23,14 +23,16 @@ use common::{
     },
     primitives::Id,
 };
-use pos_accounting::{
-    AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
-};
+use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView};
 use thiserror::Error;
 use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
-use super::{error::TokensError, TransactionSource};
+use super::{
+    error::TokensError, pos_accounting_undo_cache::CachedPoSBlockUndo,
+    tokens_accounting_undo_cache::CachedTokensBlockUndo, utxos_undo_cache::CachedUtxosBlockUndo,
+    TransactionSource,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -51,7 +53,7 @@ pub enum TransactionVerifierStorageError {
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Accounting BlockUndo error: {0}")]
-    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
+    AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("Tokens accounting BlockUndo error: {0}")]
@@ -80,20 +82,25 @@ pub trait TransactionVerifierStorageRef:
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
 
+    fn get_undo_data(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, <Self as TransactionVerifierStorageRef>::Error>;
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_account_nonce_count(
         &self,
@@ -132,7 +139,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &utxo::UtxosBlockUndo,
+        undo: &CachedUtxosBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_utxo_undo_data(
@@ -140,13 +147,13 @@ pub trait TransactionVerifierStorageMut:
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
-    fn set_accounting_undo_data(
+    fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &AccountingBlockUndo,
+        undo: &CachedPoSBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
-    fn del_accounting_undo_data(
+    fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
@@ -170,7 +177,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &tokens_accounting::BlockUndo,
+        undo: &CachedTokensBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_tokens_accounting_undo_data(
@@ -199,6 +206,13 @@ where
         self.deref().get_gen_block_index(block_id)
     }
 
+    fn get_undo_data(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedUtxosBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_undo_data(tx_source)
+    }
+
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -206,19 +220,18 @@ where
         self.deref().get_token_aux_data(token_id)
     }
 
-    fn get_accounting_undo(
+    fn get_pos_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        self.deref().get_accounting_undo(id)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_pos_accounting_undo(tx_source)
     }
 
     fn get_tokens_accounting_undo(
         &self,
-        id: Id<Block>,
-    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
-    {
-        self.deref().get_tokens_accounting_undo(id)
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedTokensBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_tokens_accounting_undo(tx_source)
     }
 
     fn get_account_nonce_count(

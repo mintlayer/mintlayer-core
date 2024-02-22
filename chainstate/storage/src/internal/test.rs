@@ -24,8 +24,10 @@ use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
-use utxo::{Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
-use utxo::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{
+    Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite,
+    UtxosTxUndoWithSources,
+};
 
 type TestStore = crate::inmemory::Store;
 
@@ -439,40 +441,4 @@ fn utxo_db_impl_test(#[case] seed: Seed) {
     let mut db_tx = store.transaction_rw(None).expect("should create a transaction");
     assert!(db_tx.set_best_block_for_utxos(&block_id.into()).is_ok());
     db_tx.commit().expect("commit cannot fail");
-
-    let db_tx = store.transaction_ro().expect("should create a transaction");
-    let block_id =
-        Id::new(db_tx.get_best_block_for_utxos().expect("query should not fail").to_hash());
-    drop(db_tx);
-
-    // undo checking
-    let undo = create_rand_block_undo(&mut rng, 10, 10);
-
-    let mut db_tx = store.transaction_rw(None).expect("should create a transaction");
-    {
-        let mut db_interface = utxo::UtxosDB::new(&mut db_tx);
-        assert!(db_interface.set_undo_data(block_id, &undo).is_ok());
-    }
-    db_tx.commit().expect("commit cannot fail");
-
-    let db_tx = store.transaction_ro().expect("should create a transaction");
-    {
-        let db_interface = utxo::UtxosDB::new(&db_tx);
-        assert_eq!(db_interface.get_undo_data(block_id), Ok(Some(undo)));
-    }
-    drop(db_tx);
-
-    let mut db_tx = store.transaction_rw(None).expect("should create a transaction");
-    {
-        let mut db_interface = utxo::UtxosDB::new(&mut db_tx);
-        assert!(db_interface.del_undo_data(block_id).is_ok());
-    }
-    db_tx.commit().expect("commit cannot fail");
-
-    let db_tx = store.transaction_ro().expect("should create a transaction");
-    {
-        let db_interface = utxo::UtxosDB::new(&db_tx);
-        assert_eq!(db_interface.get_undo_data(block_id), Ok(None));
-    }
-    drop(db_tx);
 }
