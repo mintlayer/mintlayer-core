@@ -78,6 +78,7 @@ pub async fn start_services(
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
         wallet_config.wallet_file,
+        wallet_config.start_staking_for_account,
         node_rpc,
     )
     .await?;

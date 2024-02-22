@@ -66,7 +66,7 @@ class WalletRpcController:
         self.log = log
         self.node = node
         self.config = config
-        self.wallet_args = wallet_args
+        self.wallet_args = [arg for arg in wallet_args if arg != "--wallet-file"]
         self.chain_config_args = chain_config_args
         self.account = {'account': DEFAULT_ACCOUNT_INDEX}
 

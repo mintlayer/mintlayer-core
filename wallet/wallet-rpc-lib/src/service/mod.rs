@@ -20,11 +20,12 @@ mod worker;
 use std::{path::PathBuf, sync::Arc};
 
 use common::chain::ChainConfig;
+use crypto::key::hdkd::u31::U31;
 use utils::shallow_clone::ShallowClone;
 
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
-use wallet_controller::NodeInterface;
+use wallet_controller::{ControllerConfig, NodeInterface};
 pub use worker::{CreatedWallet, WalletController, WalletControllerError};
 
 use events::WalletServiceEvents;
@@ -53,6 +54,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
     pub async fn start(
         chain_config: Arc<ChainConfig>,
         wallet_file: Option<PathBuf>,
+        start_staking_for_account: Vec<U31>,
         node_rpc: N,
     ) -> Result<Self, InitError<N>> {
         let (wallet_events, events_rx) = WalletServiceEvents::new();
@@ -69,13 +71,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
                 )?
             };
 
-            let controller = WalletController::new(
+            let mut controller = WalletController::new(
                 chain_config.shallow_clone(),
                 node_rpc.clone(),
                 wallet,
                 wallet_events.clone(),
             )
             .await?;
+
+            for account_index in start_staking_for_account {
+                // Irrelevant for staking
+                let config = ControllerConfig { in_top_x_mb: 5 };
+                controller.synced_controller(account_index, config).await?.start_staking()?;
+            }
 
             Some(controller)
         } else {

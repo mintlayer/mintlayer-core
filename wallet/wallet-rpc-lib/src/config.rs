@@ -19,6 +19,7 @@ use common::chain::config::{
     regtest_options::{regtest_chain_config, ChainConfigOptions},
     ChainConfig, ChainType,
 };
+use crypto::key::hdkd::u31::U31;
 use rpc::{rpc_creds::RpcCreds, RpcAuthData};
 
 /// Configuration options for the wallet service
@@ -28,6 +29,9 @@ pub struct WalletServiceConfig {
 
     /// Wallet file to operate on
     pub wallet_file: Option<PathBuf>,
+
+    /// Start staking for account after starting the wallet
+    pub start_staking_for_account: Vec<U31>,
 
     /// RPC address of the node to connect to
     pub node_rpc_address: Option<String>,
@@ -40,6 +44,7 @@ impl WalletServiceConfig {
     pub fn new(
         chain_type: ChainType,
         wallet_file: Option<PathBuf>,
+        start_staking_for_account: Vec<U31>,
         chain_config_options: ChainConfigOptions,
     ) -> anyhow::Result<Self> {
         let chain_config = match chain_type {
@@ -49,6 +54,7 @@ impl WalletServiceConfig {
         Ok(Self {
             chain_config,
             wallet_file,
+            start_staking_for_account,
             node_rpc_address: None,
             node_credentials: RpcAuthData::None,
         })
