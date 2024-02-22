@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use api_server_common::storage::storage_api::Delegation;
-use common::chain::{DelegationId, Destination, PoolId};
+use common::chain::{DelegationId, Destination, PoolId, UtxoOutPoint};
 use common::primitives::Amount;
 use pos_accounting::{
     DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingOperations,
@@ -165,10 +165,10 @@ impl PoSAccountingOperations<()> for PoSAdapter {
 
     fn create_delegation_id(
         &mut self,
-        _delegation_id: DelegationId,
         _target_pool: PoolId,
         _spend_key: Destination,
-    ) -> Result<(), pos_accounting::Error> {
+        _input0_outpoint: &UtxoOutPoint,
+    ) -> Result<(DelegationId, ()), pos_accounting::Error> {
         unimplemented!()
     }
 

@@ -38,9 +38,9 @@ use crypto::{
 };
 use itertools::Itertools;
 use pos_accounting::{
-    make_delegation_id, make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB,
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView, PoolData,
+    make_pool_id, DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingDelta,
+    PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
+    PoolData,
 };
 use test_utils::nft_utils::*;
 use tokens_accounting::{
@@ -557,12 +557,13 @@ impl<'a> RandomTxMaker<'a> {
                     Some(output)
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
-                    let delegation_id =
-                        make_delegation_id(result_inputs[0].utxo_outpoint().unwrap());
-
                     if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
                         let _ = pos_accounting_cache
-                            .create_delegation_id(delegation_id, *pool_id, destination.clone())
+                            .create_delegation_id(
+                                *pool_id,
+                                destination.clone(),
+                                result_inputs[0].utxo_outpoint().unwrap(),
+                            )
                             .unwrap();
                         Some(output)
                     } else {

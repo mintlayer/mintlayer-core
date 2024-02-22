@@ -24,7 +24,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use super::create_pool_data;
 
 use crate::{
-    make_delegation_id, make_pool_id,
+    make_pool_id,
     pool::{delegation::DelegationData, storage::PoSAccountingDB},
     storage::in_memory::InMemoryPoSAccounting,
     FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingOperations, PoSAccountingUndo,
@@ -166,10 +166,9 @@ fn perform_random_operation(
         3..=4 => {
             if let Some(pool_id) = random_pool {
                 let input0_outpoint = random_outpoint0(rng);
-                let delegation_id = make_delegation_id(&input0_outpoint);
 
-                let undo = op
-                    .create_delegation_id(delegation_id, pool_id, Destination::AnyoneCanSpend)
+                let (_, undo) = op
+                    .create_delegation_id(pool_id, Destination::AnyoneCanSpend, &input0_outpoint)
                     .unwrap();
                 undos.push(undo);
             }

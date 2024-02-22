@@ -15,7 +15,7 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{DelegationId, Destination, PoolId},
+    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
@@ -107,10 +107,10 @@ pub trait PoSAccountingOperations<U> {
 
     fn create_delegation_id(
         &mut self,
-        delegation_id: DelegationId,
         target_pool: PoolId,
         spend_key: Destination,
-    ) -> Result<U, Error>;
+        input0_outpoint: &UtxoOutPoint,
+    ) -> Result<(DelegationId, U), Error>;
 
     fn delete_delegation_id(&mut self, delegation_id: DelegationId) -> Result<U, Error>;
 
