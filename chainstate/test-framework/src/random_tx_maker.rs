@@ -33,7 +33,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::{
-    random::{CryptoRng, Rng, SliceRandom},
+    random::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use itertools::Itertools;
@@ -59,7 +59,7 @@ fn get_random_pool_data<'a>(
 ) -> Option<(&'a PoolId, &'a PoolData)> {
     let all_pool_data = storage.all_pool_data();
     (!all_pool_data.is_empty())
-        .then(|| all_pool_data.iter().nth(rng.gen_range(0..all_pool_data.len())).unwrap())
+        .then(|| all_pool_data.iter().choose(rng).unwrap())
         .and_then(|(id, data)| tip_view.pool_exists(*id).unwrap().then_some((id, data)))
 }
 
@@ -70,14 +70,7 @@ fn get_random_delegation_data<'a>(
 ) -> Option<(&'a DelegationId, &'a DelegationData)> {
     let all_delegation_data = storage.all_delegation_data();
     (!all_delegation_data.is_empty())
-        .then(|| {
-            {
-                all_delegation_data
-                    .iter()
-                    .nth(rng.gen_range(0..all_delegation_data.len()))
-                    .unwrap()
-            }
-        })
+        .then(|| all_delegation_data.iter().choose(rng).unwrap())
         .and_then(|(id, data)| {
             tip_view.get_delegation_data(*id).unwrap().is_some().then_some((id, data))
         })
@@ -139,9 +132,6 @@ impl<'a> RandomTxMaker<'a> {
         TokensAccountingDeltaData,
         PoSAccountingDeltaData,
     ) {
-        // TODO: ideally all inputs/outputs should be shuffled but it would mess up with token issuance
-        // because ids are build from input0
-
         let tokens_db = TokensAccountingDB::new(self.tokens_store);
         let mut tokens_cache = TokensAccountingCache::new(&tokens_db);
 
@@ -182,8 +172,11 @@ impl<'a> RandomTxMaker<'a> {
             fee_inputs,
         );
 
+        // TODO: ideally all inputs should be shuffled but it would mess up with token issuance
+        // because ids are built from input0
         inputs.extend(account_inputs);
         outputs.extend(account_outputs);
+        outputs.shuffle(rng);
 
         (
             Transaction::new(0, inputs, outputs).unwrap(),
@@ -193,35 +186,34 @@ impl<'a> RandomTxMaker<'a> {
     }
 
     fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(UtxoOutPoint, TxOutput)> {
-        // TODO: it take several items from the beginning of the collection assuming that outpoints
-        // are ids thus the order changes with new insertions. But more sophisticated random selection can be implemented here
         let number_of_inputs = rng.gen_range(1..5);
         self.utxo_set
             .iter()
-            .take(number_of_inputs)
-            .map(|(outpoint, utxo)| (outpoint.clone(), utxo.output().clone()))
+            .choose_multiple(rng, number_of_inputs)
+            .iter()
+            .map(|(outpoint, utxo)| ((*outpoint).clone(), utxo.output().clone()))
             .collect()
     }
 
     fn select_accounts(&self, rng: &mut impl Rng) -> Vec<AccountType> {
-        // TODO: it take several items from the beginning of the collection assuming that outpoints
-        // are ids thus the order changes with new insertions. But more sophisticated random selection can be implemented here
         let number_of_inputs = rng.gen_range(1..5);
 
         let tokens = self
             .tokens_store
             .tokens_data()
             .iter()
-            .take(number_of_inputs)
-            .map(|(token_id, _)| AccountType::Token(*token_id))
+            .choose_multiple(rng, number_of_inputs)
+            .iter()
+            .map(|(token_id, _)| AccountType::Token(**token_id))
             .collect::<Vec<_>>();
 
         let mut delegations = self
             .pos_accounting_store
             .all_delegation_balances()
             .iter()
-            .take(number_of_inputs)
-            .map(|(id, _)| AccountType::Delegation(*id))
+            .choose_multiple(rng, number_of_inputs)
+            .iter()
+            .map(|(id, _)| AccountType::Delegation(**id))
             .collect::<Vec<_>>();
 
         delegations.extend_from_slice(&tokens);
