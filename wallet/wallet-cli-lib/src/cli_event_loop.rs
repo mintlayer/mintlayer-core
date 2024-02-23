@@ -82,8 +82,14 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
             };
             let wallet = WalletRpcHandlesClient::new(wallet_rpc, server_rpc);
 
-            let mut command_handler =
-                CommandHandler::new(ControllerConfig { in_top_x_mb }, wallet).await;
+            let mut command_handler = CommandHandler::new(
+                ControllerConfig {
+                    in_top_x_mb,
+                    broadcast_to_mempool: true,
+                },
+                wallet,
+            )
+            .await;
 
             loop {
                 tokio::select! {
@@ -107,8 +113,14 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
         } => {
             let wallet = ClientWalletRpc::new(remote_socket_address, rpc_auth).await?;
 
-            let mut command_handler =
-                CommandHandler::new(ControllerConfig { in_top_x_mb }, wallet).await;
+            let mut command_handler = CommandHandler::new(
+                ControllerConfig {
+                    in_top_x_mb,
+                    broadcast_to_mempool: true,
+                },
+                wallet,
+            )
+            .await;
 
             loop {
                 tokio::select! {

@@ -131,6 +131,10 @@ pub struct ControllerConfig {
     /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
     /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
     pub in_top_x_mb: usize,
+
+    /// Should the controller broadcast the created transactions to the mempool
+    /// Set to False by the GUI wallet to allow for a confirmation dialog before broadcasting
+    pub broadcast_to_mempool: bool,
 }
 
 pub struct Controller<T, W> {

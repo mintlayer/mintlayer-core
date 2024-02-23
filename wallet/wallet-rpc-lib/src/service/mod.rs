@@ -81,7 +81,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
 
             for account_index in start_staking_for_account {
                 // Irrelevant for staking
-                let config = ControllerConfig { in_top_x_mb: 5 };
+                let config = ControllerConfig {
+                    in_top_x_mb: 5,
+                    broadcast_to_mempool: true,
+                };
                 controller.synced_controller(account_index, config).await?.start_staking()?;
             }
 

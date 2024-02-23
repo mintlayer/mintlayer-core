@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use chainstate::ChainstateError;
 use common::{
     address::Address,
-    chain::{ChainConfig, GenBlock},
+    chain::{ChainConfig, GenBlock, SignedTransaction},
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::u31::U31;
@@ -34,7 +34,7 @@ use wallet::{
 };
 use wallet_controller::{
     read::ReadOnlyController, synced_controller::SyncedController, ControllerConfig,
-    HandlesController, UtxoState, WalletHandlesClient,
+    HandlesController, UtxoState, WalletHandlesClient, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -395,13 +395,14 @@ impl Backend {
             .ok_or(BackendError::InvalidAmount(amount))?;
 
         // TODO: add support for utxo selection in the GUI
-        self.synced_wallet_controller(wallet_id, account_id.account_index())
+        let tx = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
             .send_to_address(address, amount, vec![])
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id })
+        Ok(TransactionInfo { wallet_id, tx })
     }
 
     async fn synced_wallet_controller(
@@ -418,6 +419,8 @@ impl Backend {
                 account_index,
                 ControllerConfig {
                     in_top_x_mb: IN_TOP_X_MB,
+                    // don't broadcast_to_mempool before confirmation dialog
+                    broadcast_to_mempool: false,
                 },
             )
             .await
@@ -451,13 +454,14 @@ impl Backend {
             .decode_object(&self.chain_config)
             .map_err(|e| BackendError::AddressError(e.to_string()))?;
 
-        self.synced_wallet_controller(wallet_id, account_id.account_index())
+        let tx = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
             .create_stake_pool_tx(amount, decommission_key, mpt, cost_per_block)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id })
+        Ok(TransactionInfo { wallet_id, tx })
     }
 
     async fn create_delegation(
@@ -478,13 +482,14 @@ impl Backend {
         let delegation_key = parse_address(&self.chain_config, &delegation_address)
             .map_err(|err| BackendError::AddressError(err.to_string()))?;
 
-        self.synced_wallet_controller(wallet_id, account_id.account_index())
+        let (tx, _) = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
             .create_delegation(delegation_key, pool_id)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id })
+        Ok(TransactionInfo { wallet_id, tx })
     }
 
     async fn delegate_staking(
@@ -501,13 +506,14 @@ impl Backend {
         let delegation_amount = parse_coin_amount(&self.chain_config, &delegation_amount)
             .ok_or(BackendError::InvalidAmount(delegation_amount))?;
 
-        self.synced_wallet_controller(wallet_id, account_id.account_index())
+        let tx = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
             .delegate_staking(delegation_amount, delegation_id)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id })
+        Ok(TransactionInfo { wallet_id, tx })
     }
 
     async fn send_delegation_to_address(
@@ -532,13 +538,28 @@ impl Backend {
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|e| BackendError::AddressError(e.to_string()))?;
 
-        self.synced_wallet_controller(wallet_id, account_id.account_index())
+        let tx = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
             .await?
             .send_to_address_from_delegation(address, amount, delegation_id)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id })
+        Ok(TransactionInfo { wallet_id, tx })
+    }
+
+    async fn submit_transaction(
+        &mut self,
+        wallet_id: WalletId,
+        tx: SignedTransaction,
+    ) -> Result<WalletId, BackendError> {
+        self.synced_wallet_controller(wallet_id, DEFAULT_ACCOUNT_INDEX)
+            .await?
+            .broadcast_to_mempool(tx)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(wallet_id)
     }
 
     fn get_account_balance(
@@ -633,6 +654,10 @@ impl Backend {
                     &self.event_tx,
                     BackendEvent::SendDelegationToAddress(result),
                 );
+            }
+            BackendRequest::SubmitTx { wallet_id, tx } => {
+                let result = self.submit_transaction(wallet_id, tx).await;
+                Self::send_event(&self.event_tx, BackendEvent::Broadcast(result));
             }
             BackendRequest::TransactionList {
                 wallet_id,

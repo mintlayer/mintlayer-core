@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod confirm_broadcast;
 pub mod new_wallet_account;
 pub mod popup_dialog;
 pub mod wallet_mnemonic;
