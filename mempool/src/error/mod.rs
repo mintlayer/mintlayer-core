@@ -21,7 +21,7 @@ use subsystem::error::CallError;
 use thiserror::Error;
 
 use common::{
-    chain::{GenBlock, Transaction},
+    chain::{Block, GenBlock, Transaction},
     primitives::{amount::DisplayAmount, Id, H256},
 };
 
@@ -48,6 +48,8 @@ pub enum Error {
     Policy(#[from] MempoolPolicyError),
     #[error("Orphan transaction error: {0}")]
     Orphan(#[from] OrphanPoolError),
+    #[error("Tip moved while trying to process transaction")]
+    TipMoved,
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -111,8 +113,6 @@ pub enum TxValidationError {
     TxValidation(#[from] ConnectTransactionError),
     #[error("Subsystem call error")]
     CallError(#[from] CallError),
-    #[error("Tip moved while trying to process transaction")]
-    TipMoved,
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -145,4 +145,27 @@ pub enum MempoolConflictError {
     SpendsNewUnconfirmed,
     #[error("Transaction would require too many replacements.")]
     TooManyReplacements,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ChainstateEventError {
+    #[error(transparent)]
+    Reorg(#[from] ReorgError),
+}
+
+/// An error that can happen in mempool on chain reorg
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ReorgError {
+    #[error(transparent)]
+    Chainstate(#[from] chainstate::ChainstateError),
+    #[error("Could not obtain the best block for utxos")]
+    BestBlockForUtxos,
+    #[error("Could not find the previous tip index")]
+    OldTipIndex,
+    #[error("Could not find the new tip index")]
+    NewTipIndex,
+    #[error("Block {0:?} not found while traversing history")]
+    BlockNotFound(Id<Block>),
+    #[error("Chainstate call: {0}")]
+    ChainstateCall(#[from] subsystem::error::CallError),
 }

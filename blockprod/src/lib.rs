@@ -243,7 +243,7 @@ mod tests {
             min_max_bootstrap_import_buffer_sizes: Default::default(),
         };
 
-        let mempool_config = Arc::new(MempoolConfig::new());
+        let mempool_config = MempoolConfig::new();
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),

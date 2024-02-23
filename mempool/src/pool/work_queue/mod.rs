@@ -40,8 +40,9 @@ impl<W: Ord> PeerQueue<W> {
         self.queue.insert(item)
     }
 
-    /// Perform a work unit from this queue
-    fn perform<R>(&mut self, mut handler: impl FnMut(W) -> Option<R>) -> Option<R> {
+    /// Pick a unit of work from this queue. No longer relevant work items can be filtered out by
+    /// returning `None` from the handler callback.
+    fn pick<R>(&mut self, mut handler: impl FnMut(W) -> Option<R>) -> Option<R> {
         loop {
             if let Some(ret) = handler(self.queue.pop_first()?) {
                 break Some(ret);
@@ -162,10 +163,11 @@ impl<W: Ord> WorkQueue<W> {
         }
     }
 
-    /// Perform a unit of work, picking the next peer from the scheduled set.
+    /// Pick a unit of work, selecting the next peer from the scheduled set.
     ///
-    /// The actual work is done by the provided handler function, the schedule queue is only
-    /// concerned with picking the next peer and work item to be processed.
+    /// The handler function provides the means of filtering out work units that should be
+    /// discarded. If an item is discarded, it does not count as work unit and we move to the next
+    /// one immediately.
     ///
     /// The handler controls whether it's done with this peer by returning an [Option] value:
     /// * `None`: This work item was looked at but does not qualify as work so it is trivially
@@ -173,9 +175,8 @@ impl<W: Ord> WorkQueue<W> {
     /// * `Some(ret)`: This work item has been processed successfully. The peer will be scheduled
     ///   again in the next round at soonest. A return value may be provided.
     ///
-    /// The function returns the value returned by the handler or `None` if no work items for the
-    /// peer picked have been successfully processed this time.
-    pub fn perform<R>(&mut self, mut handler: impl FnMut(PeerId, W) -> Option<R>) -> Option<R> {
+    /// The function returns the value returned by the handler or `None` if there is no work left.
+    pub fn pick<R>(&mut self, mut handler: impl FnMut(PeerId, W) -> Option<R>) -> Option<R> {
         // Pick a peer from the scheduled set
         loop {
             let peer = self.scheduled.pop()?;
@@ -190,7 +191,7 @@ impl<W: Ord> WorkQueue<W> {
                     assert!(!peer_queue.is_empty());
 
                     // Perform the work from the queue
-                    let result = peer_queue.perform(move |work| handler(peer, work));
+                    let result = peer_queue.pick(move |work| handler(peer, work));
 
                     self.advance_round();
 

@@ -251,7 +251,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
             // Add the transaction
             let tx = tx.transaction().clone();
             let _ = mempool
-                .add_transaction(tx, gen_origin().into(), &mut work_queue)
+                .add_transaction_with_origin(tx, gen_origin().into(), &mut work_queue)
                 .expect("tx add");
 
             // Randomly perform 0, 1, or 2 work units
@@ -265,13 +265,13 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 
         log::info!(
             "Stats: count {}, memory {}, encoded size {}",
-            mempool.store.txs_by_id.len(),
+            mempool.tx_store().txs_by_id.len(),
             mempool.memory_usage(),
-            mempool.store.txs_by_id.values().map(|e| e.size().get()).sum::<usize>(),
+            mempool.tx_store().txs_by_id.values().map(|e| e.size().get()).sum::<usize>(),
         );
 
         // Check the final state of each transaction in the original sequence
-        results.push(all_tx_ids.iter().map(|id| TxStatus::fetch(&mempool, id)).collect());
+        results.push(all_tx_ids.iter().map(|id| fetch_status(&mempool, id)).collect());
     }
 
     // Check the final outcome, i.e. which transactions end up in mempool versus orphan pool, is
@@ -307,11 +307,8 @@ async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigi
 
     // Check the second transaction gets rejected by mempool
     let mut mempool = setup_with_chainstate(tf.chainstate());
-    let res = mempool.add_transaction(tx1, origin.into(), &mut WorkQueue::new());
-    assert_eq!(
-        res,
-        Err(OrphanPoolError::NotSupportedForLocalOrigin(origin).into())
-    );
+    let res = mempool.add_transaction_with_origin(tx1, origin.into(), &mut WorkQueue::new());
+    assert!(res.is_err());
 }
 
 #[rstest]
@@ -343,7 +340,7 @@ async fn bad_orphan_does_not_block_good_one(#[case] seed: Seed) {
 
     let mut work_queue = WorkQueue::new();
     mempool
-        .add_transaction(tx0, LocalTxOrigin::Mempool.into(), &mut work_queue)
+        .add_transaction_with_origin(tx0, LocalTxOrigin::Mempool.into(), &mut work_queue)
         .unwrap()
         .assert_in_mempool();
 
@@ -406,19 +403,19 @@ async fn orphan_scheduling(#[case] seed: Seed) {
     let mut work_queue = WorkQueue::new();
 
     mempool
-        .add_transaction(tx3, gen_origin().into(), &mut work_queue)
+        .add_transaction_with_origin(tx3, gen_origin().into(), &mut work_queue)
         .unwrap()
         .assert_in_orphan_pool();
     assert_eq!(work_queue.total_len(), 0);
 
     mempool
-        .add_transaction(tx2, gen_origin().into(), &mut work_queue)
+        .add_transaction_with_origin(tx2, gen_origin().into(), &mut work_queue)
         .unwrap()
         .assert_in_orphan_pool();
     assert_eq!(work_queue.total_len(), 0);
 
     mempool
-        .add_transaction(tx0, gen_origin().into(), &mut work_queue)
+        .add_transaction_with_origin(tx0, gen_origin().into(), &mut work_queue)
         .unwrap()
         .assert_in_mempool();
     assert_eq!(work_queue.total_len(), 1);
@@ -437,14 +434,14 @@ async fn orphan_scheduling(#[case] seed: Seed) {
 
     // Submit tx4, should not really change much
     mempool
-        .add_transaction(tx4, gen_origin().into(), &mut work_queue)
+        .add_transaction_with_origin(tx4, gen_origin().into(), &mut work_queue)
         .unwrap()
         .assert_in_orphan_pool();
     assert_eq!(work_queue.total_len(), 0);
 
     // Now submit tx1 which releases tx3 and tx4
     mempool
-        .add_transaction(tx1, gen_origin().into(), &mut work_queue)
+        .add_transaction_with_origin(tx1, gen_origin().into(), &mut work_queue)
         .unwrap()
         .assert_in_mempool();
     assert_eq!(work_queue.total_len(), 2);

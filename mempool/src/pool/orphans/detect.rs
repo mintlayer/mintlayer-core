@@ -23,15 +23,15 @@ pub enum OrphanType {
 
 impl OrphanType {
     /// Check an error signifies a potential orphan transaction
-    pub fn from_error(err: &ConnectTransactionError) -> Option<Self> {
+    pub fn from_error(err: ConnectTransactionError) -> Result<Self, ConnectTransactionError> {
         use ConnectTransactionError as CTE;
-        match err {
+        match &err {
             // Missing UTXO signifies a possible orphan
-            CTE::MissingOutputOrSpent(_) => Some(Self::MissingUtxo),
+            CTE::MissingOutputOrSpent(_) => Ok(Self::MissingUtxo),
 
             // Nonce gap signifies a possible orphan
             CTE::NonceIsNotIncremental(_acct, expected, got) => {
-                got.value().checked_sub(expected.value()).map(Self::AccountNonceGap)
+                got.value().checked_sub(expected.value()).map(Self::AccountNonceGap).ok_or(err)
             }
 
             // These do not
@@ -85,7 +85,7 @@ impl OrphanType {
             | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
-            | CTE::IOPolicyError(_, _) => None,
+            | CTE::IOPolicyError(_, _) => Err(err),
         }
     }
 }

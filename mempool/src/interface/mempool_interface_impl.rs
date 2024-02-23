@@ -39,7 +39,7 @@ type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 /// Contains all the information required to spin up the mempool subsystem
 pub struct MempoolInit {
     chain_config: Arc<ChainConfig>,
-    mempool_config: Arc<MempoolConfig>,
+    mempool_config: MempoolConfig,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 }
@@ -47,7 +47,7 @@ pub struct MempoolInit {
 impl MempoolInit {
     fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: Arc<MempoolConfig>,
+        mempool_config: MempoolConfig,
         chainstate_handle: chainstate::ChainstateHandle,
         time_getter: TimeGetter,
     ) -> Self {
@@ -111,10 +111,9 @@ impl MempoolImpl {
 
     /// Handle chainstate events such as new tip
     fn process_chainstate_event(&mut self, evt: chainstate::ChainstateEvent) {
-        let _ = self
-            .mempool
-            .process_chainstate_event(evt, &mut self.work_queue)
-            .log_err_pfx("Error while handling a mempool event");
+        if let Err(err) = self.mempool.process_chainstate_event(evt, &mut self.work_queue) {
+            log::error!("Error while handling a mempool event: {err}");
+        }
     }
 
     /// Has orphan processing work to do
@@ -136,12 +135,8 @@ impl MempoolInterface for MempoolImpl {
         origin: LocalTxOrigin,
         options: TxOptions,
     ) -> Result<(), Error> {
-        let status = self.mempool.add_transaction_with_options(
-            tx,
-            origin.into(),
-            options,
-            &mut self.work_queue,
-        )?;
+        let tx = self.mempool.make_entry(tx, origin.into(), options);
+        let status = self.mempool.add_transaction(tx, &mut self.work_queue)?;
 
         // TODO The following assertion could be avoided by parametrizing the above
         // `add_transaction` by the origin type and have the return type depend on it.
@@ -156,8 +151,8 @@ impl MempoolInterface for MempoolImpl {
         origin: RemoteTxOrigin,
         options: TxOptions,
     ) -> Result<TxStatus, Error> {
-        self.mempool
-            .add_transaction_with_options(tx, origin.into(), options, &mut self.work_queue)
+        let tx = self.mempool.make_entry(tx, origin.into(), options);
+        self.mempool.add_transaction(tx, &mut self.work_queue)
     }
 
     fn get_all(&self) -> Vec<SignedTransaction> {
@@ -199,7 +194,7 @@ impl MempoolInterface for MempoolImpl {
     }
 
     fn memory_usage(&self) -> usize {
-        Mempool::memory_usage(&self.mempool)
+        self.mempool.memory_usage()
     }
 
     fn get_size_limit(&self) -> MempoolMaxSize {
@@ -255,7 +250,7 @@ impl subsystem::Subsystem for MempoolImpl {
 /// Mempool constructor
 pub fn make_mempool(
     chain_config: Arc<ChainConfig>,
-    mempool_config: Arc<MempoolConfig>,
+    mempool_config: MempoolConfig,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 ) -> MempoolInit {

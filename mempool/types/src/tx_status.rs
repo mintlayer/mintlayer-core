@@ -72,3 +72,15 @@ impl TxStatus {
         }
     }
 }
+
+impl std::fmt::Display for TxStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let status_str = match self {
+            TxStatus::InMempool => "in mempool",
+            TxStatus::InMempoolDuplicate => "in mempool (duplicate)",
+            TxStatus::InOrphanPool => "in orphan pool",
+            TxStatus::InOrphanPoolDuplicate => "in orphan pool (duplicate)",
+        };
+        status_str.fmt(f)
+    }
+}
