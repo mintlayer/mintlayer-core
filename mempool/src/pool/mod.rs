@@ -13,51 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::RwLock;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    mem,
-    num::NonZeroUsize,
-    sync::Arc,
-    time::Duration,
-};
-use utxo::UtxosStorageRead;
+use std::{mem, sync::Arc};
 
-use chainstate::{
-    chainstate_interface::ChainstateInterface,
-    tx_verifier::{
-        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
-        TransactionSource,
-    },
-};
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction, TxInput,
-    },
-    primitives::{time::Time, Amount, BlockHeight, DisplayAmount, Id},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
+    primitives::{Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
-use serialization::Encode;
 use utils::{ensure, eventhandler::EventsController, shallow_clone::ShallowClone};
 
-pub use self::feerate::FeeRate;
-pub use self::memory_usage_estimator::MemoryUsageEstimator;
+pub use self::{feerate::FeeRate, tx_pool::feerate_points};
+
 use self::{
     entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
-    feerate::{INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
+    memory_usage_estimator::MemoryUsageEstimator,
     orphans::{OrphanType, TxOrphanPool},
-    rolling_fee_rate::RollingFeeRate,
-    store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
+    tx_pool::{TxAdditionOutcome, TxPool},
 };
 use crate::{
     config,
-    error::{
-        BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
-        TxValidationError,
-    },
+    error::{BlockConstructionError, Error, MempoolPolicyError, OrphanPoolError},
     event::{self, MempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
@@ -65,193 +42,45 @@ use crate::{
     TxStatus,
 };
 
-use crate::config::*;
-
-mod collect_txs;
+// TODO(PR): Move fee, feerate?
 mod entry;
 pub mod fee;
 mod feerate;
-pub mod feerate_points;
-pub mod memory_usage_estimator;
 mod orphans;
-mod reorg;
-mod rolling_fee_rate;
-mod store;
-mod tx_verifier;
+mod tx_pool;
 mod work_queue;
+
+// TODO(PR) Remove
+pub use tx_pool::memory_usage_estimator;
 
 pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
+// TODO(PR) Check if this needs to be polymorphic in M
 pub struct Mempool<M> {
-    chain_config: Arc<ChainConfig>,
-    mempool_config: Arc<MempoolConfig>,
-    store: MempoolStore,
-    rolling_fee_rate: RwLock<RollingFeeRate>,
-    max_size: MempoolMaxSize,
-    max_tx_age: Duration,
-    chainstate_handle: chainstate::ChainstateHandle,
-    clock: TimeGetter,
-    memory_usage_estimator: M,
-    events_controller: EventsController<MempoolEvent>,
-    tx_verifier: tx_verifier::TransactionVerifier,
+    tx_pool: tx_pool::TxPool<M>,
     orphans: TxOrphanPool,
-}
-
-impl<M> std::fmt::Debug for Mempool<M> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.store.fmt(f)
-    }
+    events_controller: EventsController<MempoolEvent>,
+    clock: TimeGetter,
 }
 
 impl<M> Mempool<M> {
-    pub fn new(
-        chain_config: Arc<ChainConfig>,
-        mempool_config: Arc<MempoolConfig>,
-        chainstate_handle: chainstate::ChainstateHandle,
-        clock: TimeGetter,
-        memory_usage_estimator: M,
-    ) -> Self {
-        log::trace!("Setting up mempool transaction verifier");
-        let tx_verifier = tx_verifier::create(
-            chain_config.shallow_clone(),
-            chainstate_handle.shallow_clone(),
-        );
-
-        log::trace!("Creating mempool object");
-        Self {
-            chain_config,
-            mempool_config,
-            store: MempoolStore::new(),
-            chainstate_handle,
-            max_size: MempoolMaxSize::default(),
-            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
-            rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
-            clock,
-            memory_usage_estimator,
-            events_controller: Default::default(),
-            tx_verifier,
-            orphans: TxOrphanPool::new(),
-        }
+    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+        self.events_controller.subscribe_to_events(handler)
     }
 
-    pub fn chainstate_handle(&self) -> &chainstate::ChainstateHandle {
-        &self.chainstate_handle
-    }
-
-    pub fn blocking_chainstate_handle(
-        &self,
-    ) -> subsystem::blocking::BlockingHandle<dyn ChainstateInterface> {
-        subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone())
+    pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
+        self.orphans.remove_by_origin(RemoteTxOrigin::new(peer_id));
     }
 
     // Reset the mempool state, returning the list of transactions previously stored in mempool
     fn reset(&mut self) -> impl Iterator<Item = TxEntry> {
-        // Discard the old tx verifier and replace it with a fresh one
-        self.tx_verifier = tx_verifier::create(
-            self.chain_config.shallow_clone(),
-            self.chainstate_handle.shallow_clone(),
-        );
-
         // Clear the store, returning the list of transactions it contained previously
-        let pool_txs = mem::replace(&mut self.store, MempoolStore::new()).into_transactions();
+        let pool_txs = self.tx_pool.reset();
 
         // Clear the orphan pool, returning the list of previous transactions.
         let orphan_txs = mem::replace(&mut self.orphans, TxOrphanPool::new()).into_transactions();
 
         pool_txs.chain(orphan_txs.map(|entry| entry.map_origin(TxOrigin::from)))
-    }
-
-    pub fn best_block_id(&self) -> Id<GenBlock> {
-        utxo::UtxosStorageRead::get_best_block_for_utxos(&self.tx_verifier)
-            .expect("best block to exist")
-    }
-
-    pub fn max_size(&self) -> MempoolMaxSize {
-        self.max_size
-    }
-}
-
-// Rolling-fee-related methods
-impl<M: MemoryUsageEstimator> Mempool<M> {
-    pub fn memory_usage(&self) -> usize {
-        self.memory_usage_estimator.estimate_memory_usage(&self.store)
-    }
-
-    fn rolling_fee_halflife(&self) -> Duration {
-        let mem_usage = self.memory_usage();
-        if mem_usage < self.max_size.as_bytes() / 4 {
-            ROLLING_FEE_BASE_HALFLIFE / 4
-        } else if mem_usage < self.max_size.as_bytes() / 2 {
-            ROLLING_FEE_BASE_HALFLIFE / 2
-        } else {
-            ROLLING_FEE_BASE_HALFLIFE
-        }
-    }
-
-    fn update_min_fee_rate(&self, rate: FeeRate) {
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).set_rolling_minimum_fee_rate(rate);
-        rolling_fee_rate.set_block_since_last_rolling_fee_bump(false);
-    }
-
-    fn get_update_min_fee_rate(&self) -> FeeRate {
-        log::debug!("get_update_min_fee_rate");
-        let rolling_fee_rate = *self.rolling_fee_rate.read();
-        if !rolling_fee_rate.block_since_last_rolling_fee_bump()
-            || rolling_fee_rate.rolling_minimum_fee_rate()
-                == FeeRate::from_amount_per_kb(Amount::from_atoms(0))
-        {
-            return rolling_fee_rate.rolling_minimum_fee_rate();
-        } else if self.clock.get_time()
-            > (rolling_fee_rate.last_rolling_fee_update() + ROLLING_FEE_DECAY_INTERVAL)
-                .expect("Both times come from the same clock, so this cannot happen")
-        {
-            // Decay the rolling fee
-            self.decay_rolling_fee_rate();
-            log::debug!(
-                "rolling fee rate after decay_rolling_fee_rate {:?}",
-                self.rolling_fee_rate,
-            );
-
-            if self.rolling_fee_rate.read().rolling_minimum_fee_rate() < INCREMENTAL_RELAY_THRESHOLD
-            {
-                log::trace!(
-                    "rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee",
-                    self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-                );
-                self.drop_rolling_fee();
-                return self.rolling_fee_rate.read().rolling_minimum_fee_rate();
-            }
-        }
-
-        std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-            INCREMENTAL_RELAY_FEE_RATE,
-        )
-    }
-
-    fn drop_rolling_fee(&self) {
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate)
-            .set_rolling_minimum_fee_rate(FeeRate::from_amount_per_kb(Amount::from_atoms(0)));
-    }
-
-    fn decay_rolling_fee_rate(&self) {
-        let halflife = self.rolling_fee_halflife();
-        let time = self.clock.get_time();
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        *rolling_fee_rate = (*rolling_fee_rate).decay_fee(halflife, time);
-    }
-}
-
-// Entry Creation
-impl<M> Mempool<M> {
-    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
-        self.store.contains(tx_id)
-    }
-
-    pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
-        self.store.get_entry(id).map(TxMempoolEntry::transaction)
     }
 
     pub fn contains_orphan_transaction(&self, id: &Id<Transaction>) -> bool {
@@ -263,6 +92,8 @@ impl<M> Mempool<M> {
     }
 }
 
+/*
+<<<<<<< HEAD
 /// Result of transaction validation
 enum ValidationOutcome {
     /// Transaction is valid for acceptance to mempool
@@ -898,6 +729,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         }
     }
 }
+=======
+>>>>>>> 85869ab51 (wip)
+*/
 
 // Mempool Interface and Event Reactions
 impl<M: MemoryUsageEstimator> Mempool<M> {
@@ -942,15 +776,68 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         entry: TxEntry,
         work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
-        let tx_id = *entry.tx_id();
-        let status = self.add_transaction_entry(entry)?;
-        self.enqueue_children(&tx_id, work_queue);
-        Ok(status)
+        match self.tx_pool.add_transaction(entry) {
+            Ok(outcome) => match outcome {
+                TxAdditionOutcome::Added { transaction } => {
+                    self.enqueue_children(transaction.tx_id(), work_queue);
+                    Ok(TxStatus::InMempool)
+                }
+                TxAdditionOutcome::Duplicate { transaction: _ } => Ok(TxStatus::InMempoolDuplicate),
+            },
+            Err(err) => {
+                todo!("Orphan processing here")
+            }
+        }
     }
 
+    fn add_transaction_entry(
+        tx_pool: &mut TxPool<M>,
+        orphans: &mut TxOrphanPool,
+        entry: TxEntry,
+    ) -> Result<TxStatus, Error> {
+        todo!()
+    }
+
+    // TODO(PR): Move to orphans module
+    fn check_orphan_pool_policy(
+        &self,
+        transaction: TxEntry,
+        orphan_type: OrphanType,
+    ) -> Result<TxEntry<RemoteTxOrigin>, OrphanPoolError> {
+        // Only remote transactions are allowed in the orphan pool
+        let transaction = transaction
+            .try_map_origin(|origin| match origin {
+                TxOrigin::Local(o) => Err(OrphanPoolError::NotSupportedForLocalOrigin(o)),
+                TxOrigin::Remote(o) => Ok(o),
+            })
+            .map_err(|(_, e)| e)?;
+
+        // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
+        // transactions but we don't want it to take up too much space due to large txns either.
+        let size: usize = transaction.size().into();
+        ensure!(
+            size <= config::MAX_ORPHAN_TX_SIZE,
+            OrphanPoolError::TooLarge(size, config::MAX_ORPHAN_TX_SIZE),
+        );
+
+        // Account nonces are supposed to be consecutive. If the distance between the expected and
+        // given nonce is too large, the transaction is not accepted into the orphan pool.
+        if let OrphanType::AccountNonceGap(gap) = orphan_type {
+            ensure!(
+                gap <= config::MAX_ORPHAN_ACCOUNT_GAP,
+                OrphanPoolError::NonceGapTooLarge(gap),
+            );
+        }
+
+        self.tx_pool.orphan_rbf_checks(&transaction)?;
+
+        Ok(transaction)
+    }
+
+    // TODO(PR): Take TxEntry rather than ID
     /// Enqueue children of a transaction if it's been included in the mempool
     fn enqueue_children(&mut self, tx_id: &Id<Transaction>, work_queue: &mut WorkQueue) {
-        if let Some(entry) = self.store.get_entry(tx_id) {
+        if let Some(entry) = self.tx_pool.get_entry(tx_id) {
             for orphan in self.orphans.children_of(entry.tx_entry()) {
                 let orphan_id = *orphan.tx_id();
                 let peer_id = orphan.origin().peer_id();
@@ -958,172 +845,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     log::trace!("Added orphan {orphan_id:?} to peer{peer_id}'s work queue");
                 }
             }
-        }
-    }
-
-    fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
-        // Note: it's not a good idea to use anything above "trace" here, even to log the
-        // transaction id, because this may make our test logs huge,
-        // see https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
-        log::trace!("Adding transaction {tx:?}");
-
-        let tx_id = *tx.tx_id();
-        let origin = tx.origin();
-        let relay_policy = tx.options().relay_policy();
-
-        if self.contains_transaction(&tx_id) {
-            return Ok(TxStatus::InMempoolDuplicate);
-        }
-
-        match self.validate_transaction(tx) {
-            Ok(ValidationOutcome::Valid {
-                transaction,
-                conflicts,
-                delta,
-            }) => {
-                if ENABLE_RBF {
-                    self.store.drop_conflicts(conflicts);
-                }
-                tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
-                self.finalize_tx(transaction)?;
-                self.store.assert_valid();
-
-                let event = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
-                self.events_controller.broadcast(event.into());
-
-                Ok(TxStatus::InMempool)
-            }
-            Ok(ValidationOutcome::Orphan { transaction }) => {
-                Ok(self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?)
-            }
-            Err(err) => {
-                log::warn!("Transaction {tx_id} rejected: {err}");
-
-                let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
-                self.events_controller.broadcast(event.into());
-                Err(err)
-            }
-        }
-    }
-
-    pub fn get_all(&self) -> Vec<SignedTransaction> {
-        self.store
-            .txs_by_descendant_score
-            .iter()
-            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
-            .collect()
-    }
-
-    pub fn collect_txs(
-        &self,
-        tx_accumulator: Box<dyn TransactionAccumulator>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
-        collect_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
-    }
-
-    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
-        self.events_controller.subscribe_to_events(handler)
-    }
-
-    pub fn process_chainstate_event(
-        &mut self,
-        evt: chainstate::ChainstateEvent,
-        work_queue: &mut WorkQueue,
-    ) -> Result<(), reorg::ReorgError> {
-        log::info!("mempool: Processing chainstate event {evt:?}");
-        match evt {
-            chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.on_new_tip(block_id, block_height, work_queue)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn on_new_tip(
-        &mut self,
-        block_id: Id<Block>,
-        block_height: BlockHeight,
-        work_queue: &mut WorkQueue,
-    ) -> Result<(), reorg::ReorgError> {
-        log::info!(
-            "New block tip: {:?} at height {}",
-            block_id.as_hash(),
-            block_height.into_int()
-        );
-        reorg::handle_new_tip(self, block_id, work_queue)?;
-        let event = event::NewTip::new(block_id, block_height);
-        self.events_controller.broadcast(event.into());
-        Ok(())
-    }
-
-    pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
-        self.orphans.remove_by_origin(RemoteTxOrigin::new(peer_id));
-    }
-
-    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
-        let min_feerate = std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-            *self.mempool_config.min_tx_relay_fee_rate,
-        );
-        let mut total_size = 0;
-        self.store
-            .txs_by_descendant_score
-            .iter()
-            .rev()
-            .find(|(_score, tx_id)| {
-                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
-                (total_size / 1_000_000) >= in_top_x_mb
-            })
-            .map_or(min_feerate, |(score, _txs)| score.to_feerate(min_feerate))
-    }
-
-    pub fn get_fee_rate_points(
-        &self,
-        num_points: NonZeroUsize,
-    ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
-        let min_feerate = std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
-            *self.mempool_config.min_tx_relay_fee_rate,
-        );
-        let min_score = DescendantScore::new(min_feerate);
-
-        let size_to_score: BTreeMap<_, _> = self
-            .store
-            .txs_by_descendant_score
-            .iter()
-            .rev()
-            .map(|(score, tx_id)| {
-                let size = self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size().into());
-                (score, size)
-            })
-            .chain(std::iter::once((&min_score, 1)))
-            .scan(0, |accumulated_size, (score, size)| {
-                *accumulated_size += size;
-
-                Some((*accumulated_size, *score))
-            })
-            .collect();
-
-        let last = size_to_score.keys().next_back().expect("not empty");
-        let first = size_to_score.keys().next().expect("not empty");
-        let points = feerate_points::generate_equidistant_span(*first, *last, num_points.get());
-
-        if points.len() >= size_to_score.len() {
-            Ok(size_to_score
-                .into_iter()
-                .map(|(point, score)| (point, score.to_feerate(min_feerate)))
-                .collect())
-        } else {
-            points
-                .into_iter()
-                .map(|point| {
-                    let score = feerate_points::find_interpolated_value(&size_to_score, point)
-                        .ok_or(MempoolPolicyError::FeeOverflow)?;
-                    Ok((point, score.to_feerate(min_feerate)))
-                })
-                .collect()
         }
     }
 
@@ -1146,11 +867,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             if orphan.is_ready() {
                 // Take the transaction out of orphan pool and pass it to mempool processing code.
                 let orphan = orphan.take().map_origin(TxOrigin::from);
-                let result = self.add_transaction_entry(orphan);
+                let result =
+                    Self::add_transaction_entry(&mut self.tx_pool, &mut self.orphans, orphan);
                 log::debug!("Orphan tx {orphan_id:?} processed: {result:?}");
             } else {
                 // Not all prerequisites are satisfied. The tx stays in the orphan pool.
-                log::debug!("Orphan tx {orphan_id:?} not ready");
+                log::trace!("Orphan tx {orphan_id:?} not ready");
             }
 
             Some(orphan_id)

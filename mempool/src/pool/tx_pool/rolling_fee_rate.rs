@@ -18,7 +18,7 @@ use std::time::Duration;
 use common::primitives::{time::Time, Amount};
 use logging::log;
 
-use super::feerate::FeeRate;
+use super::FeeRate;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RollingFeeRate {

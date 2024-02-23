@@ -48,6 +48,8 @@ pub enum Error {
     Policy(#[from] MempoolPolicyError),
     #[error("Orphan transaction error: {0}")]
     Orphan(#[from] OrphanPoolError),
+    #[error("Tip moved while trying to process transaction")]
+    TipMoved,
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -105,14 +107,12 @@ pub enum MempoolPolicyError {
 pub enum TxValidationError {
     #[error("Chainstate error")]
     ChainstateError(#[from] ChainstateError),
-    #[error("Transaction added during initial block download")]
-    AddedDuringIBD,
+    //#[error("Transaction added during initial block download")]
+    //AddedDuringIBD,
     #[error(transparent)]
     TxValidation(#[from] ConnectTransactionError),
     #[error("Subsystem call error")]
     CallError(#[from] CallError),
-    #[error("Tip moved while trying to process transaction")]
-    TipMoved,
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]

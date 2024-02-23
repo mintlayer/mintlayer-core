@@ -15,7 +15,7 @@
 
 use crate::{
     error::{BlockConstructionError, TxValidationError},
-    pool::{tx_verifier, Mempool, TxMempoolEntry},
+    pool::tx_pool::{tx_verifier, TxMempoolEntry, TxPool},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
 
@@ -70,7 +70,7 @@ impl<'a> From<&'a TxMempoolEntry> for EntryByScore<'a> {
 /// Returns the updated TransactionAccumulator. Ok(None) means that a
 /// recoverable error happened (such as that the mempool tip moved).
 pub fn collect_txs<M>(
-    mempool: &Mempool<M>,
+    mempool: &TxPool<M>,
     mut tx_accumulator: Box<dyn TransactionAccumulator>,
     transaction_ids: Vec<Id<Transaction>>,
     packing_strategy: PackingStrategy,

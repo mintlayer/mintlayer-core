@@ -23,11 +23,6 @@ use crate::error::MempoolPolicyError;
 
 use super::fee::Fee;
 
-pub const INCREMENTAL_RELAY_FEE_RATE: FeeRate =
-    FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
-pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate =
-    FeeRate::from_amount_per_kb(Amount::from_atoms(500));
-
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, HasValueHint,
 )]

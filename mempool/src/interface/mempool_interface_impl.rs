@@ -17,6 +17,7 @@ use crate::{
     config::MempoolConfig,
     error::{BlockConstructionError, Error},
     event::MempoolEvent,
+    // TODO(PR): Remove
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
@@ -89,6 +90,7 @@ impl MempoolInit {
     }
 }
 
+// TODO(PR): Try to move into the top-level mempool object
 pub struct MempoolImpl {
     mempool: Mempool,
     work_queue: crate::pool::WorkQueue,

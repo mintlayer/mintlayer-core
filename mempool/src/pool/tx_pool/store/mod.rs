@@ -29,12 +29,8 @@ use common::{
 use logging::log;
 use utils::newtype;
 
-use super::{
-    entry::{TxDependency, TxEntry},
-    fee::Fee,
-    Time, TxEntryWithFee,
-};
-use crate::{error::MempoolPolicyError, FeeRate};
+use super::{Fee, Time, TxEntry, TxEntryWithFee};
+use crate::{error::MempoolPolicyError, pool::entry::TxDependency, FeeRate};
 use mem_usage::Tracked;
 
 newtype! {

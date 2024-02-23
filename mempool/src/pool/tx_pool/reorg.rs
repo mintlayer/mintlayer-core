@@ -26,7 +26,7 @@ use logging::log;
 use utils::tap_log::TapLog;
 use utxo::UtxosStorageRead;
 
-use super::{MemoryUsageEstimator, Mempool, WorkQueue};
+use super::{MemoryUsageEstimator, TxPool, WorkQueue};
 use crate::tx_origin::LocalTxOrigin;
 
 /// An error that can happen in mempool on chain reorg
@@ -118,7 +118,7 @@ impl ReorgData {
 }
 
 fn fetch_disconnected_txs<M>(
-    mempool: &Mempool<M>,
+    mempool: &TxPool<M>,
     new_tip: Id<Block>,
 ) -> Result<impl Iterator<Item = SignedTransaction>, ReorgError> {
     let old_tip = mempool
@@ -135,7 +135,7 @@ fn fetch_disconnected_txs<M>(
 }
 
 pub fn handle_new_tip<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
+    mempool: &mut TxPool<M>,
     new_tip: Id<Block>,
     work_queue: &mut WorkQueue,
 ) -> Result<(), ReorgError> {
@@ -187,7 +187,7 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
 }
 
 fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
+    mempool: &mut TxPool<M>,
     txs_to_insert: impl Iterator<Item = SignedTransaction>,
     work_queue: &mut WorkQueue,
 ) -> Result<(), ReorgError> {
@@ -221,7 +221,7 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
 }
 
 pub fn refresh_mempool<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
+    mempool: &mut TxPool<M>,
 ) -> Result<(), ReorgError> {
     reorg_mempool_transactions(mempool, std::iter::empty(), &mut WorkQueue::new())
 }
