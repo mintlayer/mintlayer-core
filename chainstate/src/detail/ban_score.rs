@@ -131,7 +131,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
-            ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,

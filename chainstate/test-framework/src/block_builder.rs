@@ -37,6 +37,7 @@ use common::{
 use crypto::key::PrivateKey;
 use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 
@@ -54,7 +55,8 @@ pub struct BlockBuilder<'f> {
     // need these fields to track info across the txs
     used_utxo: BTreeSet<UtxoOutPoint>,
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
-    tokens_data: InMemoryTokensAccounting,
+    tokens_accounting_store: InMemoryTokensAccounting,
+    pos_accounting_store: InMemoryPoSAccounting,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -75,10 +77,18 @@ impl<'f> BlockBuilder<'f> {
             .unwrap()
             .read_tokens_accounting_data()
             .unwrap();
-        let tokens_data = InMemoryTokensAccounting::from_values(
+        let tokens_accounting_store = InMemoryTokensAccounting::from_values(
             all_tokens_data.token_data,
             all_tokens_data.circulating_supply,
         );
+
+        let all_pos_accounting_data = framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_pos_accounting_data_tip()
+            .unwrap();
+        let pos_accounting_store = InMemoryPoSAccounting::from_data(all_pos_accounting_data);
 
         Self {
             framework,
@@ -91,7 +101,8 @@ impl<'f> BlockBuilder<'f> {
             block_signing_key: None,
             used_utxo,
             account_nonce_tracker,
-            tokens_data,
+            tokens_accounting_store,
+            pos_accounting_store,
         }
     }
 
@@ -127,18 +138,24 @@ impl<'f> BlockBuilder<'f> {
             })
         });
 
-        let (tx, new_tokens_delta) = super::random_tx_maker::RandomTxMaker::new(
-            &self.framework.chainstate,
-            &utxo_set,
-            &self.tokens_data,
-            account_nonce_getter,
-        )
-        .make(rng);
+        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+            super::random_tx_maker::RandomTxMaker::new(
+                &self.framework.chainstate,
+                &utxo_set,
+                &self.tokens_accounting_store,
+                &self.pos_accounting_store,
+                account_nonce_getter,
+            )
+            .make(rng);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
-            // flush new tokens info to the in memory store
-            let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_data);
+            // flush new tokens info to the in-memory store
+            let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
             tokens_db.merge_with_delta(new_tokens_delta).unwrap();
+
+            // flush new pos accounting info to the in-memory store
+            let mut pos_db = PoSAccountingDB::new(&mut self.pos_accounting_store);
+            pos_db.merge_with_delta(new_pos_accounting_delta).unwrap();
 
             // update used utxo set because this function can be called multiple times without flushing data to storage
             tx.inputs().iter().for_each(|input| {

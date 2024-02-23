@@ -21,7 +21,10 @@ use common::{
     primitives::{Amount, H256},
 };
 
-use crate::pool::{delegation::DelegationData, pool_data::PoolData};
+use crate::{
+    pool::{delegation::DelegationData, pool_data::PoolData},
+    PoSAccountingData,
+};
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
@@ -44,6 +47,17 @@ impl InMemoryPoSAccounting {
             delegation_data: Default::default(),
         }
     }
+
+    pub fn from_data(data: PoSAccountingData) -> Self {
+        Self {
+            pool_data: data.pool_data,
+            pool_balances: data.pool_balances,
+            pool_delegation_shares: data.pool_delegation_shares,
+            delegation_balances: data.delegation_balances,
+            delegation_data: data.delegation_data,
+        }
+    }
+
     pub fn from_values(
         pool_data: BTreeMap<PoolId, PoolData>,
         pool_balances: BTreeMap<PoolId, Amount>,
@@ -60,18 +74,15 @@ impl InMemoryPoSAccounting {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn all_pool_data(&self) -> &BTreeMap<PoolId, PoolData> {
+    pub fn all_pool_data(&self) -> &BTreeMap<PoolId, PoolData> {
         &self.pool_data
     }
 
-    #[cfg(test)]
-    pub(crate) fn all_delegation_data(&self) -> &BTreeMap<DelegationId, DelegationData> {
+    pub fn all_delegation_data(&self) -> &BTreeMap<DelegationId, DelegationData> {
         &self.delegation_data
     }
 
-    #[cfg(test)]
-    pub(crate) fn all_delegation_balances(&self) -> &BTreeMap<DelegationId, Amount> {
+    pub fn all_delegation_balances(&self) -> &BTreeMap<DelegationId, Amount> {
         &self.delegation_balances
     }
 

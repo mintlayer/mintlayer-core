@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::DestinationSigError,
         tokens::TokenId,
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, TokenIssuanceVersion,
-        Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, OutPointSourceId, PoolId, TokenIssuanceVersion, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -104,10 +104,8 @@ pub enum ConnectTransactionError {
     PoolDataNotFound(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
-    #[error("Unexpected pool id in kernel {0} doesn't match pool id {1}")]
+    #[error("Pool id provided in the tx output {0} doesn't match calculated pool id {1}")]
     UnexpectedPoolId(PoolId, PoolId),
-    #[error("Data for delegation {0} not found")]
-    DelegationDataNotFound(DelegationId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811
