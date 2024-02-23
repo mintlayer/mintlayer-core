@@ -969,3 +969,59 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     assert_eq!(<Id<GenBlock>>::from(block_c_id), tf.best_block_id());
 }
+
+// Produce `genesis -> a` chain, where block `a` transfers coins and creates a pool in separate txs.
+//
+// It's vital to have 2 txs in that order because on disconnect pos undo would be performed first
+// and pos::BlockUndo object would be erased. But then when transfer tx is disconnected pos::BlockUndo
+// is fetched and checked again, which should work fine and just return None.
+//
+// Then produce a parallel `genesis -> b -> c` that should trigger a in-memory reorg for block `a`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_pos_tx_with_simple_tx(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pledge_amount = create_unit_test_config().min_stake_pool_pledge();
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let genesis_block_id: Id<GenBlock> = tf.genesis().get_id().into();
+
+    // produce block `a` at height 1 and create additional pool
+    let transfer_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_block_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(pledge_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let transfer_tx_id = transfer_tx.transaction().get_id();
+
+    let (stake_pool_data, _) =
+        create_stake_pool_data_with_all_reward_to_staker(&mut rng, pledge_amount, vrf_pk);
+    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(transfer_tx_id.into(), 0));
+    let stake_pool_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(transfer_tx_id.into(), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .build();
+
+    tf.make_block_builder()
+        .with_transactions(vec![transfer_tx, stake_pool_tx])
+        .build_and_process()
+        .unwrap();
+
+    // produce block at height 2 that should trigger in memory reorg for block `b`
+    let new_chain_block_id = tf.create_chain(&tf.genesis().get_id().into(), 2, &mut rng).unwrap();
+    assert_eq!(new_chain_block_id, tf.best_block_id());
+}

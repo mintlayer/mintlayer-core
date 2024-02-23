@@ -15,6 +15,7 @@
 
 use super::*;
 use chainstate_test_framework::TxVerificationStrategy;
+use common::primitives::Idable;
 
 #[rstest]
 #[trace]
@@ -41,5 +42,12 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
             block_builder.build_and_process().unwrap().unwrap();
         }
+        let best_block_id = tf.best_block_id();
+
+        // create longer chain to trigger reorg and disconnect all the random txs
+        let genesis = &tf.genesis().get_id().into();
+        let new_best_block_id = tf.create_chain(genesis, max_blocks, &mut rng).unwrap();
+        assert_ne!(best_block_id, tf.best_block_id());
+        assert_eq!(new_best_block_id, tf.best_block_id());
     });
 }
