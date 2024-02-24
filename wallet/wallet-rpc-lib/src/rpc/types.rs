@@ -62,6 +62,9 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid pool ID")]
     InvalidPoolId,
 
+    #[error("Invalid delegation ID")]
+    InvalidDelegationId,
+
     #[error("Invalid token ID")]
     InvalidTokenId,
 

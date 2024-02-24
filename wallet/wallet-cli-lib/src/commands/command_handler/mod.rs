@@ -1027,7 +1027,7 @@ where
                 if let Some(fees) = fees {
                     format_fees(&mut output_str, fees, chain_config);
                 } else {
-                    writeln!(output_str, "Could not calcualte fees")
+                    writeln!(output_str, "Could not calculate fees")
                         .expect("Writing to a memory buffer should not fail");
                 }
 

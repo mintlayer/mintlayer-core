@@ -218,7 +218,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
             output = await wallet.inspect_transaction(signed_tx2)
             assert_in(f"Transfer({acc1_address}, 0.1)", output)
-            assert_in(f"Could not calcualte fees", output)
+            assert_in(f"Could not calculate fees", output)
             assert_in(f"number of inputs: 1", output)
             assert_in(f"total signatures 1", output)
             assert_in(f"The signatures could not be verified because the UTXOs were spend or not found", output)
