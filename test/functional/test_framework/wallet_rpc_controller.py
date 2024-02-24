@@ -26,6 +26,8 @@ from tempfile import NamedTemporaryFile
 
 from typing import Optional, List, Tuple, Union
 
+from test_framework.util import rpc_port
+
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
@@ -73,7 +75,7 @@ class WalletRpcController:
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
 
-        port = 23034 + int(self.node.url.split(':')[3])
+        port = rpc_port(10)
         url = "127.0.0.1"
         bind_addr = f"{url}:{port}"
         self.log.info(f"node url: {self.node.url}")

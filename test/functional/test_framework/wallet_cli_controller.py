@@ -100,7 +100,17 @@ class WalletCliController:
         )
 
         # read any initial input from the wallet
-        (await self._read_available_output(can_be_empty=True, timeout=0.1)).strip()
+        open_wallet = "--wallet-file" in self.wallet_args
+        num_acc_to_start_staking = sum([1 for arg in self.wallet_args if arg == "--start-staking-for-account"])
+        if open_wallet:
+            output = await self._read_available_output(can_be_empty=False)
+            # wait for the wallet to be loaded
+            while "Wallet loaded successfully" not in output:
+                output += await self._read_available_output(can_be_empty=False)
+
+            # wait for all the accounts to start staking
+            while output.count("Staking started successfully") != num_acc_to_start_staking:
+                output += await self._read_available_output(can_be_empty=False)
 
         return self
 
