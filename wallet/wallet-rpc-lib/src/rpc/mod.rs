@@ -809,7 +809,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .map_err(|_| RpcError::InvalidAddress)?;
         let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
             .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|_| RpcError::InvalidPoolId)?;
+            .map_err(|_| RpcError::InvalidDelegationId)?;
 
         self.wallet
             .call_async(move |controller| {
