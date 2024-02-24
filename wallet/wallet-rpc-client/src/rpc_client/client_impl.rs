@@ -50,6 +50,10 @@ use wallet_types::with_locked::WithLocked;
 impl WalletInterface for ClientWalletRpc {
     type Error = WalletRpcError;
 
+    async fn exit(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     async fn shutdown(&mut self) -> Result<(), Self::Error> {
         WalletRpcClient::shutdown(&self.http_client)
             .await

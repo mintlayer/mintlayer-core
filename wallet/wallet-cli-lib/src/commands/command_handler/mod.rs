@@ -495,8 +495,12 @@ where
             }
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
-            ColdWalletCommand::Exit => {
+            ColdWalletCommand::RpcShutdownAndExit => {
                 self.wallet.get_wallet_mut().await?.shutdown().await?;
+                Ok(ConsoleCommand::Exit)
+            }
+            ColdWalletCommand::Exit => {
+                self.wallet.get_wallet_mut().await?.exit().await?;
                 Ok(ConsoleCommand::Exit)
             }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),

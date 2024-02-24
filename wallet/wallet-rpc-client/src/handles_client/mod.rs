@@ -83,6 +83,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
 {
     type Error = WalletRpcHandlesClientError<N>;
 
+    async fn exit(&mut self) -> Result<(), Self::Error> {
+        if let Some(rpc) = self.server_rpc.take() {
+            rpc.shutdown().await;
+        }
+        Ok(())
+    }
+
     async fn shutdown(&mut self) -> Result<(), Self::Error> {
         if let Some(rpc) = self.server_rpc.take() {
             rpc.shutdown().await;

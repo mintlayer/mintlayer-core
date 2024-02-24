@@ -239,6 +239,10 @@ pub enum ColdWalletCommand {
     /// Print the version of the wallet software and possibly the git commit hash, if found
     Version,
 
+    /// Shutdown the RPC interface or the remote wallet it is connected to
+    /// and exit the wallet
+    RpcShutdownAndExit,
+
     /// Exit the wallet
     Exit,
 }
