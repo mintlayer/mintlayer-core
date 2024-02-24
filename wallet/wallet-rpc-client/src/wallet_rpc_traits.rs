@@ -49,6 +49,8 @@ pub enum PartialOrSignedTx {
 pub trait WalletInterface {
     type Error: std::error::Error + Send + Sync + 'static;
 
+    async fn exit(&mut self) -> Result<(), Self::Error>;
+
     async fn shutdown(&mut self) -> Result<(), Self::Error>;
 
     async fn version(&self) -> Result<String, Self::Error>;
