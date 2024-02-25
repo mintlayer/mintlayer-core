@@ -359,6 +359,15 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
+    async fn get_latest_blocktimestamps(
+        &self,
+    ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_latest_blocktimestamps().await?;
+
+        Ok(res)
+    }
+
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;

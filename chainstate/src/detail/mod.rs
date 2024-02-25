@@ -64,7 +64,10 @@ use utils::{
 };
 use utxo::UtxosDB;
 
-pub use self::{error::*, info::ChainInfo, median_time::calculate_median_time_past};
+pub use self::{
+    error::*, info::ChainInfo, median_time::calculate_median_time_past,
+    median_time::calculate_median_time_past_from_blocktimestamps, median_time::MEDIAN_TIME_SPAN,
+};
 pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,

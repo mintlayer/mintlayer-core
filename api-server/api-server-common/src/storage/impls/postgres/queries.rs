@@ -364,6 +364,50 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    pub async fn get_latest_blocktimestamps(
+        &self,
+    ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError> {
+        const MEDIAN_TIME_SPAN: i64 = chainstate::MEDIAN_TIME_SPAN as i64;
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT block_timestamp
+                FROM
+                (
+                (
+                    SELECT block_height, block_timestamp
+                    FROM ml_blocks
+                    WHERE block_height IS NOT NULL
+                    ORDER BY block_height DESC
+                    LIMIT $1
+                )
+                UNION ALL
+                (
+                    SELECT block_height, block_timestamp
+                    FROM ml_genesis
+                    LIMIT 1
+                )
+                ORDER BY block_height DESC
+                LIMIT $1
+                ) as blocks
+                "#,
+                &[&MEDIAN_TIME_SPAN],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let timestamps = rows
+            .into_iter()
+            .map(|row| {
+                let block_timestamp: i64 = row.get(0);
+                BlockTimestamp::from_int_seconds(block_timestamp as u64)
+            })
+            .collect();
+
+        Ok(timestamps)
+    }
+
     pub async fn get_best_block(&mut self) -> Result<BlockAuxData, ApiServerStorageError> {
         let row = self
             .tx

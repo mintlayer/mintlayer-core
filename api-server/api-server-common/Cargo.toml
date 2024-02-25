@@ -14,6 +14,7 @@ logging = { path = '../../logging'}
 pos-accounting = { path = '../../pos-accounting' }
 serialization = { path = "../../serialization" }
 mempool = { path = "../../mempool" }
+chainstate = { path = "../../chainstate" }
 
 async-trait.workspace = true
 bb8-postgres = "0.8"

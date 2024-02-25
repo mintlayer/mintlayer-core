@@ -117,6 +117,9 @@ where
             chain_config.genesis_block().timestamp()
         );
 
+        let timestamps = db_tx.get_latest_blocktimestamps().await.unwrap();
+        assert_eq!(timestamps, vec![chain_config.genesis_block().timestamp()]);
+
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
             let block = db_tx.get_block(random_block_id).await.unwrap();

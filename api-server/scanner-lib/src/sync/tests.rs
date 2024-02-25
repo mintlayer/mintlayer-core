@@ -47,6 +47,7 @@ use common::{
             sighash::{sighashtype::SigHashType, signature_hash},
         },
         stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         CoinUnit, Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -302,7 +303,7 @@ async fn randomized(#[case] seed: Seed) {
 #[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test]
-async fn basic_sync_real_state(#[case] seed: Seed) {
+async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let initial_pledge = 40_000 * CoinUnit::ATOMS_PER_COIN + rng.gen_range(10000..100000);
@@ -635,6 +636,360 @@ async fn basic_sync_real_state(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
 
     assert_eq!(balance, staker_balance);
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn reorg_locked_balance(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.initialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+
+    let (priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+    let destination = Destination::PublicKey(pub_key.clone());
+
+    let lock_for_block_count = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        destination.clone(),
+        OutputTimeLock::ForBlockCount(1),
+    );
+    let lock_until_height = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(2)),
+        destination.clone(),
+        OutputTimeLock::UntilHeight(BlockHeight::new(2)),
+    );
+    let lock_for_sec = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(3)),
+        destination.clone(),
+        OutputTimeLock::ForSeconds(rng.gen_range(1..=target_block_time.as_secs())),
+    );
+    let lock_until_time = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(4)),
+        destination.clone(),
+        OutputTimeLock::UntilTime(
+            chain_config
+                .genesis_block()
+                .timestamp()
+                .add_int_seconds(
+                    target_block_time.as_secs() + rng.gen_range(1..=target_block_time.as_secs()),
+                )
+                .unwrap(),
+        ),
+    );
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                0,
+            ),
+            InputWitness::NoSignature(None),
+        )
+        // Add all different Time locks to unlock after the next block
+        .add_output(lock_for_block_count.clone())
+        .add_output(lock_until_height.clone())
+        .add_output(lock_for_sec.clone())
+        .add_output(lock_until_time.clone())
+        .build();
+
+    let prev_block_hash = chain_config.genesis_block_id();
+    let prev_tx_id = transaction.transaction().get_id();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(prev_block_hash)
+        .with_transactions(vec![transaction])
+        .build();
+
+    let prev_block_hash = block.get_id();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_best_block()
+        .await
+        .unwrap()
+        .block_height();
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    // Check all the outputs are locked and the locked balance is updated
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
+    // check there are no available UTXOs as all are locked
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert!(utxos.is_empty());
+    drop(db_tx);
+
+    // create an empty block
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf.make_block_builder().with_parent(prev_block_hash.into()).build();
+
+    let prev_block_hash = block.get_id();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = block_height.next_height();
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    // Check all the height outputs are unlocked, but the time based ones are still not
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::from_atoms(3 + 4)));
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+
+    assert_eq!(balance, Some(Amount::from_atoms(1 + 2)));
+    // check all of the UTXOs are available
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    drop(db_tx);
+
+    // check we can spend all of the height locked utxos as they are unlocked
+    let spend_transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 1),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let input_witnesses = (0..spend_transaction.inputs().len())
+        .map(|idx| {
+            let sighash = signature_hash(
+                SigHashType::default(),
+                spend_transaction.transaction(),
+                &[Some(&lock_for_block_count), Some(&lock_until_height)],
+                idx,
+            )
+            .unwrap();
+            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash).unwrap();
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::default(),
+                signature.encode(),
+            ))
+        })
+        .collect();
+
+    let spend_transaction =
+        SignedTransaction::new(spend_transaction.take_transaction(), input_witnesses).unwrap();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(prev_block_hash.into())
+        .with_transactions(vec![spend_transaction])
+        .build();
+
+    let _prev_block_hash = block.get_id();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_best_block()
+        .await
+        .unwrap()
+        .block_height();
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    // Check the time based ones are now unlocked as well
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::ZERO));
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+
+    assert_eq!(balance, Some(Amount::from_atoms(3 + 4)));
+    // check all of the UTXOs are available
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    drop(db_tx);
+
+    // check we can spend all of the time locked utxos as they are unlocked
+    let spend_time_locked = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 2),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 3),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let input_witnesses = (0..spend_time_locked.inputs().len())
+        .map(|idx| {
+            let sighash = signature_hash(
+                SigHashType::default(),
+                spend_time_locked.transaction(),
+                &[Some(&lock_for_sec), Some(&lock_until_time)],
+                idx,
+            )
+            .unwrap();
+            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash).unwrap();
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::default(),
+                signature.encode(),
+            ))
+        })
+        .collect();
+
+    let spend_time_locked_signed =
+        SignedTransaction::new(spend_time_locked.take_transaction(), input_witnesses).unwrap();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(prev_block_hash.into())
+        .with_transactions(vec![spend_time_locked_signed])
+        .build();
+
+    let _prev_block_hash = block.get_id();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_best_block()
+        .await
+        .unwrap()
+        .block_height();
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    // check there are no more available utxos, and both balance and locked balance are 0
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::ZERO));
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+
+    assert_eq!(balance, Some(Amount::ZERO));
+    // check there are no utxos as all are spent
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert!(utxos.is_empty());
+    drop(db_tx);
+
+    // delete last block
+    local_state.scan_blocks(block_height, vec![]).await.unwrap();
+
+    // we are back to 2 available utxos and balance is updated
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::ZERO));
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+
+    assert_eq!(balance, Some(Amount::from_atoms(3 + 4)));
+    // check all of the UTXOs are available
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    drop(db_tx);
+
+    // delete one more block
+    local_state
+        .scan_blocks(block_height.prev_height().unwrap(), vec![])
+        .await
+        .unwrap();
+
+    // Check all the height outputs are unlocked, but the time based ones now back to locked
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::from_atoms(3 + 4)));
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+
+    assert_eq!(balance, Some(Amount::from_atoms(1 + 2)));
+    // check all of the UTXOs are available
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert_eq!(utxos.len(), 2);
+    drop(db_tx);
+
+    // delete one more block
+    local_state
+        .scan_blocks(
+            block_height.prev_height().unwrap().prev_height().unwrap(),
+            vec![],
+        )
+        .await
+        .unwrap();
+
+    // Check all the outputs are locked and the locked balance is updated
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    let address = Address::new(&chain_config, &destination).unwrap();
+    let locked_amount = db_tx
+        .get_address_locked_balance(address.get(), CoinOrTokenId::Coin)
+        .await
+        .unwrap();
+
+    assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+    assert_eq!(balance, None);
+    // check there are no available UTXOs as all are locked
+    let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
+    assert!(utxos.is_empty());
+    drop(db_tx);
 }
 
 #[allow(clippy::too_many_arguments)]

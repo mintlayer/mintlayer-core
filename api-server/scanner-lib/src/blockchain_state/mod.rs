@@ -20,7 +20,10 @@ use api_server_common::storage::storage_api::{
     ApiServerTransactionRw, Delegation, FungibleTokenData, LockedUtxo, TransactionInfo,
     TxAdditionalInfo, Utxo, UtxoLock,
 };
-use chainstate::constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
+use chainstate::{
+    calculate_median_time_past_from_blocktimestamps,
+    constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator},
+};
 use common::{
     address::Address,
     chain::{
@@ -113,8 +116,6 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             .await
             .expect("Unable to disconnect tables");
 
-        let mut previous_timestamp = db_tx.get_best_block().await?.block_timestamp();
-
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
@@ -124,11 +125,9 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 &mut db_tx,
                 &self.chain_config,
                 block_height,
-                previous_timestamp,
                 block_timestamp,
             )
             .await?;
-            previous_timestamp = block_timestamp;
 
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
@@ -204,11 +203,18 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-    previous_timestamp: BlockTimestamp,
     block_timestamp: BlockTimestamp,
 ) -> Result<(), ApiServerStorageError> {
+    // calculate the previous and new median_time
+    let mut timestamps = db_tx.get_latest_blocktimestamps().await?;
+    let previous_median_time =
+        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+    timestamps.push(block_timestamp);
+    let new_median_time =
+        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+
     let locked_utxos = db_tx
-        .get_locked_utxos_until_now(block_height, (previous_timestamp, block_timestamp))
+        .get_locked_utxos_until_now(block_height, (previous_median_time, new_median_time))
         .await?;
 
     for (outpoint, locked_utxo) in locked_utxos {

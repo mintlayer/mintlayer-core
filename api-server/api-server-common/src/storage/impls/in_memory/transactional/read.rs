@@ -139,6 +139,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         Ok(Some(self.transaction.get_storage_version()?))
     }
 
+    async fn get_latest_blocktimestamps(
+        &self,
+    ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError> {
+        self.transaction.get_latest_blocktimestamps()
+    }
+
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         self.transaction.get_best_block()
     }
