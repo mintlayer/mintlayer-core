@@ -65,7 +65,7 @@ build:cargo:
 test:cargo_deny:
   stage: test_cargo_deny
   script:
-    - cargo install cargo-deny
+    - cargo install cargo-deny --locked
     - cargo deny check advisories licenses
 
 test:func:

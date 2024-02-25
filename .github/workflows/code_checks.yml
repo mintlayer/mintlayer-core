@@ -22,6 +22,6 @@ jobs:
       - name: Install rust clippy
         run: rustup component add clippy
       - name: Install cargo-deny
-        run: cargo install cargo-deny
+        run: cargo install cargo-deny --locked
       - name: Run checks
         run: ./do_checks.sh
