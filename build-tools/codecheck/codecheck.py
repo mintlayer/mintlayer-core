@@ -330,7 +330,7 @@ def check_trailing_whitespaces():
     exempted_files = [
         'crypto/src/symkey/chacha20poly1305/XCHACHA20POLY1305_TEST_VECTORS.tv',
         'script/src/test/test_vectors_4opc.csv.gz',
-        'wasm-crypto/pkg/wasm_crypto_bg.wasm',
+        'wasm-wrappers/pkg/wasm_crypto_bg.wasm',
     ]
 
     ok = True
