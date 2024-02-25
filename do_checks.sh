@@ -15,24 +15,24 @@ cargo clippy --all-features --workspace --all-targets -- \
     -D warnings \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
-    -W clippy::implicit_saturating_sub \
-    -W clippy::implicit_clone \
-    -W clippy::map_unwrap_or \
-    -W clippy::unnested_or_patterns \
-    -W clippy::manual_assert \
-    -W clippy::unused_async \
-    -W clippy::mut_mut \
-    -W clippy::todo
+    -D clippy::implicit_saturating_sub \
+    -D clippy::implicit_clone \
+    -D clippy::map_unwrap_or \
+    -D clippy::unnested_or_patterns \
+    -D clippy::manual_assert \
+    -D clippy::unused_async \
+    -D clippy::mut_mut \
+    -D clippy::todo
 
 # Checks that only apply to production code
 cargo clippy --all-features --workspace --lib --bins --examples -- \
     -A clippy::all \
     -D clippy::float_arithmetic \
-    -W clippy::unwrap_used \
-    -W clippy::dbg_macro \
-    -W clippy::items_after_statements \
-    -W clippy::fallible_impl_from \
-    -W clippy::string_slice
+    -D clippy::unwrap_used \
+    -D clippy::dbg_macro \
+    -D clippy::items_after_statements \
+    -D clippy::fallible_impl_from \
+    -D clippy::string_slice
 
 # Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
 "$PYTHON" "$SCRIPT_DIR/build-tools/codecheck/codecheck.py"
