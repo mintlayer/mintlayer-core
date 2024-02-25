@@ -224,6 +224,8 @@ impl FromStr for NetworkAddressWithOptionalPort {
         // either 'NotIpAddressOrDomainName("[1")' or 'BadPortNumber("2:3:4:5:6:7:8]")'.
         // The former looks too cryptic, so we choose the latter.
         let port = if let Some(pos) = separator_pos {
+            // Note: the position "pos + separator_len" is guaranteed to be at a character boundary.
+            #[allow(clippy::string_slice)]
             let port_str = &s[pos + separator_len..];
             let port: u16 = port_str
                 .parse()
@@ -233,6 +235,8 @@ impl FromStr for NetworkAddressWithOptionalPort {
             None
         };
 
+        // Note: the position "separator_pos" is guaranteed to be at a character boundary.
+        #[allow(clippy::string_slice)]
         let addr_str = &s[..separator_pos.unwrap_or(s.len())];
         let address: NetworkAddress = addr_str.parse()?;
 
