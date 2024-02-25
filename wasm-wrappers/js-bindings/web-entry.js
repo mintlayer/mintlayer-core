@@ -1,4 +1,4 @@
-import init from "../pkg/wasm_crypto.js";
+import init from "../pkg/wasm_wrappers.js";
 
 import { run_test } from "./crypto_test.js";
 
