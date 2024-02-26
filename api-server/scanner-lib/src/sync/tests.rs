@@ -707,7 +707,21 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .add_output(lock_until_height.clone())
         .add_output(lock_for_sec.clone())
         .add_output(lock_until_time.clone())
+        // Add all different time locks but already unlocked
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(Amount::from_atoms(10)),
+            destination.clone(),
+            OutputTimeLock::UntilHeight(BlockHeight::new(0)),
+        ))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(Amount::from_atoms(20)),
+            destination.clone(),
+            OutputTimeLock::UntilTime(chain_config.genesis_block().timestamp()),
+        ))
         .build();
+
+    let already_unlocked_coins = 10 + 20;
+    let already_unlocked_utxos = 2;
 
     let prev_block_hash = chain_config.genesis_block_id();
     let prev_tx_id = transaction.transaction().get_id();
@@ -741,9 +755,12 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
-    // check there are no available UTXOs as all are locked
+
+    let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
+    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
+    // check there are only 2 available utxos
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert!(utxos.is_empty());
+    assert_eq!(utxos.len(), already_unlocked_utxos);
     drop(db_tx);
 
     // create an empty block
@@ -766,11 +783,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     assert_eq!(locked_amount, Some(Amount::from_atoms(3 + 4)));
 
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
-
-    assert_eq!(balance, Some(Amount::from_atoms(1 + 2)));
+    assert_eq!(
+        balance,
+        Some(Amount::from_atoms(1 + 2 + already_unlocked_coins))
+    );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
+    assert_eq!(utxos.len(), 2 + already_unlocked_utxos);
     drop(db_tx);
 
     // check we can spend all of the height locked utxos as they are unlocked
@@ -841,10 +860,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
 
-    assert_eq!(balance, Some(Amount::from_atoms(3 + 4)));
+    assert_eq!(
+        balance,
+        Some(Amount::from_atoms(3 + 4 + already_unlocked_coins))
+    );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
+    assert_eq!(utxos.len(), 2 + already_unlocked_utxos);
     drop(db_tx);
 
     // check we can spend all of the time locked utxos as they are unlocked
@@ -915,10 +937,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
 
-    assert_eq!(balance, Some(Amount::ZERO));
+    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
     // check there are no utxos as all are spent
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert!(utxos.is_empty());
+    assert_eq!(utxos.len(), already_unlocked_utxos);
     drop(db_tx);
 
     // delete last block
@@ -935,11 +957,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     assert_eq!(locked_amount, Some(Amount::ZERO));
 
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
-
-    assert_eq!(balance, Some(Amount::from_atoms(3 + 4)));
+    assert_eq!(
+        balance,
+        Some(Amount::from_atoms(3 + 4 + already_unlocked_coins))
+    );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
+    assert_eq!(utxos.len(), 2 + already_unlocked_utxos);
     drop(db_tx);
 
     // delete one more block
@@ -960,10 +984,13 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
 
-    assert_eq!(balance, Some(Amount::from_atoms(1 + 2)));
+    assert_eq!(
+        balance,
+        Some(Amount::from_atoms(1 + 2 + already_unlocked_coins))
+    );
     // check all of the UTXOs are available
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert_eq!(utxos.len(), 2);
+    assert_eq!(utxos.len(), 2 + already_unlocked_utxos);
     drop(db_tx);
 
     // delete one more block
@@ -985,10 +1012,10 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
     assert_eq!(locked_amount, Some(Amount::from_atoms(1 + 2 + 3 + 4)));
     let balance = db_tx.get_address_balance(address.get(), CoinOrTokenId::Coin).await.unwrap();
-    assert_eq!(balance, None);
+    assert_eq!(balance, Some(Amount::from_atoms(already_unlocked_coins)));
     // check there are no available UTXOs as all are locked
     let utxos = db_tx.get_address_available_utxos(address.get()).await.unwrap();
-    assert!(utxos.is_empty());
+    assert_eq!(utxos.len(), already_unlocked_utxos);
     drop(db_tx);
 }
 

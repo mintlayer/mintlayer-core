@@ -121,11 +121,15 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let block_timestamp = block.timestamp();
 
+            // calculate the previous and new median_time
+            let (previous_median_time, new_median_time) =
+                previous_and_new_median_time(&mut db_tx, block_timestamp).await?;
+
             update_locked_amounts_for_current_block(
                 &mut db_tx,
                 &self.chain_config,
                 block_height,
-                block_timestamp,
+                (previous_median_time, new_median_time),
             )
             .await?;
 
@@ -164,7 +168,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
                     block_height,
-                    block_timestamp,
+                    new_median_time,
                     tx,
                 )
                 .await
@@ -203,16 +207,8 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     db_tx: &mut T,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
+    (previous_median_time, new_median_time): (BlockTimestamp, BlockTimestamp),
 ) -> Result<(), ApiServerStorageError> {
-    // calculate the previous and new median_time
-    let mut timestamps = db_tx.get_latest_blocktimestamps().await?;
-    let previous_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
-    timestamps.push(block_timestamp);
-    let new_median_time =
-        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
-
     let locked_utxos = db_tx
         .get_locked_utxos_until_now(block_height, (previous_median_time, new_median_time))
         .await?;
@@ -279,6 +275,20 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
     }
 
     Ok(())
+}
+
+async fn previous_and_new_median_time<T: ApiServerStorageRead>(
+    db_tx: &mut T,
+    block_timestamp: BlockTimestamp,
+) -> Result<(BlockTimestamp, BlockTimestamp), ApiServerStorageError> {
+    let mut timestamps = db_tx.get_latest_blocktimestamps().await?;
+    let previous_median_time =
+        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+    timestamps.insert(0, block_timestamp);
+    let new_median_time =
+        calculate_median_time_past_from_blocktimestamps(timestamps.iter().copied());
+
+    Ok((previous_median_time, new_median_time))
 }
 
 async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
@@ -762,7 +772,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
+    median_time: BlockTimestamp,
     transaction: &SignedTransaction,
 ) -> Result<(), ApiServerStorageError> {
     update_tables_from_transaction_inputs(
@@ -779,7 +789,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
         Arc::clone(&chain_config),
         db_tx,
         block_height,
-        block_timestamp,
+        median_time,
         transaction.transaction().get_id(),
         transaction.transaction().inputs(),
         transaction.transaction().outputs(),
@@ -1054,7 +1064,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
     block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
+    median_time: BlockTimestamp,
     transaction_id: Id<Transaction>,
     inputs: &[TxInput],
     outputs: &[TxOutput],
@@ -1261,26 +1271,51 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 }
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             },
-            TxOutput::LockThenTransfer(output_value, destination, lock) => match destination {
-                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                    let address = Address::<Destination>::new(&chain_config, destination)
-                        .expect("Unable to encode destination");
+            TxOutput::LockThenTransfer(output_value, destination, lock) => {
+                let address = Address::<Destination>::new(&chain_config, destination)
+                    .expect("Unable to encode destination");
 
-                    address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                let outpoint =
+                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
 
-                    let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
+                let already_unlocked = tx_verifier::timelock_check::check_timelock(
+                    &block_height,
+                    &median_time,
+                    lock,
+                    &block_height,
+                    &median_time,
+                    &outpoint,
+                )
+                .is_ok();
+
+                if already_unlocked {
+                    let utxo = Utxo::new(output.clone(), false);
+                    db_tx
+                        .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .await
+                        .expect("Unable to set utxo");
+                } else {
+                    let lock = UtxoLock::from_output_lock(*lock, median_time, block_height);
                     let utxo = LockedUtxo::new(output.clone(), lock);
-                    let outpoint = UtxoOutPoint::new(
-                        OutPointSourceId::Transaction(transaction_id),
-                        idx as u32,
-                    );
                     db_tx
                         .set_locked_utxo_at_height(outpoint, utxo, address.get(), block_height)
                         .await
                         .expect("Unable to set locked utxo");
+                }
 
-                    match output_value {
-                        OutputValue::Coin(amount) => {
+                match output_value {
+                    OutputValue::Coin(amount) => {
+                        if already_unlocked {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::Coin,
+                                block_height,
+                            )
+                            .await;
+                        } else {
                             increase_locked_address_amount(
                                 db_tx,
                                 &address,
@@ -1290,8 +1325,19 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                             )
                             .await;
                         }
-                        OutputValue::TokenV0(_) => {}
-                        OutputValue::TokenV1(token_id, amount) => {
+                    }
+                    OutputValue::TokenV0(_) => {}
+                    OutputValue::TokenV1(token_id, amount) => {
+                        if already_unlocked {
+                            increase_address_amount(
+                                db_tx,
+                                &address,
+                                amount,
+                                CoinOrTokenId::TokenId(*token_id),
+                                block_height,
+                            )
+                            .await;
+                        } else {
                             increase_locked_address_amount(
                                 db_tx,
                                 &address,
@@ -1303,23 +1349,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         }
                     }
                 }
-                Destination::AnyoneCanSpend => {
-                    // for tests
-                    let address = Address::<Destination>::new(&chain_config, destination)
-                        .expect("Unable to encode destination");
-                    let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
-                    let utxo = LockedUtxo::new(output.clone(), lock);
-                    let outpoint = UtxoOutPoint::new(
-                        OutPointSourceId::Transaction(transaction_id),
-                        idx as u32,
-                    );
-                    db_tx
-                        .set_locked_utxo_at_height(outpoint, utxo, address.get(), block_height)
-                        .await
-                        .expect("Unable to set locked utxo");
-                }
-                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
-            },
+            }
         }
     }
 
