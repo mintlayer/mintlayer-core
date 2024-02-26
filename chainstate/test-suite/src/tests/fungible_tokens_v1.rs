@@ -279,9 +279,12 @@ fn token_issue_test(#[case] seed: Seed) {
 
         // Ticker is too long
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_ascii_alphanumeric_string(&mut rng, 10..u16::MAX as usize)
-                .as_bytes()
-                .to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(
+                &mut rng,
+                (token_max_ticker_len + 1)..u16::MAX as usize,
+            )
+            .as_bytes()
+            .to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
