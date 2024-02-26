@@ -62,8 +62,6 @@ pub enum MempoolPolicyError {
     NoOutputs,
     #[error("Transaction exceeds the maximum block size.")]
     ExceedsMaxBlockSize,
-    #[error("Transaction already exists in the mempool.")]
-    TransactionAlreadyInMempool,
     #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
@@ -121,8 +119,6 @@ pub enum TxValidationError {
 pub enum OrphanPoolError {
     #[error(transparent)]
     Conflict(#[from] MempoolConflictError),
-    #[error("Transaction already present")]
-    Duplicate,
     #[error("Transaction {0} too large to be accepted into orphan pool (max {1})")]
     TooLarge(usize, usize),
     #[error("Orphan pool full")]

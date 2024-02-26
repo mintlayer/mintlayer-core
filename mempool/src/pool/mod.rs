@@ -33,7 +33,7 @@ use chainstate::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction,
+        Transaction, TxInput,
     },
     primitives::{amount::Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
@@ -50,7 +50,6 @@ use self::{
     feerate::{INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
     orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
-    spends_unconfirmed::SpendsUnconfirmed,
     store::{Conflicts, DescendantScore, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
 use crate::{
@@ -77,7 +76,6 @@ pub mod memory_usage_estimator;
 mod orphans;
 mod reorg;
 mod rolling_fee_rate;
-mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
 mod work_queue;
@@ -447,7 +445,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     // Cheap mempool policy checks that run before anything else
     fn check_preliminary_mempool_policy(&self, entry: &TxEntry) -> Result<(), MempoolPolicyError> {
         let tx = entry.transaction();
-        let tx_id = entry.tx_id();
 
         ensure!(
             !tx.transaction().inputs().is_empty(),
@@ -462,12 +459,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         ensure!(
             entry.size().get() <= self.chain_config.max_tx_size_for_mempool(),
             MempoolPolicyError::ExceedsMaxBlockSize,
-        );
-
-        // TODO: Taken from the previous implementation. Is this correct?
-        ensure!(
-            !self.contains_transaction(tx_id),
-            MempoolPolicyError::TransactionAlreadyInMempool,
         );
 
         Ok(())
@@ -578,6 +569,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         entry: &'a TxEntry<O>,
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
         entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
+    }
+
+    fn spends_unconfirmed(&self, input: &TxInput) -> bool {
+        // TODO: if TxInput spends from an account there is no way to know tx_id
+        match input {
+            TxInput::Utxo(outpoint) => outpoint
+                .source_id()
+                .get_tx_id()
+                .map_or(false, |tx_id| self.contains_transaction(tx_id)),
+            TxInput::Account(..) | TxInput::AccountCommand(..) => false,
+        }
     }
 }
 
@@ -715,7 +717,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let spends_new_unconfirmed = tx.transaction().inputs().iter().any(|input| {
             // input spends an unconfirmed output
-            let unconfirmed = input.spends_unconfirmed(self);
+            let unconfirmed = self.spends_unconfirmed(input);
             // this unconfirmed output is not spent by one of the conflicts
             let new = !inputs_spent_by_conflicts.contains(input);
             unconfirmed && new
@@ -969,6 +971,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let origin = tx.origin();
         let relay_policy = tx.options().relay_policy();
 
+        if self.contains_transaction(&tx_id) {
+            return Ok(TxStatus::InMempoolDuplicate);
+        }
+
         match self.validate_transaction(tx) {
             Ok(ValidationOutcome::Valid {
                 transaction,
@@ -988,8 +994,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 Ok(TxStatus::InMempool)
             }
             Ok(ValidationOutcome::Orphan { transaction }) => {
-                self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?;
-                Ok(TxStatus::InOrphanPool)
+                Ok(self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?)
             }
             Err(err) => {
                 log::warn!("Transaction {tx_id} rejected: {err}");

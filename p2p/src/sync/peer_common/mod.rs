@@ -53,9 +53,7 @@ pub async fn handle_message_processing_result(
         // event. Therefore this error can be safely ignored.
         P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
         // The special handling of these mempool errors is not really necessary, because their ban score is 0
-        P2pError::MempoolError(MempoolError::Policy(
-            MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
-        )) => Ok(()),
+        P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::MempoolFull)) => Ok(()),
 
         // A protocol error - increase the ban score of a peer if needed.
         e @ (P2pError::ProtocolError(_)

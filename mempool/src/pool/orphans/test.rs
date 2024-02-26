@@ -103,7 +103,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     let tx_id = *entry.tx_id();
     let n_deps = BTreeSet::from_iter(entry.requires()).len();
 
-    assert_eq!(orphans.insert(entry), Ok(()));
+    assert_eq!(orphans.insert(entry), Ok(TxStatus::InOrphanPool));
 
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans.transactions.len(), 1);
@@ -133,7 +133,10 @@ fn capacity_reached(#[case] seed: Seed) {
     let time = Time::from_secs_since_epoch(0);
 
     for entry in (0..config::DEFAULT_ORPHAN_POOL_CAPACITY).map(|_| random_tx_entry(&mut rng)) {
-        assert_eq!(orphans.insert_and_enforce_limits(entry, time), Ok(()));
+        assert_eq!(
+            orphans.insert_and_enforce_limits(entry, time),
+            Ok(TxStatus::InOrphanPool)
+        );
     }
 
     assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
@@ -160,7 +163,7 @@ fn simulation(#[case] seed: Seed) {
                 let entry = random_tx_entry(&mut rng);
                 assert_eq!(
                     orphans.insert(entry.clone()),
-                    Ok(()),
+                    Ok(TxStatus::InOrphanPool),
                     "Insertion of {entry:?} failed"
                 );
                 assert_eq!(orphans.len(), len_before + 1);

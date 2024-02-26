@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{chain::Transaction, primitives::Id};
 use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
+use mempool_types::TxStatus;
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time, TxDependency};
@@ -175,9 +176,11 @@ impl TxOrphanPool {
     }
 
     /// Insert a transaction entry
-    pub fn insert(&mut self, entry: TxEntry) -> Result<(), OrphanPoolError> {
+    pub fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
-        ensure!(!self.contains(&tx_id), OrphanPoolError::Duplicate);
+        if self.contains(&tx_id) {
+            return Ok(TxStatus::InOrphanPoolDuplicate);
+        }
 
         self.maps.insert(&entry, InternalId::new(self.len()));
         self.transactions.push(entry);
@@ -187,7 +190,7 @@ impl TxOrphanPool {
             ensure!(self.contains(&tx_id), OrphanPoolError::Full);
         }
 
-        Ok(())
+        Ok(TxStatus::InOrphanPool)
     }
 
     /// Insert a transaction entry and make sure the pool size does not grow too large
@@ -195,14 +198,14 @@ impl TxOrphanPool {
         &mut self,
         entry: TxEntry,
         cur_time: Time,
-    ) -> Result<(), OrphanPoolError> {
+    ) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();
 
-        self.insert(entry)?;
+        let status = self.insert(entry)?;
         self.enforce_limits(cur_time);
         ensure!(self.contains(&tx_id), OrphanPoolError::Full);
 
-        Ok(())
+        Ok(status)
     }
 
     /// Remove transaction by its internal ID

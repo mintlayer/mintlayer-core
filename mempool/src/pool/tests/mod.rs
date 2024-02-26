@@ -396,7 +396,7 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     mempool.add_transaction_test(tx.clone())?.assert_in_mempool();
     assert_eq!(
         mempool.add_transaction_test(tx),
-        Err(MempoolPolicyError::TransactionAlreadyInMempool.into())
+        Ok(TxStatus::InMempoolDuplicate),
     );
     mempool.store.assert_valid();
     Ok(())

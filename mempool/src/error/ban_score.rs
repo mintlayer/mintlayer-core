@@ -59,7 +59,6 @@ impl MempoolBanScore for MempoolPolicyError {
             // This could be refined later.
             MempoolPolicyError::Conflict(_) => 0,
             MempoolPolicyError::MempoolFull => 0,
-            MempoolPolicyError::TransactionAlreadyInMempool => 0,
             MempoolPolicyError::ConflictsFeeOverflow => 0,
             MempoolPolicyError::TransactionFeeLowerThanConflictsWithDescendants => 0,
             MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. } => 0,

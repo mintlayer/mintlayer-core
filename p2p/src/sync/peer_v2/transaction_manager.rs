@@ -293,7 +293,9 @@ where
                         },
                     )?;
                 }
-                mempool::TxStatus::InOrphanPool => {}
+                mempool::TxStatus::InMempoolDuplicate
+                | mempool::TxStatus::InOrphanPool
+                | mempool::TxStatus::InOrphanPoolDuplicate => {}
             }
         }
 
