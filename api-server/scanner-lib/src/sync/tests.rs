@@ -578,18 +578,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let staker_balance = local_state
-        .storage()
-        .transaction_ro()
-        .await
-        .unwrap()
-        .get_pool_data(pool_id)
-        .await
-        .unwrap()
-        .unwrap()
-        .staker_balance()
-        .unwrap();
-
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = tf
         .make_pos_block_builder(&mut rng)
@@ -618,24 +606,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     // after decommission the staker balance is 0
     assert_eq!(decommissioned_pool.staker_balance().unwrap(), Amount::ZERO);
-    let address = Address::<Destination>::new(
-        tf.chain_config(),
-        decommissioned_pool.decommission_destination(),
-    )
-    .expect("Unable to encode destination");
-
-    //  but the address still has the same balance
-    let balance = local_state
-        .storage()
-        .transaction_ro()
-        .await
-        .unwrap()
-        .get_address_balance(address.get(), CoinOrTokenId::Coin)
-        .await
-        .unwrap()
-        .unwrap_or(Amount::ZERO);
-
-    assert_eq!(balance, staker_balance);
 }
 
 #[rstest]
@@ -1078,7 +1048,8 @@ async fn sync_and_compare(
         .unwrap()
         .unwrap_or(Amount::ZERO);
 
-    assert_eq!(balance, scanner_data.staker_balance().unwrap());
+    // address balance is not updated
+    assert_eq!(balance, Amount::ZERO);
 
     let node_delegations = tf
         .chainstate
@@ -1104,6 +1075,7 @@ async fn sync_and_compare(
             .unwrap()
             .unwrap_or(Amount::ZERO);
 
-        assert_eq!(balance, share);
+        // address balance is not updated
+        assert_eq!(balance, Amount::ZERO);
     }
 }

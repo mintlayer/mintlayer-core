@@ -407,7 +407,6 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::CreateStakePool(pool_id, pool_data) => {
-                let staker = pool_data.staker();
                 let pool_data: PoolData = pool_data.as_ref().clone().into();
 
                 db_tx
@@ -422,31 +421,6 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     block_height,
                     false,
                     &chain_config,
-                )
-                .await;
-
-                let address = Address::<Destination>::new(
-                    &chain_config,
-                    pool_data.decommission_destination(),
-                )
-                .expect("Unable to encode destination");
-                increase_address_amount(
-                    db_tx,
-                    &address,
-                    &pool_data.staker_balance().expect("no overflow"),
-                    CoinOrTokenId::Coin,
-                    block_height,
-                )
-                .await;
-
-                let staker_address = Address::<Destination>::new(&chain_config, staker)
-                    .expect("Unable to encode destination");
-                increase_address_amount(
-                    db_tx,
-                    &staker_address,
-                    &Amount::ZERO,
-                    CoinOrTokenId::Coin,
-                    block_height,
                 )
                 .await;
             }
@@ -732,36 +706,10 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 db_tx
                     .set_delegation_at_height(*delegation_id, &updated_delegation, block_height)
                     .await?;
-                let address = Address::<Destination>::new(
-                    &chain_config,
-                    updated_delegation.spend_destination(),
-                )
-                .expect("Unable to encode address");
-                increase_address_amount(
-                    db_tx,
-                    &address,
-                    rewards,
-                    CoinOrTokenId::Coin,
-                    block_height,
-                )
-                .await;
             }
 
             let pool_data = adapter.get_pool_data(pool_id).expect("no error").expect("must exist");
             db_tx.set_pool_data_at_height(pool_id, &pool_data, block_height).await?;
-            let pool_reward = adapter.get_pool_reward(pool_id);
-
-            let address =
-                Address::<Destination>::new(&chain_config, pool_data.decommission_destination())
-                    .expect("Unable to encode address");
-            increase_address_amount(
-                db_tx,
-                &address,
-                &pool_reward,
-                CoinOrTokenId::Coin,
-                block_height,
-            )
-            .await;
         }
     }
 
@@ -877,19 +825,6 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             .set_delegation_at_height(*delegation_id, &new_delegation, block_height)
                             .await
                             .expect("Unable to update delegation");
-                        let address = Address::<Destination>::new(
-                            &chain_config,
-                            new_delegation.spend_destination(),
-                        )
-                        .expect("Unable to encode address");
-                        decrease_address_amount(
-                            db_tx,
-                            address,
-                            amount,
-                            CoinOrTokenId::Coin,
-                            block_height,
-                        )
-                        .await;
                     }
                 }
             }
@@ -939,15 +874,6 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                                 .entry(address.clone())
                                 .or_default()
                                 .insert(tx.get_id());
-
-                            decrease_address_amount(
-                                db_tx,
-                                address,
-                                &pool_data.staker_balance().expect("no overflow"),
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
                         }
                     }
                 }
@@ -1165,14 +1091,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, stake_pool_data.decommission_key())
                         .expect("Unable to encode address");
-                increase_address_amount(
-                    db_tx,
-                    &address,
-                    &stake_pool_data.pledge(),
-                    CoinOrTokenId::Coin,
-                    block_height,
-                )
-                .await;
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
                 let staker_address =
@@ -1199,9 +1117,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 let address =
                     Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
                         .expect("Unable to encode address");
-                increase_address_amount(db_tx, &address, amount, CoinOrTokenId::Coin, block_height)
-                    .await;
-
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
                 set_utxo(
