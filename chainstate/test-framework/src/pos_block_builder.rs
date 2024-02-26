@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::{
     utils::{pos_mine, produce_kernel_signature},
     TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
-use chainstate_storage::Transactional;
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochStorageRead};
 use common::{
     chain::{
@@ -31,16 +33,19 @@ use common::{
         },
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Block, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, Block, Destination, GenBlock, PoolId, RequiredConsensus,
+        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Id, Idable, H256},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
-    vrf::{VRFKeyKind, VRFPrivateKey},
+    key::{PrivateKey, PublicKey},
+    random::{seq::IteratorRandom, CryptoRng, Rng},
+    vrf::VRFPrivateKey,
 };
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use serialization::Encode;
+use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 
 /// The block builder that allows construction and processing of a block.
 pub struct PoSBlockBuilder<'f> {
@@ -48,44 +53,62 @@ pub struct PoSBlockBuilder<'f> {
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
     consensus_data: Option<ConsensusData>,
-    block_signing_key: Option<PrivateKey>,
     transactions: Vec<SignedTransaction>,
 
-    staking_pool: Option<PoolId>,
+    staking_pool: PoolId,
     kernel_input_outpoint: Option<UtxoOutPoint>,
-
     staker_sk: PrivateKey,
     staker_vrf_sk: VRFPrivateKey,
 
-    randomness: Option<PoSRandomness>,
-    stake_pool_balance: Option<Amount>,
+    randomness: Option<PoSRandomness>, // FIXME: remove it
+
+    // need these fields to track info across the txs
+    used_utxo: BTreeSet<UtxoOutPoint>,
+    account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
+    tokens_accounting_store: InMemoryTokensAccounting,
+    pos_accounting_store: InMemoryPoSAccounting,
 }
 
 impl<'f> PoSBlockBuilder<'f> {
     /// Creates a new builder instance.
-    pub fn new(framework: &'f mut TestFramework, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn new(
+        framework: &'f mut TestFramework,
+        rng: &mut (impl Rng + CryptoRng),
+        staking_pool: Option<(PoolId, PrivateKey, VRFPrivateKey)>,
+    ) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
 
-        let (staker_vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-        let (staker_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+        // Staking pool is set here and via builders methods because it must be known in advance before `add_test_transaction` is called.
+        // Also it would make order of calls matter.
+        let (staking_pool, staker_sk, staker_vrf_sk) = staking_pool.unwrap_or_else(|| {
+            framework
+                .staking_pools
+                .iter()
+                .map(|(id, (sk, vrf))| (*id, sk.clone(), vrf.clone()))
+                .choose(rng)
+                .expect("if pool is not provided it should be available for random selection in TestFramework")
+        });
 
-        let staking_pool =
-            framework.chainstate.get_chain_config().genesis_block().utxos().iter().find_map(
-                |output| match output {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_) => None,
-                    | TxOutput::CreateStakePool(pool_id, _) => Some(*pool_id),
-                },
-            );
+        let all_tokens_data = framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_tokens_accounting_data()
+            .unwrap();
+        let tokens_accounting_store = InMemoryTokensAccounting::from_values(
+            all_tokens_data.token_data,
+            all_tokens_data.circulating_supply,
+        );
+
+        let all_pos_accounting_data = framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_pos_accounting_data_tip()
+            .unwrap();
+        let pos_accounting_store = InMemoryPoSAccounting::from_data(all_pos_accounting_data);
 
         Self {
             framework,
@@ -93,13 +116,15 @@ impl<'f> PoSBlockBuilder<'f> {
             prev_block_hash,
             timestamp,
             consensus_data: None,
-            block_signing_key: None,
             staking_pool,
             kernel_input_outpoint: None,
             staker_sk,
             staker_vrf_sk,
             randomness: None,
-            stake_pool_balance: None,
+            used_utxo: BTreeSet::new(),
+            account_nonce_tracker: BTreeMap::new(),
+            tokens_accounting_store,
+            pos_accounting_store,
         }
     }
 
@@ -133,33 +158,8 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    pub fn with_block_signing_key(mut self, block_signing_key: PrivateKey) -> Self {
-        self.block_signing_key = Some(block_signing_key);
-        self
-    }
-
-    pub fn with_stake_spending_key(mut self, staker_key: PrivateKey) -> Self {
-        self.staker_sk = staker_key;
-        self
-    }
-
-    pub fn with_vrf_key(mut self, staker_vrf_key: VRFPrivateKey) -> Self {
-        self.staker_vrf_sk = staker_vrf_key;
-        self
-    }
-
-    pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
-        self.staking_pool = Some(pool_id);
-        self
-    }
-
     pub fn with_randomness(mut self, randomness: PoSRandomness) -> Self {
         self.randomness = Some(randomness);
-        self
-    }
-
-    pub fn with_stake_pool_balance(mut self, balance: Amount) -> Self {
-        self.stake_pool_balance = Some(balance);
         self
     }
 
@@ -181,7 +181,7 @@ impl<'f> PoSBlockBuilder<'f> {
             Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
         let reward = BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
             staking_destination,
-            self.staking_pool.unwrap(),
+            self.staking_pool,
         )]);
 
         let block_body = BlockBody::new(reward, self.transactions);
@@ -194,13 +194,11 @@ impl<'f> PoSBlockBuilder<'f> {
             consensus_data,
         );
 
-        let signed_header = if let Some(key) = self.block_signing_key {
-            let signature = key.sign_message(&unsigned_header.encode()).unwrap();
+        let signed_header = {
+            let signature = self.staker_sk.sign_message(&unsigned_header.encode()).unwrap();
             let sig_data = BlockHeaderSignatureData::new(signature);
             let done_signature = BlockHeaderSignature::HeaderSignature(sig_data);
             unsigned_header.with_signature(done_signature)
-        } else {
-            unsigned_header.with_no_signature()
         };
 
         let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
@@ -226,7 +224,6 @@ impl<'f> PoSBlockBuilder<'f> {
 
     fn mine_pos_block(&self) -> (PoSData, BlockTimestamp) {
         let parent_block_index = self.framework.block_index(&self.prev_block_hash);
-        let staking_pool = self.staking_pool.expect("staking pool id must be set");
 
         let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
             // if staking outpoint is not set try to extract it from the parent
@@ -255,7 +252,7 @@ impl<'f> PoSBlockBuilder<'f> {
                             | TxOutput::IssueFungibleToken(_)
                             | TxOutput::IssueNft(_, _, _)
                             | TxOutput::DataDeposit(_) => false,
-                            TxOutput::CreateStakePool(pool_id, _) => *pool_id == staking_pool,
+                            TxOutput::CreateStakePool(pool_id, _) => *pool_id == self.staking_pool,
                         })
                         .unwrap();
                     UtxoOutPoint::new(genesis.get_id().into(), output_index as u32)
@@ -266,7 +263,7 @@ impl<'f> PoSBlockBuilder<'f> {
         let staking_destination =
             Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
         let kernel_outputs =
-            vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), staking_pool)];
+            vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), self.staking_pool)];
 
         let kernel_sig = produce_kernel_signature(
             self.framework,
@@ -317,11 +314,75 @@ impl<'f> PoSBlockBuilder<'f> {
             InputWitness::Standard(kernel_sig),
             &self.staker_vrf_sk,
             randomness,
-            staking_pool,
+            self.staking_pool,
             chain_config.final_supply().unwrap(),
             epoch_index,
             current_difficulty.into(),
         )
         .unwrap()
+    }
+
+    /// Adds a transaction that uses random utxos and accounts
+    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+        let utxo_set = self
+            .framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_utxo_set()
+            .unwrap()
+            .into_iter()
+            .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
+            .collect();
+
+        let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
+            self.account_nonce_tracker.get(&account).copied().or_else(|| {
+                let db_tx = self.framework.storage.transaction_ro().unwrap();
+                db_tx.get_account_nonce_count(account).unwrap()
+            })
+        });
+
+        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+            super::random_tx_maker::RandomTxMaker::new(
+                &self.framework.chainstate,
+                &utxo_set,
+                &self.tokens_accounting_store,
+                &self.pos_accounting_store,
+                account_nonce_getter,
+            )
+            .make(rng);
+
+        if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
+            // flush new tokens info to the in-memory store
+            let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
+            tokens_db.merge_with_delta(new_tokens_delta).unwrap();
+
+            // flush new pos accounting info to the in-memory store
+            let mut pos_db = PoSAccountingDB::new(&mut self.pos_accounting_store);
+            pos_db.merge_with_delta(new_pos_accounting_delta).unwrap();
+
+            // update used utxo set because this function can be called multiple times without flushing data to storage
+            tx.inputs().iter().for_each(|input| {
+                match input {
+                    TxInput::Utxo(utxo_outpoint) => {
+                        self.used_utxo.insert(utxo_outpoint.clone());
+                    }
+                    TxInput::Account(outpoint) => {
+                        self.account_nonce_tracker
+                            .insert(outpoint.account().clone().into(), outpoint.nonce());
+                    }
+                    TxInput::AccountCommand(nonce, op) => {
+                        self.account_nonce_tracker.insert(op.clone().into(), *nonce);
+                    }
+                };
+            });
+
+            let witnesses = tx.inputs().iter().map(|_| super::empty_witness(rng)).collect();
+            let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
+
+            self.add_transaction(tx)
+        } else {
+            self
+        }
     }
 }

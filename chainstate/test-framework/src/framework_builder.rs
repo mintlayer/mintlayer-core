@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     tx_verification_strategy::{
@@ -22,8 +22,15 @@ use crate::{
     TestFramework, TestStore,
 };
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
-use common::{chain::ChainConfig, time_getter::TimeGetter};
-use crypto::random::{CryptoRng, Rng};
+use common::{
+    chain::{ChainConfig, PoolId},
+    time_getter::TimeGetter,
+};
+use crypto::{
+    key::PrivateKey,
+    random::{CryptoRng, Rng},
+    vrf::VRFPrivateKey,
+};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
 use variant_count::VariantCount;
@@ -46,22 +53,19 @@ pub struct TestFrameworkBuilder {
     time_value: Option<Arc<SeqCstAtomicU64>>,
     tx_verification_strategy: TxVerificationStrategy,
     initial_time_since_genesis: u64,
+    staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
 }
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = common::chain::config::create_unit_test_config();
-        let chainstate_config = ChainstateConfig {
-            max_db_commit_attempts: Default::default(),
-            max_orphan_blocks: Default::default(),
-            min_max_bootstrap_import_buffer_sizes: Default::default(),
-            max_tip_age: Default::default(),
-        };
+        let chainstate_config = ChainstateConfig::new();
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
         let time_value = None;
         let initial_time_since_genesis = 0;
+        let staking_pools = BTreeMap::new();
 
         assert_eq!(TxVerificationStrategy::VARIANT_COUNT, 3);
         let tx_verification_strategy = match rng.gen_range(0..3) {
@@ -80,6 +84,7 @@ impl TestFrameworkBuilder {
             time_value,
             tx_verification_strategy,
             initial_time_since_genesis,
+            staking_pools,
         }
     }
 
@@ -92,6 +97,7 @@ impl TestFrameworkBuilder {
         // TODO: get strategy from `tf`
         let tx_verification_strategy = TxVerificationStrategy::Default;
         let initial_time_since_genesis = 0;
+        let staking_pools = tf.staking_pools;
 
         TestFrameworkBuilder {
             chain_config,
@@ -102,6 +108,7 @@ impl TestFrameworkBuilder {
             time_value,
             tx_verification_strategy,
             initial_time_since_genesis,
+            staking_pools,
         }
     }
 
@@ -151,6 +158,14 @@ impl TestFrameworkBuilder {
     /// Set initial mock time to given number of seconds after the genesis timestamp.
     pub fn with_initial_time_since_genesis(mut self, initial_time_since_genesis: u64) -> Self {
         self.initial_time_since_genesis = initial_time_since_genesis;
+        self
+    }
+
+    pub fn with_staking_pools(
+        mut self,
+        staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
+    ) -> Self {
+        self.staking_pools = staking_pools;
         self
     }
 
@@ -217,6 +232,7 @@ impl TestFrameworkBuilder {
             block_indexes: Vec::new(),
             time_getter,
             time_value,
+            staking_pools: self.staking_pools,
         })
     }
 

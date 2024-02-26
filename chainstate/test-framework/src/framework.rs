@@ -25,7 +25,9 @@ use crate::{
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
+    chain::{
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
+    },
     primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -46,6 +48,8 @@ pub struct TestFramework {
     pub time_getter: TimeGetter,
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
     pub time_value: Option<Arc<SeqCstAtomicU64>>,
+
+    pub staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
@@ -74,8 +78,12 @@ impl TestFramework {
         BlockBuilder::new(self)
     }
 
-    pub fn make_pos_block_builder(&mut self, rng: &mut (impl Rng + CryptoRng)) -> PoSBlockBuilder {
-        PoSBlockBuilder::new(self, rng)
+    pub fn make_pos_block_builder(
+        &mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        staking_pool: Option<(PoolId, PrivateKey, VRFPrivateKey)>,
+    ) -> PoSBlockBuilder {
+        PoSBlockBuilder::new(self, rng, staking_pool)
     }
 
     /// Get the current time using the time getter that was supplied to the test-framework
@@ -226,19 +234,12 @@ impl TestFramework {
         parent_block: &Id<GenBlock>,
         blocks: usize,
         rng: &mut (impl Rng + CryptoRng),
-        staking_sk: &PrivateKey,
-        staking_vrf_sk: &VRFPrivateKey,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Id<GenBlock>, ChainstateError> {
             for _ in 0..blocks {
-                let block = self
-                    .make_pos_block_builder(rng)
-                    .with_parent(prev_block_id)
-                    .with_block_signing_key(staking_sk.clone())
-                    .with_stake_spending_key(staking_sk.clone())
-                    .with_vrf_key(staking_vrf_sk.clone())
-                    .build();
+                let block =
+                    self.make_pos_block_builder(rng, None).with_parent(prev_block_id).build();
                 prev_block_id = block.get_id().into();
                 self.do_process_block(block, BlockSource::Local)?;
             }

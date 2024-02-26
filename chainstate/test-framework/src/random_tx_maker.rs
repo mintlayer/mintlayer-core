@@ -483,7 +483,9 @@ impl<'a> RandomTxMaker<'a> {
                         }
                     };
                 }
-                TxOutput::CreateStakePool(pool_id, _) => {
+                TxOutput::CreateStakePool(pool_id, _)
+                | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    // FIXME: there should be always at least one pool left
                     if rng.gen_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
@@ -513,7 +515,6 @@ impl<'a> RandomTxMaker<'a> {
                     result_inputs.extend(new_inputs);
                     result_outputs.extend(new_outputs);
                 }
-                TxOutput::ProduceBlockFromStake(_, _) => unimplemented!(),
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)

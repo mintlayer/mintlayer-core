@@ -13,34 +13,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use super::*;
-use chainstate_test_framework::TxVerificationStrategy;
 use common::primitives::Idable;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50)]
+//#[case(10420439202681780483.into(), 20, 50)]
+//#[case(15352447044211464671.into(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (staking_sk, staking_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (config_builder, genesis_pool) =
+            chainstate_test_framework::create_chain_config_with_default_staking_pool(
+                &mut rng, staking_pk, vrf_pk,
+            );
+
         let mut tf = TestFramework::builder(&mut rng)
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                max_db_commit_attempts: Default::default(),
-                max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
-                max_tip_age: Default::default(),
-            })
-            .with_tx_verification_strategy(TxVerificationStrategy::Randomized(seed))
+            .with_chain_config(config_builder.build())
+            .with_staking_pools(BTreeMap::from_iter([(genesis_pool, (staking_sk, vrf_sk))]))
             .build();
+        tf.progress_time_seconds_since_epoch(1);
 
         for _ in 0..rng.gen_range(10..max_blocks) {
-            let mut block_builder = tf.make_block_builder();
+            let mut block_builder = tf.make_pos_block_builder(&mut rng, None);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
             block_builder.build_and_process().unwrap().unwrap();
+
+            tf.progress_time_seconds_since_epoch(1);
         }
         let best_block_id = tf.best_block_id();
 

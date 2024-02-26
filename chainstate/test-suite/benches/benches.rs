@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
@@ -73,26 +75,19 @@ pub fn pos_reorg(c: &mut Criterion) {
     .max_depth_for_reorg(BlockDistance::new(5000))
     .build();
     let target_block_time = chain_config.target_block_spacing();
-    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config)
+        .with_staking_pools(BTreeMap::from_iter([(pool_id, (staking_sk, vrf_sk))]))
+        .build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
-    let common_block_id = tf
-        .create_chain_pos(
-            &tf.genesis().get_id().into(),
-            5,
-            &mut rng,
-            &staking_sk,
-            &vrf_sk,
-        )
-        .unwrap();
+    let common_block_id = tf.create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
 
-    tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
-        .unwrap();
+    tf.create_chain_pos(&common_block_id, 100, &mut rng).unwrap();
 
     c.bench_function("PoS reorg", |b| {
         b.iter(|| {
-            tf.create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
-                .unwrap();
+            tf.create_chain_pos(&common_block_id, 101, &mut rng).unwrap();
         })
     });
 }

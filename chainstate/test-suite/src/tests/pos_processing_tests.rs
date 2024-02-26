@@ -1263,29 +1263,29 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
             .unwrap();
 
     let block_a_id = *tf
-        .make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
+        .make_pos_block_builder(
+            &mut rng,
+            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+        )
         .build_and_process()
         .unwrap()
         .unwrap()
         .block_id();
 
     // prepare and process block_b from block_a
-    tf.make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
-        .unwrap();
+    tf.make_pos_block_builder(
+        &mut rng,
+        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+    )
+    .build_and_process()
+    .unwrap();
 
     // prepare and process block_c from block_b
     let block_c_id = *tf
-        .make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
+        .make_pos_block_builder(
+            &mut rng,
+            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+        )
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
         .build_and_process()
         .unwrap()
@@ -1294,23 +1294,23 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     // prepare and process block_d from block_a
     let block_d = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder(
+            &mut rng,
+            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+        )
         .with_parent(block_a_id.into())
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
         .build();
     let block_d_id = block_d.get_id();
     tf.process_block(block_d, BlockSource::Local).unwrap();
 
     // prepare and process block_e from block_d
     let block_e = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder(
+            &mut rng,
+            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+        )
         .with_parent(block_d_id.into())
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
-        .with_vrf_key(vrf_sk.clone())
         .build();
     let block_e_id = block_e.get_id();
     // have to calculate randomness of prev block because reorg hasn't happen yet and it's not in the db
@@ -1335,11 +1335,8 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     // prepare and process block_f from block_e
     let block_f_id = *tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder(&mut rng, Some((pool_id, staking_sk, vrf_sk)))
         .with_parent(block_e_id.into())
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk)
-        .with_vrf_key(vrf_sk)
         .with_randomness(block_e_randomness)
         .build_and_process()
         .unwrap()
@@ -1820,21 +1817,21 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
-        .with_transactions(vec![tx1, tx2])
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
-        .unwrap();
+    tf.make_pos_block_builder(
+        &mut rng,
+        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+    )
+    .with_transactions(vec![tx1, tx2])
+    .build_and_process()
+    .unwrap();
 
     // Process block_2: distribute some reward
-    tf.make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
-        .unwrap();
+    tf.make_pos_block_builder(
+        &mut rng,
+        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+    )
+    .build_and_process()
+    .unwrap();
 
     // Process block_3: spend part of the share including reward
     let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
@@ -1851,13 +1848,13 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk.clone())
-        .with_vrf_key(vrf_sk.clone())
-        .add_transaction(tx)
-        .build_and_process()
-        .unwrap();
+    tf.make_pos_block_builder(
+        &mut rng,
+        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+    )
+    .add_transaction(tx)
+    .build_and_process()
+    .unwrap();
 
     // Process block_4 and spend some share including reward
     let delegation_balance =
@@ -1881,10 +1878,10 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         let tx_id = tx.transaction().get_id();
 
         let res = tf
-            .make_pos_block_builder(&mut rng)
-            .with_block_signing_key(staking_sk.clone())
-            .with_stake_spending_key(staking_sk.clone())
-            .with_vrf_key(vrf_sk.clone())
+            .make_pos_block_builder(
+                &mut rng,
+                Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+            )
             .add_transaction(tx)
             .build_and_process()
             .unwrap_err();
@@ -1914,13 +1911,13 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staking_sk.clone())
-        .with_stake_spending_key(staking_sk)
-        .with_vrf_key(vrf_sk)
-        .add_transaction(tx)
-        .build_and_process()
-        .unwrap();
+    tf.make_pos_block_builder(
+        &mut rng,
+        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
+    )
+    .add_transaction(tx)
+    .build_and_process()
+    .unwrap();
 
     let res_pool_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
         &tf.storage,
