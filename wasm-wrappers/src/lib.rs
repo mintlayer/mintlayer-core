@@ -63,7 +63,7 @@ impl From<Network> for ChainType {
     }
 }
 
-/// Indicates whether a token an be frozen
+/// Indicates whether a token can be frozen
 #[wasm_bindgen]
 pub enum FreezableToken {
     No,
@@ -328,7 +328,7 @@ pub fn staking_pool_spend_maturity_block_count(current_block_height: u64, networ
         .to_int()
 }
 
-/// Given a number of blocks, this function returns the the output timelock
+/// Given a number of blocks, this function returns the output timelock
 /// which is used in locked outputs to lock an output for a given number of blocks
 /// since that output's transaction is included the blockchain
 #[wasm_bindgen]
@@ -337,9 +337,9 @@ pub fn encode_lock_for_block_count(block_count: u64) -> Vec<u8> {
     output.encode()
 }
 
-/// Given a number of clock seconds, this function returns the the output timelock
+/// Given a number of clock seconds, this function returns the output timelock
 /// which is used in locked outputs to lock an output for a given number of seconds
-/// since that output's transaction is included the blockchain
+/// since that output's transaction is included in the blockchain
 #[wasm_bindgen]
 pub fn encode_lock_for_seconds(total_seconds: u64) -> Vec<u8> {
     let output = OutputTimeLock::ForSeconds(total_seconds);
@@ -347,7 +347,7 @@ pub fn encode_lock_for_seconds(total_seconds: u64) -> Vec<u8> {
 }
 
 /// Given a timestamp represented by as unix timestamp, i.e., number of seconds since unix epoch,
-/// this function returns the the output timelock which is used in locked outputs to lock an output
+/// this function returns the output timelock which is used in locked outputs to lock an output
 /// until the given timestamp
 #[wasm_bindgen]
 pub fn encode_lock_until_time(timestamp_since_epoch_in_seconds: u64) -> Vec<u8> {
@@ -357,7 +357,7 @@ pub fn encode_lock_until_time(timestamp_since_epoch_in_seconds: u64) -> Vec<u8> 
     output.encode()
 }
 
-/// Given a block height, this function returns the the output timelock which is used in
+/// Given a block height, this function returns the output timelock which is used in
 /// locked outputs to lock an output until that block height is reached.
 #[wasm_bindgen]
 pub fn encode_lock_until_height(block_height: u64) -> Vec<u8> {
@@ -395,7 +395,7 @@ pub fn encode_output_coin_burn(amount: &str) -> Result<Vec<u8>, Error> {
 
 /// Given a pool id as string, an owner address and a network type (mainnet, testnet, etc),
 /// this function returns an output (as bytes) to create a delegation to the given pool.
-/// The owner address is the address that is authorized to withdraw from that pool.
+/// The owner address is the address that is authorized to withdraw from that delegation.
 #[wasm_bindgen]
 pub fn encode_output_create_delegation(
     pool_id: &str,
