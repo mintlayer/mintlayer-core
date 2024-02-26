@@ -90,10 +90,13 @@ impl Addressable for Destination {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum TxOutput {
+    /// Transfer an output, giving the provided Destination the authority to spend it (no conditions)
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),
+    /// Same as Transfer, but with the condition that an output can only be specified after some point in time.
     #[codec(index = 1)]
     LockThenTransfer(OutputValue, Destination, OutputTimeLock),
+    /// Burn an amount (whether coin or token)
     #[codec(index = 2)]
     Burn(OutputValue),
     /// Output type that is used to create a stake pool
@@ -103,8 +106,11 @@ pub enum TxOutput {
     /// in order to produce a block
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
+    /// Create a delegation; takes the owner destination (address authorized to withdraw from the delegation)
+    /// and a pool id
     #[codec(index = 5)]
     CreateDelegationId(Destination, PoolId),
+    /// Transfer an amount to a delegation that was previously created for staking
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
     #[codec(index = 7)]
