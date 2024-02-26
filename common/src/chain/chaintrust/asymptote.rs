@@ -128,6 +128,23 @@ mod tests {
     }
 
     #[test]
+    fn block_proof_boundaries() {
+        // First point is zero
+        assert!(calculate_block_proof(0) > Uint256::from_u64(1));
+
+        // Last pre-calculated point is larger than EPSILON
+        assert!(
+            calculate_block_proof(TIMESLOTS_WEIGHTS.len() as u64 - 1) > Uint256::from_u64(EPSILON)
+        );
+
+        // Afterwards, it's EPSILON
+        assert_eq!(
+            calculate_block_proof(TIMESLOTS_WEIGHTS.len() as u64),
+            Uint256::from_u64(EPSILON)
+        );
+    }
+
+    #[test]
     fn final_weights_resolvable_int() {
         // In this test, we ensure that the scaling factor, combined with alpha, is large enough to ensure
         // that the weights are resolvable as integers.
