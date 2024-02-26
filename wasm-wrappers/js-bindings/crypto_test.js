@@ -8,15 +8,15 @@
 import {
   make_private_key,
   public_key_from_private_key,
-  sign_message,
-  verify_signature,
+  sign_message_for_spending,
+  verify_signature_for_spending,
   make_default_account_privkey,
   make_receiving_address,
   make_change_address,
-  pubkey_to_string,
+  pubkey_to_pubkeyhash_address,
   Network,
   encode_input_for_utxo,
-  encode_output_burn,
+  encode_output_coin_burn,
   encode_transaction,
   encode_witness_no_signature,
   encode_signed_transaction,
@@ -26,7 +26,7 @@ import {
   encode_stake_pool_data,
   encode_witness,
   SignatureHashType,
-  encode_input_for_account_outpoint,
+  encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
   staking_pool_spend_maturity_block_count,
 } from "../pkg/wasm_wrappers.js";
@@ -50,14 +50,18 @@ export async function run_test() {
   const pub_key = public_key_from_private_key(priv_key);
   console.log(`pub key = ${pub_key}`);
   const message = "Hello, world!";
-  const signature = sign_message(priv_key, message);
+  const signature = sign_message_for_spending(priv_key, message);
   console.log(`signature = ${signature}`);
-  const verified = verify_signature(pub_key, signature, message);
+  const verified = verify_signature_for_spending(pub_key, signature, message);
   console.log(`verified valid message with correct key = ${verified}`);
   if (!verified) {
     throw new Error("Signature verification failed!");
   }
-  const verified_bad = verify_signature(pub_key, signature, "bro!");
+  const verified_bad = verify_signature_for_spending(
+    pub_key,
+    signature,
+    "bro!"
+  );
   if (verified_bad) {
     throw new Error("Invalid message signature verification passed!");
   }
@@ -131,7 +135,10 @@ export async function run_test() {
     }
 
     const receiving_pubkey = public_key_from_private_key(receiving_privkey);
-    const address = pubkey_to_string(receiving_pubkey, Network.Mainnet);
+    const address = pubkey_to_pubkeyhash_address(
+      receiving_pubkey,
+      Network.Mainnet
+    );
     console.log(`address = ${address}`);
     if (address != "mtc1qyqmdpxk2w42w37qsdj0e8g54ysvnlvpny3svzqx") {
       throw new Error("Incorrect address generated");
@@ -152,7 +159,10 @@ export async function run_test() {
     }
 
     const change_pubkey = public_key_from_private_key(change_privkey);
-    const caddress = pubkey_to_string(change_pubkey, Network.Mainnet);
+    const caddress = pubkey_to_pubkeyhash_address(
+      change_pubkey,
+      Network.Mainnet
+    );
     console.log(`address = ${caddress}`);
     if (caddress != "mtc1qxyhrpytqrvjalg2dzw4tdvzt2zz8ps6nyav2n56") {
       throw new Error("Incorrect address generated");
@@ -171,7 +181,10 @@ export async function run_test() {
     console.log(`receiving privkey = ${receiving_privkey}`);
 
     const receiving_pubkey = public_key_from_private_key(receiving_privkey);
-    const address = pubkey_to_string(receiving_pubkey, Network.Testnet);
+    const address = pubkey_to_pubkeyhash_address(
+      receiving_pubkey,
+      Network.Testnet
+    );
     console.log(`address = ${address}`);
     if (address != "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n") {
       throw new Error("Incorrect address generated");
@@ -199,7 +212,7 @@ export async function run_test() {
       console.log("Tested invalid outpoint ID successfully");
     }
     try {
-      encode_input_for_account_outpoint(
+      encode_input_for_withdraw_from_delegation(
         "invalid delegation id",
         "1",
         BigInt(1),
@@ -218,7 +231,7 @@ export async function run_test() {
     const tx_input = encode_input_for_utxo(tx_outpoint, 1);
     const deleg_id =
       "mdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqut3aj8";
-    const tx_input2 = encode_input_for_account_outpoint(
+    const tx_input2 = encode_input_for_withdraw_from_delegation(
       deleg_id,
       "1",
       BigInt(1),
@@ -234,7 +247,7 @@ export async function run_test() {
     assert_eq_arrays(inputs, expected_inputs);
 
     try {
-      encode_output_burn("invalid amount");
+      encode_output_coin_burn("invalid amount");
       throw new Error("Invalid value for amount worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid amount")) {
