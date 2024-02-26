@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use common::primitives::Idable;
+use common::{
+    chain::{ConsensusUpgrade, NetUpgrades, PoSChainConfigBuilder},
+    primitives::{BlockCount, Idable},
+};
 use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
@@ -25,8 +28,6 @@ use crypto::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50)]
-//#[case(10420439202681780483.into(), 20, 50)]
-//#[case(15352447044211464671.into(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -39,11 +40,25 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 &mut rng, staking_pk, vrf_pk,
             );
 
+        let upgrades = vec![(
+            BlockHeight::new(0),
+            ConsensusUpgrade::PoS {
+                initial_difficulty: None,
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .staking_pool_spend_maturity_block_count(BlockCount::new(5))
+                    .build(),
+            },
+        )];
+        let consensus_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+
+        let chain_config = config_builder.consensus_upgrades(consensus_upgrades).build();
+
         let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(config_builder.build())
+            .with_chain_config(chain_config)
             .with_staking_pools(BTreeMap::from_iter([(genesis_pool, (staking_sk, vrf_sk))]))
             .build();
-        tf.progress_time_seconds_since_epoch(1);
+        let target_time = tf.chain_config().target_block_spacing();
+        tf.progress_time_seconds_since_epoch(target_time.as_secs());
 
         for _ in 0..rng.gen_range(10..max_blocks) {
             let mut block_builder = tf.make_pos_block_builder(&mut rng, None);
@@ -54,13 +69,13 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
             block_builder.build_and_process().unwrap().unwrap();
 
-            tf.progress_time_seconds_since_epoch(1);
+            tf.progress_time_seconds_since_epoch(target_time.as_secs());
         }
         let best_block_id = tf.best_block_id();
 
         // create longer chain to trigger reorg and disconnect all the random txs
         let genesis = &tf.genesis().get_id().into();
-        let new_best_block_id = tf.create_chain(genesis, max_blocks, &mut rng).unwrap();
+        let new_best_block_id = tf.create_chain_pos(genesis, max_blocks, &mut rng).unwrap();
         assert_ne!(best_block_id, tf.best_block_id());
         assert_eq!(new_best_block_id, tf.best_block_id());
     });

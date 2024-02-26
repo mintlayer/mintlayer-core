@@ -144,6 +144,7 @@ impl<'f> BlockBuilder<'f> {
                 &utxo_set,
                 &self.tokens_accounting_store,
                 &self.pos_accounting_store,
+                None,
                 account_nonce_getter,
             )
             .make(rng);

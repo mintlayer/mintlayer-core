@@ -82,6 +82,9 @@ pub struct RandomTxMaker<'a> {
     tokens_store: &'a InMemoryTokensAccounting,
     pos_accounting_store: &'a InMemoryPoSAccounting,
 
+    // Pool used to for staking cannot be spent
+    staking_pool: Option<PoolId>,
+
     account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
 
@@ -106,6 +109,7 @@ impl<'a> RandomTxMaker<'a> {
         utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
         tokens_store: &'a InMemoryTokensAccounting,
         pos_accounting_store: &'a InMemoryPoSAccounting,
+        staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
     ) -> Self {
         Self {
@@ -113,6 +117,7 @@ impl<'a> RandomTxMaker<'a> {
             utxo_set,
             tokens_store,
             pos_accounting_store,
+            staking_pool,
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: false,
@@ -269,10 +274,16 @@ impl<'a> RandomTxMaker<'a> {
                             AccountSpending::DelegationBalance(delegation_id, to_spend),
                         )));
 
+                        let lock_period = self
+                            .chainstate
+                            .get_chain_config()
+                            .staking_pool_spend_maturity_block_count(
+                                self.chainstate.get_best_block_height().unwrap(),
+                            );
                         result_outputs.push(TxOutput::LockThenTransfer(
                             OutputValue::Coin(to_spend),
                             Destination::AnyoneCanSpend,
-                            OutputTimeLock::ForBlockCount(1),
+                            OutputTimeLock::ForBlockCount(lock_period.to_int()),
                         ));
 
                         let _ = pos_accounting_latest
@@ -436,57 +447,54 @@ impl<'a> RandomTxMaker<'a> {
         let mut fee_input_to_change_supply: Option<TxInput> = None;
 
         for (outpoint, input_utxo) in inputs.iter() {
-            match input_utxo {
-                TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => {
-                    match v {
-                        OutputValue::Coin(coins) => {
-                            // save utxo for a potential token supply change fee
-                            if *coins
-                                >= self
-                                    .chainstate
-                                    .get_chain_config()
-                                    .token_supply_change_fee(BlockHeight::zero())
-                                && fee_input_to_change_supply.is_none()
-                                && inputs.len() > 1
-                            {
-                                fee_input_to_change_supply = Some(TxInput::Utxo(outpoint.clone()));
-                            } else {
-                                let new_outputs =
-                                    self.spend_coins(rng, *coins, pos_accounting_cache);
-                                result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                                result_outputs.extend(new_outputs);
-                            }
-                        }
-                        OutputValue::TokenV0(_) => {
-                            unimplemented!("deprecated tokens version")
-                        }
-                        OutputValue::TokenV1(token_id, amount) => {
-                            let token_data = tokens_cache.get_token_data(token_id).unwrap();
-                            if let Some(token_data) = token_data {
-                                let tokens_accounting::TokenData::FungibleToken(token_data) =
-                                    token_data;
-                                if token_data.is_frozen() {
-                                    continue;
-                                }
-                            }
-
-                            let (new_inputs, new_outputs) = self.spend_tokens_v1(
-                                rng,
-                                tokens_cache,
-                                *token_id,
-                                *amount,
-                                &mut fee_input_to_change_supply,
-                            );
-                            result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                            result_inputs.extend(new_inputs);
-                            result_outputs.extend(new_outputs);
+            let (new_inputs, new_outputs) = match input_utxo {
+                TxOutput::Transfer(v, _) => self.spend_output_value(
+                    rng,
+                    tokens_cache,
+                    pos_accounting_cache,
+                    &mut fee_input_to_change_supply,
+                    outpoint.clone(),
+                    v,
+                    inputs.len(),
+                ),
+                TxOutput::LockThenTransfer(v, _, timelock) => {
+                    let timelock_passed = match timelock {
+                        OutputTimeLock::UntilHeight(_)
+                        | OutputTimeLock::UntilTime(_)
+                        | OutputTimeLock::ForSeconds(_) => unimplemented!(),
+                        OutputTimeLock::ForBlockCount(block_count) => {
+                            let utxo_block_height = self
+                                .chainstate
+                                .utxo(outpoint)
+                                .unwrap()
+                                .unwrap()
+                                .source()
+                                .clone()
+                                .blockchain_height()
+                                .unwrap();
+                            let current_height =
+                                self.chainstate.get_best_block_height().unwrap().next_height();
+                            utxo_block_height.into_int() + *block_count <= current_height.into_int()
                         }
                     };
+
+                    if timelock_passed {
+                        self.spend_output_value(
+                            rng,
+                            tokens_cache,
+                            pos_accounting_cache,
+                            &mut fee_input_to_change_supply,
+                            outpoint.clone(),
+                            v,
+                            inputs.len(),
+                        )
+                    } else {
+                        (Vec::new(), Vec::new())
+                    }
                 }
                 TxOutput::CreateStakePool(pool_id, _)
                 | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                    // FIXME: there should be always at least one pool left
-                    if rng.gen_bool(0.1) {
+                    if !self.staking_pool.is_some_and(|id| id == *pool_id) && rng.gen_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
                             .unwrap()
@@ -495,32 +503,45 @@ impl<'a> RandomTxMaker<'a> {
                             .unwrap();
                         let _ = pos_accounting_cache.decommission_pool(*pool_id).unwrap();
 
-                        result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                        result_outputs.push(TxOutput::LockThenTransfer(
-                            OutputValue::Coin(staker_balance),
-                            Destination::AnyoneCanSpend,
-                            OutputTimeLock::ForBlockCount(1),
-                        ));
+                        let lock_period = self
+                            .chainstate
+                            .get_chain_config()
+                            .staking_pool_spend_maturity_block_count(
+                                self.chainstate.get_best_block_height().unwrap(),
+                            );
+                        (
+                            vec![TxInput::Utxo(outpoint.clone())],
+                            vec![TxOutput::LockThenTransfer(
+                                OutputValue::Coin(staker_balance),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::ForBlockCount(lock_period.to_int()),
+                            )],
+                        )
+                        // FIXME: notify framework
+                    } else {
+                        (Vec::new(), Vec::new())
                     }
                 }
                 TxOutput::IssueNft(token_id, _, _) => {
-                    let (new_inputs, new_outputs) = self.spend_tokens_v1(
+                    let (mut new_inputs, new_outputs) = self.spend_tokens_v1(
                         rng,
                         tokens_cache,
                         *token_id,
                         Amount::from_atoms(1),
                         &mut fee_input_to_change_supply,
                     );
-                    result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                    result_inputs.extend(new_inputs);
-                    result_outputs.extend(new_outputs);
+                    new_inputs.push(TxInput::Utxo(outpoint.clone()));
+                    (new_inputs, new_outputs)
                 }
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_) => unreachable!(),
-            }
+            };
+
+            result_inputs.extend(new_inputs);
+            result_outputs.extend(new_outputs);
         }
 
         if let Some(token_id) = self.unmint_for {
@@ -695,6 +716,63 @@ impl<'a> RandomTxMaker<'a> {
             }
             new_outputs
         }
+    }
+
+    fn spend_output_value(
+        &mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
+        pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
+        fee_input_to_change_supply: &mut Option<TxInput>,
+        utxo_outpoint: UtxoOutPoint,
+        v: &OutputValue,
+        num_inputs: usize,
+    ) -> (Vec<TxInput>, Vec<TxOutput>) {
+        let mut result_inputs = Vec::new();
+        let mut result_outputs = Vec::new();
+
+        match v {
+            OutputValue::Coin(coins) => {
+                // save utxo for a potential token supply change fee
+                if *coins
+                    >= self
+                        .chainstate
+                        .get_chain_config()
+                        .token_supply_change_fee(BlockHeight::zero())
+                    && fee_input_to_change_supply.is_none()
+                    && num_inputs > 1
+                {
+                    *fee_input_to_change_supply = Some(TxInput::Utxo(utxo_outpoint.clone()));
+                } else {
+                    let new_outputs = self.spend_coins(rng, *coins, pos_accounting_cache);
+                    result_inputs.push(TxInput::Utxo(utxo_outpoint));
+                    result_outputs.extend(new_outputs);
+                }
+            }
+            OutputValue::TokenV0(_) => {
+                unimplemented!("deprecated tokens version")
+            }
+            OutputValue::TokenV1(token_id, amount) => {
+                let token_data = tokens_cache.get_token_data(token_id).unwrap();
+                if let Some(token_data) = token_data {
+                    let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
+                    if !token_data.is_frozen() {
+                        let (new_inputs, new_outputs) = self.spend_tokens_v1(
+                            rng,
+                            tokens_cache,
+                            *token_id,
+                            *amount,
+                            fee_input_to_change_supply,
+                        );
+                        result_inputs.push(TxInput::Utxo(utxo_outpoint));
+                        result_inputs.extend(new_inputs);
+                        result_outputs.extend(new_outputs);
+                    }
+                }
+            }
+        };
+
+        (result_inputs, result_outputs)
     }
 
     fn spend_tokens_v1(
