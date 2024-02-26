@@ -103,16 +103,12 @@ impl TestFramework {
 
         // Start the wallet service
         let (wallet_service, rpc_server) = {
-            let ws_config = WalletServiceConfig::new(
-                chain_type,
-                Some(wallet_path),
-                vec![],
-                chain_config_options,
-            )
-            .unwrap()
-            .with_custom_chain_config(chain_config)
-            .with_node_rpc_address(node_rpc_addr.to_string())
-            .with_username_and_password(RPC_USERNAME.to_string(), RPC_PASSWORD.to_string());
+            let ws_config = WalletServiceConfig::new(chain_type, Some(wallet_path), vec![])
+                .with_regtest_options(chain_config_options)
+                .unwrap()
+                .with_custom_chain_config(chain_config)
+                .with_node_rpc_address(node_rpc_addr.to_string())
+                .with_username_and_password(RPC_USERNAME.to_string(), RPC_PASSWORD.to_string());
             let bind_addr = "127.0.0.1:0".parse().unwrap();
             let rpc_config = wallet_rpc_lib::config::WalletRpcConfig {
                 bind_addr,

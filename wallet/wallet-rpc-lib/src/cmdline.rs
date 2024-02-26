@@ -15,8 +15,6 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
-
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use crypto::key::hdkd::u31::U31;
 use rpc::{
@@ -29,7 +27,53 @@ use utils_networking::NetworkAddressWithPort;
 use crate::config::{WalletRpcConfig, WalletServiceConfig};
 
 /// Service providing an RPC interface to a wallet
-#[derive(Parser)]
+#[derive(clap::Parser)]
+pub struct WalletRpcDaemonArgs {
+    #[clap(subcommand)]
+    command: WalletRpcDaemonCommand,
+}
+
+impl WalletRpcDaemonArgs {
+    pub fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
+        let Self { command } = self;
+        command.into_config()
+    }
+}
+
+#[derive(clap::Subcommand)]
+pub enum WalletRpcDaemonCommand {
+    /// Run the mainnet wallet.
+    Mainnet(WalletRpcDaemonChainArgs),
+
+    /// Run the testnet wallet.
+    Testnet(WalletRpcDaemonChainArgs),
+
+    /// Run the regtest wallet.
+    Regtest {
+        #[command(flatten)]
+        args: WalletRpcDaemonChainArgs,
+        #[command(flatten)]
+        regtest_opts: Box<ChainConfigOptions>,
+    },
+}
+
+impl WalletRpcDaemonCommand {
+    fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
+        match self {
+            Self::Mainnet(args) => args.into_config(ChainType::Mainnet),
+            Self::Testnet(args) => args.into_config(ChainType::Testnet),
+            Self::Regtest { args, regtest_opts } => {
+                let (ws_config, rpc_config) = args.into_config(ChainType::Regtest)?;
+                let ws_config = ws_config
+                    .with_regtest_options(*regtest_opts)
+                    .map_err(ConfigError::InvalidRegtestOptions)?;
+                Ok((ws_config, rpc_config))
+            }
+        }
+    }
+}
+
+#[derive(clap::Args)]
 #[clap(mut_args(clap_utils::env_adder("WALLET_RPC_DAEMON")))]
 #[command(
     version,
@@ -41,19 +85,10 @@ use crate::config::{WalletRpcConfig, WalletServiceConfig};
             .multiple(true)
     ),
 )]
-pub struct WalletRpcDaemonArgs {
+pub struct WalletRpcDaemonChainArgs {
     /// The wallet file to operate on
     #[arg()]
     wallet_path: Option<PathBuf>,
-
-    /// Chain type to use
-    #[arg(
-        long,
-        value_name("TYPE"),
-        value_parser(parse_chain_type),
-        default_value("mainnet")
-    )]
-    chain_type: ChainType,
 
     /// Start staking for the specified account after starting the wallet
     #[arg(long, value_name("ACC_NUMBER"), requires("wallet_path"))]
@@ -101,17 +136,16 @@ pub struct WalletRpcDaemonArgs {
     /// Enable running the wallet service without RPC authentication
     #[arg(long, conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]))]
     rpc_no_authentication: bool,
-
-    #[clap(flatten)]
-    chain_config: ChainConfigOptions,
 }
 
-impl WalletRpcDaemonArgs {
-    pub fn into_config(self) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
+impl WalletRpcDaemonChainArgs {
+    fn into_config(
+        self,
+        chain_type: ChainType,
+    ) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
             wallet_path: wallet_file,
             rpc_bind_address: wallet_rpc_address,
-            chain_type,
             start_staking_for_account,
             node_rpc_address,
             node_cookie_file,
@@ -121,7 +155,6 @@ impl WalletRpcDaemonArgs {
             rpc_username,
             rpc_password,
             rpc_no_authentication,
-            chain_config,
         } = self;
 
         let ws_config = {
@@ -133,18 +166,12 @@ impl WalletRpcDaemonArgs {
                 _ => panic!("Should not happen due to arg constraints"),
             };
 
-            WalletServiceConfig::new(
-                chain_type,
-                wallet_file,
-                start_staking_for_account,
-                chain_config,
-            )
-            .map_err(|err| ConfigError::InvalidChainConfigOption(err.to_string()))?
-            .apply_option(
-                WalletServiceConfig::with_node_rpc_address,
-                node_rpc_address.map(|addr| addr.to_string()),
-            )
-            .with_node_credentials(node_credentials)
+            WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account)
+                .apply_option(
+                    WalletServiceConfig::with_node_rpc_address,
+                    node_rpc_address.map(|addr| addr.to_string()),
+                )
+                .with_node_credentials(node_credentials)
         };
 
         let rpc_config = make_wallet_config(
@@ -209,18 +236,7 @@ pub enum ConfigError {
 
     #[error("Invalid chain config option: {0}")]
     InvalidChainConfigOption(String),
-}
 
-#[derive(thiserror::Error, Debug)]
-enum ChainTypeParseError {
-    #[error("Unrecognized chain type '{0}'")]
-    Unrecognized(String),
-}
-
-fn parse_chain_type(arg: &str) -> Result<ChainType, ChainTypeParseError> {
-    ChainType::ALL
-        .iter()
-        .find(|ct| ct.name() == arg)
-        .copied()
-        .ok_or_else(|| ChainTypeParseError::Unrecognized(arg.to_string()))
+    #[error("Invalid regtest chain configuration: {0}")]
+    InvalidRegtestOptions(anyhow::Error),
 }
