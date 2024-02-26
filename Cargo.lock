@@ -7960,21 +7960,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f186bd2dcf04330886ce82d6f33dd75a7bfcf69ecf5763b89fcde53b6ac9838"
 
 [[package]]
-name = "wasm-crypto"
-version = "0.3.0"
-dependencies = [
- "bip39",
- "common",
- "crypto",
- "getrandom 0.2.12",
- "rstest",
- "serialization",
- "test-utils",
- "thiserror",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "wasm-timer"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7987,6 +7972,21 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasm-wrappers"
+version = "0.3.0"
+dependencies = [
+ "bip39",
+ "common",
+ "crypto",
+ "getrandom 0.2.12",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -38,8 +38,8 @@ jobs:
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build the wasm module
-        working-directory: ./wasm-crypto
+        working-directory: ./wasm-wrappers
         run: wasm-pack build --target nodejs
       - name: Run the tests
-        working-directory: ./wasm-crypto
+        working-directory: ./wasm-wrappers
         run: node js-bindings/node-entry.js

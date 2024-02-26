@@ -1,6 +1,8 @@
-## Basic wasm bindings for cryptography
+## Basic wasm bindings for mintlayer
 
-##### Note: This was tested on x86_64 Linux, and may not work on other platforms. It didn't work on M1 Mac (particularly the build. A pre-built wasm binary works fine on a browser).
+This module has different functionalities of mintlayer compiled into wasm for various purposes, primarily interfacing with other systems and languages without having to rewrite code.
+
+##### Note: This was tested on x86_64 Linux, and may not work on other platforms. It didn't work on M1 Mac directly (particularly the build. A pre-built wasm binary works fine on a browser, see below for more information).
 
 
 ### To run in a web browser

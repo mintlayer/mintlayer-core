@@ -68,7 +68,7 @@ members = [
   "wallet/wallet-rpc-daemon",           # Wallet RPC daemon binary.
   "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
   "wallet/wallet-test-node",            # Node for wallet testing as a library.
-  "wasm-crypto",                        # WASM bindings for the crypto crate.
+  "wasm-wrappers",                      # WASM wrappers for various components
 ]
 
 default-members = [
