@@ -294,6 +294,7 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "bb8-postgres",
+ "chainstate",
  "chainstate-test-framework",
  "clap",
  "common",

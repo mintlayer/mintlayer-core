@@ -24,15 +24,17 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, Genesis, PoolId, Transaction, TxOutput,
+        UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use pos_accounting::PoolData;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Unbounded},
+    sync::Arc,
 };
 
 use super::CURRENT_STORAGE_VERSION;
@@ -56,6 +58,7 @@ struct ApiServerInMemoryStorage {
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
     best_block: BlockAuxData,
+    genesis_block: Arc<WithId<Genesis>>,
     storage_version: u32,
 }
 
@@ -77,6 +80,7 @@ impl ApiServerInMemoryStorage {
             address_locked_utxos: BTreeMap::new(),
             fungible_token_issuances: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
+            genesis_block: chain_config.genesis_block().clone(),
             best_block: BlockAuxData::new(
                 chain_config.genesis_block_id(),
                 0.into(),
@@ -212,6 +216,17 @@ impl ApiServerInMemoryStorage {
 
     fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError> {
         Ok(self.best_block)
+    }
+
+    fn get_latest_blocktimestamps(&self) -> Result<Vec<BlockTimestamp>, ApiServerStorageError> {
+        Ok(self
+            .main_chain_blocks_table
+            .iter()
+            .rev()
+            .map(|(_, id)| self.block_table.get(id).unwrap().block.timestamp())
+            .chain(std::iter::once(self.genesis_block.timestamp()))
+            .take(chainstate::MEDIAN_TIME_SPAN)
+            .collect())
     }
 
     fn get_block_aux_data(

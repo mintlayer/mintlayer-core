@@ -293,6 +293,10 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_best_block(&self) -> Result<BlockAuxData, ApiServerStorageError>;
 
+    async fn get_latest_blocktimestamps(
+        &self,
+    ) -> Result<Vec<BlockTimestamp>, ApiServerStorageError>;
+
     async fn get_block(
         &self,
         block_id: Id<Block>,
