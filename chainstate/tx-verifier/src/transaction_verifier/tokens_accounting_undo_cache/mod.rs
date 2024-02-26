@@ -103,9 +103,7 @@ impl TokensAccountingBlockUndoCache {
             Entry::Vacant(_) => fetcher_func(*tx_source)?,
             Entry::Occupied(entry) => match entry.get() {
                 CachedOperation::Write(undo) | CachedOperation::Read(undo) => Some(undo.clone()),
-                CachedOperation::Erase => panic!(
-                    "Attempt to undo tokens in a transaction for a block that has been fully disconnected."
-                ),
+                CachedOperation::Erase => None,
             },
         };
 

@@ -5175,3 +5175,52 @@ fn change_authority_fee(#[case] seed: Seed) {
             .unwrap();
     });
 }
+
+// Produce `genesis -> a` chain, where block `a` transfers coins and issue a token in separate txs.
+//
+// It's vital to have 2 txs in that order because on disconnect token undo would be performed first
+// and tokens::BlockUndo object would be erased. But then when transfer tx is disconnected tokens::BlockUndo
+// is fetched and checked again, which should work fine and just return None.
+//
+// Then produce a parallel `genesis -> b -> c` that should trigger a in-memory reorg for block `a`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_tokens_tx_with_simple_tx(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let genesis_block_id: Id<GenBlock> = tf.genesis().get_id().into();
+    let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
+
+    // produce block `a` with transfer tx ans issue token tx
+    let transfer_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(genesis_block_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(token_issuance_fee),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let transfer_tx_id = transfer_tx.transaction().get_id();
+
+    let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
+    let issue_token_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(transfer_tx_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
+        .build();
+
+    tf.make_block_builder()
+        .with_transactions(vec![transfer_tx, issue_token_tx])
+        .build_and_process()
+        .unwrap();
+
+    // produce block at height 2 that should trigger in memory reorg for block `b`
+    let new_chain_block_id = tf.create_chain(&tf.genesis().get_id().into(), 2, &mut rng).unwrap();
+    assert_eq!(new_chain_block_id, tf.best_block_id());
+}
