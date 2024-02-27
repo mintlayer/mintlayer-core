@@ -477,8 +477,7 @@ impl Account {
                 {
                     change_address
                 } else {
-                    let (_, change_address) = self.get_new_address(db_tx, KeyPurpose::Change)?;
-                    change_address
+                    self.key_chain.next_unused_address(db_tx, KeyPurpose::Change)?.1
                 };
 
                 let change_output = match currency {

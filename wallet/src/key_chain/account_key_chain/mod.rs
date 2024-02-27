@@ -209,6 +209,16 @@ impl AccountKeyChain {
         self.account_vrf_public_key.as_ref()
     }
 
+    /// Return the next unused address and don't mark it as issued
+    pub fn next_unused_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        purpose: KeyPurpose,
+    ) -> KeyChainResult<(ChildNumber, Address<Destination>)> {
+        let (index, _key, address) = self.get_leaf_key_chain_mut(purpose).next_unused(db_tx)?;
+        Ok((index, address))
+    }
+
     /// Issue a new address that hasn't been used before
     pub fn issue_address(
         &mut self,

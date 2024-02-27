@@ -184,6 +184,40 @@ impl LeafKeySoftChain {
         ))
     }
 
+    /// Return the next unused key, this will reuse any already issued but not used keys,
+    /// or issue a new one if all issued keys are already used
+    pub fn next_unused(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> KeyChainResult<(ChildNumber, ExtendedPublicKey, Address<Destination>)> {
+        let new_issued_index = {
+            match self.last_used() {
+                None => U31::ZERO,
+                Some(last_used) => last_used.plus_one()?,
+            }
+        };
+
+        let key = self.derive_and_add_key(db_tx, new_issued_index)?;
+
+        let index = ChildNumber::from_normal(new_issued_index);
+
+        let address = self.addresses.get(&index).expect("The address should be derived").clone();
+
+        if self.last_used() == self.last_issued() {
+            logging::log::debug!(
+                "new address: {}, index: {}, purpose {:?}",
+                address.get(),
+                new_issued_index,
+                self.purpose
+            );
+
+            self.usage_state.increment_up_to_last_issued(new_issued_index);
+            self.save_usage_state(db_tx)?;
+        }
+
+        Ok((index, key, address))
+    }
+
     /// Issue a new key
     pub fn issue_new(
         &mut self,

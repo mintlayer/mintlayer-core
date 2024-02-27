@@ -4442,3 +4442,52 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     matches!(output, TxOutput::Transfer(OutputValue::Coin(value), dest)
             if value == balance && dest == cold_wallet_address.decode_object(&chain_config).unwrap());
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    // Generate a new block which sends reward to the cold wallet address
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let reward_output =
+        make_address_output(chain_config.as_ref(), address.clone(), block1_amount).unwrap();
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![reward_output.clone()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // can create 100 txs but will not run out of change addresses
+    for _ in 0..100 {
+        wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(1)),
+                    address.decode_object(&chain_config).unwrap(),
+                )],
+                SelectedInputs::Inputs(vec![]),
+                [].into(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+            )
+            .unwrap();
+    }
+}
