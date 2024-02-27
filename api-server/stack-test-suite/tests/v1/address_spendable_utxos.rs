@@ -24,7 +24,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_address() {
-    let (task, response) = spawn_webserver("/api/v1/address/invalid-address/available-utxos").await;
+    let (task, response) = spawn_webserver("/api/v1/address/invalid-address/spendable-utxos").await;
 
     assert_eq!(response.status(), 400);
 
@@ -49,7 +49,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
     let (task, response) = spawn_webserver(&format!(
-        "/api/v1/address/{}/available-utxos",
+        "/api/v1/address/{}/spendable-utxos",
         address.get()
     ))
     .await;
@@ -287,7 +287,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
     });
 
     for (address, expected) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}/available-utxos");
+        let url = format!("/api/v1/address/{address}/spendable-utxos");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
@@ -530,7 +530,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     for (address, expected_values) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}/available-utxos");
+        let url = format!("/api/v1/address/{address}/spendable-utxos");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener

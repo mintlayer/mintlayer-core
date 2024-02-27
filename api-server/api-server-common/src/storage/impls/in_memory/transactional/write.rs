@@ -396,6 +396,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         self.transaction.get_address_available_utxos(address)
     }
 
+    async fn get_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        self.transaction.get_address_all_utxos(address)
+    }
+
     async fn get_locked_utxos_until_now(
         &self,
         block_height: BlockHeight,

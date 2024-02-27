@@ -14,8 +14,9 @@
 // limitations under the License.
 
 mod address;
-mod address_available_utxos;
+mod address_all_utxos;
 mod address_delegations;
+mod address_spendable_utxos;
 mod block;
 mod block_header;
 mod block_reward;
