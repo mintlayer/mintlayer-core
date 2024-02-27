@@ -45,19 +45,18 @@ impl WalletServiceConfig {
         chain_type: ChainType,
         wallet_file: Option<PathBuf>,
         start_staking_for_account: Vec<U31>,
-        chain_config_options: ChainConfigOptions,
-    ) -> anyhow::Result<Self> {
-        let chain_config = match chain_type {
-            ChainType::Regtest => Arc::new(regtest_chain_config(&chain_config_options)?),
-            _ => Arc::new(common::chain::config::Builder::new(chain_type).build()),
-        };
-        Ok(Self {
-            chain_config,
+    ) -> Self {
+        Self {
+            chain_config: Arc::new(common::chain::config::Builder::new(chain_type).build()),
             wallet_file,
             start_staking_for_account,
             node_rpc_address: None,
             node_credentials: RpcAuthData::None,
-        })
+        }
+    }
+
+    pub fn with_regtest_options(self, options: ChainConfigOptions) -> anyhow::Result<Self> {
+        Ok(self.with_custom_chain_config(Arc::new(regtest_chain_config(&options)?)))
     }
 
     pub fn with_custom_chain_config(mut self, chain_config: Arc<ChainConfig>) -> Self {
