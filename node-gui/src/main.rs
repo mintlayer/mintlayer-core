@@ -77,11 +77,12 @@ impl Application for MintlayerNodeGUI {
     }
 
     fn title(&self) -> String {
+        let version = env!("CARGO_PKG_VERSION");
         match self {
             MintlayerNodeGUI::Loading => "Mintlayer Node - Loading...".to_string(),
             MintlayerNodeGUI::Loaded(_backend_sender, w) => {
                 format!(
-                    "Mintlayer Node - {}",
+                    "Mintlayer Node - {} - v{version}",
                     w.node_state().chain_config().chain_type().name()
                 )
             }

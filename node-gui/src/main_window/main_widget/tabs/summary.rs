@@ -15,8 +15,9 @@
 
 use std::fmt::Debug;
 
+use common::chain::ChainConfig;
 use iced::{
-    widget::{column, Text},
+    widget::{column, tooltip, Text},
     Command, Element, Length,
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
@@ -26,6 +27,8 @@ use crate::main_window::{print_block_timestamp, NodeState};
 use super::{Tab, TabsMessage};
 
 use serialization::hex::HexEncode;
+
+const NETWORK_TOOLTIP: &str = "Mintlayer supports multiple types of networks for different purposes. The 'Mainnet' is the main network that has coins with value. The 'Testnet' is the network with coins that have no value, but is used for testing various applications before deploying them on Mainnet.";
 
 #[derive(Debug, Clone)]
 pub enum SummaryMessage {}
@@ -42,6 +45,11 @@ impl SummaryTab {
     }
 }
 
+fn get_network_type_capitalized(chain_config: &ChainConfig) -> String {
+    let mut network_type = chain_config.chain_type().name().to_string();
+    format!("{}{network_type}", network_type.remove(0).to_uppercase())
+}
+
 impl Tab for SummaryTab {
     type Message = TabsMessage;
 
@@ -54,7 +62,18 @@ impl Tab for SummaryTab {
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
+        let network_type = get_network_type_capitalized(node_state.chain_config());
         let chainstate = Grid::with_columns(2)
+            .push(Text::new("Network "))
+            .push(
+                tooltip(
+                    Text::new(network_type),
+                    NETWORK_TOOLTIP,
+                    tooltip::Position::Bottom,
+                )
+                .gap(10)
+                .style(iced::theme::Container::Box),
+            )
             .push(Text::new("Best block id "))
             .push(Text::new(node_state.chain_info.best_block_id.hex_encode()))
             .push(Text::new("Best block height "))
