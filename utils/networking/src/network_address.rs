@@ -210,23 +210,20 @@ impl FromStr for NetworkAddressWithOptionalPort {
             });
         }
 
-        let separator = ':';
-        assert!(separator.is_ascii());
-        let separator_len = 1;
-
-        // Use rfind instead of find to produce better errors; e.g. for something like
+        // Use rsplit_once instead of split_once to produce better errors; e.g. for something like
         // '[1:2:3:4:5:6:7:8]:foo' we'd prefer the error 'BadPortNumber("foo")' instead of
         // 'BadPortNumber("2:3:4:5:6:7:8]:foo")'
-        let separator_pos = s.rfind(separator);
+        let (addr_str, port_str) = if let Some((addr_str, port_str)) = s.rsplit_once(':') {
+            (addr_str, Some(port_str))
+        } else {
+            (s, None)
+        };
 
         // Parse the port first, to produce a slightly more understandable error.
         // E.g. when parsing '[1:2:3:4:5:6:7:8]', which is not a valid address, we could produce
         // either 'NotIpAddressOrDomainName("[1")' or 'BadPortNumber("2:3:4:5:6:7:8]")'.
         // The former looks too cryptic, so we choose the latter.
-        let port = if let Some(pos) = separator_pos {
-            // Note: the position "pos + separator_len" is guaranteed to be at a character boundary.
-            #[allow(clippy::string_slice)]
-            let port_str = &s[pos + separator_len..];
+        let port = if let Some(port_str) = port_str {
             let port: u16 = port_str
                 .parse()
                 .map_err(|_| NetworkAddressParseError::BadPortNumber(port_str.to_owned()))?;
@@ -235,9 +232,6 @@ impl FromStr for NetworkAddressWithOptionalPort {
             None
         };
 
-        // Note: the position "separator_pos" is guaranteed to be at a character boundary.
-        #[allow(clippy::string_slice)]
-        let addr_str = &s[..separator_pos.unwrap_or(s.len())];
         let address: NetworkAddress = addr_str.parse()?;
 
         Ok(Self { address, port })

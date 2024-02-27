@@ -156,6 +156,10 @@ fn network_address_with_optional_port_printing_parsing_with_port() {
         NetworkAddressParseError::BadPortNumber("foo".to_owned())
     );
 
+    // Ipv4 address with an empty port
+    let err = "1.2.3.4:".parse::<NetworkAddressWithOptionalPort>().unwrap_err();
+    assert_eq!(err, NetworkAddressParseError::BadPortNumber("".to_owned()));
+
     // Ipv4 address with a port out of range
     let err = "1.2.3.4:65536".parse::<NetworkAddressWithOptionalPort>().unwrap_err();
     assert_eq!(
@@ -180,6 +184,10 @@ fn network_address_with_optional_port_printing_parsing_with_port() {
         err,
         NetworkAddressParseError::BadPortNumber("foo".to_owned())
     );
+
+    // Ipv6 address with an empty port
+    let err = "[1:2:3:4:5:6:7:8]:".parse::<NetworkAddressWithOptionalPort>().unwrap_err();
+    assert_eq!(err, NetworkAddressParseError::BadPortNumber("".to_owned()));
 
     // Ipv6 address with a port out of range
     let err = "[1:2:3:4:5:6:7:8]:65536".parse::<NetworkAddressWithOptionalPort>().unwrap_err();
@@ -275,6 +283,10 @@ fn network_address_with_port_printing_parsing_with_port() {
         NetworkAddressParseError::BadPortNumber("foo".to_owned())
     );
 
+    // Ipv4 address with an empty port
+    let err = "1.2.3.4:".parse::<NetworkAddressWithPort>().unwrap_err();
+    assert_eq!(err, NetworkAddressParseError::BadPortNumber("".to_owned()));
+
     // Ipv4 address with a port out of range
     let err = "1.2.3.4:65536".parse::<NetworkAddressWithPort>().unwrap_err();
     assert_eq!(
@@ -299,6 +311,10 @@ fn network_address_with_port_printing_parsing_with_port() {
         err,
         NetworkAddressParseError::BadPortNumber("foo".to_owned())
     );
+
+    // Ipv6 address with an empty port
+    let err = "[1:2:3:4:5:6:7:8]:".parse::<NetworkAddressWithPort>().unwrap_err();
+    assert_eq!(err, NetworkAddressParseError::BadPortNumber("".to_owned()));
 
     // Ipv6 address with a port out of range
     let err = "[1:2:3:4:5:6:7:8]:65536".parse::<NetworkAddressWithPort>().unwrap_err();
