@@ -1447,7 +1447,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT utxo FROM ml_utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
+                "SELECT utxo, spent FROM ml_utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
                 &[&outpoint.encode()],
             )
             .await
@@ -1459,15 +1459,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let serialized_data: Vec<u8> = row.get(0);
+        let spent: bool = row.get(1);
 
-        let utxo = Utxo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+        let output = TxOutput::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
                 "Utxo for outpoint {:?} deserialization failed: {}",
                 outpoint, e
             ))
         })?;
 
-        Ok(Some(utxo))
+        Ok(Some(Utxo::new(output, spent)))
     }
 
     pub async fn get_address_available_utxos(
@@ -1501,13 +1502,57 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ))
                 })?;
 
-                let utxo = Utxo::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Utxo for address {:?} deserialization failed: {}",
                         address, e
                     ))
                 })?;
-                Ok((outpoint, utxo.into_output()))
+                Ok((outpoint, output))
+            })
+            .collect()
+    }
+
+    pub async fn get_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT outpoint, utxo
+                FROM ml_utxo
+                WHERE address = $1
+                UNION
+                SELECT outpoint, utxo
+                FROM ml_locked_utxo
+                WHERE address = $1
+                ;"#,
+                &[&address],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let outpoint: Vec<u8> = row.get(0);
+                let utxo: Vec<u8> = row.get(1);
+
+                let outpoint = UtxoOutPoint::decode_all(&mut outpoint.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Outpoint for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+
+                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                    ApiServerStorageError::DeserializationError(format!(
+                        "Utxo for address {:?} deserialization failed: {}",
+                        address, e
+                    ))
+                })?;
+                Ok((outpoint, output))
             })
             .collect()
     }
@@ -1543,12 +1588,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         "Outpoint deserialization failed: {e}",
                     ))
                 })?;
-                let utxo = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Utxo deserialization failed: {e}",
                     ))
                 })?;
-                Ok((outpoint, utxo))
+                Ok((outpoint, output))
             })
             .collect()
     }
@@ -1569,7 +1614,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 "INSERT INTO ml_utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2;",
-                &[&outpoint.encode(), &utxo.encode(), &spent, &address, &height],
+                &[&outpoint.encode(), &utxo.output().encode(), &spent, &address, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

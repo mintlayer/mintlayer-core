@@ -386,7 +386,7 @@ where
         db_tx.commit().await.unwrap();
     }
 
-    // Test setting/getting address available utxos
+    // Test setting/getting address spendable utxos
     {
         let db_tx = storage.transaction_ro().await.unwrap();
         let test_framework = TestFramework::builder(&mut rng).build();
@@ -481,6 +481,103 @@ where
                 .await
                 .unwrap();
             assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+        }
+
+        // get all utxos
+        {
+            // some new address
+            let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+            let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
+            let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+
+            let random_tx_id: Id<Transaction> =
+                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let outpoint = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(random_tx_id),
+                rng.gen::<u32>(),
+            );
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                bob_destination.clone(),
+            );
+
+            // setup a locked utxo
+            let locked_utxo = LockedUtxo::new(
+                output.clone(),
+                UtxoLock::UntilHeight(block_height.next_height()),
+            );
+            db_tx
+                .set_locked_utxo_at_height(
+                    outpoint.clone(),
+                    locked_utxo,
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            // set it as unlocked at next block height
+            let utxo = Utxo::new(output.clone(), false);
+            db_tx
+                .set_utxo_at_height(
+                    outpoint.clone(),
+                    utxo,
+                    bob_address.get(),
+                    block_height.next_height(),
+                )
+                .await
+                .unwrap();
+
+            // and set it as spent on the next block height
+            let spent_utxo = Utxo::new(output.clone(), true);
+            db_tx
+                .set_utxo_at_height(
+                    outpoint.clone(),
+                    spent_utxo,
+                    bob_address.get(),
+                    block_height.next_height().next_height(),
+                )
+                .await
+                .unwrap();
+
+            // set another locked utxo
+            let random_tx_id: Id<Transaction> =
+                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let locked_outpoint = UtxoOutPoint::new(
+                OutPointSourceId::Transaction(random_tx_id),
+                rng.gen::<u32>(),
+            );
+            let locked_output = TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..1000))),
+                bob_destination.clone(),
+            );
+
+            let locked_utxo = LockedUtxo::new(
+                locked_output.clone(),
+                UtxoLock::UntilHeight(BlockHeight::new(rng.gen_range(10000..100000))),
+            );
+            db_tx
+                .set_locked_utxo_at_height(
+                    locked_outpoint.clone(),
+                    locked_utxo,
+                    bob_address.get(),
+                    block_height,
+                )
+                .await
+                .unwrap();
+
+            // should return only once the first utxo and also the locked utxo
+            let utxos = db_tx.get_address_all_utxos(bob_address.get()).await.unwrap();
+            assert_eq!(utxos.len(), 2);
+            assert_eq!(
+                utxos.iter().find(|utxo| utxo.0 == outpoint),
+                Some(&(outpoint.clone(), output.clone()))
+            );
+            assert_eq!(
+                utxos.iter().find(|utxo| utxo.0 == locked_outpoint),
+                Some(&(locked_outpoint, locked_output))
+            );
         }
 
         // set one and get it

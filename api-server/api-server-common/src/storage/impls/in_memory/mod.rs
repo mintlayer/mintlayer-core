@@ -431,6 +431,37 @@ impl ApiServerInMemoryStorage {
         Ok(result)
     }
 
+    fn get_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let result = self
+            .address_utxos
+            .get(address)
+            .unwrap_or(&BTreeSet::new())
+            .union(self.address_locked_utxos.get(address).unwrap_or(&BTreeSet::new()))
+            .map(|outpoint| {
+                (
+                    outpoint.clone(),
+                    self.get_utxo(outpoint.clone()).expect("no error").map_or_else(
+                        || {
+                            self.locked_utxo_table
+                                .get(outpoint)
+                                .expect("must exit")
+                                .values()
+                                .last()
+                                .expect("not empty")
+                                .output()
+                                .clone()
+                        },
+                        |utxo| utxo.output().clone(),
+                    ),
+                )
+            })
+            .collect();
+        Ok(result)
+    }
+
     fn get_locked_utxos_until_now(
         &self,
         block_height: BlockHeight,

@@ -93,7 +93,9 @@ pub fn routes<
 
     let router = router
         .route("/address/:address", get(address))
+        .route("/address/:address/all-utxos", get(all_address_utxos))
         .route("/address/:address/available-utxos", get(address_utxos))
+        .route("/address/:address/spendable-utxos", get(address_utxos))
         .route("/address/:address/delegations", get(address_delegations));
 
     let router = router
@@ -639,6 +641,42 @@ pub async fn address_utxos<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_address_available_utxos(&address.to_string())
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                json!({
+                "outpoint": utxo.0,
+                "utxo": txoutput_to_json(&utxo.1, &state.chain_config)})
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+pub async fn all_address_utxos<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let address =
+        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+    let utxos = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_address_all_utxos(&address.to_string())
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");

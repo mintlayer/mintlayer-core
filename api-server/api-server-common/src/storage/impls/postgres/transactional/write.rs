@@ -531,6 +531,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         Ok(res)
     }
 
+    async fn get_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_address_all_utxos(address).await?;
+
+        Ok(res)
+    }
+
     async fn get_locked_utxos_until_now(
         &self,
         block_height: BlockHeight,

@@ -376,6 +376,11 @@ pub trait ApiServerStorageRead: Sync {
         address: &str,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
 
+    async fn get_address_all_utxos(
+        &self,
+        address: &str,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+
     async fn get_locked_utxos_until_now(
         &self,
         block_height: BlockHeight,
