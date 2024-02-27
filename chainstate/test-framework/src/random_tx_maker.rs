@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, vec};
+use std::collections::BTreeMap;
 
 use crate::TestChainstate;
 
@@ -33,6 +33,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
@@ -74,6 +75,11 @@ fn get_random_delegation_data<'a>(
         .and_then(|(id, data)| {
             tip_view.get_delegation_data(*id).unwrap().is_some().then_some((id, data))
         })
+}
+
+pub trait StakingPoolsObserver {
+    fn on_pool_created(&mut self, pool_id: PoolId, staker_key: PrivateKey, vrf_sk: VRFPrivateKey);
+    fn on_pool_decommissioned(&mut self, pool_id: PoolId);
 }
 
 pub struct RandomTxMaker<'a> {
@@ -132,6 +138,7 @@ impl<'a> RandomTxMaker<'a> {
     pub fn make(
         mut self,
         rng: &mut (impl Rng + CryptoRng),
+        staking_pools_observer: &mut impl StakingPoolsObserver,
     ) -> (
         Transaction,
         TokensAccountingDeltaData,
@@ -147,8 +154,13 @@ impl<'a> RandomTxMaker<'a> {
         let inputs_with_utxos = self.select_utxos(rng);
 
         // Spend selected utxos
-        let (mut inputs, mut outputs) =
-            self.create_utxo_spending(rng, &mut tokens_cache, &mut pos_delta, inputs_with_utxos);
+        let (mut inputs, mut outputs) = self.create_utxo_spending(
+            rng,
+            staking_pools_observer,
+            &mut tokens_cache,
+            &mut pos_delta,
+            inputs_with_utxos,
+        );
 
         // Select random number of accounts to spend from
         let account_inputs = self.select_accounts(rng);
@@ -438,6 +450,7 @@ impl<'a> RandomTxMaker<'a> {
     fn create_utxo_spending(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
+        staking_pools_observer: &mut impl StakingPoolsObserver,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         inputs: Vec<(UtxoOutPoint, TxOutput)>,
@@ -502,6 +515,7 @@ impl<'a> RandomTxMaker<'a> {
                             .staker_balance()
                             .unwrap();
                         let _ = pos_accounting_cache.decommission_pool(*pool_id).unwrap();
+                        staking_pools_observer.on_pool_decommissioned(*pool_id);
 
                         let lock_period = self
                             .chainstate
@@ -517,7 +531,6 @@ impl<'a> RandomTxMaker<'a> {
                                 OutputTimeLock::ForBlockCount(lock_period.to_int()),
                             )],
                         )
-                        // FIXME: notify framework
                     } else {
                         (Vec::new(), Vec::new())
                     }
@@ -564,10 +577,25 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::DataDeposit(_) => Some(output),
                 TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
                     let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
+                    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+                    let (staker_sk, staker_pk) =
+                        PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
                     *dummy_pool_id = pool_id;
+                    *pool_data = Box::new(StakePoolData::new(
+                        pool_data.pledge(),
+                        Destination::PublicKey(staker_pk),
+                        vrf_pk,
+                        Destination::AnyoneCanSpend,
+                        pool_data.margin_ratio_per_thousand(),
+                        pool_data.cost_per_block(),
+                    ));
                     let _ = pos_accounting_cache
                         .create_pool(pool_id, pool_data.as_ref().clone().into())
                         .unwrap();
+
+                    staking_pools_observer.on_pool_created(pool_id, staker_sk, vrf_sk);
+
                     Some(output)
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
@@ -669,6 +697,7 @@ impl<'a> RandomTxMaker<'a> {
                         // If enough coins for pledge - create a pool
                         let dummy_pool_id = PoolId::new(H256::zero());
                         self.stake_pool_can_be_created = false;
+
                         let pool_data = StakePoolData::new(
                             new_value,
                             Destination::AnyoneCanSpend,

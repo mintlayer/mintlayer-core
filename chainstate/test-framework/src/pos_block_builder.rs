@@ -85,6 +85,7 @@ impl<'f> PoSBlockBuilder<'f> {
         let (staking_pool, staker_sk, staker_vrf_sk) = staking_pool.unwrap_or_else(|| {
             framework
                 .staking_pools
+                .staking_pools()
                 .iter()
                 .map(|(id, (sk, vrf))| (*id, sk.clone(), vrf.clone()))
                 .choose(rng)
@@ -233,8 +234,13 @@ impl<'f> PoSBlockBuilder<'f> {
                         ConsensusData::None | ConsensusData::PoW(_) => {
                             unimplemented!()
                         }
-                        ConsensusData::PoS(_) => {
-                            UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
+                        ConsensusData::PoS(data) => {
+                            if *data.stake_pool_id() == self.staking_pool {
+                                UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
+                            } else {
+                                // FIXME: look among transactions
+                                todo!()
+                            }
                         }
                     }
                 }
@@ -351,7 +357,7 @@ impl<'f> PoSBlockBuilder<'f> {
                 Some(self.staking_pool),
                 account_nonce_getter,
             )
-            .make(rng);
+            .make(rng, &mut self.framework.staking_pools);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in-memory store

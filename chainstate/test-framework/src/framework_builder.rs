@@ -16,6 +16,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
+    staking_pools::StakingPools,
     tx_verification_strategy::{
         DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
     },
@@ -53,7 +54,7 @@ pub struct TestFrameworkBuilder {
     time_value: Option<Arc<SeqCstAtomicU64>>,
     tx_verification_strategy: TxVerificationStrategy,
     initial_time_since_genesis: u64,
-    staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
+    staking_pools: StakingPools,
 }
 
 impl TestFrameworkBuilder {
@@ -65,7 +66,7 @@ impl TestFrameworkBuilder {
         let time_getter = None;
         let time_value = None;
         let initial_time_since_genesis = 0;
-        let staking_pools = BTreeMap::new();
+        let staking_pools = StakingPools::new();
 
         assert_eq!(TxVerificationStrategy::VARIANT_COUNT, 3);
         let tx_verification_strategy = match rng.gen_range(0..3) {
@@ -165,7 +166,7 @@ impl TestFrameworkBuilder {
         mut self,
         staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
     ) -> Self {
-        self.staking_pools = staking_pools;
+        self.staking_pools = StakingPools::from_data(staking_pools);
         self
     }
 

@@ -147,7 +147,7 @@ impl<'f> BlockBuilder<'f> {
                 None,
                 account_nonce_getter,
             )
-            .make(rng);
+            .make(rng, &mut self.framework.staking_pools);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in-memory store

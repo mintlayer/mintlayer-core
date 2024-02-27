@@ -19,6 +19,7 @@ use rstest::rstest;
 
 use crate::{
     pos_block_builder::PoSBlockBuilder,
+    staking_pools::StakingPools,
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
@@ -49,7 +50,7 @@ pub struct TestFramework {
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
     pub time_value: Option<Arc<SeqCstAtomicU64>>,
 
-    pub staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
+    pub staking_pools: StakingPools,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
