@@ -72,10 +72,6 @@ impl PoSAdapter {
         }
     }
 
-    pub fn get_pool_reward(&self, pool_id: PoolId) -> Amount {
-        self.pool_rewards.get(&pool_id).copied().unwrap_or(Amount::ZERO)
-    }
-
     pub fn rewards_per_delegation(&self) -> &Vec<(DelegationId, Amount)> {
         &self.delegation_rewards
     }
