@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::{fmt::Display, panic::Location};
+
+use logging::log;
+
+use crate::workspace_path::relative_src_file_path;
 
 pub trait LogError
 where
@@ -25,35 +29,63 @@ where
     fn log_warn_pfx(self, prefix: &str) -> Self;
 }
 
+fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
+    log::log!(
+        // Note: the default target will be the module name, i.e. "utils::tap_error_log";
+        // replace it with a shorter string that is still informative enough.
+        target: "LogError",
+        log_level,
+        "{err} ({}:{}:{})",
+        relative_src_file_path(location.file()),
+        location.line(),
+        location.column()
+    );
+}
+
+fn log_error_pfx<E: Display>(err: &E, prefix: &str, log_level: log::Level, location: &Location) {
+    log::log!(
+        target: "LogError",
+        log_level,
+        "{prefix}: {err} ({}:{}:{})",
+        relative_src_file_path(location.file()),
+        location.line(),
+        location.column()
+    );
+}
+
 impl<T, E: Display> LogError for Result<T, E> {
     #[inline(always)]
+    #[track_caller]
     fn log_err(self) -> Self {
         if let Err(ref err) = self {
-            logging::log::error!("{}", err);
+            log_error(err, log::Level::Error, Location::caller());
         }
         self
     }
 
     #[inline(always)]
+    #[track_caller]
     fn log_warn(self) -> Self {
         if let Err(ref err) = self {
-            logging::log::warn!("{}", err);
+            log_error(err, log::Level::Warn, Location::caller());
         }
         self
     }
 
     #[inline(always)]
+    #[track_caller]
     fn log_err_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            logging::log::error!("{}: {}", prefix, err);
+            log_error_pfx(err, prefix, log::Level::Error, Location::caller());
         }
         self
     }
 
     #[inline(always)]
+    #[track_caller]
     fn log_warn_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            logging::log::warn!("{}: {}", prefix, err);
+            log_error_pfx(err, prefix, log::Level::Warn, Location::caller());
         }
         self
     }

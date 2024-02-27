@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,30 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod array_2d;
-pub mod atomics;
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod clap_utils;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod graph_traversals;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod rust_backtrace;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
-pub mod try_as;
-pub mod workspace_path;
+use std::path::{PathBuf, MAIN_SEPARATOR};
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+fn main() {
+    let manifest_dir =
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is missing or invalid");
+    let ws_root_dir = {
+        let mut path_buf = PathBuf::new();
+        path_buf.push(manifest_dir);
+        path_buf.pop();
+        path_buf
+    };
+
+    println!(
+        "cargo:rustc-env=WORKSPACE_PATH={}{}",
+        ws_root_dir.to_string_lossy(),
+        MAIN_SEPARATOR
+    );
+}
