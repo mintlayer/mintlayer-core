@@ -58,9 +58,11 @@ impl OrphansProxy {
         f: impl FnOnce(&mut OrphanBlocksPool) -> R + Send + 'static,
     ) -> oneshot::Receiver<R> {
         let (tx, rx) = oneshot::channel::<R>();
+        let cur_tracing_span = tracing::Span::current();
         let _ = self
             .tx
             .send(Some(Box::new(move |subsys| {
+                let _span_guard = cur_tracing_span.enter();
                 let result = f(subsys);
                 let send_result = tx.send(result);
                 if let Err(e) = send_result {

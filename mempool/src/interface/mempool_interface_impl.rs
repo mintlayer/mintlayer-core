@@ -22,9 +22,10 @@ use crate::{
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
     FeeRate, MempoolInterface, MempoolMaxSize, TxOptions, TxStatus,
 };
+use chainstate::ChainstateEventTracingWrapper;
 use common::{
     chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::Id,
+    primitives::{Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -128,6 +129,7 @@ impl MempoolImpl {
 }
 
 impl MempoolInterface for MempoolImpl {
+    #[tracing::instrument(skip_all, fields(tx_id = %tx.transaction().get_id()))]
     fn add_transaction_local(
         &mut self,
         tx: SignedTransaction,
@@ -147,6 +149,7 @@ impl MempoolInterface for MempoolImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(tx_id = %tx.transaction().get_id()))]
     fn add_transaction_remote(
         &mut self,
         tx: SignedTransaction,
@@ -181,6 +184,7 @@ impl MempoolInterface for MempoolImpl {
         self.mempool.best_block_id()
     }
 
+    #[tracing::instrument(skip_all)]
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
@@ -222,6 +226,7 @@ impl MempoolInterface for MempoolImpl {
         self.work_queue.remove_peer(peer_id);
     }
 
+    #[tracing::instrument(skip(self), fields(event = %ChainstateEventTracingWrapper(&event)))]
     fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent) {
         self.process_chainstate_event(event);
     }

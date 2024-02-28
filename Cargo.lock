@@ -954,6 +954,7 @@ dependencies = [
  "thiserror",
  "tokens-accounting",
  "tokio",
+ "tracing",
  "tx-verifier",
  "utils",
  "utils-networking",
@@ -3711,6 +3712,7 @@ dependencies = [
  "thiserror",
  "tokens-accounting",
  "tokio",
+ "tracing",
  "utils",
  "utxo",
 ]
@@ -4507,7 +4509,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "utils",
  "utils-networking",
 ]

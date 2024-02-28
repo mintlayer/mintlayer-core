@@ -36,6 +36,7 @@ serde_json.workspace = true
 static_assertions.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
