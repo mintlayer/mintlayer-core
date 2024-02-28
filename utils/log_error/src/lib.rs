@@ -60,25 +60,59 @@ use syn::{
 ///
 /// # Other notes
 ///
-/// `tracing::instrument` has a similar feature, called `err`. E.g. the following will also log
+/// 1. `tracing::instrument` has a similar feature, called `err`. E.g. the following will also log
 /// errors returned by the function:
-/// ```
-/// #[tracing::instrument(err)]
-/// fn my_func() -> std::io::Result<()> {...}
-/// ```
-/// This approach has downsides though:
-/// -   The function call location is not logged.
-/// -   `tracing::instrument` will always create a new span whenever it's used; there is no way to
-///     say "I just want to log errors".
-///     Also, the created span's info is not included in the error's log message, so it doesn't
-///     help localize the error either.
+///    ```
+///    #[tracing::instrument(err)]
+///    fn my_func() -> std::io::Result<()> {...}
+///    ```
+///    This approach has downsides though:
+///    -   The function call location is not logged.
+///    -   `tracing::instrument` will always create a new span whenever it's used; there is no way
+///        to say "I just want to log errors".
+///        Also, the created span's info is not included in the error's log message, so it doesn't
+///        help localize the error either.
+///
+/// 2. The implementation of `log_error` wraps the function body in a closure; this may lead to
+/// compilation problems if the function's result captures a lifetime. E.g. consider this code:
+///    ```
+///    struct R<'a>(&'a mut u8);
+///
+///    struct Test(u8);
+///
+///    impl Test {
+///        #[log_error]
+///        fn f(&mut self) -> std::io::Result<R<'_>> {
+///            return Ok(R(&mut self.0))
+///        }
+///    }
+///    ```
+///    This will fail to compile with the error
+///    *"captured variable cannot escape `FnMut` closure body"*.
+///    In other circumstances a different error may be generated -
+///    *"lifetime may not live long enough ... closure implements `Fn`,*
+///    *so references to captured variables can't escape the closure"*.
+///     Both errors seem to happen when mutable references are involved.
+///
+///    Note that `tracing::instrument(err)` has the same problem, see <https://github.com/tokio-rs/tracing/issues/2796>.
+///
+///    A possible workaround is to "capture" the mutable reference explicitly, e.g.:
+///    ```
+///    impl Test {
+///        #[log_error]
+///        fn f(&mut self) -> std::io::Result<R<'_>> {
+///            let this = self;
+///            return Ok(R(&mut this.0))
+///        }
+///    }
+///    ```
 #[proc_macro_attribute]
 pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = syn::parse_macro_input!(args as Args);
     let func = syn::parse_macro_input!(item as ItemFn);
 
     let log_level_str = args.level.unwrap_or(Level::Error).to_string();
-    let log_level_tok: proc_macro2::TokenStream = log_level_str.parse().unwrap();
+    let log_level_tok: proc_macro2::TokenStream = log_level_str.parse().expect("Must succeed");
 
     let ItemFn {
         attrs,

@@ -53,6 +53,7 @@ fn assert_lines_match(output: &str, regexes: &[String], context: &str) {
     );
 }
 
+#[allow(clippy::type_complexity)]
 fn run_basic_tests(
     output: &LogOutput,
     context: &str,
@@ -65,7 +66,7 @@ fn run_basic_tests(
 ) {
     for (idx, (test_func, regexes)) in tests.iter().enumerate() {
         {
-            let _ = test_func(false).unwrap();
+            test_func(false).unwrap();
             let output = output.take();
             assert_eq!(output, "", "Wrong output ({context}, idx = {idx})");
         }
@@ -93,6 +94,7 @@ mod test_log_error_trait_helpers {
 fn test_log_error_trait(output: &LogOutput) {
     use test_log_error_trait_helpers::*;
 
+    #[allow(clippy::type_complexity)]
     let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &[String])] = &[
         // log_err
         (
@@ -200,7 +202,7 @@ fn test_log_error_trait(output: &LogOutput) {
         ),
     ];
 
-    run_basic_tests(&output, "test_log_error_trait", &tests);
+    run_basic_tests(output, "test_log_error_trait", tests);
 }
 
 mod test_log_error_macro_non_async_funcs_helpers {
@@ -371,6 +373,7 @@ mod test_log_error_macro_non_async_funcs_helpers {
 fn test_log_error_macro_non_async_funcs(output: &LogOutput) {
     use test_log_error_macro_non_async_funcs_helpers::*;
 
+    #[allow(clippy::type_complexity, clippy::redundant_closure)]
     let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &[String])] = &[
         (
             &|fail| func_returns_unit(fail),
@@ -497,7 +500,7 @@ fn test_log_error_macro_non_async_funcs(output: &LogOutput) {
         ),
     ];
 
-    run_basic_tests(&output, "test_log_error_macro_non_async_funcs", &tests)
+    run_basic_tests(output, "test_log_error_macro_non_async_funcs", tests)
 }
 
 mod test_log_error_macro_async_funcs_helpers {
@@ -602,7 +605,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
 
     // func_returns_unit
     {
-        let _ = func_returns_unit(false).await.unwrap();
+        func_returns_unit(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
@@ -638,7 +641,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
 
     // func_with_early_return
     {
-        let _ = func_with_early_return(false).await.unwrap();
+        func_with_early_return(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
@@ -656,7 +659,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
 
     // nested_funcs_outer
     {
-        let _ = nested_funcs_outer(false).await.unwrap();
+        nested_funcs_outer(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
@@ -705,7 +708,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
     // (the other cases are checked in the non-async test; here we mainly check that the correct
     // LogError's method is chosen in the async case too)
     {
-        let _ = func_log_level_trace(false).await.unwrap();
+        func_log_level_trace(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
@@ -723,7 +726,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
 
     // func_with_tracing_instrument_inner
     {
-        let _ = func_with_tracing_instrument_inner(false).await.unwrap();
+        func_with_tracing_instrument_inner(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
@@ -741,7 +744,7 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
 
     // func_with_tracing_instrument_outer
     {
-        let _ = func_with_tracing_instrument_outer(false).await.unwrap();
+        func_with_tracing_instrument_outer(false).await.unwrap();
         assert_eq!(output.take(), "");
     }
     {
