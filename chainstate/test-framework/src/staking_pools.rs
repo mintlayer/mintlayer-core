@@ -16,11 +16,11 @@
 use std::collections::BTreeMap;
 
 use crate::random_tx_maker::StakingPoolsObserver;
-use common::chain::PoolId;
+use common::chain::{PoolId, UtxoOutPoint};
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 
 pub struct StakingPools {
-    staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
+    staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>,
 }
 
 impl StakingPools {
@@ -30,21 +30,35 @@ impl StakingPools {
         }
     }
 
-    pub fn from_data(staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>) -> Self {
+    pub fn from_data(
+        staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>,
+    ) -> Self {
         Self { staking_pools }
     }
 
-    pub fn staking_pools(&self) -> &BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)> {
+    pub fn staking_pools(&self) -> &BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)> {
         &self.staking_pools
     }
 }
 
 impl StakingPoolsObserver for StakingPools {
-    fn on_pool_created(&mut self, pool_id: PoolId, staker_key: PrivateKey, vrf_sk: VRFPrivateKey) {
-        self.staking_pools.insert(pool_id, (staker_key, vrf_sk));
+    fn on_pool_created(
+        &mut self,
+        pool_id: PoolId,
+        staker_key: PrivateKey,
+        vrf_sk: VRFPrivateKey,
+        outpoint: UtxoOutPoint,
+    ) {
+        self.staking_pools.insert(pool_id, (staker_key, vrf_sk, outpoint));
     }
 
     fn on_pool_decommissioned(&mut self, pool_id: PoolId) {
         self.staking_pools.remove(&pool_id);
+    }
+
+    fn on_pool_used_for_staking(&mut self, pool_id: PoolId, new_outpoint: UtxoOutPoint) {
+        if let Some((_, _, kernel_outpoint)) = self.staking_pools.get_mut(&pool_id) {
+            *kernel_outpoint = new_outpoint;
+        };
     }
 }

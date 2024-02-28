@@ -30,7 +30,7 @@ use common::{
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
         Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -78,8 +78,15 @@ fn get_random_delegation_data<'a>(
 }
 
 pub trait StakingPoolsObserver {
-    fn on_pool_created(&mut self, pool_id: PoolId, staker_key: PrivateKey, vrf_sk: VRFPrivateKey);
+    fn on_pool_created(
+        &mut self,
+        pool_id: PoolId,
+        staker_key: PrivateKey,
+        vrf_sk: VRFPrivateKey,
+        outpoint: UtxoOutPoint,
+    );
     fn on_pool_decommissioned(&mut self, pool_id: PoolId);
+    fn on_pool_used_for_staking(&mut self, pool_id: PoolId, outpoint: UtxoOutPoint);
 }
 
 pub struct RandomTxMaker<'a> {
@@ -189,17 +196,44 @@ impl<'a> RandomTxMaker<'a> {
             fee_inputs,
         );
 
-        // TODO: ideally all inputs should be shuffled but it would mess up with token issuance
-        // because ids are built from input0
         inputs.extend(account_inputs);
         outputs.extend(account_outputs);
+
+        if !inputs.is_empty() {
+            // keep first element intact so that it's always a UtxoOutpoint for ids calculation
+            inputs[1..].shuffle(rng);
+        }
         outputs.shuffle(rng);
 
-        (
-            Transaction::new(0, inputs, outputs).unwrap(),
-            tokens_cache.consume(),
-            pos_delta.consume(),
-        )
+        // now that the inputs are in place calculate the ids and replace dummy values
+        let (outputs, new_staking_pools) =
+            Self::tx_outputs_post_process(rng, &mut pos_delta, &inputs, outputs);
+
+        let tx = Transaction::new(0, inputs, outputs).unwrap();
+        let tx_id = tx.get_id();
+
+        tx.outputs().iter().enumerate().for_each(|(i, output)| match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => { /* do nothing */ }
+            TxOutput::CreateStakePool(pool_id, _) => {
+                let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
+                staking_pools_observer.on_pool_created(
+                    *pool_id,
+                    staker_sk.clone(),
+                    vrf_sk.clone(),
+                    UtxoOutPoint::new(tx_id.into(), i as u32),
+                );
+            }
+        });
+
+        (tx, tokens_cache.consume(), pos_delta.consume())
     }
 
     fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(UtxoOutPoint, TxOutput)> {
@@ -564,63 +598,6 @@ impl<'a> RandomTxMaker<'a> {
             }
         }
 
-        // now that the inputs are in place calculate the ids and replace dummy values
-        let result_outputs = result_outputs
-            .into_iter()
-            .filter_map(|mut output| match &mut output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::Burn(_)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::DataDeposit(_) => Some(output),
-                TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
-                    let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
-                    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-                    let (staker_sk, staker_pk) =
-                        PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-
-                    *dummy_pool_id = pool_id;
-                    *pool_data = Box::new(StakePoolData::new(
-                        pool_data.pledge(),
-                        Destination::PublicKey(staker_pk),
-                        vrf_pk,
-                        Destination::AnyoneCanSpend,
-                        pool_data.margin_ratio_per_thousand(),
-                        pool_data.cost_per_block(),
-                    ));
-                    let _ = pos_accounting_cache
-                        .create_pool(pool_id, pool_data.as_ref().clone().into())
-                        .unwrap();
-
-                    staking_pools_observer.on_pool_created(pool_id, staker_sk, vrf_sk);
-
-                    Some(output)
-                }
-                TxOutput::CreateDelegationId(destination, pool_id) => {
-                    if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
-                        let _ = pos_accounting_cache
-                            .create_delegation_id(
-                                *pool_id,
-                                destination.clone(),
-                                result_inputs[0].utxo_outpoint().unwrap(),
-                            )
-                            .unwrap();
-                        Some(output)
-                    } else {
-                        None // if a pool was decommissioned in this tx then skip creating a delegation
-                    }
-                }
-                TxOutput::IssueNft(dummy_token_id, _, _) => {
-                    *dummy_token_id =
-                        make_token_id(&[result_inputs[0].utxo_outpoint().unwrap().clone().into()])
-                            .unwrap();
-                    Some(output)
-                }
-            })
-            .collect();
-
         (result_inputs, result_outputs)
     }
 
@@ -868,5 +845,70 @@ impl<'a> RandomTxMaker<'a> {
         }
 
         (result_inputs, result_outputs)
+    }
+
+    fn tx_outputs_post_process(
+        rng: &mut (impl Rng + CryptoRng),
+        pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
+        inputs: &[TxInput],
+        outputs: Vec<TxOutput>,
+    ) -> (Vec<TxOutput>, BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>) {
+        let mut new_staking_pools = BTreeMap::new();
+
+        let outputs = outputs
+            .into_iter()
+            .filter_map(|mut output| match &mut output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::DataDeposit(_) => Some(output),
+                TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
+                    let pool_id = make_pool_id(inputs[0].utxo_outpoint().unwrap());
+                    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+                    let (staker_sk, staker_pk) =
+                        PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+                    *dummy_pool_id = pool_id;
+                    *pool_data = Box::new(StakePoolData::new(
+                        pool_data.pledge(),
+                        Destination::PublicKey(staker_pk),
+                        vrf_pk,
+                        Destination::AnyoneCanSpend,
+                        pool_data.margin_ratio_per_thousand(),
+                        pool_data.cost_per_block(),
+                    ));
+                    let _ = pos_accounting_cache
+                        .create_pool(pool_id, pool_data.as_ref().clone().into())
+                        .unwrap();
+
+                    new_staking_pools.insert(pool_id, (staker_sk, vrf_sk));
+
+                    Some(output)
+                }
+                TxOutput::CreateDelegationId(destination, pool_id) => {
+                    if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
+                        let _ = pos_accounting_cache
+                            .create_delegation_id(
+                                *pool_id,
+                                destination.clone(),
+                                inputs[0].utxo_outpoint().unwrap(),
+                            )
+                            .unwrap();
+                        Some(output)
+                    } else {
+                        None // if a pool was decommissioned in this tx then skip creating a delegation
+                    }
+                }
+                TxOutput::IssueNft(dummy_token_id, _, _) => {
+                    *dummy_token_id = make_token_id(inputs).unwrap();
+                    Some(output)
+                }
+            })
+            .collect();
+
+        (outputs, new_staking_pools)
     }
 }

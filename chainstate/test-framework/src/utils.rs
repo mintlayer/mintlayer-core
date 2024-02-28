@@ -161,7 +161,7 @@ pub fn create_chain_config_with_default_staking_pool(
         stake_amount,
         Destination::PublicKey(staking_pk.clone()),
         vrf_pk,
-        Destination::PublicKey(staking_pk),
+        Destination::AnyoneCanSpend,
         PerThousand::new(1000).unwrap(),
         Amount::ZERO,
     );

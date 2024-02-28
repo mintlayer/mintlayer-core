@@ -97,8 +97,11 @@ async fn ok(#[case] seed: Seed) {
             tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
             let block = tf
-                .make_pos_block_builder(&mut rng, Some((pool_id, staking_sk, vrf_sk.clone())))
+                .make_pos_block_builder()
                 .with_parent(prev_block_hash)
+                .with_stake_spending_key(staking_sk)
+                .with_vrf_key(vrf_sk.clone())
+                .with_stake_pool(pool_id)
                 .build();
             tf.process_block(block.clone(), BlockSource::Local).unwrap();
 

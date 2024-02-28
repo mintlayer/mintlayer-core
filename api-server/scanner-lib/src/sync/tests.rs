@@ -363,7 +363,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let block = create_block(
         &mut tf,
         target_block_time,
-        &mut rng,
         prev_block_hash,
         staking_sk.clone(),
         vrf_sk.clone(),
@@ -392,7 +391,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let block = create_block(
         &mut tf,
         target_block_time,
-        &mut rng,
         prev_block_hash.into(),
         staking_sk.clone(),
         vrf_sk.clone(),
@@ -448,7 +446,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let block = create_block(
         &mut tf,
         target_block_time,
-        &mut rng,
         prev_block_hash.into(),
         staking_sk.clone(),
         vrf_sk.clone(),
@@ -477,7 +474,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let block = create_block(
         &mut tf,
         target_block_time,
-        &mut rng,
         prev_block_hash.into(),
         staking_sk.clone(),
         vrf_sk.clone(),
@@ -529,7 +525,6 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let block = create_block(
         &mut tf,
         target_block_time,
-        &mut rng,
         prev_block_hash.into(),
         staking_sk.clone(),
         vrf_sk.clone(),
@@ -580,11 +575,11 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = tf
-        .make_pos_block_builder(
-            &mut rng,
-            Some((new_pool_id, new_staking_sk.clone(), new_vrf_sk.clone())),
-        )
+        .make_pos_block_builder()
         .with_parent(prev_block_hash.into())
+        .with_stake_spending_key(new_staking_sk)
+        .with_vrf_key(new_vrf_sk.clone())
+        .with_stake_pool(new_pool_id)
         .with_kernel_input(UtxoOutPoint::new(
             OutPointSourceId::Transaction(new_pool_tx_id),
             1,
@@ -988,11 +983,9 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     drop(db_tx);
 }
 
-#[allow(clippy::too_many_arguments)]
 fn create_block(
     tf: &mut TestFramework,
     target_block_time: Duration,
-    rng: &mut (impl Rng + CryptoRng),
     prev_block_hash: Id<GenBlock>,
     staking_sk: PrivateKey,
     vrf_sk: VRFPrivateKey,
@@ -1001,8 +994,11 @@ fn create_block(
 ) -> Block {
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = tf
-        .make_pos_block_builder(rng, Some((pool_id, staking_sk.clone(), vrf_sk.clone())))
+        .make_pos_block_builder()
         .with_parent(prev_block_hash)
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk.clone())
+        .with_stake_pool(pool_id)
         .with_transactions(transactions)
         .build();
     block

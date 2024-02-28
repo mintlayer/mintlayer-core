@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
+    random_tx_maker::StakingPoolsObserver,
     utils::{pos_mine, produce_kernel_signature},
     TestFramework,
 };
@@ -55,10 +56,10 @@ pub struct PoSBlockBuilder<'f> {
     consensus_data: Option<ConsensusData>,
     transactions: Vec<SignedTransaction>,
 
-    staking_pool: PoolId,
+    staking_pool: Option<PoolId>,
     kernel_input_outpoint: Option<UtxoOutPoint>,
-    staker_sk: PrivateKey,
-    staker_vrf_sk: VRFPrivateKey,
+    staker_sk: Option<PrivateKey>,
+    staker_vrf_sk: Option<VRFPrivateKey>,
 
     randomness: Option<PoSRandomness>, // FIXME: remove it
 
@@ -71,26 +72,10 @@ pub struct PoSBlockBuilder<'f> {
 
 impl<'f> PoSBlockBuilder<'f> {
     /// Creates a new builder instance.
-    pub fn new(
-        framework: &'f mut TestFramework,
-        rng: &mut (impl Rng + CryptoRng),
-        staking_pool: Option<(PoolId, PrivateKey, VRFPrivateKey)>,
-    ) -> Self {
+    pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
-
-        // Staking pool is set here and via builders methods because it must be known in advance before `add_test_transaction` is called.
-        // Also it would make order of calls matter.
-        let (staking_pool, staker_sk, staker_vrf_sk) = staking_pool.unwrap_or_else(|| {
-            framework
-                .staking_pools
-                .staking_pools()
-                .iter()
-                .map(|(id, (sk, vrf))| (*id, sk.clone(), vrf.clone()))
-                .choose(rng)
-                .expect("if pool is not provided it should be available for random selection in TestFramework")
-        });
 
         let all_tokens_data = framework
             .storage
@@ -117,10 +102,10 @@ impl<'f> PoSBlockBuilder<'f> {
             prev_block_hash,
             timestamp,
             consensus_data: None,
-            staking_pool,
+            staking_pool: None,
             kernel_input_outpoint: None,
-            staker_sk,
-            staker_vrf_sk,
+            staker_sk: None,
+            staker_vrf_sk: None,
             randomness: None,
             used_utxo: BTreeSet::new(),
             account_nonce_tracker: BTreeMap::new(),
@@ -164,9 +149,44 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
+    pub fn with_stake_spending_key(mut self, staker_key: PrivateKey) -> Self {
+        debug_assert!(self.staker_sk.is_none());
+        self.staker_sk = Some(staker_key);
+        self
+    }
+
+    pub fn with_vrf_key(mut self, staker_vrf_key: VRFPrivateKey) -> Self {
+        debug_assert!(self.staker_vrf_sk.is_none());
+        self.staker_vrf_sk = Some(staker_vrf_key);
+        self
+    }
+
+    pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
+        debug_assert!(self.staking_pool.is_none());
+        self.staking_pool = Some(pool_id);
+        self
+    }
+
     pub fn with_kernel_input(mut self, outpoint: UtxoOutPoint) -> Self {
+        debug_assert!(self.kernel_input_outpoint.is_none());
         self.kernel_input_outpoint = Some(outpoint);
         self
+    }
+
+    pub fn with_random_staking_pool(self, rng: &mut impl Rng) -> Self {
+        let (staking_pool, staker_sk, staker_vrf_sk, kernel_input_outpoint) =
+            self.framework
+                 .staking_pools
+                 .staking_pools()
+                 .iter()
+                 .map(|(id, (sk, vrf, kernel_input_outpoint))| (*id, sk.clone(), vrf.clone(), kernel_input_outpoint.clone()))
+                 .choose(rng)
+                 .expect("if pool is not provided it should be available for random selection in TestFramework");
+
+        self.with_stake_pool(staking_pool)
+            .with_stake_spending_key(staker_sk)
+            .with_vrf_key(staker_vrf_sk)
+            .with_kernel_input(kernel_input_outpoint)
     }
 
     fn build_impl(self) -> (Block, &'f mut TestFramework) {
@@ -178,11 +198,12 @@ impl<'f> PoSBlockBuilder<'f> {
             }
         };
 
-        let staking_destination =
-            Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
+        let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
+            &self.staker_sk.as_ref().unwrap(),
+        ));
         let reward = BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
             staking_destination,
-            self.staking_pool,
+            self.staking_pool.unwrap(),
         )]);
 
         let block_body = BlockBody::new(reward, self.transactions);
@@ -196,7 +217,12 @@ impl<'f> PoSBlockBuilder<'f> {
         );
 
         let signed_header = {
-            let signature = self.staker_sk.sign_message(&unsigned_header.encode()).unwrap();
+            let signature = self
+                .staker_sk
+                .as_ref()
+                .unwrap()
+                .sign_message(&unsigned_header.encode())
+                .unwrap();
             let sig_data = BlockHeaderSignatureData::new(signature);
             let done_signature = BlockHeaderSignature::HeaderSignature(sig_data);
             unsigned_header.with_signature(done_signature)
@@ -205,10 +231,14 @@ impl<'f> PoSBlockBuilder<'f> {
         let target_block_time = self.framework.chainstate.get_chain_config().target_block_spacing();
         self.framework.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
-        (
-            Block::new_from_header(signed_header, block_body).unwrap(),
-            self.framework,
-        )
+        let block = Block::new_from_header(signed_header, block_body).unwrap();
+
+        self.framework.staking_pools.on_pool_used_for_staking(
+            self.staking_pool.unwrap(),
+            UtxoOutPoint::new(block.get_id().into(), 0),
+        );
+
+        (block, self.framework)
     }
 
     /// Builds a block without processing it.
@@ -235,7 +265,7 @@ impl<'f> PoSBlockBuilder<'f> {
                             unimplemented!()
                         }
                         ConsensusData::PoS(data) => {
-                            if *data.stake_pool_id() == self.staking_pool {
+                            if *data.stake_pool_id() == self.staking_pool.unwrap() {
                                 UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
                             } else {
                                 // FIXME: look among transactions
@@ -258,7 +288,9 @@ impl<'f> PoSBlockBuilder<'f> {
                             | TxOutput::IssueFungibleToken(_)
                             | TxOutput::IssueNft(_, _, _)
                             | TxOutput::DataDeposit(_) => false,
-                            TxOutput::CreateStakePool(pool_id, _) => *pool_id == self.staking_pool,
+                            TxOutput::CreateStakePool(pool_id, _) => {
+                                *pool_id == self.staking_pool.unwrap()
+                            }
                         })
                         .unwrap();
                     UtxoOutPoint::new(genesis.get_id().into(), output_index as u32)
@@ -266,14 +298,17 @@ impl<'f> PoSBlockBuilder<'f> {
             }
         });
 
-        let staking_destination =
-            Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
-        let kernel_outputs =
-            vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), self.staking_pool)];
+        let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
+            &self.staker_sk.as_ref().unwrap(),
+        ));
+        let kernel_outputs = vec![TxOutput::ProduceBlockFromStake(
+            staking_destination.clone(),
+            self.staking_pool.unwrap(),
+        )];
 
         let kernel_sig = produce_kernel_signature(
             self.framework,
-            &self.staker_sk,
+            &self.staker_sk.as_ref().unwrap(),
             kernel_outputs.as_slice(),
             staking_destination,
             self.prev_block_hash,
@@ -318,9 +353,9 @@ impl<'f> PoSBlockBuilder<'f> {
             BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
-            &self.staker_vrf_sk,
+            &self.staker_vrf_sk.as_ref().unwrap(),
             randomness,
-            self.staking_pool,
+            self.staking_pool.unwrap(),
             chain_config.final_supply().unwrap(),
             epoch_index,
             current_difficulty.into(),
@@ -354,7 +389,7 @@ impl<'f> PoSBlockBuilder<'f> {
                 &utxo_set,
                 &self.tokens_accounting_store,
                 &self.pos_accounting_store,
-                Some(self.staking_pool),
+                self.staking_pool,
                 account_nonce_getter,
             )
             .make(rng, &mut self.framework.staking_pools);

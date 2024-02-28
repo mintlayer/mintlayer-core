@@ -24,7 +24,7 @@ use crate::{
 };
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
-    chain::{ChainConfig, PoolId},
+    chain::{ChainConfig, PoolId, UtxoOutPoint},
     time_getter::TimeGetter,
 };
 use crypto::{
@@ -164,7 +164,7 @@ impl TestFrameworkBuilder {
 
     pub fn with_staking_pools(
         mut self,
-        staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>,
+        staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>,
     ) -> Self {
         self.staking_pools = StakingPools::from_data(staking_pools);
         self

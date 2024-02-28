@@ -79,12 +79,8 @@ impl TestFramework {
         BlockBuilder::new(self)
     }
 
-    pub fn make_pos_block_builder(
-        &mut self,
-        rng: &mut (impl Rng + CryptoRng),
-        staking_pool: Option<(PoolId, PrivateKey, VRFPrivateKey)>,
-    ) -> PoSBlockBuilder {
-        PoSBlockBuilder::new(self, rng, staking_pool)
+    pub fn make_pos_block_builder(&mut self) -> PoSBlockBuilder {
+        PoSBlockBuilder::new(self)
     }
 
     /// Get the current time using the time getter that was supplied to the test-framework
@@ -234,13 +230,20 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        staking_pool: PoolId,
+        staking_sk: &PrivateKey,
+        staking_vrf_sk: &VRFPrivateKey,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Id<GenBlock>, ChainstateError> {
             for _ in 0..blocks {
-                let block =
-                    self.make_pos_block_builder(rng, None).with_parent(prev_block_id).build();
+                let block = self
+                    .make_pos_block_builder()
+                    .with_parent(prev_block_id)
+                    .with_stake_pool(staking_pool)
+                    .with_stake_spending_key(staking_sk.clone())
+                    .with_vrf_key(staking_vrf_sk.clone())
+                    .build();
                 prev_block_id = block.get_id().into();
                 self.do_process_block(block, BlockSource::Local)?;
             }

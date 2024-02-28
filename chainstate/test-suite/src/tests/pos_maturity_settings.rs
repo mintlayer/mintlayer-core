@@ -21,8 +21,7 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, Destination,
-        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable,
@@ -67,12 +66,12 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk.clone());
-    let initial_pool: PoolId = common::primitives::H256::zero().into();
     let chain_config = ConfigBuilder::test_chain()
         .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
     let target_block_time = chain_config.target_block_spacing();
+    let genesis_pool_id = common::primitives::H256::zero().into();
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
@@ -105,13 +104,13 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .build();
     let create_pool_tx_id = tx.transaction().get_id();
 
-    tf.make_pos_block_builder(
-        &mut rng,
-        Some((initial_pool, staking_sk.clone(), vrf_sk.clone())),
-    )
-    .with_transactions(vec![tx])
-    .build_and_process()
-    .unwrap();
+    tf.make_pos_block_builder()
+        .with_transactions(vec![tx])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
 
     //
     // try decommission pool at height 2 with wrong maturity setting
@@ -130,11 +129,11 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let decommission_tx_id = decommission_tx.transaction().get_id();
 
     let result = tf
-        .make_pos_block_builder(
-            &mut rng,
-            Some((initial_pool, staking_sk.clone(), vrf_sk.clone())),
-        )
+        .make_pos_block_builder()
         .with_transactions(vec![decommission_tx.clone()])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
         .build_and_process()
         .unwrap_err();
     assert_eq!(
@@ -152,18 +151,21 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     //
     // produce some block at height 2 just to move to the next NetUpgrade
     //
-    tf.make_pos_block_builder(
-        &mut rng,
-        Some((initial_pool, staking_sk.clone(), vrf_sk.clone())),
-    )
-    .build_and_process()
-    .unwrap();
+    tf.make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
 
     //
     // decommission pool again now it should pass
     //
-    tf.make_pos_block_builder(&mut rng, Some((initial_pool, staking_sk, vrf_sk)))
+    tf.make_pos_block_builder()
         .with_transactions(vec![decommission_tx])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk)
         .build_and_process()
         .unwrap();
 }
@@ -205,6 +207,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .genesis_custom(genesis)
         .build();
     let target_block_time = chain_config.target_block_spacing();
+    let genesis_pool_id = common::primitives::H256::zero().into();
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
@@ -242,13 +245,13 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
         .build();
 
-    tf.make_pos_block_builder(
-        &mut rng,
-        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
-    )
-    .with_transactions(vec![tx1, tx2])
-    .build_and_process()
-    .unwrap();
+    tf.make_pos_block_builder()
+        .with_transactions(vec![tx1, tx2])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
 
     //
     // try spend share at height 2 with wrong maturity setting
@@ -269,11 +272,11 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let spend_share_tx_id = spend_share_tx.transaction().get_id();
 
     let result = tf
-        .make_pos_block_builder(
-            &mut rng,
-            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
-        )
+        .make_pos_block_builder()
         .with_transactions(vec![spend_share_tx.clone()])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
         .build_and_process()
         .unwrap_err();
     assert_eq!(
@@ -291,18 +294,21 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     //
     // produce some block at height 2 just to move to the next NetUpgrade
     //
-    tf.make_pos_block_builder(
-        &mut rng,
-        Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
-    )
-    .build_and_process()
-    .unwrap();
+    tf.make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
 
     //
     // spend share again now it should pass
     //
-    tf.make_pos_block_builder(&mut rng, Some((pool_id, staking_sk, vrf_sk)))
+    tf.make_pos_block_builder()
         .with_transactions(vec![spend_share_tx])
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk)
         .build_and_process()
         .unwrap();
 }

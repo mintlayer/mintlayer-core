@@ -42,23 +42,23 @@ fn stable_block_time(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-    let (config_builder, pool_id) =
+    let (chain_config_builder, genesis_pool_id) =
         chainstate_test_framework::create_chain_config_with_default_staking_pool(
             &mut rng, staking_pk, vrf_pk,
         );
-    let chain_config = config_builder.build();
+    let chain_config = chain_config_builder.build();
 
     let target_block_time = chain_config.target_block_spacing();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     for _i in 0..50 {
-        tf.make_pos_block_builder(
-            &mut rng,
-            Some((pool_id, staking_sk.clone(), vrf_sk.clone())),
-        )
-        .build_and_process()
-        .unwrap();
+        tf.make_pos_block_builder()
+            .with_stake_pool(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build_and_process()
+            .unwrap();
     }
 }
 
