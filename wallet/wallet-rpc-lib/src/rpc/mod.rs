@@ -212,7 +212,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 
     pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
         let (child_number, destination) = self
             .wallet
             .call_async(move |w| {
@@ -229,7 +232,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         address: String,
     ) -> WRpcResult<PublicKeyInfo, N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
         let address = Address::from_str(&self.chain_config, &address)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidAddress)?;
@@ -262,7 +268,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 
     pub async fn issue_vrf_key(&self, account_index: U31) -> WRpcResult<VrfPublicKeyInfo, N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
         self.wallet
             .call_async(move |w| {
                 Box::pin(
@@ -413,7 +422,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
         let store_tx_in_wallet = !do_not_store;
         if store_tx_in_wallet {
-            let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
+            let config = ControllerConfig {
+                in_top_x_mb: 5,
+                broadcast_to_mempool: true,
+            }; // irrelevant for issuing addresses
             self.wallet
                 .call_async(move |controller| {
                     Box::pin(async move {
@@ -467,7 +479,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         challenge: Vec<u8>,
         address: String,
     ) -> WRpcResult<ArbitraryMessageSignature, N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
         let destination = Address::from_str(&self.chain_config, &address)
             .and_then(|addr| addr.decode_object(&self.chain_config))
             .map_err(|_| RpcError::InvalidAddress)?;
@@ -757,8 +772,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|(tx_id, delegation_id)| NewDelegation {
-                tx_id,
+            .map(|(tx, delegation_id)| NewDelegation {
+                tx_id: tx.transaction().get_id(),
                 delegation_id: Address::new(&self.chain_config, &delegation_id)
                     .expect("addressable delegation id")
                     .get()
@@ -827,7 +842,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 
     pub async fn start_staking(&self, account_index: U31) -> WRpcResult<(), N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant for issuing addresses
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
 
         self.wallet
             .call_async(move |controller| {
@@ -877,7 +895,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> WRpcResult<(), N> {
-        let config = ControllerConfig { in_top_x_mb: 5 }; // irrelevant
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -949,8 +970,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|(tx_id, token_id)| RpcTokenId {
-                tx_id,
+            .map(|(tx, token_id)| RpcTokenId {
+                tx_id: tx.transaction().get_id(),
                 token_id: Address::new(&self.chain_config, &token_id)
                     .expect("Encoding token id should never fail")
                     .to_string(),
@@ -976,8 +997,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|(tx_id, token_id)| RpcTokenId {
-                tx_id,
+            .map(|(tx, token_id)| RpcTokenId {
+                tx_id: tx.transaction().get_id(),
                 token_id: Address::new(&self.chain_config, &token_id)
                     .expect("Encoding token id should never fail")
                     .to_string(),

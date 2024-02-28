@@ -22,7 +22,7 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{DelegationId, Destination, GenBlock, PoolId},
+    chain::{DelegationId, Destination, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -128,9 +128,10 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
+    pub tx: SignedTransaction,
 }
 
 #[derive(Debug)]
@@ -183,6 +184,11 @@ pub enum BackendRequest {
     DelegateStaking(DelegateStakingRequest),
     SendDelegationToAddress(SendDelegateToAddressRequest),
 
+    SubmitTx {
+        wallet_id: WalletId,
+        tx: SignedTransaction,
+    },
+
     TransactionList {
         wallet_id: WalletId,
         account_id: AccountId,
@@ -220,7 +226,7 @@ pub enum BackendEvent {
     CreateDelegation(Result<TransactionInfo, BackendError>),
     DelegateStaking(Result<(TransactionInfo, DelegationId), BackendError>),
     SendDelegationToAddress(Result<TransactionInfo, BackendError>),
-    Broadcast(Result<(), BackendError>),
+    Broadcast(Result<WalletId, BackendError>),
 
     TransactionList(WalletId, AccountId, Result<TransactionList, BackendError>),
 }

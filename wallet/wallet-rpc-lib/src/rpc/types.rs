@@ -21,9 +21,10 @@ use common::{
         block::timestamp::BlockTimestamp,
         signature::DestinationSigError,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
-        ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 use crypto::{
     key::{
@@ -398,8 +399,10 @@ pub struct NewTransaction {
 }
 
 impl NewTransaction {
-    pub fn new(tx_id: Id<Transaction>) -> Self {
-        Self { tx_id }
+    pub fn new(tx: SignedTransaction) -> Self {
+        Self {
+            tx_id: tx.transaction().get_id(),
+        }
     }
 }
 

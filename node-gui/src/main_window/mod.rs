@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, ti
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig, SignedTransaction},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{widget::Text, Command, Element};
@@ -28,11 +28,14 @@ use rfd::AsyncFileDialog;
 
 use crate::{
     backend::{
-        messages::{BackendEvent, BackendRequest, EncryptionAction, WalletId, WalletInfo},
+        messages::{
+            BackendEvent, BackendRequest, EncryptionAction, TransactionInfo, WalletId, WalletInfo,
+        },
         BackendSender, InitializedNode,
     },
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
+        confirm_broadcast::new_confirm_broadcast,
         new_wallet_account::new_wallet_account,
         popup_dialog::{popup_dialog, Popup},
         wallet_mnemonic::wallet_mnemonic_dialog,
@@ -61,6 +64,9 @@ enum ActiveDialog {
     },
     NewAccount {
         wallet_id: WalletId,
+    },
+    ConfirmTransaction {
+        transaction_info: TransactionInfo,
     },
 }
 
@@ -130,6 +136,7 @@ pub struct MainWindow {
     /// Disable the UI (by showing a modal widget) if a file dialog is active.
     /// Without this it is possible to open multiple file dialogs (which we don't want).
     file_dialog_active: bool,
+    wallet_msg: Option<WalletMessage>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -175,6 +182,12 @@ pub enum MainWindowMessage {
         name: String,
     },
 
+    SubmitTx {
+        wallet_id: WalletId,
+        tx: SignedTransaction,
+    },
+
+    CopyToClipboard(String),
     ClosePopup,
     CloseDialog,
 }
@@ -202,6 +215,7 @@ impl MainWindow {
             popups: Vec::new(),
             active_dialog: ActiveDialog::None,
             file_dialog_active: false,
+            wallet_msg: None,
         }
     }
 
@@ -470,108 +484,69 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::SendAmount(Ok(transaction_info)) => {
-                    self.show_info(
-                        "Success. Please wait for your transaction to be included in a block."
-                            .to_owned(),
-                    );
-
-                    self.main_widget
-                        .update(
-                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
-                                transaction_info.wallet_id,
-                                WalletMessage::SendSucceed,
-                            )),
-                            backend_sender,
-                        )
-                        .map(MainWindowMessage::MainWidgetMessage)
+                    self.wallet_msg = Some(WalletMessage::SendSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
                 }
                 BackendEvent::SendAmount(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
                 BackendEvent::StakeAmount(Ok(transaction_info)) => {
-                    self.show_info(
-                        "Success. Please wait for your transaction to be included in a block."
-                            .to_owned(),
-                    );
-
-                    self.main_widget
-                        .update(
-                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
-                                transaction_info.wallet_id,
-                                WalletMessage::CreateStakingPoolSucceed,
-                            )),
-                            backend_sender,
-                        )
-                        .map(MainWindowMessage::MainWidgetMessage)
+                    self.wallet_msg = Some(WalletMessage::CreateStakingPoolSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
                 }
                 BackendEvent::StakeAmount(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
                 BackendEvent::CreateDelegation(Ok(transaction_info)) => {
-                    self.show_info(
-                        "Success. Please wait for your transaction to be included in a block."
-                            .to_owned(),
-                    );
-
-                    self.main_widget
-                        .update(
-                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
-                                transaction_info.wallet_id,
-                                WalletMessage::CreateDelegationSucceed,
-                            )),
-                            backend_sender,
-                        )
-                        .map(MainWindowMessage::MainWidgetMessage)
+                    self.wallet_msg = Some(WalletMessage::CreateDelegationSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
                 }
                 BackendEvent::CreateDelegation(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
                 BackendEvent::DelegateStaking(Ok((transaction_info, delegation_id))) => {
-                    self.show_info(
-                        "Success. Please wait for your transaction to be included in a block."
-                            .to_owned(),
-                    );
-
-                    self.main_widget
-                        .update(
-                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
-                                transaction_info.wallet_id,
-                                WalletMessage::DelegateStakingSucceed(delegation_id),
-                            )),
-                            backend_sender,
-                        )
-                        .map(MainWindowMessage::MainWidgetMessage)
+                    self.wallet_msg = Some(WalletMessage::DelegateStakingSucceed(delegation_id));
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
                 }
                 BackendEvent::DelegateStaking(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
                 BackendEvent::SendDelegationToAddress(Ok(transaction_info)) => {
-                    self.show_info(
-                        "Success. Please wait for your transaction to be included in a block."
-                            .to_owned(),
-                    );
-
-                    self.main_widget
-                        .update(
-                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
-                                transaction_info.wallet_id,
-                                WalletMessage::SendDelegationToAddressSucceed,
-                            )),
-                            backend_sender,
-                        )
-                        .map(MainWindowMessage::MainWidgetMessage)
+                    self.wallet_msg = Some(WalletMessage::SendDelegationToAddressSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
                 }
                 BackendEvent::SendDelegationToAddress(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
-                BackendEvent::Broadcast(Ok(())) => {
-                    self.show_info("Success".to_owned());
-                    Command::none()
+                BackendEvent::Broadcast(Ok(wallet_id)) => {
+                    self.active_dialog = ActiveDialog::None;
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    if let Some(wallet_msg) = self.wallet_msg.take() {
+                        self.main_widget
+                            .update(
+                                MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                    wallet_id, wallet_msg,
+                                )),
+                                backend_sender,
+                            )
+                            .map(MainWindowMessage::MainWidgetMessage)
+                    } else {
+                        Command::none()
+                    }
                 }
                 BackendEvent::Broadcast(Err(error)) => {
                     self.show_error(error.to_string());
@@ -683,6 +658,13 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::SubmitTx { wallet_id, tx } => {
+                backend_sender.send(BackendRequest::SubmitTx { wallet_id, tx });
+                Command::none()
+            }
+
+            MainWindowMessage::CopyToClipboard(text) => iced::clipboard::write(text),
+
             MainWindowMessage::ClosePopup => {
                 self.popups.pop();
                 Command::none()
@@ -764,6 +746,18 @@ impl MainWindow {
                             name,
                         }),
                         Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
+
+                ActiveDialog::ConfirmTransaction { transaction_info } => {
+                    let wallet_id = transaction_info.wallet_id;
+                    new_confirm_broadcast(
+                        Box::new(move |tx| MainWindowMessage::SubmitTx { wallet_id, tx }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                        Box::new(MainWindowMessage::CopyToClipboard),
+                        transaction_info.tx.clone(),
+                        self.node_state.chain_config.clone(),
                     )
                     .into()
                 }

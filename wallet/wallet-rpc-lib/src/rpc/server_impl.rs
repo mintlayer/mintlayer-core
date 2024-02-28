@@ -247,6 +247,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.send_coins(
@@ -271,6 +272,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<ComposedTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.request_send_coins(
@@ -307,6 +309,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.create_stake_pool(
@@ -330,6 +333,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.decommission_stake_pool(
@@ -351,6 +355,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.decommission_stake_pool_request(
@@ -373,6 +378,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewDelegation> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.create_delegation(account_index.index::<N>()?, address, pool_id, config)
@@ -389,6 +395,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.delegate_staking(account_index.index::<N>()?, amount, delegation_id, config)
@@ -406,6 +413,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.withdraw_from_delegation(
@@ -461,6 +469,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<RpcTokenId> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -483,6 +492,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<RpcTokenId> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         let token_supply = metadata.token_supply::<N>(&self.chain_config)?;
@@ -511,6 +521,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -529,6 +540,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -552,6 +564,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -567,6 +580,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -583,6 +597,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         let is_unfreezable = if is_unfreezable {
@@ -610,6 +625,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(self.unfreeze_token(account_index.index::<N>()?, token_id, config).await)
@@ -625,6 +641,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
@@ -647,6 +664,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
 
         let data = hex::decode(data).map_err(|_| RpcError::<N>::InvalidHexData)?;
@@ -833,6 +851,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<MaybeSignedTransaction> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
         };
         rpc::handle_result(
             self.sign_raw_transaction(account_index.index::<N>()?, raw_tx, config)
