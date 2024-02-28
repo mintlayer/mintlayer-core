@@ -223,7 +223,13 @@ impl ApiServerInMemoryStorage {
             .main_chain_blocks_table
             .iter()
             .rev()
-            .map(|(_, id)| self.block_table.get(id).unwrap().block.timestamp())
+            .map(|(_, id)| {
+                self.block_table
+                    .get(id)
+                    .expect("Block id must be present in block_table")
+                    .block
+                    .timestamp()
+            })
             .chain(std::iter::once(self.genesis_block.timestamp()))
             .take(chainstate::MEDIAN_TIME_SPAN)
             .collect())
