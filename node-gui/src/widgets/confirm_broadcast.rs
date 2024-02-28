@@ -68,17 +68,24 @@ impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
     }
 
     fn view(&self, _state: &Self::State) -> Element<Self::Event, iced::Renderer> {
-        let button = Button::new(Text::new("Confirm").horizontal_alignment(Horizontal::Center))
-            .width(100.0)
-            .on_press(ConfirmBroadcastEvent::Ok);
+        let button = Button::new(
+            Text::new("Confirm and broadcast").horizontal_alignment(Horizontal::Center),
+        )
+        .width(220.0)
+        .on_press(ConfirmBroadcastEvent::Ok);
 
         let summary = self.tx.transaction().text_summary(&self.chain_config);
         Card::new(
             Text::new("Confirm submit transaction"),
-            iced::widget::column![iced::widget::text(summary)],
+            iced::widget::column![iced::widget::text(summary).font(iced::font::Font {
+                family: iced::font::Family::Monospace,
+                weight: Default::default(),
+                stretch: Default::default(),
+                monospaced: true
+            })],
         )
         .foot(container(button).width(Length::Fill).center_x())
-        .max_width(600.0)
+        .max_width(1200.0)
         .on_close(ConfirmBroadcastEvent::Cancel)
         .into()
     }
