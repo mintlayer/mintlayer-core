@@ -25,7 +25,7 @@ use common::{
     primitives::{BlockHeight, Id},
     Uint256,
 };
-use utils::tap_error_log::LogError;
+use utils::{log_error, tap_error_log::LogError};
 
 #[derive(Eq, Copy, Clone, Debug)]
 pub struct BestChainCandidatesItem {
@@ -78,6 +78,7 @@ impl BestChainCandidates {
     /// Collect candidates for the best chain that have chain trust bigger than or equal to
     /// the specified one.
     /// Only consider branches that start above the minimum height where reorgs are allowed.
+    #[log_error]
     pub fn new<Chs: ChainstateAccessor>(
         chs: &Chs,
         min_chain_trust: Uint256,
@@ -127,6 +128,7 @@ impl BestChainCandidates {
 
     // Remove the block and its descendants, which must be specified in descendants_indices,
     // from the set and add the block's parent block to the set.
+    #[log_error]
     pub fn on_block_invalidated<Chs: ChainstateAccessor>(
         &mut self,
         chs: &Chs,
@@ -217,10 +219,12 @@ where
     type BlockInfo = BlockIndex;
     type GenBlockInfo = GenBlockIndex;
 
+    #[log_error]
     fn min_height_with_allowed_reorg(&self) -> Result<BlockHeight, PropertyQueryError> {
         self.get_min_height_with_allowed_reorg()
     }
 
+    #[log_error]
     fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
@@ -228,10 +232,12 @@ where
         self.get_higher_block_ids_sorted_by_height(start_from)
     }
 
+    #[log_error]
     fn get_block_info(&self, block_id: &Id<Block>) -> Result<BlockIndex, PropertyQueryError> {
         self.get_existing_block_index(block_id)
     }
 
+    #[log_error]
     fn last_common_ancestor_in_main_chain(
         &self,
         block_index: &GenBlockIndex,

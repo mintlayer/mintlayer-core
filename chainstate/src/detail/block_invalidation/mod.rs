@@ -31,7 +31,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use utils::{ensure, tap_error_log::LogError};
+use utils::{ensure, log_error, tap_error_log::LogError};
 
 pub use best_chain_candidates::BestChainCandidatesError;
 
@@ -52,6 +52,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     /// Invalidate the specified stale block and its descendants; `is_explicit_invalidation`
     /// specifies whether the invalidation is being triggered implicitly during block processing
     /// or explicitly via ChainstateInterface.
+    #[log_error]
     fn invalidate_stale_block(
         &mut self,
         block_id: &Id<Block>,
@@ -107,6 +108,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     /// Invalidate the specified block and its descendants; `is_explicit_invalidation`
     /// specifies whether the invalidation is being triggered implicitly during block processing
     /// or explicitly via ChainstateInterface.
+    #[log_error]
     pub fn invalidate_block(
         &mut self,
         block_id: &Id<Block>,
@@ -169,6 +171,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     /// Search among stale chains for ones with more trust than the current mainchain;
     /// activate the best valid chain among them.
     /// Return true if a reorg has occurred.
+    #[log_error]
     fn find_and_activate_best_chain(&mut self) -> Result<bool, BlockInvalidatorError> {
         let (cur_best_chain_trust, best_chain_candidates) = {
             let chainstate_ref = self.chainstate.make_db_tx_ro().log_err()?;
@@ -254,6 +257,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     }
 
     /// Reset fail flags in all blocks in the subtree that starts at the specified block.
+    #[log_error]
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
@@ -354,6 +358,7 @@ enum ReorgDuringInvalidationError {
     OtherDbError(#[from] chainstate_storage::Error),
 }
 
+#[log_error]
 fn is_block_in_main_chain<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<GenBlock>,
@@ -367,6 +372,7 @@ where
         .map_err(|err| BlockInvalidatorError::IsBlockInMainChainQueryError(*block_id, err))
 }
 
+#[log_error]
 fn get_min_height_with_allowed_reorg<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
 ) -> Result<BlockHeight, BlockInvalidatorError>
@@ -379,6 +385,7 @@ where
         .map_err(BlockInvalidatorError::MinHeightForReorgQueryError)
 }
 
+#[log_error]
 fn get_best_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
 ) -> Result<GenBlockIndex, BlockInvalidatorError>
@@ -391,6 +398,7 @@ where
         .map_err(BlockInvalidatorError::BestBlockIndexQueryError)
 }
 
+#[log_error]
 fn get_existing_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -404,6 +412,7 @@ where
         .map_err(|err| BlockInvalidatorError::BlockIndexQueryError((*block_id).into(), err))
 }
 
+#[log_error]
 fn update_block_status<S, V>(
     chainstate_ref: &mut ChainstateRef<S, V>,
     block_index: BlockIndex,

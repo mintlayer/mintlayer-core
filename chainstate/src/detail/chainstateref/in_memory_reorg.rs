@@ -22,7 +22,7 @@ use common::{
 use tx_verifier::{
     flush_to_storage, transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
 };
-use utils::tap_error_log::LogError;
+use utils::{log_error, tap_error_log::LogError};
 
 use crate::{calculate_median_time_past, CheckBlockError, TransactionVerificationStrategy};
 
@@ -33,6 +33,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     // and then connect all block in the new branch.
     // All these operations are performed via `TransactionVerifier` without db modifications
     // and the resulting delta is returned.
+    #[log_error]
     pub fn reorganize_in_memory(
         &self,
         new_block_header: &BlockHeader,

@@ -10,10 +10,12 @@ rust-version.workspace = true
 [dependencies]
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
-pos-accounting = {path = '../../pos-accounting'}
+logging = { path = '../../logging' }
+pos-accounting = { path = '../../pos-accounting' }
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
-tokens-accounting = {path = '../../tokens-accounting'}
+tokens-accounting = { path = '../../tokens-accounting' }
+utils = { path = '../../utils' }
 utxo = { path = '../../utxo' }
 
 mockall = { workspace = true, optional = true }
@@ -22,8 +24,7 @@ parity-scale-codec.workspace = true
 
 [dev-dependencies]
 crypto = { path = '../../crypto' }
-test-utils = {path = '../../test-utils'}
-utils = { path = '../../utils' }
+test-utils = { path = '../../test-utils' }
 
 itertools.workspace = true
 rstest.workspace = true

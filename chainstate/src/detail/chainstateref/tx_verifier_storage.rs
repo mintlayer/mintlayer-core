@@ -44,6 +44,7 @@ use tokens_accounting::{
 use tx_verifier::transaction_verifier::{
     CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo, TransactionSource,
 };
+use utils::log_error;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
@@ -51,6 +52,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
 {
     type Error = TransactionVerifierStorageError;
 
+    #[log_error]
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
@@ -58,6 +60,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         self.db_tx.get_token_id(&tx_id).map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
@@ -65,6 +68,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
     }
 
+    #[log_error]
     fn get_undo_data(
         &self,
         tx_source: TransactionSource,
@@ -81,6 +85,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         }
     }
 
+    #[log_error]
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
@@ -90,6 +95,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
@@ -108,6 +114,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         }
     }
 
+    #[log_error]
     fn get_tokens_accounting_undo(
         &self,
         tx_source: TransactionSource,
@@ -126,6 +133,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         }
     }
 
+    #[log_error]
     fn get_account_nonce_count(
         &self,
         account: AccountType,
@@ -138,6 +146,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
 
 // TODO: this function is a duplicate of one in chainstate-types; the cause for this is that BlockchainStorageRead causes a circular dependencies
 // BlockchainStorageRead should probably be moved out of storage
+#[log_error]
 pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     db_tx: &S,
     chain_config: &ChainConfig,
@@ -156,6 +165,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
 {
     type Error = storage_result::Error;
 
+    #[log_error]
     fn get_utxo(
         &self,
         outpoint: &common::chain::UtxoOutPoint,
@@ -163,6 +173,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
         self.db_tx.get_utxo(outpoint)
     }
 
+    #[log_error]
     fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error> {
         self.db_tx.get_best_block_for_utxos()
     }
@@ -173,6 +184,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
 {
     type Error = utxo::Error;
 
+    #[log_error]
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         let mut db = UtxosDB::new(&mut self.db_tx);
         db.batch_write(utxos)
@@ -182,6 +194,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     TransactionVerifierStorageMut for ChainstateRef<'a, S, V>
 {
+    #[log_error]
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
@@ -192,6 +205,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn del_token_aux_data(
         &mut self,
         token_id: &TokenId,
@@ -201,6 +215,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn set_token_id(
         &mut self,
         issuance_tx_id: &Id<Transaction>,
@@ -211,6 +226,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn del_token_id(
         &mut self,
         issuance_tx_id: &Id<Transaction>,
@@ -220,6 +236,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -237,6 +254,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn del_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -252,6 +270,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -269,6 +288,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn del_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -285,6 +305,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn apply_accounting_delta(
         &mut self,
         tx_source: TransactionSource,
@@ -318,6 +339,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn set_account_nonce_count(
         &mut self,
         account: AccountType,
@@ -328,6 +350,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn del_account_nonce_count(
         &mut self,
         account: AccountType,
@@ -337,6 +360,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    #[log_error]
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -354,6 +378,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         }
     }
 
+    #[log_error]
     fn del_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
@@ -376,18 +401,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
 {
     type Error = pos_accounting::Error;
 
+    #[log_error]
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }
 
+    #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_balance(pool_id)
     }
 
+    #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_data(pool_id)
     }
 
+    #[log_error]
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
@@ -395,6 +424,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_balance(delegation_id)
     }
 
+    #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -402,6 +432,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_data(delegation_id)
     }
 
+    #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -409,6 +440,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_delegations_shares(pool_id)
     }
 
+    #[log_error]
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -422,6 +454,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
     for ChainstateRef<'a, S, V>
 {
+    #[log_error]
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
@@ -436,6 +469,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAcc
 {
     type Error = storage_result::Error;
 
+    #[log_error]
     fn get_token_data(
         &self,
         id: &TokenId,
@@ -443,6 +477,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAcc
         self.db_tx.get_token_data(id)
     }
 
+    #[log_error]
     fn get_circulating_supply(
         &self,
         id: &TokenId,
@@ -456,6 +491,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
 {
     type Error = tokens_accounting::Error;
 
+    #[log_error]
     fn batch_write_tokens_data(
         &mut self,
         delta: tokens_accounting::TokensAccountingDeltaData,
