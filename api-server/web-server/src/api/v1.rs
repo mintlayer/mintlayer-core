@@ -420,6 +420,7 @@ pub async fn transactions<T: ApiServerStorage>(
     const OFFSET: &str = "offset";
     const ITEMS: &str = "items";
     const DEFAULT_NUM_ITEMS: u32 = 10;
+    const MAX_NUM_ITEMS: u32 = 100;
 
     let offset = params
         .get(OFFSET)
@@ -438,6 +439,10 @@ pub async fn transactions<T: ApiServerStorage>(
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
         .unwrap_or(DEFAULT_NUM_ITEMS);
+    ensure!(
+        items <= MAX_NUM_ITEMS,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
 
     let txs = state
         .db
@@ -765,6 +770,7 @@ pub async fn pools<T: ApiServerStorage>(
     const OFFSET: &str = "offset";
     const ITEMS: &str = "items";
     const DEFAULT_NUM_ITEMS: u32 = 10;
+    const MAX_NUM_ITEMS: u32 = 100;
     const SORT: &str = "sort";
 
     let offset = params
@@ -784,6 +790,10 @@ pub async fn pools<T: ApiServerStorage>(
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
         })?
         .unwrap_or(DEFAULT_NUM_ITEMS);
+    ensure!(
+        items <= MAX_NUM_ITEMS,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
 
     let sort = params
         .get(SORT)
