@@ -30,6 +30,7 @@ criterion.workspace = true
 regex.workspace = true
 rstest.workspace = true
 static_assertions.workspace = true
+tracing.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 
 [target.'cfg(loom)'.dependencies]

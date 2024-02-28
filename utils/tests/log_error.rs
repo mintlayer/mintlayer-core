@@ -35,6 +35,24 @@ async fn test_all() {
     test_log_error_macro_async_funcs(&output).await;
 }
 
+fn assert_lines_match(output: &str, regexes: &[String], context: &str) {
+    let output = output.trim();
+    let lines = output.lines().collect::<Vec<_>>();
+
+    for (line_idx, (line, regex)) in lines.iter().zip(regexes.iter()).enumerate() {
+        assert!(
+            Regex::new(regex).unwrap().is_match(line),
+            "Wrong line in output ({context}, line_idx = {line_idx}): '{output}'\nThe regex was: '{regex}'"
+        );
+    }
+
+    assert_eq!(
+        lines.len(),
+        regexes.len(),
+        "Wrong number of lines in output ({context}): '{output}'"
+    );
+}
+
 fn run_basic_tests(
     output: &LogOutput,
     context: &str,
@@ -42,26 +60,20 @@ fn run_basic_tests(
         // test func
         &dyn Fn(/*whether test func should fail:*/ bool) -> Result<(), SeriousError>,
         // regex that the log output must match on error
-        &'static str,
+        &[String],
     )],
 ) {
-    for (idx, (test_func, regex)) in tests.iter().enumerate() {
+    for (idx, (test_func, regexes)) in tests.iter().enumerate() {
         {
             let _ = test_func(false).unwrap();
             let output = output.take();
-            assert_eq!(
-                output, "",
-                "Wrong output (idx = {idx}, context = {context})"
-            );
+            assert_eq!(output, "", "Wrong output ({context}, idx = {idx})");
         }
 
         {
             let _ = test_func(true).unwrap_err();
             let output = output.take();
-            assert!(
-                Regex::new(regex).unwrap().is_match(&output),
-                "Wrong output (idx = {idx}, context = {context}): {output}"
-            );
+            assert_lines_match(&output, regexes, &format!("{context}, idx = {idx}"));
         }
     }
 }
@@ -81,68 +93,110 @@ mod test_log_error_trait_helpers {
 fn test_log_error_trait(output: &LogOutput) {
     use test_log_error_trait_helpers::*;
 
-    let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &'static str)] = &[
+    let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &[String])] = &[
         // log_err
         (
             &|fail| failing_func(fail).log_err(),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         // log_warn
         (
             &|fail| failing_func(fail).log_warn(),
-            r"WARN LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         // log_err_with_level
         (
             &|fail| failing_func(fail).log_err_with_level(log::Level::Trace),
-            r"TRACE LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"TRACE LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level(log::Level::Debug),
-            r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level(log::Level::Info),
-            r"INFO LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"INFO LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level(log::Level::Warn),
-            r"WARN LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level(log::Level::Error),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         // log_err_pfx
         (
             &|fail| failing_func(fail).log_err_pfx("foo"),
-            r"ERROR LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         // log_warn_pfx
         (
             &|fail| failing_func(fail).log_warn_pfx("foo"),
-            r"WARN LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         // log_err_with_level_pfx
         (
             &|fail| failing_func(fail).log_err_with_level_pfx(log::Level::Trace, "foo"),
-            r"TRACE LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"TRACE LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level_pfx(log::Level::Debug, "foo"),
-            r"DEBUG LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"DEBUG LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level_pfx(log::Level::Info, "foo"),
-            r"INFO LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"INFO LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level_pfx(log::Level::Warn, "foo"),
-            r"WARN LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| failing_func(fail).log_err_with_level_pfx(log::Level::Error, "foo"),
-            r"ERROR LogError: foo: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: foo: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
     ];
 
@@ -167,6 +221,59 @@ mod test_log_error_macro_non_async_funcs_helpers {
             Err(SeriousError)
         } else {
             Ok(42)
+        }
+    }
+
+    #[log_error]
+    pub fn func_with_early_return(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            return Err(SeriousError);
+        }
+
+        Ok(())
+    }
+
+    #[log_error]
+    pub fn nested_funcs_innermost(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub const INNERMOST_FUNC_CALL_LINE: u32 = line!() + 4;
+
+    #[log_error]
+    pub fn nested_funcs_inner(fail: bool) -> Result<(), SeriousError> {
+        nested_funcs_innermost(fail)
+    }
+
+    pub const INNER_FUNC_CALL_LINE: u32 = line!() + 4;
+
+    #[log_error]
+    pub fn nested_funcs_outer(fail: bool) -> Result<(), SeriousError> {
+        nested_funcs_inner(fail)
+    }
+
+    #[log_error]
+    #[tracing::instrument]
+    pub fn func_with_tracing_instrument_inner(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Same as func_with_tracing_instrument_inner, but here the call to tracing::instrument comes first.
+    #[tracing::instrument]
+    #[log_error]
+    pub fn func_with_tracing_instrument_outer(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
         }
     }
 
@@ -264,55 +371,129 @@ mod test_log_error_macro_non_async_funcs_helpers {
 fn test_log_error_macro_non_async_funcs(output: &LogOutput) {
     use test_log_error_macro_non_async_funcs_helpers::*;
 
-    let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &'static str)] = &[
+    let tests: &[(&dyn Fn(bool) -> Result<(), SeriousError>, &[String])] = &[
         (
             &|fail| func_returns_unit(fail),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_returns_i32(fail).map(|_| ()),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
-
+        (
+            &|fail| func_with_early_return(fail),
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
+        ),
+        (
+            &|fail| nested_funcs_outer(fail),
+            &[
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    INNERMOST_FUNC_CALL_LINE
+                ),
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    INNER_FUNC_CALL_LINE
+                ),
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    line!() - 12
+                ),
+            ],
+        ),
+        (
+            &|fail| func_with_tracing_instrument_inner(fail),
+            &[format!(
+                r"ERROR func_with_tracing_instrument_inner\{{fail=true\}}: LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
+        ),
+        (
+            // Note: tracing span info is not included in this case.
+            &|fail| func_with_tracing_instrument_outer(fail),
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
+        ),
         (
             &|fail| func_log_level_trace1(fail),
-            r"TRACE LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"TRACE LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_trace2(fail),
-            r"TRACE LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"TRACE LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_debug1(fail),
-            r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_debug2(fail),
-            r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"DEBUG LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_info1(fail),
-            r"INFO LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"INFO LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_info2(fail),
-            r"INFO LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"INFO LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_warn1(fail),
-            r"WARN LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_warn2(fail),
-            r"WARN LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"WARN LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_error1(fail),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
         (
             &|fail| func_log_level_error2(fail),
-            r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)",
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 3
+            )],
         ),
     ];
 
@@ -341,6 +522,38 @@ mod test_log_error_macro_async_funcs_helpers {
     }
 
     #[log_error]
+    pub async fn func_with_early_return(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            return Err(SeriousError);
+        }
+
+        Ok(())
+    }
+
+    #[log_error]
+    pub async fn nested_funcs_innermost(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub const INNERMOST_FUNC_CALL_LINE: u32 = line!() + 4;
+
+    #[log_error]
+    pub async fn nested_funcs_inner(fail: bool) -> Result<(), SeriousError> {
+        nested_funcs_innermost(fail).await
+    }
+
+    pub const INNER_FUNC_CALL_LINE: u32 = line!() + 4;
+
+    #[log_error]
+    pub async fn nested_funcs_outer(fail: bool) -> Result<(), SeriousError> {
+        nested_funcs_inner(fail).await
+    }
+
+    #[log_error]
     pub async fn func_with_refs(
         fail: bool,
         x: &str,
@@ -361,6 +574,27 @@ mod test_log_error_macro_async_funcs_helpers {
             Ok(())
         }
     }
+
+    #[log_error]
+    #[tracing::instrument]
+    pub async fn func_with_tracing_instrument_inner(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Same as func_with_tracing_instrument_inner, but here the call to tracing::instrument comes first.
+    #[tracing::instrument]
+    #[log_error]
+    pub async fn func_with_tracing_instrument_outer(fail: bool) -> Result<(), SeriousError> {
+        if fail {
+            Err(SeriousError)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 async fn test_log_error_macro_async_funcs(output: &LogOutput) {
@@ -374,11 +608,13 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
     {
         let _ = func_returns_unit(true).await.unwrap_err();
         let output = output.take();
-        assert!(
-            Regex::new(r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)")
-                .unwrap()
-                .is_match(&output),
-            "Wrong output: {output}"
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_returns_unit",
         );
     }
 
@@ -390,11 +626,59 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
     {
         let _ = func_returns_i32(true).await.unwrap_err();
         let output = output.take();
-        assert!(
-            Regex::new(r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)")
-                .unwrap()
-                .is_match(&output),
-            "Wrong output: {output}"
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_returns_i32",
+        );
+    }
+
+    // func_with_early_return
+    {
+        let _ = func_with_early_return(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let _ = func_with_early_return(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_with_early_return",
+        );
+    }
+
+    // nested_funcs_outer
+    {
+        let _ = nested_funcs_outer(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let _ = nested_funcs_outer(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            &[
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    INNERMOST_FUNC_CALL_LINE
+                ),
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    INNER_FUNC_CALL_LINE
+                ),
+                format!(
+                    r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                    line!() - 15
+                ),
+            ],
+            "test_log_error_macro_async_funcs/nested_funcs_outer",
         );
     }
 
@@ -406,11 +690,13 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
     {
         let _ = func_with_refs(true, "foo", "bar").await.unwrap_err();
         let output = output.take();
-        assert!(
-            Regex::new(r"ERROR LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)")
-                .unwrap()
-                .is_match(&output),
-            "Wrong output: {output}"
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_with_refs",
         );
     }
 
@@ -425,11 +711,50 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
     {
         let _ = func_log_level_trace(true).await.unwrap_err();
         let output = output.take();
-        assert!(
-            Regex::new(r"TRACE LogError: This is serious \(utils/tests/log_error.rs:\d+:\d+\)")
-                .unwrap()
-                .is_match(&output),
-            "Wrong output: {output}"
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"TRACE LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_with_tracing_instrument_outer",
+        );
+    }
+
+    // func_with_tracing_instrument_inner
+    {
+        let _ = func_with_tracing_instrument_inner(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let _ = func_with_tracing_instrument_inner(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR func_with_tracing_instrument_inner\{{fail=true\}}: LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func_with_tracing_instrument_inner",
+        );
+    }
+
+    // func_with_tracing_instrument_outer
+    {
+        let _ = func_with_tracing_instrument_outer(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let _ = func_with_tracing_instrument_outer(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            // Note: tracing span info is not included in this case.
+            &[format!(
+                r"ERROR LogError: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 7
+            )],
+            "test_log_error_macro_async_funcs/func_with_tracing_instrument_outer",
         );
     }
 }

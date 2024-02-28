@@ -31,7 +31,7 @@ where
     fn log_err_with_level_pfx(self, log_level: log::Level, prefix: &str) -> Self;
 }
 
-fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
+pub fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
     log::log!(
         // Note: the default target will be the module name, i.e. "utils::tap_error_log";
         // replace it with a shorter string that is still informative enough.
@@ -44,8 +44,14 @@ fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
     );
 }
 
-fn log_error_pfx<E: Display>(err: &E, prefix: &str, log_level: log::Level, location: &Location) {
+pub fn log_error_pfx<E: Display>(
+    err: &E,
+    prefix: &str,
+    log_level: log::Level,
+    location: &Location,
+) {
     log::log!(
+        // Same target as in log_error
         target: "LogError",
         log_level,
         "{prefix}: {err} ({}:{}:{})",

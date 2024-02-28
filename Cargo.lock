@@ -984,6 +984,7 @@ dependencies = [
  "common",
  "crypto",
  "itertools 0.12.1",
+ "logging",
  "mockall",
  "num-traits",
  "parity-scale-codec",
@@ -7514,6 +7515,7 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
