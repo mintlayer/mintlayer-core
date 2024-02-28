@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use std::{collections::BTreeMap, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use super::helpers::{
     new_pub_key_destination, pos::create_stake_pool_data_with_all_reward_to_staker,

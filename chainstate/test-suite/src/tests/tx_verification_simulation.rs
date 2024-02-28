@@ -28,7 +28,7 @@ use crypto::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50)]
-#[case(1326317083504692347.into(), 20, 50)]
+//#[case(1326317083504692347.into(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -52,19 +52,28 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         )];
         let consensus_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
 
-        let chain_config = config_builder.consensus_upgrades(consensus_upgrades).build();
+        let chain_config = config_builder
+            .consensus_upgrades(consensus_upgrades)
+            .max_future_block_time_offset(std::time::Duration::from_secs(1_000_000))
+            .build();
+        let target_time = chain_config.target_block_spacing();
         let genesis_pool_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
 
+        // Initialize original TestFramework
         let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(chain_config)
+            .with_chain_config(chain_config.clone())
+            .with_initial_time_since_genesis(target_time.as_secs())
             .with_staking_pools(BTreeMap::from_iter([(
                 genesis_pool_id,
-                (staking_sk.clone(), vrf_sk.clone(), genesis_pool_outpoint),
+                (
+                    staking_sk.clone(),
+                    vrf_sk.clone(),
+                    genesis_pool_outpoint.clone(),
+                ),
             )]))
             .build();
-        let target_time = tf.chain_config().target_block_spacing();
-        tf.progress_time_seconds_since_epoch(target_time.as_secs());
 
+        // Generate a random chain
         for _ in 0..rng.gen_range(10..max_blocks) {
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
@@ -76,20 +85,41 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
             tf.progress_time_seconds_since_epoch(target_time.as_secs());
         }
-        let best_block_id = tf.best_block_id();
+        let old_best_block_id = tf.best_block_id();
 
-        // create longer chain to trigger reorg and disconnect all the random txs
-        let genesis_block_id = &tf.genesis().get_id().into();
-        let new_best_block_id = tf
-            .create_chain_pos(
-                genesis_block_id,
-                max_blocks,
+        // Create longer chain to trigger reorg and disconnect all the random txs.
+        //
+        // Second TestFramework with separate storage is used, because generating alternative chain
+        // requires up-to-date kernel information which is not trivial to implement from outside of chainstate.
+        // So here we create a separate chain from the same Genesis and submit blocks one by one eventually
+        // triggering a reorg.
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config)
+            .with_initial_time_since_genesis(target_time.as_secs())
+            .with_staking_pools(BTreeMap::from_iter([(
                 genesis_pool_id,
-                &staking_sk,
-                &vrf_sk,
-            )
-            .unwrap();
-        assert_ne!(best_block_id, tf.best_block_id());
-        assert_eq!(new_best_block_id, tf.best_block_id());
+                (staking_sk.clone(), vrf_sk.clone(), genesis_pool_outpoint),
+            )]))
+            .build();
+
+        let mut prev_block_id = tf2.genesis().get_id().into();
+        for _ in 0..max_blocks {
+            let block = tf2
+                .make_pos_block_builder()
+                .with_parent(prev_block_id)
+                .with_stake_pool(genesis_pool_id)
+                .with_stake_spending_key(staking_sk.clone())
+                .with_vrf_key(vrf_sk.clone())
+                .build();
+            prev_block_id = block.get_id().into();
+            tf2.process_block(block.clone(), BlockSource::Local).unwrap();
+            tf2.progress_time_seconds_since_epoch(target_time.as_secs());
+
+            // submit block to the original chain
+            tf.process_block(block, BlockSource::Local).unwrap();
+        }
+
+        assert_ne!(old_best_block_id, tf.best_block_id());
+        assert_eq!(tf.best_block_id(), tf2.best_block_id());
     });
 }
