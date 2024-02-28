@@ -752,11 +752,11 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         tx: SignedTransaction,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        self.wallet
-            .add_unconfirmed_tx(tx.clone(), self.wallet_events)
-            .map_err(ControllerError::WalletError)?;
-
         if self.config.broadcast_to_mempool {
+            self.wallet
+                .add_unconfirmed_tx(tx.clone(), self.wallet_events)
+                .map_err(ControllerError::WalletError)?;
+
             self.rpc_client
                 .submit_transaction(tx.clone(), Default::default())
                 .await

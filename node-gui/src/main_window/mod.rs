@@ -187,6 +187,7 @@ pub enum MainWindowMessage {
         tx: SignedTransaction,
     },
 
+    CopyToClipboard(String),
     ClosePopup,
     CloseDialog,
 }
@@ -662,6 +663,8 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::CopyToClipboard(text) => iced::clipboard::write(text),
+
             MainWindowMessage::ClosePopup => {
                 self.popups.pop();
                 Command::none()
@@ -752,6 +755,7 @@ impl MainWindow {
                     new_confirm_broadcast(
                         Box::new(move |tx| MainWindowMessage::SubmitTx { wallet_id, tx }),
                         Box::new(|| MainWindowMessage::CloseDialog),
+                        Box::new(MainWindowMessage::CopyToClipboard),
                         transaction_info.tx.clone(),
                         self.node_state.chain_config.clone(),
                     )
