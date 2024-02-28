@@ -27,6 +27,8 @@ where
     fn log_err_pfx(self, prefix: &str) -> Self;
     fn log_warn(self) -> Self;
     fn log_warn_pfx(self, prefix: &str) -> Self;
+    fn log_err_with_level(self, log_level: log::Level) -> Self;
+    fn log_err_with_level_pfx(self, log_level: log::Level, prefix: &str) -> Self;
 }
 
 fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
@@ -74,6 +76,15 @@ impl<T, E: Display> LogError for Result<T, E> {
 
     #[inline(always)]
     #[track_caller]
+    fn log_err_with_level(self, log_level: log::Level) -> Self {
+        if let Err(ref err) = self {
+            log_error(err, log_level, Location::caller());
+        }
+        self
+    }
+
+    #[inline(always)]
+    #[track_caller]
     fn log_err_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
             log_error_pfx(err, prefix, log::Level::Error, Location::caller());
@@ -86,6 +97,15 @@ impl<T, E: Display> LogError for Result<T, E> {
     fn log_warn_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
             log_error_pfx(err, prefix, log::Level::Warn, Location::caller());
+        }
+        self
+    }
+
+    #[inline(always)]
+    #[track_caller]
+    fn log_err_with_level_pfx(self, log_level: log::Level, prefix: &str) -> Self {
+        if let Err(ref err) = self {
+            log_error_pfx(err, prefix, log_level, Location::caller());
         }
         self
     }

@@ -40,3 +40,5 @@ pub mod workspace_path;
 
 mod concurrency_impl;
 pub use concurrency_impl::*;
+
+pub use log_error::log_error;
