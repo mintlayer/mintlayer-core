@@ -70,7 +70,7 @@ class WalletRpcController:
         self.config = config
         self.wallet_args = [arg for arg in wallet_args if arg != "--wallet-file"]
         self.chain_config_args = chain_config_args
-        self.account = {'account': DEFAULT_ACCOUNT_INDEX}
+        self.account = DEFAULT_ACCOUNT_INDEX
 
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
@@ -158,7 +158,7 @@ class WalletRpcController:
         return "Success, the account name has been successfully renamed"
 
     async def select_account(self, account_index: int) -> str:
-        self.account = {'account': account_index}
+        self.account = account_index
         return "Success"
 
     async def new_public_key(self) -> bytes:

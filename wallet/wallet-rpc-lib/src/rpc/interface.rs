@@ -27,10 +27,10 @@ use wallet_controller::{
 use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
-    AccountIndexArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
-    CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
-    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
+    AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
+    DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
     TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
@@ -110,7 +110,7 @@ trait WalletRpc {
     #[method(name = "account_rename")]
     async fn rename_account(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         name: Option<String>,
         options: EmptyArgs,
     ) -> rpc::RpcResult<NewAccountInfo>;
@@ -118,28 +118,28 @@ trait WalletRpc {
     #[method(name = "address_show")]
     async fn get_issued_addresses(
         &self,
-        options: AccountIndexArg,
+        account: AccountArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
 
     #[method(name = "address_new")]
-    async fn issue_address(&self, account_index: AccountIndexArg) -> rpc::RpcResult<AddressInfo>;
+    async fn issue_address(&self, account: AccountArg) -> rpc::RpcResult<AddressInfo>;
 
     #[method(name = "address_reveal_public_key")]
     async fn reveal_public_key(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: String,
     ) -> rpc::RpcResult<PublicKeyInfo>;
 
     #[method(name = "account_balance")]
     async fn get_balance(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances>;
 
     #[method(name = "account_utxos")]
-    async fn get_utxos(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<JsonValue>>;
+    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<JsonValue>>;
 
     #[method(name = "node_submit_transaction")]
     async fn submit_raw_transaction(
@@ -152,7 +152,7 @@ trait WalletRpc {
     #[method(name = "address_send")]
     async fn send_coins(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: String,
         amount: DecimalAmount,
         selected_utxos: Vec<UtxoOutPoint>,
@@ -162,7 +162,7 @@ trait WalletRpc {
     #[method(name = "transaction_create_from_cold_input")]
     async fn transaction_from_cold_input(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: String,
         amount_str: DecimalAmount,
         selected_utxo: UtxoOutPoint,
@@ -177,7 +177,7 @@ trait WalletRpc {
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         amount: DecimalAmount,
         cost_per_block: DecimalAmount,
         margin_ratio_per_thousand: String,
@@ -188,7 +188,7 @@ trait WalletRpc {
     #[method(name = "staking_decommission_pool")]
     async fn decommission_stake_pool(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         pool_id: String,
         output_address: Option<String>,
         options: TransactionOptions,
@@ -197,7 +197,7 @@ trait WalletRpc {
     #[method(name = "staking_decommission_pool_request")]
     async fn decommission_stake_pool_request(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         pool_id: String,
         output_address: Option<String>,
         options: TransactionOptions,
@@ -206,7 +206,7 @@ trait WalletRpc {
     #[method(name = "delegation_create")]
     async fn create_delegation(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: String,
         pool_id: String,
         options: TransactionOptions,
@@ -215,7 +215,7 @@ trait WalletRpc {
     #[method(name = "delegation_stake")]
     async fn delegate_staking(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         amount: DecimalAmount,
         delegation_id: String,
         options: TransactionOptions,
@@ -224,7 +224,7 @@ trait WalletRpc {
     #[method(name = "delegation_withdraw")]
     async fn withdraw_from_delegation(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: String,
         amount: DecimalAmount,
         delegation_id: String,
@@ -232,55 +232,49 @@ trait WalletRpc {
     ) -> rpc::RpcResult<NewTransaction>;
 
     #[method(name = "staking_start")]
-    async fn start_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()>;
+    async fn start_staking(&self, account: AccountArg) -> rpc::RpcResult<()>;
 
     #[method(name = "staking_stop")]
-    async fn stop_staking(&self, account_index: AccountIndexArg) -> rpc::RpcResult<()>;
+    async fn stop_staking(&self, account: AccountArg) -> rpc::RpcResult<()>;
 
     #[method(name = "staking_status")]
-    async fn staking_status(&self, account_index: AccountIndexArg)
-        -> rpc::RpcResult<StakingStatus>;
+    async fn staking_status(&self, account: AccountArg) -> rpc::RpcResult<StakingStatus>;
 
     #[method(name = "staking_list_pool_ids")]
-    async fn list_pool_ids(&self, account_index: AccountIndexArg) -> rpc::RpcResult<Vec<PoolInfo>>;
+    async fn list_pool_ids(&self, account: AccountArg) -> rpc::RpcResult<Vec<PoolInfo>>;
 
     #[method(name = "staking_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: String) -> rpc::RpcResult<StakePoolBalance>;
 
     #[method(name = "delegation_list_ids")]
-    async fn list_delegation_ids(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<Vec<DelegationInfo>>;
+    async fn list_delegation_ids(&self, account: AccountArg)
+        -> rpc::RpcResult<Vec<DelegationInfo>>;
 
     #[method(name = "staking_list_created_block_ids")]
     async fn list_created_blocks_ids(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
     ) -> rpc::RpcResult<Vec<CreatedBlockInfo>>;
 
     #[method(name = "staking_new_vrf_public_key")]
-    async fn new_vrf_public_key(
-        &self,
-        account_index: AccountIndexArg,
-    ) -> rpc::RpcResult<VrfPublicKeyInfo>;
+    async fn new_vrf_public_key(&self, account: AccountArg) -> rpc::RpcResult<VrfPublicKeyInfo>;
 
     #[method(name = "staking_show_legacy_vrf_key")]
     async fn get_legacy_vrf_public_key(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
     ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo>;
 
     #[method(name = "staking_show_vrf_public_keys")]
     async fn get_vrf_public_key(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
     ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
 
     #[method(name = "token_nft_issue_new")]
     async fn issue_new_nft(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         destination_address: String,
         metadata: NftMetadata,
         options: TransactionOptions,
@@ -289,7 +283,7 @@ trait WalletRpc {
     #[method(name = "token_issue_new")]
     async fn issue_new_token(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         destination_address: String,
         metadata: TokenMetadata,
         options: TransactionOptions,
@@ -298,7 +292,7 @@ trait WalletRpc {
     #[method(name = "token_change_authority")]
     async fn change_token_authority(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         address: String,
         options: TransactionOptions,
@@ -307,7 +301,7 @@ trait WalletRpc {
     #[method(name = "token_mint")]
     async fn mint_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         address: String,
         amount: DecimalAmount,
@@ -317,7 +311,7 @@ trait WalletRpc {
     #[method(name = "token_unmint")]
     async fn unmint_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         amount: DecimalAmount,
         options: TransactionOptions,
@@ -326,7 +320,7 @@ trait WalletRpc {
     #[method(name = "token_lock_supply")]
     async fn lock_token_supply(
         &self,
-        account_index: AccountIndexArg,
+        account_index: AccountArg,
         token_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -334,7 +328,7 @@ trait WalletRpc {
     #[method(name = "token_freeze")]
     async fn freeze_token(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         is_unfreezable: bool,
         options: TransactionOptions,
@@ -343,7 +337,7 @@ trait WalletRpc {
     #[method(name = "token_unfreeze")]
     async fn unfreeze_token(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -351,7 +345,7 @@ trait WalletRpc {
     #[method(name = "token_send")]
     async fn send_tokens(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         token_id: String,
         address: String,
         amount: DecimalAmount,
@@ -361,7 +355,7 @@ trait WalletRpc {
     #[method(name = "address_deposit_data")]
     async fn deposit_data(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         data: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -422,20 +416,20 @@ trait WalletRpc {
     #[method(name = "transaction_abandon")]
     async fn abandon_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<()>;
 
     #[method(name = "transaction_list_pending")]
     async fn list_pending_transactions(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
     ) -> rpc::RpcResult<Vec<Id<Transaction>>>;
 
     #[method(name = "transaction_list_by_address")]
     async fn list_transactions_by_address(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         address: Option<String>,
         limit: usize,
     ) -> rpc::RpcResult<Vec<TxInfo>>;
@@ -443,21 +437,21 @@ trait WalletRpc {
     #[method(name = "transaction_get")]
     async fn get_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<serde_json::Value>;
 
     #[method(name = "transaction_get_raw")]
     async fn get_raw_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
 
     #[method(name = "account_sign_raw_transaction")]
     async fn sign_raw_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         raw_tx: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction>;
@@ -465,7 +459,7 @@ trait WalletRpc {
     #[method(name = "account_sign_challenge_plain")]
     async fn sign_challenge(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         challenge: String,
         address: String,
     ) -> rpc::RpcResult<String>;
@@ -473,7 +467,7 @@ trait WalletRpc {
     #[method(name = "account_sign_challenge_hex")]
     async fn sign_challenge_hex(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         challenge: String,
         address: String,
     ) -> rpc::RpcResult<String>;
@@ -497,7 +491,7 @@ trait WalletRpc {
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
 
@@ -524,14 +518,14 @@ trait WalletRpc {
     #[method(name = "node_generate_block")]
     async fn node_generate_block(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         transactions: Vec<HexEncoded<SignedTransaction>>,
     ) -> rpc::RpcResult<()>;
 
     #[method(name = "node_generate_blocks")]
     async fn node_generate_blocks(
         &self,
-        account_index: AccountIndexArg,
+        account: AccountArg,
         block_count: u32,
     ) -> rpc::RpcResult<()>;
 
