@@ -71,7 +71,11 @@ Finally, to run the example, run:
 node js-bindings/node-entry.js
 ```
 
-### Further documentation
+### Further documentation on wasm
 
 - https://developer.mozilla.org/en-US/docs/WebAssembly/Rust_to_wasm
 - https://rustwasm.github.io/wasm-bindgen/introduction.html
+
+### Mintlayer WASM Wrappers Function API documentation
+
+[You can find the public functions documentations here](doc/wasm_wrappers/index.html)
