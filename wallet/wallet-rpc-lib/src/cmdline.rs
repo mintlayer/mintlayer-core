@@ -21,7 +21,9 @@ use rpc::{
     rpc_creds::{RpcCreds, RpcCredsError},
     RpcAuthData,
 };
-use utils::{clap_utils, ensure};
+use utils::{
+    clap_utils, cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure,
+};
 use utils_networking::NetworkAddressWithPort;
 
 use crate::config::{WalletRpcConfig, WalletServiceConfig};
@@ -162,7 +164,11 @@ impl WalletRpcDaemonChainArgs {
             let node_credentials = match (node_cookie_file, node_username, node_password) {
                 (Some(cookie_file_path), None, None) => RpcAuthData::Cookie { cookie_file_path },
                 (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
-                (None, None, None) => RpcAuthData::None,
+                (None, None, None) => {
+                    let cookie_file_path =
+                        default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+                    RpcAuthData::Cookie { cookie_file_path }
+                }
                 _ => panic!("Should not happen due to arg constraints"),
             };
 
