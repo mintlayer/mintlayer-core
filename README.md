@@ -28,7 +28,7 @@ You can see the full list of mintlayer executables by running `cargo run --bin`,
 
 - `node-daemon`: The node software as a command line software. This is the software that manages the blocks, p2p communication, and all the other important functions of the blockchain network. The `node-daemon` is at the center of all other executables, except for the GUI, which has an instance of the node included in it for simplicity.
 - `node-gui`: The graphical user interface of the node for people who are not as tech-savvy and just want to run a node using the simplest means possible. The GUI is almost always behind in development compared to other tools, but it contains what is necessary to run a node, stake, delegate, and do other important tasks. The GUI also contains the machinery to run a wallet and create one. You can open multiple wallets with the GUI.
-- `node-rpc-daemon`: A wallet that can be controlled remotely using RPC. This can be run as a service.
+- `wallet-rpc-daemon`: A wallet that can be controlled remotely using RPC. This can be run as a service.
 - `wallet-cli`: A command line interface for the wallet. All the newest features and functionalities of the wallet are available in this wallet. The `wallet-cli` is extremely ubiquitous and can be run in many modes, including a self-contained wallet, a controller of an RPC wallet, as an RPC wallet itself, and also as a cold wallet for air-gapped storage of coins and assets.
 
 ### Preparations for compiling the source code
