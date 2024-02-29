@@ -91,7 +91,7 @@ The API web server will immediately start and connect to the database locally. A
 
 ### Testing the API web server
 
-Once the previous steps are complete, you're ready to communicate with the API web server. The following curl command should work, no problem:
+Once the previous steps are complete, you're ready to communicate with the API web server. The following curl command should work (or you can put the link in your browser directly):
 
 ```
 curl http://127.0.0.1:3000/api/v1/chain/tip
