@@ -22,6 +22,7 @@ use common::{
     primitives::Id,
 };
 use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
+use rpc::description::ValueHint as VH;
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_log::TapLog;
 
@@ -36,6 +37,15 @@ pub struct GetTxResponse {
     transaction: HexEncoded<SignedTransaction>,
 }
 
+impl rpc::description::HasValueHint for GetTxResponse {
+    const HINT: VH = VH::Object(&[
+        ("id", &VH::HEX_STRING),
+        ("status", &VH::STRING),
+        ("transaction", &VH::HEX_STRING),
+    ]);
+}
+
+#[rpc::describe]
 #[rpc::rpc(server, client, namespace = "mempool")]
 trait MempoolRpc {
     #[method(name = "contains_tx")]

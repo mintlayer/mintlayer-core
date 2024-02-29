@@ -11,6 +11,8 @@ test-support = []
 [dependencies]
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
+rpc-description = { path = "description" }
+rpc-description-macro = { path = "description-macro" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils/" }
 utils-networking = { path = "../utils/networking" }
@@ -30,5 +32,6 @@ tower-http = { workspace = true, features = ["auth", "set-header"] }
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
+expect-test.workspace = true
 rstest.workspace = true
 tokio.workspace = true

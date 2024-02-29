@@ -56,3 +56,7 @@ impl std::fmt::Display for PeerId {
         write!(f, "{}", self.0)
     }
 }
+
+impl rpc_description::HasValueHint for PeerId {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
+}

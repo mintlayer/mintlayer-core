@@ -43,3 +43,7 @@ impl FromStr for BannableAddress {
         IpAddr::from_str(s).map(BannableAddress)
     }
 }
+
+impl rpc_description::HasValueHint for BannableAddress {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim("ip address string");
+}

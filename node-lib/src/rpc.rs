@@ -21,6 +21,8 @@ use chainstate_launcher::ChainConfig;
 use rpc::{handle_result, RpcResult};
 use subsystem::ShutdownTrigger;
 
+/// RPC methods controlling the node.
+#[rpc::describe]
 #[rpc::rpc(server, client, namespace = "node")]
 pub trait NodeRpc {
     /// Order the node to shutdown
@@ -31,6 +33,7 @@ pub trait NodeRpc {
     #[method(name = "version")]
     fn version(&self) -> RpcResult<String>;
 
+    /// Set mock time for the node (for testing purposes only)
     #[method(name = "set_mock_time")]
     fn set_mock_time(&self, time: u64) -> RpcResult<()>;
 }

@@ -28,6 +28,7 @@ use serialization::hex_encoded::HexEncoded;
 
 use crate::detail::job_manager::JobKey;
 
+#[rpc::describe]
 #[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
     /// When called, the job manager will be notified to send a signal

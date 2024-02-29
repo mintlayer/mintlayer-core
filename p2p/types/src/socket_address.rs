@@ -79,3 +79,7 @@ impl FromStr for SocketAddress {
         SocketAddr::from_str(s).map(SocketAddress)
     }
 }
+
+impl rpc_description::HasValueHint for SocketAddress {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
+}

@@ -33,6 +33,11 @@ pub enum PackingStrategy {
     LeaveEmptySpace,
 }
 
+impl rpc::description::HasValueHint for PackingStrategy {
+    const HINT: rpc::description::ValueHint =
+        rpc::description::ValueHint::Prim("\"FillSpaceFromMempool\" OR \"LeaveEmptySpace\"");
+}
+
 pub trait TransactionAccumulator: Send {
     /// Add a transaction to the accumulator and its fee
     /// This method should not mutate self unless it's successful

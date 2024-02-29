@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
 use common::primitives::amount::Amount;
+use rpc::description::ValueHint as VH;
 
 use crate::error::MempoolPolicyError;
 
@@ -71,6 +72,10 @@ impl std::ops::Add for FeeRate {
     fn add(self, other: Self) -> Self::Output {
         (self.amount_per_kb + other.amount_per_kb).map(FeeRate::from_amount_per_kb)
     }
+}
+
+impl rpc::description::HasValueHint for FeeRate {
+    const HINT: VH = VH::Object(&[("amount_per_kb", &VH::NUMBER)]);
 }
 
 #[cfg(test)]

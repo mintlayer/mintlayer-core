@@ -71,6 +71,10 @@ impl IpOrSocketAddress {
     }
 }
 
+impl rpc_description::HasValueHint for IpOrSocketAddress {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
+}
+
 #[cfg(test)]
 mod tests {
     use serde_test::{assert_tokens, Token};

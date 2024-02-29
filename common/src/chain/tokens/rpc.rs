@@ -21,6 +21,7 @@ use crate::{
     chain::{Block, Destination, Transaction},
     primitives::{Amount, Id},
 };
+use rpc_description::ValueHint as VH;
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
@@ -52,6 +53,14 @@ impl RPCTokenInfo {
             Self::NonFungibleToken(_) => 0,
         }
     }
+}
+
+impl rpc_description::HasValueHint for RPCTokenInfo {
+    // TODO This should be more detailed
+    const HINT: rpc_description::ValueHint = VH::Choice(&[
+        &VH::Object(&[("FungibleToken", &VH::GENERIC_OBJECT)]),
+        &VH::Object(&[("NonFungibleToken", &VH::GENERIC_OBJECT)]),
+    ]);
 }
 
 #[derive(Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize)]

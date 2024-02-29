@@ -11,6 +11,7 @@ rust-version.workspace = true
 crypto = { path = '../crypto'}
 logging = { path = "../logging/" }
 merkletree = { path = "../merkletree", features = ["scale-codec"] }
+rpc-description = { path = "../rpc/description" }
 script = { path = '../script'}
 serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }

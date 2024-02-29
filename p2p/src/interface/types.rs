@@ -44,3 +44,7 @@ pub struct ConnectedPeer {
     /// Min time for a ping roundtrip, in milliseconds
     pub ping_min: Option<u64>,
 }
+
+impl rpc::description::HasValueHint for ConnectedPeer {
+    const HINT: rpc::description::ValueHint = rpc::description::ValueHint::GENERIC_OBJECT;
+}

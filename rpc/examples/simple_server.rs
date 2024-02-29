@@ -44,6 +44,8 @@ impl SomeSubsystem {
 
 type SomeSubsystemHandle = subsystem::Handle<SomeSubsystem>;
 
+/// This is a random testing RPC interface
+#[rpc::describe]
 #[rpc::rpc(server, namespace = "some_subsystem")]
 pub trait SomeSubsystemRpc {
     #[method(name = "name")]

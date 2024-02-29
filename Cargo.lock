@@ -1287,6 +1287,7 @@ dependencies = [
  "proptest",
  "ref-cast",
  "regex",
+ "rpc-description",
  "rstest",
  "script",
  "serde",
@@ -3753,6 +3754,7 @@ name = "mempool-types"
 version = "0.3.0"
 dependencies = [
  "p2p-types",
+ "rpc-description",
  "serde",
 ]
 
@@ -4590,6 +4592,7 @@ version = "0.3.0"
 dependencies = [
  "common",
  "parity-scale-codec",
+ "rpc-description",
  "serde",
  "serialization",
 ]
@@ -5559,10 +5562,13 @@ dependencies = [
  "async-trait",
  "base64 0.22.0",
  "crypto",
+ "expect-test",
  "http",
  "hyper",
  "jsonrpsee",
  "logging",
+ "rpc-description",
+ "rpc-description-macro",
  "rstest",
  "serde",
  "serde_json",
@@ -5574,6 +5580,22 @@ dependencies = [
  "tower-http",
  "utils",
  "utils-networking",
+]
+
+[[package]]
+name = "rpc-description"
+version = "0.3.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "rpc-description-macro"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6074,6 +6096,7 @@ name = "serialization"
 version = "0.3.0"
 dependencies = [
  "hex",
+ "rpc-description",
  "serde",
  "serde_json",
  "serialization-core",
@@ -7537,6 +7560,7 @@ version = "0.3.0"
 dependencies = [
  "addr",
  "itertools 0.12.1",
+ "rpc-description",
  "serde_test",
  "serde_with",
  "test-utils",

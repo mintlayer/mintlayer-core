@@ -210,6 +210,11 @@ impl Sum<Amount> for Option<Amount> {
     }
 }
 
+impl rpc_description::HasValueHint for Amount {
+    const HINT: rpc_description::ValueHint =
+        rpc_description::ValueHint::Object(&[("val", &rpc_description::ValueHint::NUMBER)]);
+}
+
 #[macro_export]
 macro_rules! amount_sum {
     ($arg_1:expr, $($arg_n:expr),+) => {{
