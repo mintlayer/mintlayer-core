@@ -70,7 +70,7 @@ class WalletRpcController:
         self.config = config
         self.wallet_args = [arg for arg in wallet_args if arg != "--wallet-file"]
         self.chain_config_args = chain_config_args
-        self.account = {'account': DEFAULT_ACCOUNT_INDEX}
+        self.account = DEFAULT_ACCOUNT_INDEX
 
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
@@ -144,21 +144,21 @@ class WalletRpcController:
         return [AccountInfo(idx, name) for idx, name in enumerate(result['account_names'])]
 
     async def get_best_block_height(self) -> str:
-        return str(self._write_command("wallet_best_block", [{}])['result']['height'])
+        return str(self._write_command("wallet_best_block", [])['result']['height'])
 
     async def get_best_block(self) -> str:
-        return self._write_command("wallet_best_block", [{}])['result']['id']
+        return self._write_command("wallet_best_block", [])['result']['id']
 
     async def create_new_account(self, name: Optional[str] = None) -> str:
-        result = self._write_command("account_create", [name, {}])['result']
+        result = self._write_command("account_create", [name])['result']
         return f"Success, the new account index is: {result['account']}"
 
     async def rename_account(self, name: Optional[str] = None) -> str:
-        self._write_command("account_rename", [self.account, name, {}])
+        self._write_command("account_rename", [self.account, name])
         return "Success, the account name has been successfully renamed"
 
     async def select_account(self, account_index: int) -> str:
-        self.account = {'account': account_index}
+        self.account = account_index
         return "Success"
 
     async def new_public_key(self) -> bytes:

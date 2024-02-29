@@ -109,26 +109,18 @@ impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
     }
 }
 
-/// Struct representing empty arguments to RPC call, for forwards compatibility
-#[derive(Debug, Eq, PartialEq, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct EmptyArgs {}
-
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AccountIndexArg {
-    pub account: u32,
-}
+pub struct AccountArg(pub u32);
 
-impl AccountIndexArg {
+impl AccountArg {
     pub fn index<N: NodeInterface>(&self) -> Result<U31, RpcError<N>> {
-        U31::from_u32(self.account).ok_or(RpcError::AcctIndexOutOfRange)
+        U31::from_u32(self.0).ok_or(RpcError::AcctIndexOutOfRange)
     }
 }
 
-impl From<U31> for AccountIndexArg {
-    fn from(value: U31) -> Self {
-        Self {
-            account: value.into_u32(),
-        }
+impl From<U31> for AccountArg {
+    fn from(idx: U31) -> Self {
+        Self(idx.into())
     }
 }
 
