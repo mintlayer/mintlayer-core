@@ -22,9 +22,9 @@ The architecture of the API server is made to be distributed as much as desired.
 
 ### Using other database infrastructures
 
-Currently, the API server uses PostgreSQL for storage, but the design is extremely flexible and any desired database can be added if need by implementing some interface (trait) in the rust code.
+Currently, the API server uses PostgreSQL for storage, but the design is extremely flexible and any desired database can be added if needed by implementing some interface (trait) in the rust code.
 
-In addition to the PostgreSQL, an implementation of a full in-memory storage exists, which we use for testing and as a reference implementation. Hence, when adding a new database implementation, the in-memory implementation can be used as a reference implementation. Our tests ensure that both PostgreSQL and in-memory implementation, through the beautiful abstractions of rust, both arrive to the same result. Any additional implementation can be added to the same test suite.
+In addition to the PostgreSQL, an implementation of a full in-memory storage exists, which we use for testing and as a reference implementation. Hence, when adding a new database implementation, the in-memory implementation can be used as a reference one. Our tests ensure that both PostgreSQL and in-memory implementation, through the beautiful abstractions of rust, arrive to the same result. Any additional implementation can be added to the same test suite.
 
 ## How to run
 
@@ -32,7 +32,7 @@ In the following we present the minimal requirements to run the API server in ac
 
 ### Make sure you have a node running
 
-If you don't have a node running, the API server won't have a source, from which it can read block data. To run the node, please consult the [the main readme file of the repo](/README.md).
+If you don't have a node running, the API server won't have a source, from which it can read block data. To run the node, please consult the [main readme file of the repo](/README.md).
 
 ### How to run the database
 
@@ -47,9 +47,9 @@ Notice a few things:
 1. This command doesn't need root
 2. The database is running in trust mode, which means no username or password required
 3. The command line argument `--rm` is used, so that the container will be deleted on exit
-4. The database name is `mintlayer-testnet`, which is a standard used in the form of `mintlayer-`, followed by the network name (mainnet, testnet, etc)
+4. The database name is `mintlayer-testnet`. This is the default database name that the API server will use for testnet. In general, the default database name is `mintlayer-`, followed by the network name (mainnet, testnet, etc).
 5. The port binding `127.0.0.1:5432:5432` doesn't allow external computers in the network to connect. Binding to `0.0.0.0` has security implications that are out of the scope of this documentation. Please make sure to have proper network security when running a database.
-6. There's no volume set. Meaning: Once the container is stopped and removed, all the data in the database will be lost. Please consult the documentation of the container to learn how to preserve the database data.
+6. There's no volume set. Meaning: Once the container is stopped and removed, all the data in the database may be lost (based on this container's volume policy, it will be stored in the common volume storage of the OS). Please consult the documentation of the container to learn how to preserve the database data.
 
 Please understand that this is just a minimal example, and for real infrastructure, proper security must be considered.
 
@@ -67,21 +67,21 @@ or if you want to run using the executable directly:
 api-blockchain-scanner-daemon --network testnet
 ```
 
-And this should immediately work, where the blockchain scanner daemon will communicate with the default network RPC network port of the node (13030 for testnet, 3030 for mainnet), and it will also communicate with the database and write the data it finds in the blockchain.
+And this should immediately work. The blockchain scanner daemon will communicate with the default network RPC network port of the node (13030 for testnet, 3030 for mainnet), and it will also communicate with the database and write the data it finds in the blockchain.
 
-If you need to configure extra options, such as postgres username and password, just add `--help` to the commands above, and the commands will be shown.
+If you need to configure extra options, such as postgres username and password, just add `--help` to the commands above, and the options be shown.
 
 ### How to run the API web server
 
 After having filled the database with information, the API web server can use this information to respond to http requests, whether for requests from the public, or your internal infrastructure for other purposes.
 
-Assuming the database server is setup on the same machine and is reachable with `127.0.0.1:5432`, you can use the following command to run the API web server, compiled from the source code:
+Assuming the database server is setup on the same machine and is reachable via `127.0.0.1:5432`, you can use the following command to run the API web server, compiled from the source code:
 
 ```
 cargo run --bin api-web-server --release -- --network testnet --bind-address 127.0.0.1:3000
 ```
 
-Or, you can just run the executable if you have:
+Or, you can just run the executable if you have the binary `api-web-server` and use it directly:
 
 ```
 api-web-server --network testnet --bind-address 127.0.0.1:3000
@@ -109,4 +109,4 @@ Make sure the scanner is fully synced to get correct information about the curre
 
 ### Logging
 
-The same logging rules [in the main readme file](/README.md) apply here as well. By default, all the programs we use have INFO level logging.
+The same logging rules [in the main readme file](/README.md) apply here as well. By default, all our programs use INFO level logging.
