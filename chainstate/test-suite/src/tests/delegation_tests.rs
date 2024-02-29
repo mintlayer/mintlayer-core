@@ -22,14 +22,16 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
+        config::create_unit_test_config,
         output_value::OutputValue,
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
+        stakelock::StakePoolData,
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, AccountsBalancesCheckVersion,
         ChainstateUpgrade, DelegationId, Destination, NetUpgrades, OutPointSourceId, PoolId,
         SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -476,7 +478,7 @@ fn delegate_staking(#[case] seed: Seed) {
 // Delegate some coins. Check the balance.
 // Decommission the pool. Check that delegation balance and data exist.
 // Spend a part of delegated coins. Check the balance.
-// Spend the rest of delegation coins. Check that the delegation is was not removed.
+// Spend the rest of delegation coins. Check that the delegation was not removed.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1570,4 +1572,195 @@ fn delegate_and_spend_share_same_block_multiple_delegations(
             }
         }
     });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_pool_then_delegate_staking_and_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (pool_id, stake_outpoint, delegation_id, _, transfer_outpoint) =
+            prepare_delegation(&mut rng, &mut tf);
+        let amount_to_delegate = (get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint)
+            - Amount::from_atoms(1))
+        .unwrap();
+
+        // Delegate staking
+        let delegate_staking_tx = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let delegate_staking_tx_id = delegate_staking_tx.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(delegate_staking_tx)
+            .build_and_process()
+            .unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(Some(amount_to_delegate), delegation_balance);
+
+        // decommission the pool
+        let staker_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap()
+                .staker_balance()
+                .unwrap();
+        let decommission_pool_tx = TransactionBuilder::new()
+            .add_input(stake_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(staker_balance),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+        tf.make_block_builder()
+            .add_transaction(decommission_pool_tx)
+            .build_and_process()
+            .unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(Some(amount_to_delegate), delegation_balance);
+
+        let delegation_data = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_data(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(
+            Some(DelegationData::new(pool_id, Destination::AnyoneCanSpend)),
+            delegation_data
+        );
+
+        // Delegate more after the pool was decommissioned
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(delegate_staking_tx_id.into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(
+                Amount::from_atoms(1),
+                delegation_id,
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(
+            amount_to_delegate + Amount::from_atoms(1),
+            delegation_balance
+        );
+
+        // Reorg to undo all the operations
+        let old_tip = tf.best_block_id();
+        let new_tip = tf.create_chain(&tf.chain_config().genesis_block_id(), 10, &mut rng).unwrap();
+        assert_ne!(old_tip, new_tip);
+        assert_eq!(new_tip, tf.best_block_id());
+    });
+}
+
+// Create genesis pool that has non-zero delegation reward.
+// In the same block create a delegation and delegate some coins to genesis pool.
+// Using genesis pool generate a block, distributing reward to newly created delegation.
+// Create alternative chain to trigger a reorg. It shouldn't fail.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delegate_same_pool_as_staking(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+    let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
+    let stake_pool_data = StakePoolData::new(
+        stake_pool_pledge,
+        Destination::PublicKey(staker_pk),
+        vrf_pk,
+        Destination::AnyoneCanSpend,
+        PerThousand::new(500).unwrap(),
+        Amount::ZERO,
+    );
+
+    let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        mint_amount,
+        genesis_pool_id,
+        stake_pool_data,
+    )
+    .build();
+
+    let target_block_time = chain_config.target_block_spacing();
+
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.clone())
+        .with_initial_time_since_genesis(target_block_time.as_secs())
+        .build();
+
+    let genesis_mint_outpoint = UtxoOutPoint::new(tf.chain_config().genesis_block_id().into(), 0);
+    let create_delegation_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Utxo(genesis_mint_outpoint.clone()),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            genesis_pool_id,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(mint_amount),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+    let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
+    let delegation_id = pos_accounting::make_delegation_id(&genesis_mint_outpoint);
+
+    let delegate_staking_tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(create_delegation_tx_id.into(), 1),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::DelegateStaking(mint_amount, delegation_id))
+        .build();
+
+    // Create block with delegation to genesis pool
+    tf.make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
+        .with_stake_spending_key(staker_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
+        .build_and_process()
+        .unwrap();
+
+    // Create alternative chain to trigger reorg
+    tf.create_chain_pos(
+        &tf.chain_config().genesis_block_id().into(),
+        2,
+        genesis_pool_id,
+        &staker_sk,
+        &vrf_sk,
+    )
+    .unwrap();
 }

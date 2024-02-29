@@ -28,7 +28,6 @@ use crypto::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 20, 50)]
-//#[case(1326317083504692347.into(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -116,7 +115,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             tf2.progress_time_seconds_since_epoch(target_time.as_secs());
 
             // submit block to the original chain
-            tf.process_block(block, BlockSource::Local).unwrap();
+            tf.process_block(block, BlockSource::Peer).unwrap();
         }
 
         assert_ne!(old_best_block_id, tf.best_block_id());

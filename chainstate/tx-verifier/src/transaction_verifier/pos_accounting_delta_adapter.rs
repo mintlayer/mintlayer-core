@@ -210,7 +210,11 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         let (delegation_id, undo) =
             delta.create_delegation_id(target_pool, spend_key, input0_outpoint)?;
 
-        log::debug!("Creating a delegation: {}", delegation_id);
+        log::debug!(
+            "Creating a delegation: {} for pool {}",
+            delegation_id,
+            target_pool
+        );
 
         self.merge_delta(delta.consume())?;
 

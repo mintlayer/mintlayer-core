@@ -263,6 +263,9 @@ impl RandomizedTransactionVerificationStrategy {
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+
+        tx_verifier.disconnect_block_reward(block).log_err()?;
+
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
             if self.rng.lock().unwrap().gen::<bool>() {
@@ -284,8 +287,6 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_num -= 1;
             }
         }
-
-        tx_verifier.disconnect_block_reward(block).log_err()?;
 
         Ok(tx_verifier)
     }

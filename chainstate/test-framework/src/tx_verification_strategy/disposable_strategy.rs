@@ -134,6 +134,11 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
     {
         let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
+        let mut tx_verifier = base_tx_verifier.derive_child();
+        tx_verifier.disconnect_block_reward(block).log_err()?;
+        let consumed_cache = tx_verifier.consume()?;
+        flush_to_storage(&mut base_tx_verifier, consumed_cache)?;
+
         block
             .transactions()
             .iter()
@@ -150,11 +155,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                     .map_err(ConnectTransactionError::TransactionVerifierError)
             })
             .log_err()?;
-
-        let mut tx_verifier = base_tx_verifier.derive_child();
-        tx_verifier.disconnect_block_reward(block).log_err()?;
-        let consumed_cache = tx_verifier.consume()?;
-        flush_to_storage(&mut base_tx_verifier, consumed_cache)?;
 
         base_tx_verifier.set_best_block(block.prev_block_id());
 

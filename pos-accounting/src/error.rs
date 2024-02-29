@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::DelegationId;
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Accounting storage error")]
@@ -83,8 +85,8 @@ pub enum Error {
     InvariantErrorDelegationShareNotFound,
     #[error("Failed to convert pledge value to signed")]
     PledgeValueToSignedError,
-    #[error("Delegation undo failed; data not found")]
-    InvariantErrorDelegationUndoFailedDataNotFound,
+    #[error("Delegation undo failed; data not found for {0}")]
+    InvariantErrorDelegationUndoFailedDataNotFound(DelegationId),
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
     #[error("Increase staker rewards of nonexisting pool")]
