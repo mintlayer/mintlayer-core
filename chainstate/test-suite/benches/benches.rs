@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
@@ -55,7 +53,7 @@ pub fn pos_reorg(c: &mut Criterion) {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
     let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
     let stake_pool_data = StakePoolData::new(
         stake_pool_pledge,
@@ -69,25 +67,33 @@ pub fn pos_reorg(c: &mut Criterion) {
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         mint_amount,
-        pool_id,
+        genesis_pool_id,
         stake_pool_data,
     )
     .max_depth_for_reorg(BlockDistance::new(5000))
     .build();
     let target_block_time = chain_config.target_block_spacing();
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config)
-        .with_staking_pools(BTreeMap::from_iter([(pool_id, (staking_sk, vrf_sk))]))
-        .build();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
-    let common_block_id = tf.create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
+    let common_block_id = tf
+        .create_chain_pos(
+            &tf.genesis().get_id().into(),
+            5,
+            genesis_pool_id,
+            &staking_sk,
+            &vrf_sk,
+        )
+        .unwrap();
 
-    tf.create_chain_pos(&common_block_id, 100, &mut rng).unwrap();
+    tf.create_chain_pos(&common_block_id, 100, genesis_pool_id, &staking_sk, &vrf_sk)
+        .unwrap();
 
     c.bench_function("PoS reorg", |b| {
         b.iter(|| {
-            tf.create_chain_pos(&common_block_id, 101, &mut rng).unwrap();
+            tf.create_chain_pos(&common_block_id, 101, genesis_pool_id, &staking_sk, &vrf_sk)
+                .unwrap();
         })
     });
 }

@@ -1756,7 +1756,7 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
 
     // Create alternative chain to trigger reorg
     tf.create_chain_pos(
-        &tf.chain_config().genesis_block_id().into(),
+        &tf.chain_config().genesis_block_id(),
         2,
         genesis_pool_id,
         &staker_sk,

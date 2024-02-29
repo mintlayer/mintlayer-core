@@ -212,6 +212,7 @@ impl<'a> RandomTxMaker<'a> {
         let tx = Transaction::new(0, inputs, outputs).unwrap();
         let tx_id = tx.get_id();
 
+        // after tx id is calculated kernel inputs for new pools can be propagated
         tx.outputs().iter().enumerate().for_each(|(i, output)| match output {
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
@@ -724,6 +725,7 @@ impl<'a> RandomTxMaker<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spend_output_value(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
@@ -731,13 +733,13 @@ impl<'a> RandomTxMaker<'a> {
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         fee_input_to_change_supply: &mut Option<TxInput>,
         utxo_outpoint: UtxoOutPoint,
-        v: &OutputValue,
+        output_value: &OutputValue,
         num_inputs: usize,
     ) -> (Vec<TxInput>, Vec<TxOutput>) {
         let mut result_inputs = Vec::new();
         let mut result_outputs = Vec::new();
 
-        match v {
+        match output_value {
             OutputValue::Coin(coins) => {
                 // save utxo for a potential token supply change fee
                 if *coins

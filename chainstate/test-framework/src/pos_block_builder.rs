@@ -61,7 +61,7 @@ pub struct PoSBlockBuilder<'f> {
     staker_sk: Option<PrivateKey>,
     staker_vrf_sk: Option<VRFPrivateKey>,
 
-    randomness: Option<PoSRandomness>, // FIXME: remove it
+    randomness: Option<PoSRandomness>,
 
     // need these fields to track info across the txs
     used_utxo: BTreeSet<UtxoOutPoint>,
@@ -144,11 +144,6 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    pub fn with_randomness(mut self, randomness: PoSRandomness) -> Self {
-        self.randomness = Some(randomness);
-        self
-    }
-
     pub fn with_stake_spending_key(mut self, staker_key: PrivateKey) -> Self {
         debug_assert!(self.staker_sk.is_none());
         self.staker_sk = Some(staker_key);
@@ -164,6 +159,11 @@ impl<'f> PoSBlockBuilder<'f> {
     pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
         debug_assert!(self.staking_pool.is_none());
         self.staking_pool = Some(pool_id);
+        self
+    }
+
+    pub fn with_randomness(mut self, randomness: PoSRandomness) -> Self {
+        self.randomness = Some(randomness);
         self
     }
 
@@ -199,7 +199,7 @@ impl<'f> PoSBlockBuilder<'f> {
         };
 
         let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
-            &self.staker_sk.as_ref().unwrap(),
+            self.staker_sk.as_ref().unwrap(),
         ));
         let reward = BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
             staking_destination,
@@ -264,13 +264,8 @@ impl<'f> PoSBlockBuilder<'f> {
                         ConsensusData::None | ConsensusData::PoW(_) => {
                             unimplemented!()
                         }
-                        ConsensusData::PoS(data) => {
-                            if *data.stake_pool_id() == self.staking_pool.unwrap() {
-                                UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
-                            } else {
-                                // FIXME: look among transactions
-                                todo!()
-                            }
+                        ConsensusData::PoS(_) => {
+                            UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
                         }
                     }
                 }
@@ -299,7 +294,7 @@ impl<'f> PoSBlockBuilder<'f> {
         });
 
         let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
-            &self.staker_sk.as_ref().unwrap(),
+            self.staker_sk.as_ref().unwrap(),
         ));
         let kernel_outputs = vec![TxOutput::ProduceBlockFromStake(
             staking_destination.clone(),
@@ -308,7 +303,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         let kernel_sig = produce_kernel_signature(
             self.framework,
-            &self.staker_sk.as_ref().unwrap(),
+            self.staker_sk.as_ref().unwrap(),
             kernel_outputs.as_slice(),
             staking_destination,
             self.prev_block_hash,
@@ -353,7 +348,7 @@ impl<'f> PoSBlockBuilder<'f> {
             BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
-            &self.staker_vrf_sk.as_ref().unwrap(),
+            self.staker_vrf_sk.as_ref().unwrap(),
             randomness,
             self.staking_pool.unwrap(),
             chain_config.final_supply().unwrap(),

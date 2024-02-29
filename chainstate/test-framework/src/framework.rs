@@ -50,6 +50,7 @@ pub struct TestFramework {
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
     pub time_value: Option<Arc<SeqCstAtomicU64>>,
 
+    // All pools from the tip that can be used for staking
     pub staking_pools: StakingPools,
 }
 
