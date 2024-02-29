@@ -41,7 +41,7 @@ use crate::{
     rpc::{WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
-        CreatedWallet, DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue,
+        CreatedWallet, DecimalAmount, DelegationInfo, HexEncoded, JsonValue,
         LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation,
         NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId,
         StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -57,7 +57,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletEventsRpcSe
     async fn subscribe_wallet_events(
         &self,
         pending: rpc::subscription::Pending,
-        _options: EmptyArgs,
     ) -> rpc::subscription::Reply {
         let wallet_events = self.wallet.subscribe().await?;
         rpc::subscription::connect_broadcast(wallet_events, pending).await
@@ -155,15 +154,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.lock_private_keys().await)
     }
 
-    async fn best_block(&self, _empty_args: EmptyArgs) -> rpc::RpcResult<BlockInfo> {
+    async fn best_block(&self) -> rpc::RpcResult<BlockInfo> {
         rpc::handle_result(self.best_block().await)
     }
 
-    async fn create_account(
-        &self,
-        name: Option<String>,
-        _empty_args: EmptyArgs,
-    ) -> rpc::RpcResult<NewAccountInfo> {
+    async fn create_account(&self, name: Option<String>) -> rpc::RpcResult<NewAccountInfo> {
         rpc::handle_result(self.create_account(name).await)
     }
 
@@ -171,7 +166,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         name: Option<String>,
-        _options: EmptyArgs,
     ) -> rpc::RpcResult<NewAccountInfo> {
         rpc::handle_result(self.update_account_name(account_arg.index::<N>()?, name).await)
     }

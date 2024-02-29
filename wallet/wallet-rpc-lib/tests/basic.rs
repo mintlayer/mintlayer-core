@@ -27,10 +27,7 @@ use utils::{
     ACCOUNT1_ARG,
 };
 use wallet_rpc_lib::{
-    types::{
-        AddressInfo, Balances, BlockInfo, EmptyArgs, NewAccountInfo, NewTransaction,
-        TransactionOptions,
-    },
+    types::{AddressInfo, Balances, BlockInfo, NewAccountInfo, NewTransaction, TransactionOptions},
     TxState,
 };
 
@@ -48,7 +45,7 @@ async fn startup_shutdown(#[case] seed: Seed) {
     let rpc_client = tf.rpc_client_http();
     let genesis_id = tf.chain_config().genesis_block_id();
     let best_block: BlockInfo =
-        rpc_client.request("wallet_best_block", [EmptyArgs {}]).await.unwrap();
+        rpc_client.request("wallet_best_block", Vec::<u32>::new()).await.unwrap();
     assert_eq!(best_block.id, genesis_id);
     assert_eq!(best_block.height, BlockHeight::new(0));
 
@@ -108,10 +105,8 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let addr_result: Result<AddressInfo, _> =
         wallet_rpc.request("address_new", [ACCOUNT1_ARG]).await;
     assert!(addr_result.is_err());
-    let new_acct: NewAccountInfo = wallet_rpc
-        .request("account_create", (None::<String>, EmptyArgs {}))
-        .await
-        .unwrap();
+    let new_acct: NewAccountInfo =
+        wallet_rpc.request("account_create", Vec::<u32>::new()).await.unwrap();
     assert_eq!(new_acct.account, 1);
     let acct1_addr: AddressInfo = wallet_rpc.request("address_new", [ACCOUNT1_ARG]).await.unwrap();
     log::debug!("acct1_addr: {acct1_addr:?}");
@@ -120,7 +115,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let mut wallet_events: Subscription<JsonValue> = wallet_rpc
         .subscribe(
             "subscribe_wallet_events",
-            [EmptyArgs {}],
+            Vec::<u32>::new(),
             "unsubscribe_wallet_events",
         )
         .await

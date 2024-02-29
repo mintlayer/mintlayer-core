@@ -109,10 +109,6 @@ impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
     }
 }
 
-/// Struct representing empty arguments to RPC call, for forwards compatibility
-#[derive(Debug, Eq, PartialEq, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct EmptyArgs {}
-
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AccountArg(pub u32);
 

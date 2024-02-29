@@ -144,17 +144,17 @@ class WalletRpcController:
         return [AccountInfo(idx, name) for idx, name in enumerate(result['account_names'])]
 
     async def get_best_block_height(self) -> str:
-        return str(self._write_command("wallet_best_block", [{}])['result']['height'])
+        return str(self._write_command("wallet_best_block", [])['result']['height'])
 
     async def get_best_block(self) -> str:
-        return self._write_command("wallet_best_block", [{}])['result']['id']
+        return self._write_command("wallet_best_block", [])['result']['id']
 
     async def create_new_account(self, name: Optional[str] = None) -> str:
-        result = self._write_command("account_create", [name, {}])['result']
+        result = self._write_command("account_create", [name])['result']
         return f"Success, the new account index is: {result['account']}"
 
     async def rename_account(self, name: Optional[str] = None) -> str:
-        self._write_command("account_rename", [self.account, name, {}])
+        self._write_command("account_rename", [self.account, name])
         return "Success, the account name has been successfully renamed"
 
     async def select_account(self, account_index: int) -> str:

@@ -37,10 +37,9 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, EmptyArgs, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId,
-        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        VrfPublicKeyInfo,
+        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
+        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
     },
     WalletRpcClient,
 };
@@ -177,13 +176,13 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn best_block(&self) -> Result<BlockInfo, Self::Error> {
-        WalletRpcClient::best_block(&self.http_client, EmptyArgs {})
+        WalletRpcClient::best_block(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn create_account(&self, name: Option<String>) -> Result<NewAccountInfo, Self::Error> {
-        WalletRpcClient::create_account(&self.http_client, name, EmptyArgs {})
+        WalletRpcClient::create_account(&self.http_client, name)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -193,7 +192,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         name: Option<String>,
     ) -> Result<NewAccountInfo, Self::Error> {
-        WalletRpcClient::rename_account(&self.http_client, account_index.into(), name, EmptyArgs {})
+        WalletRpcClient::rename_account(&self.http_client, account_index.into(), name)
             .await
             .map_err(WalletRpcError::ResponseError)
     }

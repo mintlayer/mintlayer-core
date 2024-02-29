@@ -28,7 +28,7 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
-    DecimalAmount, DelegationInfo, EmptyArgs, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
+    DecimalAmount, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
     NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
     TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
@@ -37,7 +37,7 @@ use crate::types::{
 #[rpc::rpc(server)]
 trait WalletEventsRpc {
     #[subscription(name = "subscribe_wallet_events", item = Event)]
-    async fn subscribe_wallet_events(&self, options: EmptyArgs) -> rpc::subscription::Reply;
+    async fn subscribe_wallet_events(&self) -> rpc::subscription::Reply;
 }
 
 #[rpc::rpc(server, client)]
@@ -98,21 +98,16 @@ trait WalletRpc {
     async fn lock_private_key_encryption(&self) -> rpc::RpcResult<()>;
 
     #[method(name = "wallet_best_block")]
-    async fn best_block(&self, options: EmptyArgs) -> rpc::RpcResult<BlockInfo>;
+    async fn best_block(&self) -> rpc::RpcResult<BlockInfo>;
 
     #[method(name = "account_create")]
-    async fn create_account(
-        &self,
-        name: Option<String>,
-        options: EmptyArgs,
-    ) -> rpc::RpcResult<NewAccountInfo>;
+    async fn create_account(&self, name: Option<String>) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "account_rename")]
     async fn rename_account(
         &self,
         account: AccountArg,
         name: Option<String>,
-        options: EmptyArgs,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "address_show")]
