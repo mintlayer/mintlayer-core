@@ -18,17 +18,30 @@ For non-security related bugs, please open an [issue](https://github.com/mintlay
 
 We welcome contributions from all developers. Please refer to our detailed [contributing guide](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md) before proceeding.
 
-## Building
+## Running a node
 
-To compile the code, you will need to install Rust. Instructions for this can be found in our contributing guide. After installation, use the `cargo build` command to build the project and `cargo test` to run the tests.
+To run a mainnet or testnet node, you have the option to use pre-built binaries (from the Mintlayer website, mintlayer.org) or compile the code yourself and build the software yourself.
 
-## Trying out the testnet
+### What executables exist?
 
-To join the testnet, you have the option to use pre-built binaries or compile the code yourself. The build instructions are available [here](https://docs.mintlayer.org/testnet/node-setup-cli).
+You can see the full list of mintlayer executables by running `cargo run --bin`, assuming you have rust installed. Rust will list all the possible executables. The following are the most important:
 
-To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`. To launch the GUI wallet, use this command: `cargo run --bin node-gui`. You can get testnet coins from [the faucet](https://faucet.mintlayer.org/) in order to use the testnet, alternatively you can email opensource@mintlayer.org .
+- `node-daemon`: The node software as a command line software. This is the software that manages the blocks, p2p communication, and all the other important functions of the blockchain network. The `node-daemon` is at the center of all other executables, except for the GUI, which has an instance of the node included in it for simplicity.
+- `node-gui`: The graphical user interface of the node for people who are not as tech-savvy and just want to run a node using the simplest means possible. The GUI is almost always behind in development compared to other tools, but it contains what is necessary to run a node, stake, delegate, and do other important tasks. The GUI also contains the machinery to run a wallet and create one. You can open multiple wallets with the GUI.
+- `node-rpc-daemon`: A wallet that can be controlled remotely using RPC. This can be run as a service.
+- `wallet-cli`: A command line interface for the wallet. All the newest features and functionalities of the wallet are available in this wallet. The `wallet-cli` is extremely ubiquitous and can be run in many modes, including a self-contained wallet, a controller of an RPC wallet, as an RPC wallet itself, and also as a cold wallet for air-gapped storage of coins and assets.
 
-### Logging
+### Preparations for compiling the source code
+
+- Install the rust compiler: https://www.rust-lang.org/tools/install
+- Make sure to relaunch your terminal when you're done. To ensure the rust compiler is working, run: `cargo --version`, and it should return a version number. If you get a compilation failure, usually it means a dependency is missing.
+- Install dependencies (for Linux/Debian/Ubuntu, you need `apt-get install build-essential`). For the GUI (Graphical User Interface) you also need `libgtk-3-dev`. Find the equivalent dependencies for your Linux distribution if it's not Debian-based.
+
+### Ways to run the software when building from source
+
+You can either keep running the code from source, using `cargo run --release --bin <program name>`, or you can just build with `cargo build --release --bin <program name>`, which will put the executable in the `target/release` directory.
+
+### Running software and how to control logging
 
 The logging of mintlayer-core is configured via the `RUST_LOG` environment variable. All log messages are printed to the terminal screen; we prefer simplicity over complicated log machinery. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using these commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
 
