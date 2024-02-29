@@ -133,7 +133,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             )
             .await?;
 
-            logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
+            logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
             let (total_fees, tx_additional_infos) =
                 calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;

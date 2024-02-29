@@ -35,13 +35,13 @@ pub struct ApiServerWebServerConfig {
     #[clap(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
-    /// The optional network address and port to listen on
+    /// The optional network address and port to listen on for http API requests
     ///
     /// Format: `<ip>:<port>`
     ///
     /// Default: `127.0.0.1:3000`
     #[clap(long)]
-    pub address: Option<ListenAddress>,
+    pub bind_address: Option<ListenAddress>,
 
     /// Postgres config values
     #[clap(flatten)]
@@ -52,19 +52,19 @@ pub struct ApiServerWebServerConfig {
 
     /// Optional RPC address
     #[clap(long)]
-    pub rpc_address: Option<NetworkAddressWithPort>,
+    pub node_rpc_address: Option<NetworkAddressWithPort>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]
-    pub rpc_cookie_file: Option<String>,
+    pub node_rpc_cookie_file: Option<String>,
 
     /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
-    pub rpc_username: Option<String>,
+    pub node_rpc_username: Option<String>,
 
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
-    pub rpc_password: Option<String>,
+    pub node_rpc_password: Option<String>,
 }
 
 #[derive(Clone, Debug, Parser)]

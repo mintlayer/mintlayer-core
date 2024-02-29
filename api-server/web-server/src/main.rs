@@ -63,7 +63,11 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     .map_err(ApiServerWebServerInitError::PostgresConnectionError)?;
 
     let rpc_client = {
-        let rpc_auth = match (args.rpc_cookie_file, args.rpc_username, args.rpc_password) {
+        let rpc_auth = match (
+            args.node_rpc_cookie_file,
+            args.node_rpc_username,
+            args.node_rpc_password,
+        ) {
             (None, None, None) => {
                 let cookie_file_path =
                     default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
@@ -82,7 +86,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
         let default_rpc_bind_address =
             || default_rpc_config(&chain_config).bind_address.expect("Can't fail").into();
 
-        let rpc_address = args.rpc_address.unwrap_or_else(default_rpc_bind_address);
+        let rpc_address = args.node_rpc_address.unwrap_or_else(default_rpc_bind_address);
 
         make_rpc_client(rpc_address.to_string(), rpc_auth)
             .await
@@ -100,7 +104,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     };
 
     web_server(
-        args.address.unwrap_or_default().tcp_listener(),
+        args.bind_address.unwrap_or_default().tcp_listener(),
         state,
         args.enable_post_routes,
     )
