@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use bip39::{Language, Mnemonic};
+use bip39::Language;
 use common::{
     address::{pubkeyhash::PublicKeyHash, traits::Addressable, Address},
     chain::{
