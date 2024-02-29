@@ -40,8 +40,14 @@ fn assert_lines_match(output: &str, regexes: &[String], context: &str) {
     let lines = output.lines().collect::<Vec<_>>();
 
     for (line_idx, (line, regex)) in lines.iter().zip(regexes.iter()).enumerate() {
+        let regex = if cfg!(windows) {
+            regex.replace('/', r"\\")
+        } else {
+            regex.clone()
+        };
+
         assert!(
-            Regex::new(regex).unwrap().is_match(line),
+            Regex::new(&regex).unwrap().is_match(line),
             "Wrong line in output ({context}, line_idx = {line_idx}): '{output}'\nThe regex was: '{regex}'"
         );
     }
