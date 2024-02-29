@@ -60,6 +60,10 @@ For heavy debugging operation
 - RPC Wallet:  `RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log`
 - GUI:         `RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log`
 
+## The API server
+
+The API server is a tool for indexing the blockchain. Its source code is contained in this repository and its [readme can be found in its directory](api-server/README.md).
+
 ## Communicating with the node and wallet
 
 Communication with the node and the wallet is possible through RPC. Details on that can be found in:
@@ -67,7 +71,7 @@ Communication with the node and the wallet is possible through RPC. Details on t
 - [Node RPC readme](rpc/README.md)
 - [Wallet RPC readme](wallet/wallet-rpc-daemon/README.md)
 
-## Running a node in a rented public server or a Virtual Private Server (VPS)
+## Security, and running a node in a rented public server or a Virtual Private Server (VPS)
 
 Please read the documentation on the recommended security practices when running a public server:
 
