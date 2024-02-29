@@ -51,6 +51,25 @@ async fn invalid_num_items() {
     task.abort();
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn invalid_num_items_max(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let more_than_max = rng.gen_range(101..1000);
+    let (task, response) = spawn_webserver(&format!("/api/v1/pool?items={more_than_max}")).await;
+
+    assert_eq!(response.status(), 400);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
+
+    task.abort();
+}
+
 #[tokio::test]
 async fn invalid_sort_order() {
     let (task, response) = spawn_webserver("/api/v1/pool?sort=asd").await;

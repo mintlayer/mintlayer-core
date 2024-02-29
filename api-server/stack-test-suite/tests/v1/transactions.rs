@@ -52,6 +52,26 @@ async fn invalid_num_items() {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+async fn invalid_num_items_max(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let more_than_max = rng.gen_range(101..1000);
+    let (task, response) =
+        spawn_webserver(&format!("/api/v1/transaction?items={more_than_max}")).await;
+
+    assert_eq!(response.status(), 400);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(body["error"].as_str().unwrap(), "Invalid number of items");
+
+    task.abort();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
 async fn ok(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
