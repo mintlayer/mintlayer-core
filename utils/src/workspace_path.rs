@@ -15,10 +15,6 @@
 
 /// Return the path to the workspace, as it was recorded on the build machine. The path has
 /// a trailing path separator.
-///
-/// Note that the path is produced by the build script using PathBuf::to_string_lossy, so if it
-/// contained non-Unicode characters, this value will be an approximation rather than the exact
-/// path itself.
 pub fn workspace_path() -> &'static str {
     env!("WORKSPACE_PATH")
 }
@@ -28,8 +24,28 @@ pub fn workspace_path() -> &'static str {
 /// return the original path.
 ///
 /// The purpose of this function is to shorten file paths before printing them to the log.
+///
+/// Note: std::panic::Location::caller().file() may return an absolute or a relative path,
+/// depending on the circumstances (it looks like the result depends on whether the file belongs
+/// to the package where the binary crate is located - if it does, a relative path is returned,
+/// if not, an absolute one is).
 pub fn relative_src_file_path(src_file_path: &str) -> &str {
-    // Note: the passed path may have been retrieved from std::panic::Location; if so,
-    // it's not suitable for passing to Path::new (according to the docs), so we avoid that.
+    // Note: the passed path is not suitable for passing to Path::new, because it was obtained
+    // on the build machine, which may use the other path separator (if we're cross-compiling).
     src_file_path.strip_prefix(workspace_path()).unwrap_or(src_file_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workspace_path() {
+        // Note:  file!() and std::panic::Location::caller().file() will return relative paths
+        // inside the test, so we can't use them for testing here.
+
+        let cargo_utils_toml_dir = env!("CARGO_MANIFEST_DIR");
+        assert_eq!(cargo_utils_toml_dir, format!("{}utils", workspace_path()));
+        assert_eq!(relative_src_file_path(cargo_utils_toml_dir), "utils");
+    }
 }

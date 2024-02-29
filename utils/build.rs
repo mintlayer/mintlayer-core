@@ -18,6 +18,13 @@ use std::path::{PathBuf, MAIN_SEPARATOR};
 fn main() {
     let manifest_dir =
         std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is missing or invalid");
+    // Note: there is no point in allowing non-utf-8 strings here, because we won't be able
+    // to propagate them further anyway.
+    // Also note that if we tried accessing CARGO_MANIFEST_DIR directly from the code via env!
+    // and it wasn't Unicode, the compilation would fail anyway, complaining that the env var
+    // is not defined.
+    let manifest_dir = manifest_dir.to_str().expect("CARGO_MANIFEST_DIR is not a Unicode string");
+
     let ws_root_dir = {
         let mut path_buf = PathBuf::new();
         path_buf.push(manifest_dir);
@@ -27,7 +34,7 @@ fn main() {
 
     println!(
         "cargo:rustc-env=WORKSPACE_PATH={}{}",
-        ws_root_dir.to_string_lossy(),
+        ws_root_dir.to_str().expect("ws_root_dir must be Unicode"),
         MAIN_SEPARATOR
     );
 }
