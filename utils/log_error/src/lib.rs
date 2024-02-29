@@ -26,13 +26,17 @@ use syn::{
 ///
 /// Usage:
 /// ```
+/// # use log_error::log_error;
 /// #[log_error]
-/// fn my_func() -> std::io::Result<()> {...}
+/// fn my_func() -> std::io::Result<()> { // ...
+/// # Ok(()) }
 /// ```
 /// The default logging level is `Error`, but it can also be specified explicitly as follows:
 /// ```
+/// # use log_error::log_error;
 /// #[log_error(level = "debug")]
-/// fn my_func() -> std::io::Result<()> {...}
+/// fn my_func() -> std::io::Result<()> { // ...
+/// # Ok(()) }
 /// ```
 /// Possible values for the level are "trace", "debug", "info", "warn" and "error"
 /// (case-insensitive).
@@ -43,15 +47,19 @@ use syn::{
 /// will determine whether the produced log line will contain `tracing`'s span info or not.
 /// Namely, in this case the span info will be included:
 /// ```
+/// # use log_error::log_error;
 /// #[log_error]
 /// #[tracing::instrument]
-/// fn my_func() -> std::io::Result<()> {...}
+/// fn my_func() -> std::io::Result<()> { // ...
+/// # Ok(()) }
 /// ```
 /// but in this case it will be not:
 /// ```
+/// # use log_error::log_error;
 /// #[tracing::instrument]
 /// #[log_error]
-/// fn my_func() -> std::io::Result<()> {...}
+/// fn my_func() -> std::io::Result<()> { // ...
+/// # Ok(()) }
 /// ```
 /// This may seem counterintuitive, because the outer macro is called first and it should be
 /// able to wrap whatever the inner macro is producing. But in reality `tracing::instrument`
@@ -64,7 +72,8 @@ use syn::{
 /// errors returned by the function:
 ///    ```
 ///    #[tracing::instrument(err)]
-///    fn my_func() -> std::io::Result<()> {...}
+///    fn my_func() -> std::io::Result<()> { // ...
+///    # Ok(()) }
 ///    ```
 ///    This approach has downsides though:
 ///    -   The function call location is not logged.
@@ -75,7 +84,7 @@ use syn::{
 ///
 /// 2. The implementation of `log_error` wraps the function body in a closure; this may lead to
 /// compilation problems if the function's result captures a lifetime. E.g. consider this code:
-///    ```
+///    ```ignore
 ///    struct R<'a>(&'a mut u8);
 ///
 ///    struct Test(u8);
@@ -98,6 +107,9 @@ use syn::{
 ///
 ///    A possible workaround is to "capture" the mutable reference explicitly, e.g.:
 ///    ```
+///    # use log_error::log_error;
+///    # struct R<'a>(&'a mut u8);
+///    # struct Test(u8);
 ///    impl Test {
 ///        #[log_error]
 ///        fn f(&mut self) -> std::io::Result<R<'_>> {
