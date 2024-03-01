@@ -101,7 +101,7 @@ use syn::{
 ///    In other circumstances a different error may be generated -
 ///    *"lifetime may not live long enough ... closure implements `Fn`,*
 ///    *so references to captured variables can't escape the closure"*.
-///     Both errors seem to happen when mutable references are involved.
+///    Both errors seem to happen when mutable references are involved.
 ///
 ///    Note that `tracing::instrument(err)` has the same problem, see <https://github.com/tokio-rs/tracing/issues/2796>.
 ///
@@ -151,8 +151,12 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
                 let result = (move || #block)();
 
                 if let Err(ref err) = result {
-                    utils::tap_error_log::log_error(
-                        err, logging::log::Level::#log_level_tok, std::panic::Location::caller());
+                    utils::log_utils::log(
+                        err,
+                        "log_error",
+                        logging::log::Level::#log_level_tok,
+                        std::panic::Location::caller()
+                    );
                 }
                 result
             }
@@ -220,8 +224,12 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
                     )().await;
 
                     if let Err(ref err) = result {
-                        utils::tap_error_log::log_error(
-                            err, logging::log::Level::#log_level_tok, caller_location);
+                        utils::log_utils::log(
+                            err,
+                            "log_error",
+                            logging::log::Level::#log_level_tok,
+                            caller_location
+                        );
                     }
 
                     result

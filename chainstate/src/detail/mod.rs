@@ -61,7 +61,7 @@ use utils::{
     eventhandler::{EventHandler, EventsController},
     log_error,
     set_flag::SetFlag,
-    tap_error_log::LogError,
+    tap_error_log::TapLog,
 };
 use utxo::UtxosDB;
 

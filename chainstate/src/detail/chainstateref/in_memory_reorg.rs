@@ -22,7 +22,7 @@ use common::{
 use tx_verifier::{
     flush_to_storage, transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
 };
-use utils::{log_error, tap_error_log::LogError};
+use utils::{log_error, tap_error_log::TapLog};
 
 use crate::{calculate_median_time_past, CheckBlockError, TransactionVerificationStrategy};
 

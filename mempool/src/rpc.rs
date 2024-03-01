@@ -23,7 +23,7 @@ use common::{
 };
 use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
 use serialization::hex_encoded::HexEncoded;
-use utils::tap_error_log::LogError;
+use utils::tap_error_log::TapLog;
 
 use crate::{FeeRate, MempoolMaxSize, TxStatus};
 

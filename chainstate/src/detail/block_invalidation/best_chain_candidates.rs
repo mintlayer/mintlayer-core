@@ -25,7 +25,7 @@ use common::{
     primitives::{BlockHeight, Id},
     Uint256,
 };
-use utils::{log_error, tap_error_log::LogError};
+use utils::{log_error, tap_error_log::TapLog};
 
 #[derive(Eq, Copy, Clone, Debug)]
 pub struct BestChainCandidatesItem {

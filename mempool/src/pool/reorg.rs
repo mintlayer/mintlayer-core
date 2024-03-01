@@ -23,7 +23,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use utils::tap_error_log::LogError;
+use utils::tap_error_log::TapLog;
 use utxo::UtxosStorageRead;
 
 use super::{MemoryUsageEstimator, Mempool, WorkQueue};
