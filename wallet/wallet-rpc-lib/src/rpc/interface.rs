@@ -163,6 +163,15 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    #[method(name = "staking_sweep_delegation")]
+    async fn sweep_delegation(
+        &self,
+        account: AccountArg,
+        destination_address: String,
+        delegation_id: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
     #[method(name = "transaction_create_from_cold_input")]
     async fn transaction_from_cold_input(
         &self,

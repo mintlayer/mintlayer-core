@@ -558,6 +558,34 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn sweep_delegation(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        delegation_id: String,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidPoolId)?;
+        let destination_address = Address::from_str(&self.chain_config, &destination_address)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .sweep_delegation(destination_address, delegation_id)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
     pub async fn send_coins(
         &self,
         account_index: U31,

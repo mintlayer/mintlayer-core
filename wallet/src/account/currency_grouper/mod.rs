@@ -136,8 +136,8 @@ pub fn output_currency_value(output: &TxOutput) -> Result<(Currency, Amount), Ut
         TxOutput::IssueNft(token_id, _, _) => {
             OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
         }
-        TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
+        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.pledge()),
+        TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)

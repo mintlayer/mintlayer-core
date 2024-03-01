@@ -1160,6 +1160,25 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn create_sweep_from_delegation_transaction(
+        &mut self,
+        account_index: U31,
+        address: Address<Destination>,
+        delegation_id: DelegationId,
+        delegation_share: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.sweep_delegation(
+                db_tx,
+                address,
+                delegation_id,
+                delegation_share,
+                current_fee_rate,
+            )
+        })
+    }
+
     pub fn create_transaction_to_addresses_from_delegation(
         &mut self,
         account_index: U31,

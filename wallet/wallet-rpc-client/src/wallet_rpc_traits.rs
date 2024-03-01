@@ -191,6 +191,14 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn sweep_delegation(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        delegation_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
     async fn transaction_from_cold_input(
         &self,
         account_index: U31,

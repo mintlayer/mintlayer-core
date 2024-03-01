@@ -976,6 +976,24 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
+            WalletCommand::SweepFromDelegation {
+                destination_address,
+                delegation_id,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet
+                    .sweep_delegation(
+                        selected_account,
+                        destination_address,
+                        delegation_id,
+                        self.config,
+                    )
+                    .await?;
+
+                Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
             WalletCommand::CreateTxFromColdInput {
                 address,
                 amount,

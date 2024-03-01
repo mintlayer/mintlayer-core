@@ -415,7 +415,8 @@ pub enum WalletCommand {
         utxos: Vec<String>,
     },
 
-    /// Sweep all coins or tokens from an address or addresses to a given address.
+    /// Sweep all spendable coins or tokens from an address or addresses to a given address.
+    /// Sepndable coins are any coins that are not locked, and tokens that are not frozen or locked.
     /// The wallet will automatically calculate the required fees
     #[clap(name = "address-sweep-spendable")]
     SweepFromAddress {
@@ -423,6 +424,16 @@ pub enum WalletCommand {
         destination_address: String,
         /// The addresses to be swept
         addresses: Vec<String>,
+    },
+
+    /// Sweep all the coins from a delegation to a given address.
+    /// The wallet will automatically calculate the required fees
+    #[clap(name = "staking-sweep-delegation")]
+    SweepFromDelegation {
+        /// The receiving address of the coins
+        destination_address: String,
+        /// The delegation to be swept
+        delegation_id: String,
     },
 
     /// Creates a transaction that spends from a specific address,

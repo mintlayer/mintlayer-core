@@ -505,6 +505,45 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Create a transaction that transfers all the coins from a delegation to the destination address
+    /// and broadcast it to the mempool.
+    pub async fn sweep_delegation(
+        &mut self,
+        destination_address: Address<Destination>,
+        delegation_id: DelegationId,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        let pool_id = self
+            .wallet
+            .get_delegation(self.account_index, delegation_id)
+            .map_err(ControllerError::WalletError)?
+            .pool_id;
+
+        let delegation_share = self
+            .rpc_client
+            .get_delegation_share(pool_id, delegation_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(
+                WalletError::DelegationNotFound(delegation_id),
+            ))?;
+
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  _consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_sweep_from_delegation_transaction(
+                    account_index,
+                    destination_address,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     /// Create a partially signed transfer transaction to the destination address with the
     /// specified amount, from the specified utxo. The change from the transfer will be sent to the
     /// optionally specified change address, otherwise it will be sent to the destination from the

@@ -625,6 +625,61 @@ impl Account {
         self.sign_transaction_from_req(request.with_outputs(outputs), db_tx)
     }
 
+    pub fn sweep_delegation(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        address: Address<Destination>,
+        delegation_id: DelegationId,
+        delegation_share: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let current_block_height = self.best_block().1;
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address.clone(),
+            delegation_share,
+            current_block_height,
+        )?;
+        let delegation_data = self.find_delegation(&delegation_id)?;
+        let nonce = delegation_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
+
+        let outputs = vec![output];
+
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountSpending::DelegationBalance(delegation_id, delegation_share),
+        ));
+        let input_size = serialization::Encode::encoded_size(&tx_input);
+        let total_fee: Amount = current_fee_rate
+            .compute_fee(
+                tx_size_with_outputs(outputs.as_slice())
+                    + input_size
+                    + input_signature_size_from_destination(&delegation_data.destination)?,
+            )
+            .map_err(|_| WalletError::OutputAmountOverflow)?
+            .into();
+
+        let amount = (delegation_share - total_fee).ok_or(UtxoSelectorError::NotEnoughFunds(
+            delegation_share,
+            total_fee,
+        ))?;
+
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address,
+            amount,
+            current_block_height,
+        )?;
+
+        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+
+        self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
+            .into_signed_tx()
+    }
+
     pub fn process_send_request(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,

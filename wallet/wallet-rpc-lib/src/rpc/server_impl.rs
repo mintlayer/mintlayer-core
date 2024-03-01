@@ -277,6 +277,28 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn sweep_delegation(
+        &self,
+        account: AccountArg,
+        destination_address: String,
+        delegation_id: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
+        };
+        rpc::handle_result(
+            self.sweep_delegation(
+                account.index::<N>()?,
+                destination_address,
+                delegation_id,
+                config,
+            )
+            .await,
+        )
+    }
+
     async fn transaction_from_cold_input(
         &self,
         account_arg: AccountArg,

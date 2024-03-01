@@ -274,6 +274,9 @@ class WalletCliController:
     async def sweep_addresses(self, destination_address: str, from_addresses: List[str] = []) -> str:
         return await self._write_command(f"address-sweep-spendable {destination_address} {' '.join(from_addresses)}\n")
 
+    async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
+        return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")
+
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 

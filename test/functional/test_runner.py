@@ -140,6 +140,7 @@ BASE_SCRIPTS = [
     'wallet_submit_tx.py',
     'wallet_select_utxos.py',
     'wallet_sweep.py',
+    'wallet_sweep_delegation.py',
     'wallet_recover_accounts.py',
     'wallet_get_address_usage.py',
     'wallet_tokens.py',
