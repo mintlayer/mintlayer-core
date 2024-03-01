@@ -69,7 +69,7 @@ api-blockchain-scanner-daemon --network testnet
 
 And this should immediately work. The blockchain scanner daemon will communicate with the default network RPC network port of the node (13030 for testnet, 3030 for mainnet), and it will also communicate with the database and write the data it finds in the blockchain.
 
-If you need to configure extra options, such as postgres username and password, just add `--help` to the commands above, and the options be shown.
+If you need to configure extra options, such as postgres username and password, just add `--help` to the commands above, and the options will be shown.
 
 ### How to run the API web server
 
