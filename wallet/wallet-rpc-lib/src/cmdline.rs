@@ -89,7 +89,7 @@ impl WalletRpcDaemonCommand {
 )]
 pub struct WalletRpcDaemonChainArgs {
     /// The wallet file to operate on
-    #[arg()]
+    #[arg(long, value_name("PATH"))]
     wallet_file: Option<PathBuf>,
 
     /// Start staking for the specified account after starting the wallet
