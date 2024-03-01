@@ -1,0 +1,23 @@
+# The file names are based on the defaults we chose in the systemd services. Change to whatever you chose.
+# To test and FORCE rotation: logrotate -vf /etc/logrotate.d/mintlayer
+# To test without forcing: logrotate -v /etc/logrotate.d/mintlayer
+/var/log/mintlayer-node-testnet-stdout.log
+/var/log/mintlayer-node-testnet-stderr.log
+/var/log/mintlayer-wallet-rpc-testnet-stdout.log
+/var/log/mintlayer-wallet-rpc-testnet-stdout.log {
+    # Rotate at 50 MB size
+    size 50M
+          # Keep the last 7 files
+    rotate 7
+    compress
+          # Don't compress the first file
+    delaycompress
+          # A non-existing file is OK. Don't error.
+    missingok
+          # Don't rotate if the log file is empty
+    notifempty
+          # Ensure that the handle to the file remains open,
+          # so logrotate copies the file and empties it
+          # instead of renaming
+    copytruncate
+}

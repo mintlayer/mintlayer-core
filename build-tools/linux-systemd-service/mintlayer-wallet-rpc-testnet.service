@@ -1,0 +1,43 @@
+# For mainnet, change every testnet instance to mainnet
+[Unit]
+Description=Mintlayer Testnet Wallet RPC Daemon
+After=syslog.target network-online.target
+
+# RULES for picking a user:
+#  1. DO NOT use root
+#  2. DO NOT use a user that has root access through sudo, doas, or similar
+[Service]
+User=mintlayeruser
+
+# Type is simple because the wallet-rpc-daemon is blocking
+Type=simple
+
+# Path of the source code OR executable
+WorkingDirectory=/home/mintlayeruser/mintlayer-core
+
+# Use this if you want the wallet-rpc-daemon to be built from source
+# Consider running the `wallet-rpc-daemon` with the `--help` option to see what options are available (authentication, etc)
+# --start-staking-for-account 0 will start staking for account number 0
+ExecStart=cargo run -j 1 --release --bin wallet-rpc-daemon -- testnet /path/to/wallet/file --start-staking-for-account 0
+# If you're using an executable and didn't clone the source, comment the line above, and uncomment below
+#ExecStart=/path/to/wallet-rpc-daemon testnet
+
+Environment="RUST_BACKTRACE=full"
+# Change `info` to `debug` for deeper logs
+Environment="RUST_LOG=info"
+# Only if compiling from source: Add debug info when building. This is usually unnecessary, but if it's needed, this is how it's done.
+Environment="RUSTFLAGS=-g"
+
+# Always restart when the server is killed for any reason, and wait 60 seconds before retrying
+Restart=always
+RestartSec=60s
+
+# Make the timeout long enough if you're using cargo run above, to give the service time to build
+TimeoutSec=900
+
+# Log files stored in /var/log/
+StandardOutput=append:/var/log/mintlayer-wallet-rpc-testnet-stdout.log
+StandardError=append:/var/log/mintlayer-wallet-rpc-testnet-stderr.log
+
+[Install]
+WantedBy=multi-user.target

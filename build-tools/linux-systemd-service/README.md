@@ -39,7 +39,7 @@ Consider checking out these stories:
 ## How to create a system service that runs mintlayer daemon automatically for you
 
 1. Choose whether you want to clone the source code, or download the release executable
-2. Pick the appropriate service file from this directory for the node you need (testnet, mainnet, etc), one of the files ending with ".service". Let's say you picked `mintlayer-node-testnet.service`
+2. Pick the appropriate service file from this directory for the node you need (testnet, mainnet, etc), one of the files ending with ".service". Let's say you picked [mintlayer-node-testnet.service](mintlayer-node-testnet.service)
 3. Edit the following in the service file:
 
     A. The `user` to whatever user should run mintlayer daemon. NEVER use root or a user with root access.
@@ -55,3 +55,6 @@ Consider checking out these stories:
 7. Start the service with: `sudo systemctl start mintlayer-node-testnet`
 8. Now the service is continuously running. You can find the logs in `/var/log/`. To Ensure the service has started, run: `sudo journalctl -u mintlayer-node-testnet`, and you'll see at the end something like "Started mintlayer-node-testnet.service - Mintlayer Testnet Daemon"
 
+## How to create a system service that runs the wallet and stakes
+
+The same instructions from above, with little changes, apply to the wallet-rpc-daemon service. An example can be found here: [mintlayer-wallet-rpc-testnet.service](mintlayer-wallet-rpc-testnet.service)

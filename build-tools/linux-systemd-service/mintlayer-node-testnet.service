@@ -18,7 +18,7 @@ WorkingDirectory=/home/mintlayeruser/mintlayer-core
 # Use this if you want the node to be built from source
 ExecStart=cargo run -j 1 --release --bin node-daemon -- testnet
 # If you're using an executable and didn't clone the source, comment the line above, and uncomment below
-#ExecStart=node-daemon testnet
+#ExecStart=/path/to/node-daemon testnet
 
 Environment="RUST_BACKTRACE=full"
 # Change `info` to `debug` for deeper logs
@@ -26,7 +26,7 @@ Environment="RUST_LOG=info"
 # Only if compiling from source: Add debug info when building
 Environment="RUSTFLAGS=-g"
 
-# always restart when server is killed for any reason, and wait 60 seconds before retrying
+# Always restart when the server is killed for any reason, and wait 60 seconds before retrying
 Restart=always
 RestartSec=60s
 
