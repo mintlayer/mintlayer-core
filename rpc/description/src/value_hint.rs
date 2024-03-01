@@ -51,7 +51,7 @@ impl ValueHint {
 }
 
 impl HasValueHint for std::time::Duration {
-    const HINT: VH = VH::Object(&[("secs", &VH::NUMBER), ("nanos", &VH::NUMBER)]);
+    const HINT: VH = VH::Tuple(&[&VH::Prim("secs number"), &VH::Prim("nanos number")]);
 }
 
 impl<T: HasValueHint + ?Sized> HasValueHint for &T {

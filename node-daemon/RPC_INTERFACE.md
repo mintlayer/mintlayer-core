@@ -661,10 +661,10 @@ Returns:
 [ [
     ip address string,
     {
-        "time": {
-            "secs": number,
-            "nanos": number,
-        },
+        "time": [
+            secs number,
+            nanos number,
+        ],
     },
 ], .. ]
 ```
@@ -676,10 +676,10 @@ Parameters:
 ```
 {
     "address": ip address string,
-    "duration": {
-        "secs": number,
-        "nanos": number,
-    },
+    "duration": [
+        secs number,
+        nanos number,
+    ],
 }
 ```
 
@@ -716,10 +716,10 @@ Returns:
 [ [
     ip address string,
     {
-        "time": {
-            "secs": number,
-            "nanos": number,
-        },
+        "time": [
+            secs number,
+            nanos number,
+        ],
     },
 ], .. ]
 ```
