@@ -120,6 +120,10 @@ For heavy debugging operation
 
 More complex log filtering is possible, e.g. you can filter out log lines produced by a certain crate or module, but this is out of scope of this document.
 
+## Wallets
+
+For more information about the wallets and their usage, [visit this readme file](wallet/README.md).
+
 ## The API server
 
 The API server is a tool for indexing the blockchain. Its source code is contained in this repository and its [readme can be found in its directory](api-server/README.md).
