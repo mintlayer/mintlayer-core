@@ -31,7 +31,7 @@ use tx_verifier::{
     },
     TransactionSource,
 };
-use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
+use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;
 
 /// Strategy that creates separate instances of TransactionVerifier on every tx, flushing the

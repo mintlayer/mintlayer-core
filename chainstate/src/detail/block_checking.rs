@@ -20,7 +20,7 @@ use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block},
     primitives::id::WithId,
 };
-use utils::tap_error_log::LogError;
+use utils::tap_log::TapLog;
 
 pub struct BlockChecker<'a, S, V> {
     chainstate: &'a Chainstate<S, V>,

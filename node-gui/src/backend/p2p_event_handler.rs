@@ -18,7 +18,7 @@ use std::sync::Arc;
 use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
 use subsystem::Handle;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use utils::tap_error_log::LogError;
+use utils::tap_log::TapLog;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
 

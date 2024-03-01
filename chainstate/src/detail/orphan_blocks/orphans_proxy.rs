@@ -16,7 +16,7 @@
 use std::sync::mpsc;
 
 use logging::log;
-use utils::tap_error_log::LogError;
+use utils::tap_log::TapLog;
 
 use super::OrphanBlocksPool;
 

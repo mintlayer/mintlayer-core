@@ -30,7 +30,7 @@ use tx_verifier::{
     },
     TransactionSource,
 };
-use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
+use utils::{shallow_clone::ShallowClone, tap_log::TapLog};
 use utxo::UtxosView;
 
 pub struct DefaultTransactionVerificationStrategy {}

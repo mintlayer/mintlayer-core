@@ -30,7 +30,7 @@ use common::{
 };
 use logging::log;
 use std::{num::NonZeroUsize, sync::Arc};
-use utils::tap_error_log::LogError;
+use utils::tap_log::TapLog;
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 

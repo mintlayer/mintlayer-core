@@ -33,6 +33,7 @@ use pos_accounting::{
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;
 use tokens_accounting::TokensAccountingStorageRead;
+use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
 use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
@@ -84,62 +85,76 @@ mod private {
 
 /// Blockchain data storage transaction
 impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B> {
+    #[log_error]
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
         self.read_value::<well_known::StoreVersion>()
     }
 
+    #[log_error]
     fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
         self.read_value::<well_known::MagicBytes>()
     }
 
+    #[log_error]
     fn get_chain_type(&self) -> crate::Result<Option<String>> {
         self.read_value::<well_known::ChainType>()
     }
 
+    #[log_error]
     fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
         self.read::<db::DBBlockIndex, _, _>(id)
     }
 
     /// Get the hash of the best block
+    #[log_error]
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
         self.read_value::<well_known::BestBlockId>()
     }
 
+    #[log_error]
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
     }
 
+    #[log_error]
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
     }
 
+    #[log_error]
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
         let store = self.0.get::<db::DBBlock, _>();
         let encoded_block = store.get(block_index.block_id());
         private::block_index_to_block_reward(block_index, encoded_block)
     }
 
+    #[log_error]
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
         self.read_value::<well_known::MinHeightForReorg>()
     }
 
+    #[log_error]
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
+    #[log_error]
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
+    #[log_error]
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
 
+    #[log_error]
     fn get_token_id(&self, issuance_tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>> {
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
     }
 
+    #[log_error]
     fn get_tokens_accounting_undo(
         &self,
         id: Id<Block>,
@@ -147,6 +162,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
+    #[log_error]
     fn get_block_tree_by_height(
         &self,
         start_from: BlockHeight,
@@ -164,6 +180,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         Ok(result)
     }
 
+    #[log_error]
     fn get_pos_accounting_undo(
         &self,
         id: Id<Block>,
@@ -171,6 +188,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
 
+    #[log_error]
     fn get_accounting_epoch_delta(
         &self,
         epoch_index: EpochIndex,
@@ -178,6 +196,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBAccountingEpochDelta, _, _>(epoch_index)
     }
 
+    #[log_error]
     fn get_accounting_epoch_undo_delta(
         &self,
         epoch_index: EpochIndex,
@@ -185,12 +204,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
     }
 
+    #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 }
 
 impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRo<'st, B> {
+    #[log_error]
     fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
         self.read::<db::DBEpochData, _, _>(epoch_index)
     }
@@ -199,10 +220,12 @@ impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRo<'st, B> {
 impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
     type Error = crate::Error;
 
+    #[log_error]
     fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>> {
         self.read::<db::DBUtxo, _, _>(outpoint)
     }
 
+    #[log_error]
     fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>> {
         self.read_value::<well_known::UtxosBestBlockId>()
             .map(|id| id.expect("Best block for UTXOs to be present"))
@@ -212,18 +235,22 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
         self.read::<db::DBAccountingPoolDataTip, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingDelegationBalancesTip, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -231,6 +258,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         self.read::<db::DBAccountingDelegationDataTip, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -240,6 +268,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
+    #[log_error]
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -252,18 +281,22 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
         self.read::<db::DBAccountingPoolDataSealed, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingDelegationBalancesSealed, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -271,6 +304,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         self.read::<db::DBAccountingDelegationDataSealed, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -280,6 +314,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
+    #[log_error]
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -292,10 +327,12 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
 impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<'st, B> {
     type Error = crate::Error;
 
+    #[log_error]
     fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
         self.read::<db::DBTokensData, _, _>(id)
     }
 
+    #[log_error]
     fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBTokensCirculatingSupply, _, _>(id)
     }
@@ -303,62 +340,76 @@ impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<
 
 /// Blockchain data storage transaction
 impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B> {
+    #[log_error]
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
         self.read_value::<well_known::StoreVersion>()
     }
 
+    #[log_error]
     fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
         self.read_value::<well_known::MagicBytes>()
     }
 
+    #[log_error]
     fn get_chain_type(&self) -> crate::Result<Option<String>> {
         self.read_value::<well_known::ChainType>()
     }
 
+    #[log_error]
     fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
         self.read::<db::DBBlockIndex, _, _>(id)
     }
 
     /// Get the hash of the best block
+    #[log_error]
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
         self.read_value::<well_known::BestBlockId>()
     }
 
+    #[log_error]
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
     }
 
+    #[log_error]
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
     }
 
+    #[log_error]
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
         let store = self.0.get::<db::DBBlock, _>();
         let encoded_block = store.get(block_index.block_id());
         private::block_index_to_block_reward(block_index, encoded_block)
     }
 
+    #[log_error]
     fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
         self.read_value::<well_known::MinHeightForReorg>()
     }
 
+    #[log_error]
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<db::DBBlockByHeight, _, _>(height)
     }
 
+    #[log_error]
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
+    #[log_error]
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>> {
         self.read::<db::DBTokensAuxData, _, _>(&token_id)
     }
 
+    #[log_error]
     fn get_token_id(&self, issuance_tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>> {
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
     }
 
+    #[log_error]
     fn get_tokens_accounting_undo(
         &self,
         id: Id<Block>,
@@ -366,6 +417,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
+    #[log_error]
     fn get_block_tree_by_height(
         &self,
         start_from: BlockHeight,
@@ -383,6 +435,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         Ok(result)
     }
 
+    #[log_error]
     fn get_pos_accounting_undo(
         &self,
         id: Id<Block>,
@@ -390,6 +443,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBAccountingBlockUndo, _, _>(id)
     }
 
+    #[log_error]
     fn get_accounting_epoch_delta(
         &self,
         epoch_index: EpochIndex,
@@ -397,6 +451,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBAccountingEpochDelta, _, _>(epoch_index)
     }
 
+    #[log_error]
     fn get_accounting_epoch_undo_delta(
         &self,
         epoch_index: EpochIndex,
@@ -404,12 +459,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
     }
 
+    #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 }
 
 impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRw<'st, B> {
+    #[log_error]
     fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
         self.read::<db::DBEpochData, _, _>(epoch_index)
     }
@@ -418,10 +475,12 @@ impl<'st, B: storage::Backend> EpochStorageRead for super::StoreTxRw<'st, B> {
 impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
     type Error = crate::Error;
 
+    #[log_error]
     fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>> {
         self.read::<db::DBUtxo, _, _>(outpoint)
     }
 
+    #[log_error]
     fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>> {
         self.read_value::<well_known::UtxosBestBlockId>()
             .map(|id| id.expect("Best block for UTXOs to be present"))
@@ -431,18 +490,22 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
         self.read::<db::DBAccountingPoolDataTip, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingDelegationBalancesTip, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -450,6 +513,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         self.read::<db::DBAccountingDelegationDataTip, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -459,6 +523,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
+    #[log_error]
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -471,18 +536,22 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
         self.read::<db::DBAccountingPoolDataSealed, _, _>(pool_id)
     }
 
+    #[log_error]
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingDelegationBalancesSealed, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -490,6 +559,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         self.read::<db::DBAccountingDelegationDataSealed, _, _>(delegation_id)
     }
 
+    #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -499,6 +569,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
+    #[log_error]
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -511,10 +582,12 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
 impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<'st, B> {
     type Error = crate::Error;
 
+    #[log_error]
     fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
         self.read::<db::DBTokensData, _, _>(id)
     }
 
+    #[log_error]
     fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBTokensCirculatingSupply, _, _>(id)
     }

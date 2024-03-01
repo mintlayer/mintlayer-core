@@ -18,15 +18,18 @@ use super::*;
 use crate::schema::{self as db};
 use common::chain::UtxoOutPoint;
 use storage::MakeMapRef;
+use utils::log_error;
 use utxo::Utxo;
 
 impl<B: storage::Backend> StoreTxRo<'_, B> {
     /// Dump raw database contents
+    #[log_error]
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.0.dump_raw().map_err(crate::Error::from)
     }
 
     /// Collect and return all utxos from the storage
+    #[log_error]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<UtxoOutPoint, Utxo>> {
         self.0
             .get::<db::DBUtxo, _>()
@@ -36,6 +39,7 @@ impl<B: storage::Backend> StoreTxRo<'_, B> {
     }
 
     /// Collect and return all tip accounting data from storage
+    #[log_error]
     pub fn read_pos_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let pool_data = self
             .0
@@ -77,6 +81,7 @@ impl<B: storage::Backend> StoreTxRo<'_, B> {
     }
 
     /// Collect and return all sealed accounting data from storage
+    #[log_error]
     pub fn read_pos_accounting_data_sealed(
         &self,
     ) -> crate::Result<pos_accounting::PoSAccountingData> {
@@ -119,6 +124,7 @@ impl<B: storage::Backend> StoreTxRo<'_, B> {
         })
     }
 
+    #[log_error]
     pub fn read_tokens_accounting_data(
         &self,
     ) -> crate::Result<tokens_accounting::TokensAccountingData> {

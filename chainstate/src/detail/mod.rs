@@ -59,8 +59,9 @@ use tx_verifier::transaction_verifier;
 use utils::{
     ensure,
     eventhandler::{EventHandler, EventsController},
+    log_error,
     set_flag::SetFlag,
-    tap_error_log::LogError,
+    tap_log::TapLog,
 };
 use utxo::UtxosDB;
 
@@ -112,17 +113,22 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.subsystem_events.wait_for_all_events();
     }
 
-    fn make_db_tx(&mut self) -> chainstate_storage::Result<ChainstateRef<TxRw<'_, S>, V>> {
-        let db_tx = self.chainstate_storage.transaction_rw(None)?;
+    #[log_error]
+    fn make_db_tx<'a>(&'a mut self) -> chainstate_storage::Result<ChainstateRef<TxRw<'a, S>, V>> {
+        // Note: this is a workaround for log_error's compilation issues, see log_error docs
+        // for details.
+        let this = self;
+        let db_tx = this.chainstate_storage.transaction_rw(None)?;
         Ok(chainstateref::ChainstateRef::new_rw(
-            &self.chain_config,
-            &self.chainstate_config,
-            &self.tx_verification_strategy,
+            &this.chain_config,
+            &this.chainstate_config,
+            &this.tx_verification_strategy,
             db_tx,
-            &self.time_getter,
+            &this.time_getter,
         ))
     }
 
+    #[log_error]
     pub(crate) fn make_db_tx_ro(
         &self,
     ) -> chainstate_storage::Result<ChainstateRef<TxRo<'_, S>, V>> {
@@ -136,6 +142,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         ))
     }
 
+    #[log_error]
     pub fn query(&self) -> Result<ChainstateQuery<TxRo<'_, S>, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
@@ -148,6 +155,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.rpc_events.subscribe()
     }
 
+    #[log_error]
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
@@ -164,8 +172,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
             db_tx
                 .get_best_block_id()
-                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))
-                .log_err()?
+                .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?
         };
 
         let mut chainstate = Self::new_no_genesis(
@@ -178,10 +185,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         );
 
         if best_block_id.is_none() {
-            chainstate
-                .process_genesis()
-                .map_err(ChainstateError::ProcessBlockError)
-                .log_err()?;
+            chainstate.process_genesis().map_err(ChainstateError::ProcessBlockError)?;
         } else {
             chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
         }
@@ -216,6 +220,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
+    #[log_error]
     fn check_genesis(&self) -> Result<(), InitializationError> {
         let dbtx = self.make_db_tx_ro()?;
 
@@ -264,6 +269,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// a BlockError and return it.
     /// On each iteration, before doing anything else, call `on_new_attempt`
     /// (this can be used for logging).
+    #[log_error]
     fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, Err>(
         &mut self,
         mut main_action: MainAction,
@@ -281,9 +287,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             on_new_attempt(attempts_count);
             attempts_count += 1;
 
-            let mut chainstate_ref = self.make_db_tx().map_err(Err::from).log_err()?;
+            let mut chainstate_ref = self.make_db_tx().map_err(Err::from)?;
             let result = main_action(&mut chainstate_ref).log_err()?;
-            let db_commit_result = chainstate_ref.commit_db_tx().log_err();
+            let db_commit_result = chainstate_ref.commit_db_tx();
 
             match db_commit_result {
                 Ok(_) => return Ok(result),
@@ -298,6 +304,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Integrate the block into the blocktree, performing all the necessary checks.
     /// The returned bool indicates whether a reorg has occurred.
+    #[log_error]
     fn integrate_block(
         chainstate_ref: &mut ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
@@ -361,19 +368,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Attempt to process the block. On success, return Some(block_index_of_the_passed_block)
     /// if a reorg has occurred and the passed block is now the best block, otherwise return None.
+    #[log_error]
     fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let block = self.check_legitimate_orphan(block_source, block).log_err()?;
+        let block = self.check_legitimate_orphan(block_source, block)?;
         let block_id = block.get_id();
 
         // Ensure that the block being submitted is new to us. If not, bail out immediately,
         // otherwise create a new block index and continue.
         let block_index = {
-            let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
-            let existing_block_index = get_block_index(&chainstate_ref, &block_id).log_err()?;
+            let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
+            let existing_block_index = get_block_index(&chainstate_ref, &block_id)?;
 
             if let Some(block_index) = existing_block_index {
                 return if block_index.status().is_ok() {
@@ -383,9 +391,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 };
             }
 
-            chainstate_ref
-                .create_block_index_for_new_block(&block, BlockStatus::new())
-                .log_err()?
+            chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
         };
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
@@ -407,9 +413,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 // If the above code has succeeded, then the block_index must be present in the DB.
                 // Note that we can't return the initially obtained block_index, because its
                 // block status is outdated.
-                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
-                let saved_block_index =
-                    get_existing_block_index(&chainstate_ref, &block_id).log_err()?;
+                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
+                let saved_block_index = get_existing_block_index(&chainstate_ref, &block_id)?;
 
                 assert!(saved_block_index.status().is_ok());
                 return Ok(reorg_occurred.then_some(saved_block_index));
@@ -439,43 +444,37 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         {
             // Note: we already have an error to return, so we ignore the result of
             // the following call.
-            let _result = self
-                .with_rw_tx(
-                    |chainstate_ref| {
-                        chainstate_ref.update_block_status(block_index.clone(), status)
-                    },
-                    |attempt_number| {
-                        log::info!(
-                            "Updating status for block {block_id}, attempt #{attempt_number}"
-                        );
-                    },
-                    |attempts_count, db_err| {
-                        BlockError::DbCommitError(
-                            attempts_count,
-                            db_err,
-                            DbCommittingContext::BlockStatus(block_id),
-                        )
-                    },
-                )
-                .log_err();
+            let _result = self.with_rw_tx(
+                |chainstate_ref| chainstate_ref.update_block_status(block_index.clone(), status),
+                |attempt_number| {
+                    log::info!("Updating status for block {block_id}, attempt #{attempt_number}");
+                },
+                |attempts_count, db_err| {
+                    BlockError::DbCommitError(
+                        attempts_count,
+                        db_err,
+                        DbCommittingContext::BlockStatus(block_id),
+                    )
+                },
+            );
         }
 
         if let Some(first_invalid_block_id) = first_invalid_block_id {
             let is_block_in_main_chain = {
-                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
-                is_block_in_main_chain(&chainstate_ref, &first_invalid_block_id.into()).log_err()?
+                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
+                is_block_in_main_chain(&chainstate_ref, &first_invalid_block_id.into())?
             };
             assert!(!is_block_in_main_chain);
             // Again, we ignore the result here.
             let _result = BlockInvalidator::new(self)
-                .invalidate_block(&first_invalid_block_id, block_invalidation::IsExplicit::No)
-                .log_err();
+                .invalidate_block(&first_invalid_block_id, block_invalidation::IsExplicit::No);
         }
 
         Err(err)
     }
 
     /// process orphan blocks that depend on the given block, recursively
+    #[log_error]
     fn process_orphans_of(
         &mut self,
         block_id: &Id<Block>,
@@ -516,6 +515,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
+    #[log_error]
     fn process_block_and_related_orphans(
         &mut self,
         block: WithId<Block>,
@@ -551,6 +551,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// returns the block index of the new tip
+    #[log_error]
     pub fn process_block(
         &mut self,
         block: WithId<Block>,
@@ -560,32 +561,24 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Initialize chainstate with genesis block
+    #[log_error]
     pub fn process_genesis(&mut self) -> Result<(), BlockError> {
         // Gather information about genesis.
         let genesis_id = self.chain_config.genesis_block_id();
 
         // Initialize storage with given info
-        let mut db_tx = self
-            .chainstate_storage
-            .transaction_rw(None)
-            .map_err(BlockError::from)
-            .log_err()?;
-        db_tx
-            .set_best_block_id(&genesis_id)
-            .map_err(BlockError::StorageError)
-            .log_err()?;
+        let mut db_tx = self.chainstate_storage.transaction_rw(None).map_err(BlockError::from)?;
+        db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
         db_tx
             .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
-            .map_err(BlockError::StorageError)
-            .log_err()?;
+            .map_err(BlockError::StorageError)?;
 
         db_tx
             .set_epoch_data(
                 0,
                 &EpochData::new(PoSRandomness::new(self.chain_config.initial_randomness())),
             )
-            .map_err(BlockError::StorageError)
-            .log_err()?;
+            .map_err(BlockError::StorageError)?;
 
         // initialize the utxo-set by adding genesis outputs to it
         UtxosDB::initialize_db(&mut db_tx, &self.chain_config);
@@ -600,6 +593,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
+    #[log_error]
     fn create_pool_in_storage(
         &self,
         db: &mut impl PoSAccountingOperations<PoSAccountingUndo>,
@@ -655,6 +649,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
+    #[log_error]
     fn update_initial_block_download_flag(&mut self) -> Result<(), PropertyQueryError> {
         if self.is_initial_block_download_finished.test() {
             return Ok(());
@@ -673,6 +668,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
+    #[log_error]
     fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
@@ -684,20 +680,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let block_index_found = chainstate_ref
             .get_gen_block_index(&prev_block_id)
-            .map_err(OrphanCheckError::PrevBlockIndexNotFound)
-            .log_err()?
+            .map_err(OrphanCheckError::PrevBlockIndexNotFound)?
             .is_some();
 
         drop(chainstate_ref);
 
         if block_source == BlockSource::Local && !block_index_found {
-            self.new_orphan_block(block).log_err()?;
+            self.new_orphan_block(block)?;
             return Err(OrphanCheckError::LocalOrphan);
         }
         Ok(block)
     }
 
     /// Mark new block as an orphan
+    #[log_error]
     fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
         match self.orphan_blocks.add_block(block) {
             Ok(_) => Ok(()),
@@ -726,6 +722,7 @@ impl From<chainstate_storage::Error> for BlockIntegrationError {
     }
 }
 
+#[log_error]
 fn get_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -739,6 +736,7 @@ where
         .map_err(|err| BlockError::BlockIndexQueryError((*block_id).into(), err))
 }
 
+#[log_error]
 fn get_existing_block_index<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -752,6 +750,7 @@ where
         .map_err(|err| BlockError::BlockIndexQueryError((*block_id).into(), err))
 }
 
+#[log_error]
 fn is_block_in_main_chain<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     block_id: &Id<GenBlock>,

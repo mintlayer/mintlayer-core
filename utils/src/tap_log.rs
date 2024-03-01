@@ -17,9 +17,9 @@ use std::{fmt::Display, panic::Location};
 
 use logging::log;
 
-use crate::workspace_path::relative_src_file_path;
+use crate::log_utils;
 
-pub trait LogError
+pub trait TapLog
 where
     Self: Sized,
 {
@@ -27,38 +27,20 @@ where
     fn log_err_pfx(self, prefix: &str) -> Self;
     fn log_warn(self) -> Self;
     fn log_warn_pfx(self, prefix: &str) -> Self;
+    fn log_lvl(self, log_level: log::Level) -> Self;
+    fn log_lvl_pfx(self, log_level: log::Level, prefix: &str) -> Self;
 }
 
-fn log_error<E: Display>(err: &E, log_level: log::Level, location: &Location) {
-    log::log!(
-        // Note: the default target will be the module name, i.e. "utils::tap_error_log";
-        // replace it with a shorter string that is still informative enough.
-        target: "LogError",
-        log_level,
-        "{err} ({}:{}:{})",
-        relative_src_file_path(location.file()),
-        location.line(),
-        location.column()
-    );
-}
+// Note: the default target will be the module name, i.e. "utils::tap_log";
+// replace it with a shorter string that is still informative enough.
+const LOG_TARGET: &str = "TapLog";
 
-fn log_error_pfx<E: Display>(err: &E, prefix: &str, log_level: log::Level, location: &Location) {
-    log::log!(
-        target: "LogError",
-        log_level,
-        "{prefix}: {err} ({}:{}:{})",
-        relative_src_file_path(location.file()),
-        location.line(),
-        location.column()
-    );
-}
-
-impl<T, E: Display> LogError for Result<T, E> {
+impl<T, E: Display> TapLog for Result<T, E> {
     #[inline(always)]
     #[track_caller]
     fn log_err(self) -> Self {
         if let Err(ref err) = self {
-            log_error(err, log::Level::Error, Location::caller());
+            log_utils::log(err, LOG_TARGET, log::Level::Error, Location::caller());
         }
         self
     }
@@ -67,7 +49,16 @@ impl<T, E: Display> LogError for Result<T, E> {
     #[track_caller]
     fn log_warn(self) -> Self {
         if let Err(ref err) = self {
-            log_error(err, log::Level::Warn, Location::caller());
+            log_utils::log(err, LOG_TARGET, log::Level::Warn, Location::caller());
+        }
+        self
+    }
+
+    #[inline(always)]
+    #[track_caller]
+    fn log_lvl(self, log_level: log::Level) -> Self {
+        if let Err(ref err) = self {
+            log_utils::log(err, LOG_TARGET, log_level, Location::caller());
         }
         self
     }
@@ -76,7 +67,13 @@ impl<T, E: Display> LogError for Result<T, E> {
     #[track_caller]
     fn log_err_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            log_error_pfx(err, prefix, log::Level::Error, Location::caller());
+            log_utils::log_pfx(
+                err,
+                prefix,
+                LOG_TARGET,
+                log::Level::Error,
+                Location::caller(),
+            );
         }
         self
     }
@@ -85,7 +82,22 @@ impl<T, E: Display> LogError for Result<T, E> {
     #[track_caller]
     fn log_warn_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            log_error_pfx(err, prefix, log::Level::Warn, Location::caller());
+            log_utils::log_pfx(
+                err,
+                prefix,
+                LOG_TARGET,
+                log::Level::Warn,
+                Location::caller(),
+            );
+        }
+        self
+    }
+
+    #[inline(always)]
+    #[track_caller]
+    fn log_lvl_pfx(self, log_level: log::Level, prefix: &str) -> Self {
+        if let Err(ref err) = self {
+            log_utils::log_pfx(err, prefix, LOG_TARGET, log_level, Location::caller());
         }
         self
     }

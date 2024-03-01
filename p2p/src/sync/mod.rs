@@ -39,7 +39,7 @@ use common::{
 use logging::log;
 use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
 use tracing::Instrument;
-use utils::{sync::Arc, tap_error_log::LogError};
+use utils::{sync::Arc, tap_log::TapLog};
 
 use crate::{
     config::P2pConfig,

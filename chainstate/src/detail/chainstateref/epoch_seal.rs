@@ -28,7 +28,7 @@ use common::{
 use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingView};
 use thiserror::Error;
 use tx_verifier::transaction_verifier::error::SpendStakeError;
-use utils::tap_error_log::LogError;
+use utils::{log_error, tap_log::TapLog};
 
 use crate::BlockError;
 
@@ -43,6 +43,7 @@ pub enum BlockStateEvent {
 /// should be updated.
 /// Sealed epoch is the state of accounting that is `epoch_length` * `sealed_epoch_distance_from_tip` blocks
 /// behind the tip and is used for PoS calculations.
+#[log_error]
 pub fn update_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
@@ -66,6 +67,7 @@ pub fn update_epoch_seal<S: BlockchainStorageWrite>(
 
 /// If a block was connected and it was the last block of the epoch, the epoch seal must be advanced.
 /// Meaning merging all the data from the epoch after current sealed state.
+#[log_error]
 fn advance_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
@@ -96,6 +98,7 @@ fn advance_epoch_seal<S: BlockchainStorageWrite>(
 
 /// If a block was disconnected and it was the last block of the epoch, the epoch seal must be rolled back.
 /// Meaning undo merging of all the data from the last sealed epoch.
+#[log_error]
 fn rollback_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
@@ -144,6 +147,7 @@ pub enum BlockStateEventWithIndex<'a> {
     Disconnect(BlockHeight),
 }
 
+#[log_error]
 fn create_randomness_from_block<S, P>(
     epoch_data_cache: &S,
     pos_view: &P,
@@ -207,6 +211,7 @@ where
 
 /// Every epoch has data associated with it.
 /// On every block change check whether this data should be updated.
+#[log_error]
 pub fn update_epoch_data<S, P>(
     epoch_data_cache: &mut S,
     pos_view: &P,

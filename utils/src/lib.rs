@@ -27,6 +27,7 @@ pub mod ensure;
 pub mod eventhandler;
 pub mod exp_rand;
 pub mod graph_traversals;
+pub mod log_utils;
 pub mod maybe_encrypted;
 pub mod newtype;
 pub mod once_destructor;
@@ -34,9 +35,11 @@ pub mod qrcode;
 pub mod rust_backtrace;
 pub mod set_flag;
 pub mod shallow_clone;
-pub mod tap_error_log;
+pub mod tap_log;
 pub mod try_as;
 pub mod workspace_path;
 
 mod concurrency_impl;
 pub use concurrency_impl::*;
+
+pub use log_error::log_error;

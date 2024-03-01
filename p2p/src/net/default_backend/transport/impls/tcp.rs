@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use p2p_types::socket_address::SocketAddress;
 use tokio::net::{TcpListener, TcpStream};
-use utils::tap_error_log::LogError;
+use utils::tap_log::TapLog;
 
 use crate::{
     net::default_backend::transport::{

@@ -39,6 +39,8 @@ pub fn init_logging() {
         // This will be true if stderr is the actual terminal (i.e. it wasn't redirected
         // to a file etc).
         std::io::stderr().is_terminal(),
+        // Use the default env var for filtering.
+        None,
     );
 }
 
@@ -46,14 +48,30 @@ pub fn init_logging() {
 ///
 /// `is_terminal` will determine text coloring in the `TextColoring::Auto` case.
 pub fn init_logging_to(file: impl Write + Send + 'static, is_terminal: bool) {
-    init_logging_impl(Mutex::new(Box::new(file)), is_terminal);
+    init_logging_impl(Mutex::new(Box::new(file)), is_terminal, None);
+}
+
+/// Same as init_logging_to, but here we use the specified custom env var for filtering
+/// instead of RUST_LOG.
+pub fn init_logging_with_env_var(
+    file: impl Write + Send + 'static,
+    is_terminal: bool,
+    filter_env_var_name: &str,
+) {
+    init_logging_impl(
+        Mutex::new(Box::new(file)),
+        is_terminal,
+        Some(filter_env_var_name),
+    );
 }
 
 static LOG_STYLE_ENV_VAR_NAME: &str = "ML_LOG_STYLE";
 
 static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
 
-fn init_logging_impl<MW>(make_writer: MW, is_terminal: bool)
+/// `filter_env_var_name` specifies a custom env var to use instead of RUST_LOG;
+/// if not specified, RUST_LOG will be used.
+fn init_logging_impl<MW>(make_writer: MW, is_terminal: bool, filter_env_var_name: Option<&str>)
 where
     MW: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
@@ -73,8 +91,10 @@ where
 
         Registry::default()
             .with(logging_layer)
-            // This will construct EnvFilter using the default env variable RUST_LOG
-            .with(EnvFilter::from_default_env())
+            // This will construct EnvFilter using the specified env variable.
+            .with(EnvFilter::from_env(
+                filter_env_var_name.unwrap_or("RUST_LOG"),
+            ))
             // This basically calls tracing::subscriber::set_global_default on self and then
             // initializes a 'log' compatibility layer, so that 'log' macros continue to work
             // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
