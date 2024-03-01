@@ -30,7 +30,7 @@ use tokio::sync::{
     mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
-use utils::{ensure, tap_error_log::TapLog};
+use utils::{ensure, tap_log::TapLog};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum JobManagerError {

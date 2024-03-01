@@ -28,7 +28,7 @@ use common::{
 use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingView};
 use thiserror::Error;
 use tx_verifier::transaction_verifier::error::SpendStakeError;
-use utils::{log_error, tap_error_log::TapLog};
+use utils::{log_error, tap_log::TapLog};
 
 use crate::BlockError;
 

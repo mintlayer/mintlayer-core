@@ -28,7 +28,7 @@ use crypto::{
 };
 use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
-use utils::tap_error_log::TapLog;
+use utils::tap_log::TapLog;
 use wallet::{
     account::{
         currency_grouper::Currency, transaction_list::TransactionList, DelegationData, PoolData,

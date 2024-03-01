@@ -31,7 +31,7 @@ where
     fn log_lvl_pfx(self, log_level: log::Level, prefix: &str) -> Self;
 }
 
-// Note: the default target will be the module name, i.e. "utils::tap_error_log";
+// Note: the default target will be the module name, i.e. "utils::tap_log";
 // replace it with a shorter string that is still informative enough.
 const LOG_TARGET: &str = "TapLog";
 

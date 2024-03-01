@@ -35,7 +35,7 @@ pub mod qrcode;
 pub mod rust_backtrace;
 pub mod set_flag;
 pub mod shallow_clone;
-pub mod tap_error_log;
+pub mod tap_log;
 pub mod try_as;
 pub mod workspace_path;
 

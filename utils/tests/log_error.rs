@@ -17,7 +17,7 @@ use log_output::LogOutput;
 use logging::log;
 use regex::Regex;
 use thiserror::Error;
-use utils::{log_error, tap_error_log::TapLog};
+use utils::{log_error, tap_log::TapLog};
 
 #[derive(Error, Debug)]
 #[error("This is serious")]

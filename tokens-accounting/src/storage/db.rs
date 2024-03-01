@@ -19,7 +19,7 @@ use accounting::{
     combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
 };
 use common::{chain::tokens::TokenId, primitives::Amount};
-use utils::tap_error_log::TapLog;
+use utils::tap_log::TapLog;
 
 use crate::{
     data::{TokensAccountingDeltaData, TokensAccountingDeltaUndoData},

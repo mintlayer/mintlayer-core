@@ -31,7 +31,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use utils::{ensure, log_error, tap_error_log::TapLog};
+use utils::{ensure, log_error, tap_log::TapLog};
 
 pub use best_chain_candidates::BestChainCandidatesError;
 
