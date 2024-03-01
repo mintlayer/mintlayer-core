@@ -1,6 +1,6 @@
 # For mainnet, change every testnet instance to mainnet
 [Unit]
-Description=Mintlayer Testnet Daemon
+Description=Mintlayer Testnet Wallet RPC Daemon
 After=syslog.target network-online.target
 
 # RULES for picking a user:
@@ -9,16 +9,18 @@ After=syslog.target network-online.target
 [Service]
 User=mintlayeruser
 
-# Type is simple because the node-daemon is blocking
+# Type is simple because the wallet-rpc-daemon is blocking
 Type=simple
 
 # Path of the source code OR executable
 WorkingDirectory=/home/mintlayeruser/mintlayer-core
 
-# Use this if you want the node to be built from source
-ExecStart=cargo run -j 1 --release --bin node-daemon -- testnet
+# Use this if you want the wallet-rpc-daemon to be built from source
+# Consider running the `wallet-rpc-daemon` with the `--help` option to see what options are available (authentication, etc)
+# --start-staking-for-account 0 will start staking for account number 0
+ExecStart=cargo run -j 1 --release --bin wallet-rpc-daemon -- testnet /path/to/wallet/file --start-staking-for-account 0
 # If you're using an executable and didn't clone the source, comment the line above, and uncomment below
-#ExecStart=/path/to/node-daemon testnet
+#ExecStart=/path/to/wallet-rpc-daemon testnet
 
 Environment="RUST_BACKTRACE=full"
 # Change `info` to `debug` for deeper logs
@@ -34,8 +36,8 @@ RestartSec=60s
 TimeoutSec=900
 
 # Log files stored in /var/log/
-StandardOutput=append:/var/log/mintlayer-node-testnet-stdout.log
-StandardError=append:/var/log/mintlayer-node-testnet-stderr.log
+StandardOutput=append:/var/log/mintlayer-wallet-rpc-testnet-stdout.log
+StandardError=append:/var/log/mintlayer-wallet-rpc-testnet-stderr.log
 
 [Install]
 WantedBy=multi-user.target
