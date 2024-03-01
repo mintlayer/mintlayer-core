@@ -90,10 +90,10 @@ impl WalletRpcDaemonCommand {
 pub struct WalletRpcDaemonChainArgs {
     /// The wallet file to operate on
     #[arg()]
-    wallet_path: Option<PathBuf>,
+    wallet_file: Option<PathBuf>,
 
     /// Start staking for the specified account after starting the wallet
-    #[arg(long, value_name("ACC_NUMBER"), requires("wallet_path"))]
+    #[arg(long, value_name("ACC_NUMBER"), requires("wallet_file"))]
     start_staking_for_account: Vec<U31>,
 
     /// RPC address of the node to connect to
@@ -146,8 +146,8 @@ impl WalletRpcDaemonChainArgs {
         chain_type: ChainType,
     ) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
-            wallet_path: wallet_file,
-            rpc_bind_address: wallet_rpc_address,
+            wallet_file,
+            rpc_bind_address,
             start_staking_for_account,
             node_rpc_address,
             node_cookie_file,
@@ -185,7 +185,7 @@ impl WalletRpcDaemonChainArgs {
             rpc_username,
             rpc_password,
             rpc_no_authentication,
-            wallet_rpc_address,
+            rpc_bind_address,
             *ws_config.chain_config.chain_type(),
         )?;
 
