@@ -63,12 +63,11 @@ class AccountInfo:
     name: Optional[str]
 
 class WalletRpcController:
-
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
         self.log = log
         self.node = node
         self.config = config
-        self.wallet_args = [arg for arg in wallet_args if arg != "--wallet-file"]
+        self.wallet_args = wallet_args
         self.chain_config_args = chain_config_args
         self.account = DEFAULT_ACCOUNT_INDEX
 
