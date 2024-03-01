@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
+use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{ConsensusUpgrade, NetUpgrades, PoSChainConfigBuilder, UtxoOutPoint},
     primitives::{BlockCount, Idable},
@@ -72,7 +73,22 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             )]))
             .build();
 
+        // Reference TestFramework is used to recreate expected storage after reorg
+        let mut reference_tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.clone())
+            .with_initial_time_since_genesis(target_time.as_secs())
+            .with_staking_pools(BTreeMap::from_iter([(
+                genesis_pool_id,
+                (
+                    staking_sk.clone(),
+                    vrf_sk.clone(),
+                    genesis_pool_outpoint.clone(),
+                ),
+            )]))
+            .build();
+
         // Generate a random chain
+        let mut all_blocks = Vec::new();
         for _ in 0..rng.gen_range(10..max_blocks) {
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
@@ -80,11 +96,24 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
-            block_builder.build_and_process().unwrap().unwrap();
-
+            let block = block_builder.build();
+            let block_index = tf.process_block(block.clone(), BlockSource::Local).unwrap();
             tf.progress_time_seconds_since_epoch(target_time.as_secs());
+
+            all_blocks.push((block, block_index.unwrap()));
         }
         let old_best_block_id = tf.best_block_id();
+
+        // Manually update reference storage.
+        // After reorg only blocks and block indexes are left from the original chain
+        {
+            let mut db_tx = reference_tf.storage.transaction_rw(None).unwrap();
+            for (block, block_index) in all_blocks {
+                db_tx.set_block_index(&block_index).unwrap();
+                db_tx.add_block(&block).unwrap();
+            }
+            db_tx.commit().unwrap();
+        }
 
         // Create longer chain to trigger reorg and disconnect all the random txs.
         //
@@ -115,10 +144,31 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             tf2.progress_time_seconds_since_epoch(target_time.as_secs());
 
             // submit block to the original chain
-            tf.process_block(block, BlockSource::Peer).unwrap();
+            tf.process_block(block.clone(), BlockSource::Peer).unwrap();
+            reference_tf.process_block(block, BlockSource::Peer).unwrap();
         }
 
         assert_ne!(old_best_block_id, tf.best_block_id());
         assert_eq!(tf.best_block_id(), tf2.best_block_id());
+
+        // Exclude PoS accounting epoch delta from the comparison.
+        // This is a workaround because deltas are never removed on undo but rather replaced with None value.
+        // It seems like an acceptable trade-off for the simplicity of the test given that Sealed storage
+        // which utilizes such epoch deltas is not used in production.
+        {
+            let mut db_tx = tf.storage.transaction_rw(None).unwrap();
+            db_tx.del_accounting_epoch_delta(0).unwrap();
+            db_tx.commit().unwrap();
+        }
+        {
+            let mut db_tx = reference_tf.storage.transaction_rw(None).unwrap();
+            db_tx.del_accounting_epoch_delta(0).unwrap();
+            db_tx.commit().unwrap();
+        }
+
+        assert_eq!(
+            tf.storage.transaction_ro().unwrap().dump_raw(),
+            reference_tf.storage.transaction_ro().unwrap().dump_raw()
+        );
     });
 }
