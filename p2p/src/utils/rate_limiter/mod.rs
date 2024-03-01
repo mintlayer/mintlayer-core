@@ -19,7 +19,7 @@ use common::primitives::time::Time;
 
 /// Token bucket based rate limiter
 ///
-/// See https://en.wikipedia.org/wiki/Token_bucket
+/// See <https://en.wikipedia.org/wiki/Token_bucket>
 #[derive(Debug)]
 pub struct RateLimiter {
     rate: f64,

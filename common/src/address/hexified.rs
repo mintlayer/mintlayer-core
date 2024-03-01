@@ -22,7 +22,7 @@ use serialization::DecodeAll;
 
 const REGEX_SUFFIX: &str = r"\{0x([0-9a-fA-F]+)\}";
 
-/// A hexified address is an address that's formatted in such a way that it can be safely replaced with a real address using the object Address<A>.
+/// A hexified address is an address that's formatted in such a way that it can be safely replaced with a real address using the object `Address<A>`.
 /// This whole thing is a workaround due to the fact that serde doesn't support stateful serialization, so the ChainConfig cannot be passed while
 /// serializing.
 pub struct HexifiedAddress<'a, A> {

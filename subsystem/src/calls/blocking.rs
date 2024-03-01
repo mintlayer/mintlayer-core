@@ -19,7 +19,7 @@ use crate::{error::CallError, CallResult, Handle};
 use futures::future::BoxFuture;
 use utils::shallow_clone::ShallowClone;
 
-/// Blocking version of [subsystem::Handle].
+/// Blocking version of [Handle].
 ///
 /// This should be used sparingly as blocking calls induce non-trivial overhead. The call takes up
 /// a thread in the runtime thread pool. If there is not enough threads for all simultaneous
