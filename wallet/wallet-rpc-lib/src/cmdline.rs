@@ -104,16 +104,16 @@ pub struct WalletRpcDaemonChainArgs {
     #[arg(
         long,
         value_name("PATH"),
-        conflicts_with_all(["node_username", "node_password"])
+        conflicts_with_all(["node_rpc_username", "node_rpc_password"])
     )]
     node_rpc_cookie_file: Option<PathBuf>,
 
     /// Node login user name
-    #[arg(long, value_name("NAME"), requires("node_password"))]
+    #[arg(long, value_name("NAME"), requires("node_rpc_password"))]
     node_rpc_username: Option<String>,
 
     /// Node login password
-    #[arg(long, value_name("PASS"), requires("node_username"))]
+    #[arg(long, value_name("PASS"), requires("node_rpc_username"))]
     node_rpc_password: Option<String>,
 
     /// Address to bind the wallet RPC interface to
@@ -150,9 +150,9 @@ impl WalletRpcDaemonChainArgs {
             rpc_bind_address,
             start_staking_for_account,
             node_rpc_address,
-            node_rpc_cookie_file: node_cookie_file,
-            node_rpc_username: node_username,
-            node_rpc_password: node_password,
+            node_rpc_cookie_file,
+            node_rpc_username,
+            node_rpc_password,
             rpc_cookie_file,
             rpc_username,
             rpc_password,
@@ -161,16 +161,21 @@ impl WalletRpcDaemonChainArgs {
 
         let ws_config = {
             // Node RPC authentication
-            let node_credentials = match (node_cookie_file, node_username, node_password) {
-                (Some(cookie_file_path), None, None) => RpcAuthData::Cookie { cookie_file_path },
-                (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
-                (None, None, None) => {
-                    let cookie_file_path =
-                        default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-                    RpcAuthData::Cookie { cookie_file_path }
-                }
-                _ => panic!("Should not happen due to arg constraints"),
-            };
+            let node_credentials =
+                match (node_rpc_cookie_file, node_rpc_username, node_rpc_password) {
+                    (Some(cookie_file_path), None, None) => {
+                        RpcAuthData::Cookie { cookie_file_path }
+                    }
+                    (None, Some(username), Some(password)) => {
+                        RpcAuthData::Basic { username, password }
+                    }
+                    (None, None, None) => {
+                        let cookie_file_path =
+                            default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+                        RpcAuthData::Cookie { cookie_file_path }
+                    }
+                    _ => panic!("Should not happen due to arg constraints"),
+                };
 
             WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account)
                 .apply_option(
