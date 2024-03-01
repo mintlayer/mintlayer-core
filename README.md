@@ -57,37 +57,37 @@ You don't need to specify RUST_LOG environment variable for logging, since it's 
 Note: spaces don't matter, so these are aligned for readability
 
 - Node daemon:
-```
+```sh
 cargo run --release --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
 ```
 - CLI Wallet:
-```
+```sh
 cargo run --release --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
 ```
 - RPC Wallet:
-```
+```sh
 cargo run --release --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
 ```
 - GUI:
-```
+```sh
 cargo run --release --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
 ```
 
 For heavy debugging operation
 - Node daemon:
-```
+```sh
 RUST_LOG=debug cargo run --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
 ```
 - CLI Wallet:
-```
+```sh
 RUST_LOG=debug cargo run --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
 ```
 - RPC Wallet:
-```
+```sh
 RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
 ```
 - GUI:
-```
+```sh
 RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
 ```
 
