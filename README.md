@@ -37,10 +37,10 @@ There are many ways you can manage running the components of mintlayer-core. The
 
 You can:
 
-- Run the node-daemon + wallet-cli to manage your coins, where the wallet-cli owns your wallet file and manages your coins. The wallet-cli itself can optionally act as an RPC server
-- Run the node-daemon + wallet-rpc-daemon + wallet-cli, where both daemons will be services in your system, the wallet-rpc-daemon will own your wallet (and start staking automatically for you), and the wallet-cli will just be an easy interface for communicating with your wallet
-- Run only the node-gui, where the GUI contains both the node and the wallet. This is a good option for non-techy users
-- Run the node-daemon with the API server components ([see this readme](api-server/README.md)) without a wallet, to manage your application
+- Run node-daemon + wallet-cli to manage your coins, where wallet-cli owns your wallet file and manages your coins. wallet-cli itself can optionally act as an RPC server
+- Run node-daemon + wallet-rpc-daemon + wallet-cli, where both daemons will be services in your system, wallet-rpc-daemon will own your wallet (and start staking automatically for you), and wallet-cli will just be an easy interface for communicating with your wallet
+- Run only node-gui, where the GUI contains both the node and the wallet. This is a good option for non-techy users
+- Run node-daemon with the API server components ([see this readme](api-server/README.md)) without a wallet, to manage your application
 
 ### Preparations for compiling the source code
 
@@ -84,41 +84,41 @@ You don't need to specify RUST_LOG environment variable for logging, since it's 
 Note: spaces don't matter, so these are aligned for readability
 
 - Node daemon:
-```sh
-cargo run --release --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
-```
+    ```sh
+    cargo run --release --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
+    ```
 - CLI Wallet:
-```sh
-cargo run --release --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
-```
+    ```sh
+    cargo run --release --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
+    ```
 - RPC Wallet:
-```sh
-cargo run --release --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
-```
+    ```sh
+    cargo run --release --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
+    ```
 - GUI:
-```sh
-cargo run --release --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
-```
+    ```sh
+    cargo run --release --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
+    ```
 
 For heavy debugging operation
 - Node daemon:
-```sh
-RUST_LOG=debug cargo run --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
-```
+    ```sh
+    RUST_LOG=debug cargo run --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
+    ```
 - CLI Wallet:
-```sh
-RUST_LOG=debug cargo run --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
-```
+    ```sh
+    RUST_LOG=debug cargo run --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
+    ```
 - RPC Wallet:
-```sh
-RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
-```
+    ```sh
+    RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
+    ```
 - GUI:
-```sh
-RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
-```
+    ```sh
+    RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
+    ```
 
-There are more complex logging filtering that can be done at the crate level, but this is out of scope.
+More complex log filtering is possible, e.g. you can filter out log lines produced by a certain crate or module, but this is out of scope of this document.
 
 ## The API server
 
