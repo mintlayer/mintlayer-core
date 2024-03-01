@@ -36,6 +36,7 @@ pub mod set_flag;
 pub mod shallow_clone;
 pub mod tap_error_log;
 pub mod try_as;
+pub mod workspace_path;
 
 mod concurrency_impl;
 pub use concurrency_impl::*;
