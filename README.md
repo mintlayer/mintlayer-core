@@ -51,6 +51,22 @@ Here are the commands as recommended for different scenarios:
 
 #### Assuming you're using the source code
 
+Every release has a tag and a release branch. Make sure you checkout the release you need. For example, if you need v0.3.0, you should first run the following to check out the release branch:
+
+```sh
+git checkout release-v0.3.0
+```
+
+or to checkout the tag:
+
+```sh
+git checkout tags/v0.3.0
+```
+
+Release branches are more recommended than tags, because they get necessary security patches, if any. Tags are just markers.
+
+After having checked out the version you need, the following is how to run the software.
+
 For normal operation (replace testnet by mainnet to run the mainnet node)
 You don't need to specify RUST_LOG environment variable for logging, since it's by default set to be `INFO`.
 
