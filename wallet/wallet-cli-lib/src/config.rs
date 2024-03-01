@@ -149,7 +149,7 @@ pub struct CliArgs {
     /// So, you can start an RPC daemon, and make this CLI connect to it to control it.
     /// This is useful for servers, where the RPC wallet can be left staking,
     /// and the wallet CLI is used to control its state.
-    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    #[arg(long, conflicts_with_all(["wallet_file", "wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
     pub remote_rpc_wallet_address: Option<String>,
 
     /// For a remote RPC wallet, this is the path to the RPC cookie file. If not set, the value is read from the default cookie file location.

@@ -90,10 +90,10 @@ impl WalletRpcDaemonCommand {
 pub struct WalletRpcDaemonChainArgs {
     /// The wallet file to operate on
     #[arg()]
-    wallet_path: Option<PathBuf>,
+    wallet_file: Option<PathBuf>,
 
     /// Start staking for the specified account after starting the wallet
-    #[arg(long, value_name("ACC_NUMBER"), requires("wallet_path"))]
+    #[arg(long, value_name("ACC_NUMBER"), requires("wallet_file"))]
     start_staking_for_account: Vec<U31>,
 
     /// RPC address of the node to connect to
@@ -104,17 +104,17 @@ pub struct WalletRpcDaemonChainArgs {
     #[arg(
         long,
         value_name("PATH"),
-        conflicts_with_all(["node_username", "node_password"])
+        conflicts_with_all(["node_rpc_username", "node_rpc_password"])
     )]
-    node_cookie_file: Option<PathBuf>,
+    node_rpc_cookie_file: Option<PathBuf>,
 
     /// Node login user name
-    #[arg(long, value_name("NAME"), requires("node_password"))]
-    node_username: Option<String>,
+    #[arg(long, value_name("NAME"), requires("node_rpc_password"))]
+    node_rpc_username: Option<String>,
 
     /// Node login password
-    #[arg(long, value_name("PASS"), requires("node_username"))]
-    node_password: Option<String>,
+    #[arg(long, value_name("PASS"), requires("node_rpc_username"))]
+    node_rpc_password: Option<String>,
 
     /// Address to bind the wallet RPC interface to
     #[arg(long, value_name("ADDR"))]
@@ -146,13 +146,13 @@ impl WalletRpcDaemonChainArgs {
         chain_type: ChainType,
     ) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
-            wallet_path: wallet_file,
-            rpc_bind_address: wallet_rpc_address,
+            wallet_file,
+            rpc_bind_address,
             start_staking_for_account,
             node_rpc_address,
-            node_cookie_file,
-            node_username,
-            node_password,
+            node_rpc_cookie_file,
+            node_rpc_username,
+            node_rpc_password,
             rpc_cookie_file,
             rpc_username,
             rpc_password,
@@ -161,16 +161,21 @@ impl WalletRpcDaemonChainArgs {
 
         let ws_config = {
             // Node RPC authentication
-            let node_credentials = match (node_cookie_file, node_username, node_password) {
-                (Some(cookie_file_path), None, None) => RpcAuthData::Cookie { cookie_file_path },
-                (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
-                (None, None, None) => {
-                    let cookie_file_path =
-                        default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-                    RpcAuthData::Cookie { cookie_file_path }
-                }
-                _ => panic!("Should not happen due to arg constraints"),
-            };
+            let node_credentials =
+                match (node_rpc_cookie_file, node_rpc_username, node_rpc_password) {
+                    (Some(cookie_file_path), None, None) => {
+                        RpcAuthData::Cookie { cookie_file_path }
+                    }
+                    (None, Some(username), Some(password)) => {
+                        RpcAuthData::Basic { username, password }
+                    }
+                    (None, None, None) => {
+                        let cookie_file_path =
+                            default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+                        RpcAuthData::Cookie { cookie_file_path }
+                    }
+                    _ => panic!("Should not happen due to arg constraints"),
+                };
 
             WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account)
                 .apply_option(
@@ -185,7 +190,7 @@ impl WalletRpcDaemonChainArgs {
             rpc_username,
             rpc_password,
             rpc_no_authentication,
-            wallet_rpc_address,
+            rpc_bind_address,
             *ws_config.chain_config.chain_type(),
         )?;
 
