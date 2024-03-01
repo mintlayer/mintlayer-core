@@ -26,7 +26,7 @@ Environment="RUST_LOG=info"
 # Only if compiling from source: Add debug info when building
 Environment="RUSTFLAGS=-g"
 
-# always restart when server is killed for any reason, and wait 60 seconds before retrying
+# Always restart when the server is killed for any reason, and wait 60 seconds before retrying
 Restart=always
 RestartSec=60s
 

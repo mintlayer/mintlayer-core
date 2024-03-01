@@ -57,4 +57,4 @@ Consider checking out these stories:
 
 ## How to create a system service that runs the wallet and stakes
 
-The same instructions from above, with little changes, apply to the wallet-rpc-daemon service, where there is an example in the file: [mintlayer-wallet-rpc-testnet.service](mintlayer-wallet-rpc-testnet.service)
+The same instructions from above, with little changes, apply to the wallet-rpc-daemon service. An example can be found here: [mintlayer-wallet-rpc-testnet.service](mintlayer-wallet-rpc-testnet.service)

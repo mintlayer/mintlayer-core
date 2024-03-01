@@ -25,14 +25,14 @@ ExecStart=cargo run -j 1 --release --bin wallet-rpc-daemon -- testnet /path/to/w
 Environment="RUST_BACKTRACE=full"
 # Change `info` to `debug` for deeper logs
 Environment="RUST_LOG=info"
-# Only if compiling from source: Add debug info when building
+# Only if compiling from source: Add debug info when building. This is usually unnecessary, but if it's needed, this is how it's done.
 Environment="RUSTFLAGS=-g"
 
-# always restart when server is killed for any reason, and wait 60 seconds before retrying
+# Always restart when the server is killed for any reason, and wait 60 seconds before retrying
 Restart=always
 RestartSec=60s
 
-# Make the timeout too long if you're using cargo run above, to give the service time to build
+# Make the timeout long enough if you're using cargo run above, to give the service time to build
 TimeoutSec=900
 
 # Log files stored in /var/log/
