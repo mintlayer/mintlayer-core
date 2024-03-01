@@ -53,4 +53,4 @@ The server that can be used as a service. The wallet-cli cannot be used as a sys
 
 The RPC for the wallet (whether from the daemon or cli) has the default port values 3034 for mainnet and 13034 for testnet. There are different modes of authentication similar to those of the node. Run the `wallet-rpc-daemon` with the command-line argument `--help` to see the available options.
 
-The `wallet-rpc-daemon` requires a file to run. Once a file is open, the wallet can be controlled remotely with RPC. Any http and websocket RPC client can communicate with the RPC daemon. To see examples, [visit this readme file](wallet-rpc-daemon/README.md).
+Any http and websocket RPC client can communicate with the RPC daemon. To see examples, [visit this readme file](wallet-rpc-daemon/README.md).
