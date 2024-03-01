@@ -6,6 +6,7 @@ import re
 import sys
 import toml
 import itertools
+import fnmatch
 
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
@@ -201,7 +202,8 @@ def check_dependency_versions_patch_version():
     result = True
 
     for path in cargo_toml_files():
-        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+        if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
+               for exempted in exempted_files):
             continue
 
         # load the file
@@ -254,7 +256,8 @@ def check_local_licenses():
 
     ok = True
     for path in rs_sources():
-        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+        if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
+               for exempted in exempted_files):
             continue
 
         with open(path) as file:
@@ -276,7 +279,8 @@ def check_todos():
 
     ok = True
     for path in itertools.chain(rs_sources(), cargo_config_files()):
-        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+        if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
+               for exempted in exempted_files):
             continue
 
         with open(path) as file:
@@ -307,11 +311,13 @@ def check_files_end_with_newline():
 
     # list of files exempted from checks
     exempted_files = [
+        'wasm-wrappers/doc/*',
     ]
 
     ok = True
     for path in sources_with_extensions([".toml",".rs",".py",".js",".yml",".yaml",".json",".htm",".html"]):
-        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+        if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
+               for exempted in exempted_files):
             continue
 
         if file_ends_with_newline(path) is False:
@@ -331,14 +337,12 @@ def check_trailing_whitespaces():
         'crypto/src/symkey/chacha20poly1305/XCHACHA20POLY1305_TEST_VECTORS.tv',
         'script/src/test/test_vectors_4opc.csv.gz',
         'wasm-wrappers/pkg/wasm_wrappers_bg.wasm',
+        'wasm-wrappers/doc/*',
     ]
 
     ok = True
     for path in all_files():
-        # Note: some of the paths in exempted_files are temporary build artifacts, which
-        # may not exist when this script is run; this is why we need the os.path.exists
-        # check here.
-        if any((os.path.exists(exempted) and os.path.samefile(path, exempted))
+        if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
                for exempted in exempted_files):
             continue
 
