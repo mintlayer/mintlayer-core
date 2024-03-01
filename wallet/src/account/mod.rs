@@ -63,7 +63,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 use serialization::{Decode, Encode};
 use std::cmp::Reverse;
 use std::collections::btree_map::Entry;
@@ -81,7 +81,7 @@ use wallet_types::{
     KeychainUsageState, WalletTx,
 };
 
-use self::currency_grouper::Currency;
+use self::currency_grouper::{output_currency_value, Currency};
 pub use self::output_cache::{
     DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
@@ -560,6 +560,69 @@ impl Account {
             },
         )
         .try_collect()
+    }
+
+    pub fn sweep_addresses(
+        &mut self,
+        db_tx: &impl WalletStorageReadUnlocked,
+        destination: Destination,
+        request: SendRequest,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let mut grouped_inputs = group_preselected_inputs(
+            &request,
+            current_fee_rate,
+            &self.chain_config,
+            self.account_info.best_block_height(),
+        )?;
+
+        let input_fees = grouped_inputs
+            .values()
+            .map(|(_, fee)| *fee)
+            .sum::<Option<Amount>>()
+            .ok_or(WalletError::OutputAmountOverflow)?;
+
+        let coin_input = grouped_inputs.remove(&Currency::Coin).ok_or(WalletError::NoUtxos)?;
+
+        let mut outputs = grouped_inputs
+            .into_iter()
+            .filter_map(|(currency, (amount, _))| {
+                let value = match currency {
+                    Currency::Coin => None?,
+                    Currency::Token(token_id) => OutputValue::TokenV1(token_id, amount),
+                };
+
+                Some(TxOutput::Transfer(value, destination.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        let coin_output = TxOutput::Transfer(
+            OutputValue::Coin(
+                (coin_input.0 - input_fees)
+                    .ok_or(WalletError::NotEnoughUtxo(coin_input.0, input_fees))?,
+            ),
+            destination.clone(),
+        );
+
+        outputs.push(coin_output);
+        let tx_fee: Amount = current_fee_rate
+            .compute_fee(tx_size_with_outputs(outputs.as_slice()))
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into();
+        outputs.pop();
+
+        let total_fee = (tx_fee + input_fees).ok_or(WalletError::OutputAmountOverflow)?;
+
+        let coin_output = TxOutput::Transfer(
+            OutputValue::Coin(
+                (coin_input.0 - total_fee)
+                    .ok_or(WalletError::NotEnoughUtxo(coin_input.0, input_fees))?,
+            ),
+            destination,
+        );
+        outputs.push(coin_output);
+
+        self.sign_transaction_from_req(request.with_outputs(outputs), db_tx)
     }
 
     pub fn process_send_request(
@@ -1966,7 +2029,9 @@ fn group_preselected_inputs(
     block_height: BlockHeight,
 ) -> Result<BTreeMap<currency_grouper::Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
-    for (input, destination) in request.inputs().iter().zip(request.destinations()) {
+    for (input, destination, utxo) in
+        izip!(request.inputs(), request.destinations(), request.utxos())
+    {
         let input_size = serialization::Encode::encoded_size(&input);
         let inp_sig_size = input_signature_size_from_destination(destination)?;
 
@@ -1994,7 +2059,11 @@ fn group_preselected_inputs(
         };
 
         match input {
-            TxInput::Utxo(_) => {}
+            TxInput::Utxo(_) => {
+                let (currency, value) =
+                    output_currency_value(utxo.as_ref().expect("must be present"))?;
+                update_preselected_inputs(currency, value, *fee)?;
+            }
             TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(_, amount) => {
                     update_preselected_inputs(currency_grouper::Currency::Coin, *amount, *fee)?;

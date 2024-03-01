@@ -183,6 +183,14 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn sweep_addresses(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
     async fn transaction_from_cold_input(
         &self,
         account_index: U31,

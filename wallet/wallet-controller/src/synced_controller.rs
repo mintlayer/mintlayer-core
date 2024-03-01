@@ -53,6 +53,10 @@ use wallet::{
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
 };
+use wallet_types::{
+    utxo_types::{UtxoState, UtxoType},
+    with_locked::WithLocked,
+};
 
 use crate::{into_balances, types::Balances, ControllerConfig, ControllerError};
 
@@ -131,6 +135,35 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             }
         }
         Ok(())
+    }
+
+    /// Filter out utxos that contain tokens that are frozen and can't be used
+    async fn filter_out_utxos_with_frozen_tokens(
+        &self,
+        input_utxos: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>, ControllerError<T>> {
+        let mut result = vec![];
+        for utxo in input_utxos {
+            if let Some(token_id) = utxo.2 {
+                let token_info = self.get_token_info(token_id).await?;
+
+                let ok_to_use = match token_info {
+                    RPCTokenInfo::FungibleToken(token_info) => self
+                        .wallet
+                        .get_token_unconfirmed_info(self.account_index, &token_info)
+                        .map_err(ControllerError::WalletError)?
+                        .check_can_be_used()
+                        .is_ok(),
+                    RPCTokenInfo::NonFungibleToken(_) => true,
+                };
+                if ok_to_use {
+                    result.push(utxo);
+                }
+            } else {
+                result.push(utxo);
+            }
+        }
+        Ok(result)
     }
 
     pub fn abandon_transaction(
@@ -423,6 +456,49 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     BTreeMap::new(),
                     current_fee_rate,
                     consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    /// Create a transaction that transfers all the coins and tokens to the destination address
+    /// and broadcast it to the mempool.
+    pub async fn sweep_addresses(
+        &mut self,
+        destination_address: Destination,
+        from_addresses: BTreeSet<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        let selected_utxos = self
+            .wallet
+            .get_utxos(
+                self.account_index,
+                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+                UtxoState::Confirmed | UtxoState::Inactive,
+                WithLocked::Unlocked,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        let filtered_inputs = self
+            .filter_out_utxos_with_frozen_tokens(selected_utxos)
+            .await?
+            .into_iter()
+            .filter(|(_, output, _)| {
+                get_tx_output_destination(output, &|_| None)
+                    .map_or(false, |dest| from_addresses.contains(&dest))
+            })
+            .collect::<Vec<_>>();
+
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  _consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_sweep_transaction(
+                    account_index,
+                    destination_address,
+                    filtered_inputs,
+                    current_fee_rate,
                 )
             },
         )

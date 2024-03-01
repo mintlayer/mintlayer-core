@@ -44,7 +44,7 @@ use common::chain::tokens::{
 };
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
+    SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -891,7 +891,7 @@ impl<B: storage::Backend> Wallet<B> {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(
             utxo_types,
@@ -901,7 +901,7 @@ impl<B: storage::Backend> Wallet<B> {
         );
         let utxos = utxos
             .into_iter()
-            .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
+            .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
             .collect();
         Ok(utxos)
     }
@@ -1138,6 +1138,25 @@ impl<B: storage::Backend> Wallet<B> {
                     consolidate_fee_rate,
                 },
             )
+        })
+    }
+
+    pub fn create_sweep_transaction(
+        &mut self,
+        account_index: U31,
+        destination: Destination,
+        inputs: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let request = SendRequest::new().with_inputs(
+            inputs
+                .into_iter()
+                .map(|(outpoint, output, _)| (TxInput::Utxo(outpoint), output)),
+            &|_| None,
+        )?;
+
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.sweep_addresses(db_tx, destination, request, current_fee_rate)
         })
     }
 

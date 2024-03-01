@@ -255,6 +255,28 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn sweep_addresses(
+        &self,
+        account: AccountArg,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb,
+            broadcast_to_mempool: true,
+        };
+        rpc::handle_result(
+            self.sweep_addresses(
+                account.index::<N>()?,
+                destination_address,
+                from_addresses,
+                config,
+            )
+            .await,
+        )
+    }
+
     async fn transaction_from_cold_input(
         &self,
         account_arg: AccountArg,

@@ -154,6 +154,15 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    #[method(name = "address_sweep_spendable")]
+    async fn sweep_addresses(
+        &self,
+        account: AccountArg,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
     #[method(name = "transaction_create_from_cold_input")]
     async fn transaction_from_cold_input(
         &self,

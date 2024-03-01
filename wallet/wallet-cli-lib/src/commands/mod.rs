@@ -415,6 +415,16 @@ pub enum WalletCommand {
         utxos: Vec<String>,
     },
 
+    /// Sweep all coins or tokens from an address or addresses to a given address.
+    /// The wallet will automatically calculate the required fees
+    #[clap(name = "address-sweep-spendable")]
+    SweepFromAddress {
+        /// The receiving address of the coins or tokens
+        destination_address: String,
+        /// The addresses to be swept
+        addresses: Vec<String>,
+    },
+
     /// Creates a transaction that spends from a specific address,
     /// and returns the change to the same address (unless one is specified), without signature.
     /// This transaction is used for "withdrawing" small amounts from a cold storage

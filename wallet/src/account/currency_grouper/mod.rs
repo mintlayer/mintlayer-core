@@ -22,6 +22,8 @@ use common::{
     primitives::{Amount, BlockHeight},
 };
 
+use super::UtxoSelectorError;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Currency {
     Coin,
@@ -128,6 +130,36 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
     Ok(tokens_grouped)
 }
 
+pub fn output_currency_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoSelectorError> {
+    let output_value = match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+        TxOutput::IssueNft(token_id, _, _) => {
+            OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+        }
+        TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DataDeposit(_) => {
+            return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
+                output.clone(),
+            )))
+        }
+    };
+    let value = match output_value {
+        OutputValue::Coin(output_amount) => (Currency::Coin, output_amount),
+        OutputValue::TokenV0(_) => {
+            return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
+                output.clone(),
+            )))
+        }
+        OutputValue::TokenV1(token_id, output_amount) => (Currency::Token(token_id), output_amount),
+    };
+    Ok(value)
+}
+
 pub fn group_utxos_for_input<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
@@ -140,34 +172,17 @@ pub fn group_utxos_for_input<T, Grouped: Clone>(
     // Iterate over all outputs and group them up by currency
     for output in outputs {
         // Get the supported output value
-        let output_value = match get_tx_output(&output) {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
-            TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
-            TxOutput::IssueNft(token_id, _, _) => {
-                OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
-            }
-            TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::IssueFungibleToken(_)
-            | TxOutput::DataDeposit(_) => {
-                return Err(WalletError::UnsupportedTransactionOutput(Box::new(
-                    get_tx_output(&output).clone(),
-                )))
-            }
-        };
+        let (currency, value) = output_currency_value(get_tx_output(&output))?;
 
-        match output_value {
-            OutputValue::Coin(output_amount) => {
-                combiner(&mut coin_grouped, &output, output_amount)?;
+        match currency {
+            Currency::Coin => {
+                combiner(&mut coin_grouped, &output, value)?;
             }
-            OutputValue::TokenV0(_) => { /* ignore */ }
-            OutputValue::TokenV1(id, amount) => {
+            Currency::Token(_) => {
                 let total_token_amount =
-                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+                    tokens_grouped.entry(currency).or_insert_with(|| init.clone());
 
-                combiner(total_token_amount, &output, amount)?;
+                combiner(total_token_amount, &output, value)?;
             }
         }
     }

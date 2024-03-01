@@ -1408,7 +1408,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 
     let selected_utxos = utxos
         .iter()
-        .map(|(outpoint, _)| outpoint)
+        .map(|(outpoint, _, _)| outpoint)
         .take(rng.gen_range(1..utxos.len()))
         .cloned()
         .collect_vec();
@@ -4437,7 +4437,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(utxos.len(), 1);
-    let (_, output) = utxos.pop().unwrap();
+    let (_, output, _) = utxos.pop().unwrap();
 
     matches!(output, TxOutput::Transfer(OutputValue::Coin(value), dest)
             if value == balance && dest == cold_wallet_address.decode_object(&chain_config).unwrap());

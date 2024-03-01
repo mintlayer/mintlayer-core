@@ -958,6 +958,24 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
+            WalletCommand::SweepFromAddress {
+                destination_address,
+                addresses,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+
+                let new_tx = wallet
+                    .sweep_addresses(
+                        selected_account,
+                        destination_address,
+                        addresses,
+                        self.config,
+                    )
+                    .await?;
+
+                Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
             WalletCommand::CreateTxFromColdInput {
                 address,
                 amount,

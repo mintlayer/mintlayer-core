@@ -698,28 +698,29 @@ impl OutputCache {
     fn uses_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
         unconfirmed_tx.inputs().iter().any(|inp| match inp {
             TxInput::Utxo(outpoint) => {
-                let output = self
-                    .txs
-                    .get(&outpoint.source_id())
-                    .expect("must be present")
-                    .outputs()
-                    .get(outpoint.output_index() as usize)
-                    .expect("must be present");
+                if let Some(tx) = self.txs.get(&outpoint.source_id()) {
+                    let output = tx
+                        .outputs()
+                        .get(outpoint.output_index() as usize)
+                        .expect("must be present");
 
-                match output {
-                    TxOutput::Transfer(v, _)
-                    | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => match v {
-                        OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                        OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-                    },
-                    TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _) => false,
+                    match output {
+                        TxOutput::Transfer(v, _)
+                        | TxOutput::LockThenTransfer(v, _, _)
+                        | TxOutput::Burn(v) => match v {
+                            OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                            OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+                        },
+                        TxOutput::IssueNft(_, _, _)
+                        | TxOutput::DataDeposit(_)
+                        | TxOutput::CreateStakePool(_, _)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::ProduceBlockFromStake(_, _) => false,
+                    }
+                } else {
+                    false
                 }
             }
             TxInput::AccountCommand(_, cmd) => match cmd {

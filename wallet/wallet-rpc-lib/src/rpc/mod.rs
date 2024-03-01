@@ -23,7 +23,13 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -515,6 +521,41 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         sig.verify_signature(&self.chain_config, &destination, &message_challenge)?;
 
         Ok(())
+    }
+
+    pub async fn sweep_addresses(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let destination_address = Address::from_str(&self.chain_config, &destination_address)
+            .and_then(|address| address.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let from_addresses = from_addresses
+            .into_iter()
+            .map(|address| {
+                Address::from_str(&self.chain_config, &address)
+                    .and_then(|address| address.decode_object(&self.chain_config))
+                    .map_err(|_| RpcError::InvalidAddress)
+            })
+            .collect::<Result<BTreeSet<Destination>, _>>()?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .sweep_addresses(destination_address, from_addresses)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
     }
 
     pub async fn send_coins(
