@@ -31,6 +31,17 @@ You can see the full list of mintlayer executables by running `cargo run --bin`,
 - `wallet-rpc-daemon`: A wallet that can be controlled remotely using RPC. This can be run as a service.
 - `wallet-cli`: A command line interface for the wallet. All the newest features and functionalities of the wallet are available in this wallet. The `wallet-cli` is extremely ubiquitous and can be run in many modes, including a self-contained wallet, a controller of an RPC wallet, as an RPC wallet itself, and also as a cold wallet for air-gapped storage of coins and assets.
 
+### What do you need to run?
+
+There are many ways you can manage running the components of mintlayer-core. The following are a few examples.
+
+You can:
+
+- Run the node-daemon + wallet-cli to manage your coins, where the wallet-cli owns your wallet file and manages your coins. The wallet-cli itself can optionally act as an RPC server
+- Run the node-daemon + wallet-rpc-daemon + wallet-cli, where both daemons will be services in your system, the wallet-rpc-daemon will own your wallet (and start staking automatically for you), and the wallet-cli will just be an easy interface for communicating with your wallet
+- Run only the node-gui, where the GUI contains both the node and the wallet. This is a good option for non-techy users
+- Run the node-daemon with the API server components ([see this readme](api-server/README.md)) without a wallet, to manage your application
+
 ### Preparations for compiling the source code
 
 - Install the rust compiler: https://www.rust-lang.org/tools/install
@@ -45,7 +56,7 @@ You can either keep running the code from source, using `cargo run --release --b
 
 The logging of mintlayer-core is configured via the `RUST_LOG` environment variable. All log messages are printed to the terminal screen; we prefer simplicity over complicated log machinery. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using these commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
 
-If the `RUST_LOG` environment variable is not specified, the debug level `info` will be used by default.
+If the `RUST_LOG` environment variable is not specified, the log level `info` will be used by default.
 
 Here are the commands as recommended for different scenarios:
 
