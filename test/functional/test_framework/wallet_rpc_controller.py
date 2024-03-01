@@ -80,7 +80,7 @@ class WalletRpcController:
         bind_addr = f"{url}:{port}"
         self.log.info(f"node url: {self.node.url}")
         wallet_rpc = os.path.join(self.config["environment"]["BUILDDIR"], "test_rpc_wallet"+self.config["environment"]["EXEEXT"] )
-        wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+        wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
 
