@@ -59,14 +59,17 @@ where
     S: BlockchainStorage + Sync,
     V: TransactionVerificationStrategy + Sync,
 {
+    #[tracing::instrument(skip_all)]
     fn subscribe_to_subsystem_events(&mut self, handler: EventHandler<ChainstateEvent>) {
         self.chainstate.subscribe_to_events(handler)
     }
 
+    #[tracing::instrument(skip_all)]
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent> {
         self.chainstate.subscribe_to_event_broadcast()
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block.get_id()))]
     fn process_block(
         &mut self,
         block: Block,
@@ -77,24 +80,28 @@ where
             .map_err(ChainstateError::ProcessBlockError)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
         BlockInvalidator::new(&mut self.chainstate)
             .invalidate_block(block_id, detail::block_invalidation::IsExplicit::Yes)
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
         BlockInvalidator::new(&mut self.chainstate)
             .reset_block_failure_flags(block_id)
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %header.get_id()))]
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
         BlockChecker::new(&self.chainstate)
             .preliminary_header_check(header)
             .map_err(ChainstateError::ProcessBlockError)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block.get_id()))]
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         let block = BlockChecker::new(&self.chainstate)
             .preliminary_block_check(block.into())
@@ -102,6 +109,7 @@ where
         Ok(WithId::take(block))
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
         self.chainstate
             .query()
@@ -110,6 +118,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.chainstate
             .query()
@@ -118,6 +127,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError> {
         self.chainstate
             .query()
@@ -126,6 +136,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn get_block_height_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,
@@ -137,6 +148,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(height = %height))]
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
@@ -148,6 +160,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
         self.chainstate
             .query()
@@ -156,6 +169,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(from = %from, max_count = max_count))]
     fn get_mainchain_blocks(
         &self,
         from: BlockHeight,
@@ -168,6 +182,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn get_block_header(
         &self,
         block_id: Id<Block>,
@@ -179,6 +194,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
         self.chainstate
             .query()
@@ -187,6 +203,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(height = %height))]
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError> {
         self.chainstate
             .query()
@@ -195,6 +212,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_mainchain_headers_by_locator(
         &self,
         locator: &Locator,
@@ -207,6 +225,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_mainchain_headers_since_latest_fork_point(
         &self,
         block_ids: &[Id<GenBlock>],
@@ -219,6 +238,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
@@ -240,6 +260,7 @@ where
         Ok((headers, non_existing_block_headers))
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {
         let best_block_index = self
             .chainstate
@@ -250,6 +271,7 @@ where
         Ok(best_block_index.block_height())
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError> {
         self.chainstate
             .query()
@@ -258,6 +280,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
         self.chainstate
             .query()
@@ -266,6 +289,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn get_block_index(&self, block_id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
         self.chainstate
             .query()
@@ -274,6 +298,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(id = %id))]
     fn get_gen_block_index(
         &self,
         id: &Id<GenBlock>,
@@ -285,22 +310,27 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_chain_config(&self) -> &Arc<ChainConfig> {
         self.chainstate.chain_config()
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_chainstate_config(&self) -> ChainstateConfig {
         self.chainstate.chainstate_config().clone()
     }
 
+    #[tracing::instrument(skip_all)]
     fn wait_for_all_events(&self) {
         self.chainstate.wait_for_all_events()
     }
 
+    #[tracing::instrument(skip_all)]
     fn subscribers(&self) -> &[EventHandler<ChainstateEvent>] {
         self.chainstate.subscribers()
     }
 
+    #[tracing::instrument(skip_all, fields(starting_block = %starting_block))]
     fn calculate_median_time_past(
         &self,
         starting_block: &Id<GenBlock>,
@@ -310,14 +340,20 @@ where
         Ok(calculate_median_time_past(&dbtx, starting_block))
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
         self.chainstate.orphan_blocks_pool().is_already_an_orphan(block_id)
     }
 
+    #[tracing::instrument(skip_all)]
     fn orphans_count(&self) -> usize {
         self.chainstate.orphan_blocks_pool().len()
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(block_id = %block_index.block_id(), ancestor_height = %ancestor_height)
+    )]
     fn get_ancestor(
         &self,
         block_index: &GenBlockIndex,
@@ -332,6 +368,13 @@ where
             })
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            first_block_id = %first_block_index.block_id(),
+            second_block_id = %second_block_index.block_id()
+        )
+    )]
     fn last_common_ancestor(
         &self,
         first_block_index: &GenBlockIndex,
@@ -344,6 +387,9 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(
+        skip_all, fields(first_block = %first_block, second_block = %second_block)
+    )]
     fn last_common_ancestor_by_id(
         &self,
         first_block: &Id<GenBlock>,
@@ -366,6 +412,7 @@ where
         }
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = %block_index.block_id()))]
     fn get_block_reward(
         &self,
         block_index: &BlockIndex,
@@ -377,6 +424,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip(self))]
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
@@ -385,6 +433,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(token_id = %token_id))]
     fn get_token_info_for_rpc(
         &self,
         token_id: TokenId,
@@ -396,6 +445,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(token_id = %token_id))]
     fn get_token_aux_data(
         &self,
         token_id: TokenId,
@@ -407,6 +457,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(tx_id = %tx_id))]
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
@@ -418,6 +469,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_inputs_outpoints_coin_amount(
         &self,
         inputs: &[TxInput],
@@ -446,6 +498,7 @@ where
             .collect::<Result<Vec<_>, _>>()
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.chainstate
             .query()
@@ -454,6 +507,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.chainstate
             .query()
@@ -462,6 +516,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all)]
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
@@ -486,6 +541,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
@@ -502,6 +558,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
         let chainstate_ref = self
             .chainstate
@@ -517,6 +574,7 @@ where
         self.chainstate.is_initial_block_download()
     }
 
+    #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
@@ -525,6 +583,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
@@ -533,6 +592,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
@@ -541,6 +601,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn get_stake_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -552,6 +613,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(delegation_id = %delegation_id))]
     fn get_stake_delegation_balance(
         &self,
         delegation_id: DelegationId,
@@ -563,6 +625,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(delegation_id = %delegation_id))]
     fn get_stake_delegation_data(
         &self,
         delegation_id: DelegationId,
@@ -574,6 +637,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all, fields(pool_id = %pool_id, delegation_id = %delegation_id))]
     fn get_stake_pool_delegation_share(
         &self,
         pool_id: PoolId,
@@ -586,6 +650,7 @@ where
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
+    #[tracing::instrument(skip_all)]
     fn info(&self) -> Result<ChainInfo, ChainstateError> {
         let best_block_index = self.get_best_block_index()?;
         let best_block_height = best_block_index.block_height();
@@ -605,6 +670,7 @@ where
         })
     }
 
+    #[tracing::instrument(skip_all)]
     fn get_account_nonce_count(
         &self,
         account: AccountType,
@@ -616,6 +682,7 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip_all, fields(id = %id))]
     fn get_token_data(
         &self,
         id: &TokenId,
@@ -627,6 +694,7 @@ where
             .map_err(ChainstateError::from)
     }
 
+    #[tracing::instrument(skip_all, fields(id = %id))]
     fn get_token_circulating_supply(
         &self,
         id: &TokenId,
