@@ -45,20 +45,53 @@ You can either keep running the code from source, using `cargo run --release --b
 
 The logging of mintlayer-core is configured via the `RUST_LOG` environment variable. All log messages are printed to the terminal screen; we prefer simplicity over complicated log machinery. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using these commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
 
+If the `RUST_LOG` environment variable is not specified, the debug level `info` will be used by default.
+
 Here are the commands as recommended for different scenarios:
 
+#### Assuming you're using the source code
+
 For normal operation (replace testnet by mainnet to run the mainnet node)
+You don't need to specify RUST_LOG environment variable for logging, since it's by default set to be `INFO`.
+
 Note: spaces don't matter, so these are aligned for readability
-- Node daemon: `RUST_LOG=info cargo run --release --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log`
-- CLI Wallet:  `RUST_LOG=info cargo run --release --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log`
-- RPC Wallet:  `RUST_LOG=info cargo run --release --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log`
-- GUI:         `RUST_LOG=info cargo run --release --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log`
+
+- Node daemon:
+```
+cargo run --release --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
+```
+- CLI Wallet:
+```
+cargo run --release --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
+```
+- RPC Wallet:
+```
+cargo run --release --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
+```
+- GUI:
+```
+cargo run --release --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
+```
 
 For heavy debugging operation
-- Node daemon: `RUST_LOG=debug cargo run --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log`
-- CLI Wallet:  `RUST_LOG=debug cargo run --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log`
-- RPC Wallet:  `RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log`
-- GUI:         `RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log`
+- Node daemon:
+```
+RUST_LOG=debug cargo run --bin node-daemon       -- testnet 2>&1 | tee ../mintlayer.log
+```
+- CLI Wallet:
+```
+RUST_LOG=debug cargo run --bin wallet-cli        -- testnet 2>&1 | tee ../wallet-cli.log
+```
+- RPC Wallet:
+```
+RUST_LOG=debug cargo run --bin wallet-rpc-daemon -- testnet 2>&1 | tee ../wallet-cli.log
+```
+- GUI:
+```
+RUST_LOG=debug cargo run --bin node-gui          -- testnet 2>&1 | tee ../node-gui.log
+```
+
+There are more complex logging filtering that can be done at the crate level, but this is out of scope.
 
 ## The API server
 
