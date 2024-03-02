@@ -19,13 +19,16 @@ use rstest::rstest;
 
 use crate::{
     pos_block_builder::PoSBlockBuilder,
+    staking_pools::StakingPools,
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
+    chain::{
+        Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
+    },
     primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -46,6 +49,9 @@ pub struct TestFramework {
     pub time_getter: TimeGetter,
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
     pub time_value: Option<Arc<SeqCstAtomicU64>>,
+
+    // All pools from the tip that can be used for staking
+    pub staking_pools: StakingPools,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
@@ -74,8 +80,8 @@ impl TestFramework {
         BlockBuilder::new(self)
     }
 
-    pub fn make_pos_block_builder(&mut self, rng: &mut (impl Rng + CryptoRng)) -> PoSBlockBuilder {
-        PoSBlockBuilder::new(self, rng)
+    pub fn make_pos_block_builder(&mut self) -> PoSBlockBuilder {
+        PoSBlockBuilder::new(self)
     }
 
     /// Get the current time using the time getter that was supplied to the test-framework
@@ -225,7 +231,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks: usize,
-        rng: &mut (impl Rng + CryptoRng),
+        staking_pool: PoolId,
         staking_sk: &PrivateKey,
         staking_vrf_sk: &VRFPrivateKey,
     ) -> Result<Id<GenBlock>, ChainstateError> {
@@ -233,9 +239,9 @@ impl TestFramework {
         let result = || -> Result<Id<GenBlock>, ChainstateError> {
             for _ in 0..blocks {
                 let block = self
-                    .make_pos_block_builder(rng)
+                    .make_pos_block_builder()
                     .with_parent(prev_block_id)
-                    .with_block_signing_key(staking_sk.clone())
+                    .with_stake_pool(staking_pool)
                     .with_stake_spending_key(staking_sk.clone())
                     .with_vrf_key(staking_vrf_sk.clone())
                     .build();

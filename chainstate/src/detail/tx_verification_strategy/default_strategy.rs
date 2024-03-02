@@ -126,6 +126,8 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
+        tx_verifier.disconnect_block_reward(block).log_err()?;
+
         block
             .transactions()
             .iter()
@@ -134,7 +136,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                 tx_verifier.disconnect_transaction(&TransactionSource::Chain(block.get_id()), tx)
             })
             .log_err()?;
-        tx_verifier.disconnect_block_reward(block).log_err()?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 

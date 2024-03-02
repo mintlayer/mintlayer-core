@@ -20,6 +20,7 @@ mod framework;
 mod framework_builder;
 mod pos_block_builder;
 mod random_tx_maker;
+mod staking_pools;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;

@@ -435,7 +435,7 @@ impl BanScore for pos_accounting::Error {
             E::InvariantErrorDelegationSharesAdditionUndoError => 100,
             E::InvariantErrorDelegationShareNotFound => 100,
             E::PledgeValueToSignedError => 100,
-            E::InvariantErrorDelegationUndoFailedDataNotFound => 100,
+            E::InvariantErrorDelegationUndoFailedDataNotFound(_) => 100,
             E::DuplicatesInDeltaAndUndo => 100,
             E::ViewFail => 0,
             E::IncreaseStakerRewardsOfNonexistingPool => 100,

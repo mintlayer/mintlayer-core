@@ -294,7 +294,7 @@ fn spend_share_unknown_id(#[case] seed: Seed) {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
             db.spend_share_from_delegation_id(delegation_id, delegated_amount).unwrap_err(),
-            Error::InvariantErrorDelegationUndoFailedDataNotFound
+            Error::InvariantErrorDelegationUndoFailedDataNotFound(delegation_id)
         );
     }
 
@@ -305,7 +305,7 @@ fn spend_share_unknown_id(#[case] seed: Seed) {
             delta
                 .spend_share_from_delegation_id(delegation_id, delegated_amount)
                 .unwrap_err(),
-            Error::InvariantErrorDelegationUndoFailedDataNotFound
+            Error::InvariantErrorDelegationUndoFailedDataNotFound(delegation_id)
         );
     }
 }

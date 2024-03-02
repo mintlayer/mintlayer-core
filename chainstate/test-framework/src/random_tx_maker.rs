@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, vec};
+use std::collections::BTreeMap;
 
 use crate::TestChainstate;
 
@@ -30,9 +30,10 @@ use common::{
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
         Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
@@ -76,11 +77,26 @@ fn get_random_delegation_data<'a>(
         })
 }
 
+pub trait StakingPoolsObserver {
+    fn on_pool_created(
+        &mut self,
+        pool_id: PoolId,
+        staker_key: PrivateKey,
+        vrf_sk: VRFPrivateKey,
+        outpoint: UtxoOutPoint,
+    );
+    fn on_pool_decommissioned(&mut self, pool_id: PoolId);
+    fn on_pool_used_for_staking(&mut self, pool_id: PoolId, outpoint: UtxoOutPoint);
+}
+
 pub struct RandomTxMaker<'a> {
     chainstate: &'a TestChainstate,
     utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
     tokens_store: &'a InMemoryTokensAccounting,
     pos_accounting_store: &'a InMemoryPoSAccounting,
+
+    // Pool used to for staking cannot be spent
+    staking_pool: Option<PoolId>,
 
     account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
@@ -106,6 +122,7 @@ impl<'a> RandomTxMaker<'a> {
         utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
         tokens_store: &'a InMemoryTokensAccounting,
         pos_accounting_store: &'a InMemoryPoSAccounting,
+        staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
     ) -> Self {
         Self {
@@ -113,6 +130,7 @@ impl<'a> RandomTxMaker<'a> {
             utxo_set,
             tokens_store,
             pos_accounting_store,
+            staking_pool,
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: false,
@@ -127,6 +145,7 @@ impl<'a> RandomTxMaker<'a> {
     pub fn make(
         mut self,
         rng: &mut (impl Rng + CryptoRng),
+        staking_pools_observer: &mut impl StakingPoolsObserver,
     ) -> (
         Transaction,
         TokensAccountingDeltaData,
@@ -142,8 +161,13 @@ impl<'a> RandomTxMaker<'a> {
         let inputs_with_utxos = self.select_utxos(rng);
 
         // Spend selected utxos
-        let (mut inputs, mut outputs) =
-            self.create_utxo_spending(rng, &mut tokens_cache, &mut pos_delta, inputs_with_utxos);
+        let (mut inputs, mut outputs) = self.create_utxo_spending(
+            rng,
+            staking_pools_observer,
+            &mut tokens_cache,
+            &mut pos_delta,
+            inputs_with_utxos,
+        );
 
         // Select random number of accounts to spend from
         let account_inputs = self.select_accounts(rng);
@@ -172,17 +196,45 @@ impl<'a> RandomTxMaker<'a> {
             fee_inputs,
         );
 
-        // TODO: ideally all inputs should be shuffled but it would mess up with token issuance
-        // because ids are built from input0
         inputs.extend(account_inputs);
         outputs.extend(account_outputs);
+
+        if !inputs.is_empty() {
+            // keep first element intact so that it's always a UtxoOutpoint for ids calculation
+            inputs[1..].shuffle(rng);
+        }
         outputs.shuffle(rng);
 
-        (
-            Transaction::new(0, inputs, outputs).unwrap(),
-            tokens_cache.consume(),
-            pos_delta.consume(),
-        )
+        // now that the inputs are in place calculate the ids and replace dummy values
+        let (outputs, new_staking_pools) =
+            Self::tx_outputs_post_process(rng, &mut pos_delta, &inputs, outputs);
+
+        let tx = Transaction::new(0, inputs, outputs).unwrap();
+        let tx_id = tx.get_id();
+
+        // after tx id is calculated kernel inputs for new pools can be propagated
+        tx.outputs().iter().enumerate().for_each(|(i, output)| match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => { /* do nothing */ }
+            TxOutput::CreateStakePool(pool_id, _) => {
+                let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
+                staking_pools_observer.on_pool_created(
+                    *pool_id,
+                    staker_sk.clone(),
+                    vrf_sk.clone(),
+                    UtxoOutPoint::new(tx_id.into(), i as u32),
+                );
+            }
+        });
+
+        (tx, tokens_cache.consume(), pos_delta.consume())
     }
 
     fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(UtxoOutPoint, TxOutput)> {
@@ -269,10 +321,16 @@ impl<'a> RandomTxMaker<'a> {
                             AccountSpending::DelegationBalance(delegation_id, to_spend),
                         )));
 
+                        let lock_period = self
+                            .chainstate
+                            .get_chain_config()
+                            .staking_pool_spend_maturity_block_count(
+                                self.chainstate.get_best_block_height().unwrap(),
+                            );
                         result_outputs.push(TxOutput::LockThenTransfer(
                             OutputValue::Coin(to_spend),
                             Destination::AnyoneCanSpend,
-                            OutputTimeLock::ForBlockCount(1),
+                            OutputTimeLock::ForBlockCount(lock_period.to_int()),
                         ));
 
                         let _ = pos_accounting_latest
@@ -427,6 +485,7 @@ impl<'a> RandomTxMaker<'a> {
     fn create_utxo_spending(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
+        staking_pools_observer: &mut impl StakingPoolsObserver,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         inputs: Vec<(UtxoOutPoint, TxOutput)>,
@@ -436,55 +495,54 @@ impl<'a> RandomTxMaker<'a> {
         let mut fee_input_to_change_supply: Option<TxInput> = None;
 
         for (outpoint, input_utxo) in inputs.iter() {
-            match input_utxo {
-                TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => {
-                    match v {
-                        OutputValue::Coin(coins) => {
-                            // save utxo for a potential token supply change fee
-                            if *coins
-                                >= self
-                                    .chainstate
-                                    .get_chain_config()
-                                    .token_supply_change_fee(BlockHeight::zero())
-                                && fee_input_to_change_supply.is_none()
-                                && inputs.len() > 1
-                            {
-                                fee_input_to_change_supply = Some(TxInput::Utxo(outpoint.clone()));
-                            } else {
-                                let new_outputs =
-                                    self.spend_coins(rng, *coins, pos_accounting_cache);
-                                result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                                result_outputs.extend(new_outputs);
-                            }
-                        }
-                        OutputValue::TokenV0(_) => {
-                            unimplemented!("deprecated tokens version")
-                        }
-                        OutputValue::TokenV1(token_id, amount) => {
-                            let token_data = tokens_cache.get_token_data(token_id).unwrap();
-                            if let Some(token_data) = token_data {
-                                let tokens_accounting::TokenData::FungibleToken(token_data) =
-                                    token_data;
-                                if token_data.is_frozen() {
-                                    continue;
-                                }
-                            }
-
-                            let (new_inputs, new_outputs) = self.spend_tokens_v1(
-                                rng,
-                                tokens_cache,
-                                *token_id,
-                                *amount,
-                                &mut fee_input_to_change_supply,
-                            );
-                            result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                            result_inputs.extend(new_inputs);
-                            result_outputs.extend(new_outputs);
+            let (new_inputs, new_outputs) = match input_utxo {
+                TxOutput::Transfer(v, _) => self.spend_output_value(
+                    rng,
+                    tokens_cache,
+                    pos_accounting_cache,
+                    &mut fee_input_to_change_supply,
+                    outpoint.clone(),
+                    v,
+                    inputs.len(),
+                ),
+                TxOutput::LockThenTransfer(v, _, timelock) => {
+                    let timelock_passed = match timelock {
+                        OutputTimeLock::UntilHeight(_)
+                        | OutputTimeLock::UntilTime(_)
+                        | OutputTimeLock::ForSeconds(_) => unimplemented!(),
+                        OutputTimeLock::ForBlockCount(block_count) => {
+                            let utxo_block_height = self
+                                .chainstate
+                                .utxo(outpoint)
+                                .unwrap()
+                                .unwrap()
+                                .source()
+                                .clone()
+                                .blockchain_height()
+                                .unwrap();
+                            let current_height =
+                                self.chainstate.get_best_block_height().unwrap().next_height();
+                            utxo_block_height.into_int() + *block_count <= current_height.into_int()
                         }
                     };
+
+                    if timelock_passed {
+                        self.spend_output_value(
+                            rng,
+                            tokens_cache,
+                            pos_accounting_cache,
+                            &mut fee_input_to_change_supply,
+                            outpoint.clone(),
+                            v,
+                            inputs.len(),
+                        )
+                    } else {
+                        (Vec::new(), Vec::new())
+                    }
                 }
-                TxOutput::CreateStakePool(pool_id, _) => {
-                    if rng.gen_bool(0.1) {
+                TxOutput::CreateStakePool(pool_id, _)
+                | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    if !self.staking_pool.is_some_and(|id| id == *pool_id) && rng.gen_bool(0.1) {
                         let staker_balance = pos_accounting_cache
                             .get_pool_data(*pool_id)
                             .unwrap()
@@ -492,34 +550,46 @@ impl<'a> RandomTxMaker<'a> {
                             .staker_balance()
                             .unwrap();
                         let _ = pos_accounting_cache.decommission_pool(*pool_id).unwrap();
+                        staking_pools_observer.on_pool_decommissioned(*pool_id);
 
-                        result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                        result_outputs.push(TxOutput::LockThenTransfer(
-                            OutputValue::Coin(staker_balance),
-                            Destination::AnyoneCanSpend,
-                            OutputTimeLock::ForBlockCount(1),
-                        ));
+                        let lock_period = self
+                            .chainstate
+                            .get_chain_config()
+                            .staking_pool_spend_maturity_block_count(
+                                self.chainstate.get_best_block_height().unwrap(),
+                            );
+                        (
+                            vec![TxInput::Utxo(outpoint.clone())],
+                            vec![TxOutput::LockThenTransfer(
+                                OutputValue::Coin(staker_balance),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::ForBlockCount(lock_period.to_int()),
+                            )],
+                        )
+                    } else {
+                        (Vec::new(), Vec::new())
                     }
                 }
                 TxOutput::IssueNft(token_id, _, _) => {
-                    let (new_inputs, new_outputs) = self.spend_tokens_v1(
+                    let (mut new_inputs, new_outputs) = self.spend_tokens_v1(
                         rng,
                         tokens_cache,
                         *token_id,
                         Amount::from_atoms(1),
                         &mut fee_input_to_change_supply,
                     );
-                    result_inputs.push(TxInput::Utxo(outpoint.clone()));
-                    result_inputs.extend(new_inputs);
-                    result_outputs.extend(new_outputs);
+                    new_inputs.push(TxInput::Utxo(outpoint.clone()));
+                    (new_inputs, new_outputs)
                 }
-                TxOutput::ProduceBlockFromStake(_, _) => unimplemented!(),
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_) => unreachable!(),
-            }
+            };
+
+            result_inputs.extend(new_inputs);
+            result_outputs.extend(new_outputs);
         }
 
         if let Some(token_id) = self.unmint_for {
@@ -528,48 +598,6 @@ impl<'a> RandomTxMaker<'a> {
                 let _ = tokens_cache.unmint_tokens(token_id, *total_burned).unwrap();
             }
         }
-
-        // now that the inputs are in place calculate the ids and replace dummy values
-        let result_outputs = result_outputs
-            .into_iter()
-            .filter_map(|mut output| match &mut output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::Burn(_)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::DataDeposit(_) => Some(output),
-                TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
-                    let pool_id = make_pool_id(result_inputs[0].utxo_outpoint().unwrap());
-                    *dummy_pool_id = pool_id;
-                    let _ = pos_accounting_cache
-                        .create_pool(pool_id, pool_data.as_ref().clone().into())
-                        .unwrap();
-                    Some(output)
-                }
-                TxOutput::CreateDelegationId(destination, pool_id) => {
-                    if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
-                        let _ = pos_accounting_cache
-                            .create_delegation_id(
-                                *pool_id,
-                                destination.clone(),
-                                result_inputs[0].utxo_outpoint().unwrap(),
-                            )
-                            .unwrap();
-                        Some(output)
-                    } else {
-                        None // if a pool was decommissioned in this tx then skip creating a delegation
-                    }
-                }
-                TxOutput::IssueNft(dummy_token_id, _, _) => {
-                    *dummy_token_id =
-                        make_token_id(&[result_inputs[0].utxo_outpoint().unwrap().clone().into()])
-                            .unwrap();
-                    Some(output)
-                }
-            })
-            .collect();
 
         (result_inputs, result_outputs)
     }
@@ -647,6 +675,7 @@ impl<'a> RandomTxMaker<'a> {
                         // If enough coins for pledge - create a pool
                         let dummy_pool_id = PoolId::new(H256::zero());
                         self.stake_pool_can_be_created = false;
+
                         let pool_data = StakePoolData::new(
                             new_value,
                             Destination::AnyoneCanSpend,
@@ -694,6 +723,64 @@ impl<'a> RandomTxMaker<'a> {
             }
             new_outputs
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn spend_output_value(
+        &mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
+        pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
+        fee_input_to_change_supply: &mut Option<TxInput>,
+        utxo_outpoint: UtxoOutPoint,
+        output_value: &OutputValue,
+        num_inputs: usize,
+    ) -> (Vec<TxInput>, Vec<TxOutput>) {
+        let mut result_inputs = Vec::new();
+        let mut result_outputs = Vec::new();
+
+        match output_value {
+            OutputValue::Coin(coins) => {
+                // save utxo for a potential token supply change fee
+                if *coins
+                    >= self
+                        .chainstate
+                        .get_chain_config()
+                        .token_supply_change_fee(BlockHeight::zero())
+                    && fee_input_to_change_supply.is_none()
+                    && num_inputs > 1
+                {
+                    *fee_input_to_change_supply = Some(TxInput::Utxo(utxo_outpoint.clone()));
+                } else {
+                    let new_outputs = self.spend_coins(rng, *coins, pos_accounting_cache);
+                    result_inputs.push(TxInput::Utxo(utxo_outpoint));
+                    result_outputs.extend(new_outputs);
+                }
+            }
+            OutputValue::TokenV0(_) => {
+                unimplemented!("deprecated tokens version")
+            }
+            OutputValue::TokenV1(token_id, amount) => {
+                let token_data = tokens_cache.get_token_data(token_id).unwrap();
+                if let Some(token_data) = token_data {
+                    let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
+                    if !token_data.is_frozen() {
+                        let (new_inputs, new_outputs) = self.spend_tokens_v1(
+                            rng,
+                            tokens_cache,
+                            *token_id,
+                            *amount,
+                            fee_input_to_change_supply,
+                        );
+                        result_inputs.push(TxInput::Utxo(utxo_outpoint));
+                        result_inputs.extend(new_inputs);
+                        result_outputs.extend(new_outputs);
+                    }
+                }
+            }
+        };
+
+        (result_inputs, result_outputs)
     }
 
     fn spend_tokens_v1(
@@ -760,5 +847,70 @@ impl<'a> RandomTxMaker<'a> {
         }
 
         (result_inputs, result_outputs)
+    }
+
+    fn tx_outputs_post_process(
+        rng: &mut (impl Rng + CryptoRng),
+        pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
+        inputs: &[TxInput],
+        outputs: Vec<TxOutput>,
+    ) -> (Vec<TxOutput>, BTreeMap<PoolId, (PrivateKey, VRFPrivateKey)>) {
+        let mut new_staking_pools = BTreeMap::new();
+
+        let outputs = outputs
+            .into_iter()
+            .filter_map(|mut output| match &mut output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::DataDeposit(_) => Some(output),
+                TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
+                    let pool_id = make_pool_id(inputs[0].utxo_outpoint().unwrap());
+                    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+                    let (staker_sk, staker_pk) =
+                        PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+                    *dummy_pool_id = pool_id;
+                    *pool_data = Box::new(StakePoolData::new(
+                        pool_data.pledge(),
+                        Destination::PublicKey(staker_pk),
+                        vrf_pk,
+                        Destination::AnyoneCanSpend,
+                        pool_data.margin_ratio_per_thousand(),
+                        pool_data.cost_per_block(),
+                    ));
+                    let _ = pos_accounting_cache
+                        .create_pool(pool_id, pool_data.as_ref().clone().into())
+                        .unwrap();
+
+                    new_staking_pools.insert(pool_id, (staker_sk, vrf_sk));
+
+                    Some(output)
+                }
+                TxOutput::CreateDelegationId(destination, pool_id) => {
+                    if pos_accounting_cache.pool_exists(*pool_id).unwrap() {
+                        let _ = pos_accounting_cache
+                            .create_delegation_id(
+                                *pool_id,
+                                destination.clone(),
+                                inputs[0].utxo_outpoint().unwrap(),
+                            )
+                            .unwrap();
+                        Some(output)
+                    } else {
+                        None // if a pool was decommissioned in this tx then skip creating a delegation
+                    }
+                }
+                TxOutput::IssueNft(dummy_token_id, _, _) => {
+                    *dummy_token_id = make_token_id(inputs).unwrap();
+                    Some(output)
+                }
+            })
+            .collect();
+
+        (outputs, new_staking_pools)
     }
 }

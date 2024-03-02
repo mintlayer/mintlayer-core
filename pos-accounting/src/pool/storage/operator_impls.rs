@@ -202,7 +202,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations<PoS
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = *self
             .get_delegation_data(delegation_id)?
-            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound(
+                delegation_id,
+            ))?
             .source_pool();
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
@@ -325,7 +327,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
     fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
         let pool_id = *self
             .get_delegation_data(undo_data.delegation_target)?
-            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound(
+                undo_data.delegation_target,
+            ))?
             .source_pool();
 
         self.sub_delegation_from_pool_share(

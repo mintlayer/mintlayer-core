@@ -50,8 +50,9 @@ use chainstate_types::{
 use chainstateref::{ChainstateRef, ReorgError};
 use common::{
     chain::{block::timestamp::BlockTimestamp, config::ChainConfig, Block, GenBlock, TxOutput},
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockHeight, Compact, Id, Idable},
     time_getter::TimeGetter,
+    Uint256,
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations, PoSAccountingUndo};
@@ -535,12 +536,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         self.broadcast_new_tip_event(&result);
 
         if let Some(ref bi) = result {
+            let compact_target = match bi.block_header().consensus_data() {
+                common::chain::block::ConsensusData::None => Compact::from(Uint256::ZERO),
+                common::chain::block::ConsensusData::PoW(data) => data.bits(),
+                common::chain::block::ConsensusData::PoS(data) => data.compact_target(),
+            };
+            let target: common::Uint256 = compact_target.try_into().expect("valid target");
+
             log::info!(
-                "New tip in chainstate {} with height {}, timestamp: {} ({})",
+                "New tip in chainstate {} with height {}, timestamp: {} ({}); Target {:?}",
                 bi.block_id(),
                 bi.block_height(),
                 bi.block_timestamp(),
                 bi.block_timestamp().into_time(),
+                target
             );
 
             self.update_initial_block_download_flag()

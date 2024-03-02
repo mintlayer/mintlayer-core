@@ -250,7 +250,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let pool_id = PoolId::new(H256::random_using(&mut rng));
+        let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
         let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
         let stake_pool_data = StakePoolData::new(
             stake_pool_pledge,
@@ -264,7 +264,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
         let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
         let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
             mint_amount,
-            pool_id,
+            genesis_pool_id,
             stake_pool_data,
         )
         .build();
@@ -276,18 +276,18 @@ fn long_chain_reorg(#[case] seed: Seed) {
             .create_chain_pos(
                 &tf.genesis().get_id().into(),
                 5,
-                &mut rng,
+                genesis_pool_id,
                 &staking_sk,
                 &vrf_sk,
             )
             .unwrap();
 
         let old_tip = tf
-            .create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
+            .create_chain_pos(&common_block_id, 100, genesis_pool_id, &staking_sk, &vrf_sk)
             .unwrap();
 
         let new_tip = tf
-            .create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
+            .create_chain_pos(&common_block_id, 101, genesis_pool_id, &staking_sk, &vrf_sk)
             .unwrap();
 
         assert_ne!(old_tip, new_tip);
@@ -305,7 +305,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
@@ -313,7 +313,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         amount_to_stake,
-        pool_id,
+        genesis_pool_id,
         stake_pool_data,
     )
     .build();
@@ -337,9 +337,9 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         ))
         .build();
     let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .add_transaction(stake_pool_2_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -359,11 +359,10 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .build();
 
     let block_b_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(decommission_pool_tx)
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
-        .with_block_signing_key(staking_sk_2.clone())
         .with_stake_spending_key(staking_sk_2.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -375,11 +374,10 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
     );
 
     // produce block at height 2 that should trigger in memory reorg for block `b`
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_parent(block_a_id)
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
-        .with_block_signing_key(staking_sk_2.clone())
         .with_stake_spending_key(staking_sk_2)
         .with_vrf_key(vrf_sk)
         .build_and_process()
@@ -401,7 +399,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
@@ -409,7 +407,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         amount_to_stake,
-        pool_id,
+        genesis_pool_id,
         stake_pool_data,
     )
     .build();
@@ -433,9 +431,9 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         ))
         .build();
     let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .add_transaction(stake_pool_2_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -455,9 +453,9 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         .build();
 
     let block_b_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(decommission_pool_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -469,9 +467,9 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
     );
 
     // produce block at height 2 that should trigger in memory reorg for block `b`
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_parent(block_a_id)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .build_and_process()
@@ -496,7 +494,7 @@ fn pos_reorg_simple(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-    let (chain_config_builder, _) =
+    let (chain_config_builder, genesis_pool_id) =
         chainstate_test_framework::create_chain_config_with_default_staking_pool(
             &mut rng, staker_pk, vrf_pk,
         );
@@ -511,8 +509,8 @@ fn pos_reorg_simple(#[case] seed: Seed) {
     tf2.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
     // Block A
-    tf1.make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staker_sk.clone())
+    tf1.make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -520,8 +518,8 @@ fn pos_reorg_simple(#[case] seed: Seed) {
 
     // Block B
     let block_b = tf2
-        .make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staker_sk.clone())
+        .make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build();
@@ -529,8 +527,8 @@ fn pos_reorg_simple(#[case] seed: Seed) {
 
     // Block C
     let block_c = tf2
-        .make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staker_sk.clone())
+        .make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk)
         .with_vrf_key(vrf_sk)
         .build();
@@ -562,7 +560,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
@@ -570,7 +568,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         amount_to_stake,
-        pool_id,
+        genesis_pool_id,
         stake_pool_data,
     )
     .build();
@@ -592,7 +590,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         ))
         .add_output(TxOutput::CreateDelegationId(
             Destination::AnyoneCanSpend,
-            pool_id,
+            genesis_pool_id,
         ))
         .build();
     let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
@@ -612,9 +610,9 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -635,9 +633,9 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .build();
 
     let block_b_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(spend_delegation_1_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -662,9 +660,9 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .build();
 
     let block_c_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(spend_delegation_2_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -676,9 +674,9 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
     );
 
     // produce block at height 2 that should trigger in memory reorg for block `c`
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_parent(block_a_id)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .build_and_process()
@@ -701,7 +699,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
     let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let (stake_pool_data, staking_sk) =
@@ -709,7 +707,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
         (amount_to_stake * 2).unwrap(),
-        pool_id,
+        genesis_pool_id,
         stake_pool_data,
     )
     .build();
@@ -737,9 +735,9 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         ))
         .build();
     let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .add_transaction(stake_pool_2_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -773,9 +771,9 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -794,9 +792,9 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .build();
 
     let block_c_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(decommission_pool_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -821,9 +819,9 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .build();
 
     let block_d_index = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .add_transaction(spend_delegation_tx)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -835,9 +833,9 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
     );
 
     // produce block at height 2 that should trigger in memory reorg for blocks `b`, `c`, `d`
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .with_parent(block_a_id)
-        .with_block_signing_key(staking_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk)
         .build_and_process()
@@ -866,7 +864,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     let (vrf_sk_2, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let (chain_config_builder, _) =
+    let (chain_config_builder, genesis_pool_id) =
         chainstate_test_framework::create_chain_config_with_default_staking_pool(
             &mut rng, staker_pk, vrf_pk,
         );
@@ -896,9 +894,9 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         ))
         .build();
     let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
-    tf.make_pos_block_builder(&mut rng)
+    tf.make_pos_block_builder()
         .add_transaction(stake_pool_2_tx)
-        .with_block_signing_key(staker_sk.clone())
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -907,8 +905,8 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     // Produce block_b
     let block_b_index = tf
-        .make_pos_block_builder(&mut rng)
-        .with_block_signing_key(staker_sk.clone())
+        .make_pos_block_builder()
+        .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
@@ -920,10 +918,9 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     // Build block_c but do not process it
     let block_c = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
-        .with_block_signing_key(staker_sk_2.clone())
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
         .build();
@@ -931,11 +928,10 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     // Produce block_d from block_a as an alternative chain with second pool
     let block_d = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .with_parent(block_a_id)
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
-        .with_block_signing_key(staker_sk_2.clone())
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
         .build();
@@ -947,11 +943,10 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     // Produce block_e and check that reorg happened
     let block_e = tf
-        .make_pos_block_builder(&mut rng)
+        .make_pos_block_builder()
         .with_parent(block_d_id)
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(block_d_id.into(), 0))
-        .with_block_signing_key(staker_sk_2.clone())
         .with_stake_spending_key(staker_sk_2)
         .with_vrf_key(vrf_sk_2)
         .build();

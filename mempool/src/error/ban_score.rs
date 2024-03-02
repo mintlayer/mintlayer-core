@@ -300,7 +300,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::InvariantErrorDelegationBalanceAdditionUndoError => 0,
             E::InvariantErrorPoolBalanceAdditionUndoError => 0,
             E::InvariantErrorDelegationSharesAdditionUndoError => 0,
-            E::InvariantErrorDelegationUndoFailedDataNotFound => 0,
+            E::InvariantErrorDelegationUndoFailedDataNotFound(_) => 0,
             E::DuplicatesInDeltaAndUndo => 0,
             E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 0,
             E::InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound => 0,
