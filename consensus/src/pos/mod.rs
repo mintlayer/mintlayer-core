@@ -21,6 +21,7 @@ pub mod kernel;
 pub mod target;
 
 mod effective_pool_balance;
+pub use effective_pool_balance::effective_pool_balance as calculate_effective_pool_balance;
 pub use effective_pool_balance::EffectivePoolBalanceError;
 
 use chainstate_types::{

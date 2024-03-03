@@ -29,6 +29,7 @@ import {
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
   staking_pool_spend_maturity_block_count,
+  effective_balance,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -618,5 +619,14 @@ export async function run_test() {
     console.log(
       `estimated size ${estimated_size} vs real ${expected_signed_tx.length}`
     );
+  }
+
+  {
+    const eff_bal = effective_balance(Network.Mainnet, "0", "0");
+    if (eff_bal != "0") {
+      throw new Error("Effective balance test failed");
+    }
+
+    // TODO: more tests for effective balance
   }
 }

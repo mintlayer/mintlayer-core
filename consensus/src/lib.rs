@@ -20,6 +20,8 @@ mod pos;
 mod pow;
 mod validator;
 
+pub use pos::calculate_effective_pool_balance;
+
 use std::sync::Arc;
 
 use chainstate_types::{

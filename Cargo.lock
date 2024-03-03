@@ -8030,6 +8030,7 @@ version = "0.3.0"
 dependencies = [
  "bip39",
  "common",
+ "consensus",
  "crypto",
  "getrandom 0.2.12",
  "rstest",
