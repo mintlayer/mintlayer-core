@@ -29,7 +29,7 @@ chrono.workspace = true
 futures.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio", "lazy"] }
 iced_aw = { workspace = true, features = ["cupertino", "icons"] }
-rfd = { workspace = true, features = ["gtk3"] } # revert to "xdg-portal" once https://github.com/PolyMeilex/rfd/issues/126 is fixed
+rfd = { workspace = true, features = ["xdg-portal"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true

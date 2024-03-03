@@ -46,7 +46,7 @@ You can:
 
 - Install the rust compiler: https://www.rust-lang.org/tools/install
 - Make sure to relaunch your terminal when you're done. To ensure the rust compiler is working, run: `cargo --version`, and it should return a version number. If you get a compilation failure, usually it means a dependency is missing.
-- Install dependencies (for Linux/Debian/Ubuntu, you need `apt-get install build-essential`). For the GUI (Graphical User Interface) you also need `libgtk-3-dev`. Find the equivalent dependencies for your Linux distribution if it's not Debian-based.
+- Install dependencies (for Linux/Debian/Ubuntu, you need `apt-get install build-essential`). Find the equivalent dependencies for your Linux distribution if it's not Debian-based.
 
 ### Ways to run the software when building from source
 
