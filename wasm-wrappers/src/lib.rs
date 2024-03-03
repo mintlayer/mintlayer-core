@@ -677,6 +677,8 @@ pub fn encode_signed_transaction(
     Ok(tx.encode())
 }
 
+/// Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
+/// The effective balance is how the influence of a pool is calculated due to its balance.
 #[wasm_bindgen]
 pub fn effective_pool_balance(
     network: Network,
