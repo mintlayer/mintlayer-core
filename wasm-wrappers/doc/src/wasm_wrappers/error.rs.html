@@ -60,6 +60,10 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
@@ -113,6 +117,10 @@
     </span>InvalidTransaction,
     <span class="attr">#[error(<span class="string">"The number of signatures does not match the number of inputs"</span>)]
     </span>InvalidWitnessCount,
+    <span class="attr">#[error(<span class="string">"Final supply calculation error"</span>)]
+    </span>FinalSupplyError,
+    <span class="attr">#[error(<span class="string">"Calculating effective balance failed: {0}"</span>)]
+    </span>EffectiveBalanceCalculationFailed(String),
 }
 
 <span class="comment">// This is required to make an error readable in JavaScript
