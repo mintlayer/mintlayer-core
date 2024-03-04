@@ -130,14 +130,23 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
     Ok(tokens_grouped)
 }
 
-pub fn output_currency_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoSelectorError> {
-    let output_value = match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
-        TxOutput::IssueNft(token_id, _, _) => {
-            OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
-        }
-        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.pledge()),
-        TxOutput::ProduceBlockFromStake(_, _)
+fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoSelectorError> {
+    let value = match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+            OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
+            OutputValue::TokenV0(_) => {
+                return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
+                    output.clone(),
+                )))
+            }
+            OutputValue::TokenV1(token_id, output_amount) => {
+                (Currency::Token(*token_id), *output_amount)
+            }
+        },
+
+        TxOutput::IssueNft(token_id, _, _) => (Currency::Token(*token_id), Amount::from_atoms(1)),
+        TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
@@ -147,15 +156,6 @@ pub fn output_currency_value(output: &TxOutput) -> Result<(Currency, Amount), Ut
                 output.clone(),
             )))
         }
-    };
-    let value = match output_value {
-        OutputValue::Coin(output_amount) => (Currency::Coin, output_amount),
-        OutputValue::TokenV0(_) => {
-            return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
-                output.clone(),
-            )))
-        }
-        OutputValue::TokenV1(token_id, output_amount) => (Currency::Token(token_id), output_amount),
     };
     Ok(value)
 }
@@ -172,7 +172,7 @@ pub fn group_utxos_for_input<T, Grouped: Clone>(
     // Iterate over all outputs and group them up by currency
     for output in outputs {
         // Get the supported output value
-        let (currency, value) = output_currency_value(get_tx_output(&output))?;
+        let (currency, value) = output_spendable_value(get_tx_output(&output))?;
 
         match currency {
             Currency::Coin => {

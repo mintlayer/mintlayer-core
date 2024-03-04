@@ -38,7 +38,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_types::{
-    utxo_types::{UtxoStates, UtxoType, UtxoTypes},
+    utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
     KeychainUsageState,
@@ -84,12 +84,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         with_locked: WithLocked,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
-            .get_balance(
-                self.account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-                utxo_states,
-                with_locked,
-            )
+            .get_balance(self.account_index, utxo_states, with_locked)
             .map_err(ControllerError::WalletError)
     }
 

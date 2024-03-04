@@ -873,12 +873,10 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_balance(
         &self,
         account_index: U31,
-        utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         self.get_account(account_index)?.get_balance(
-            utxo_types,
             utxo_states,
             self.latest_median_time,
             with_locked,

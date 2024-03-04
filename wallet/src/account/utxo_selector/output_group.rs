@@ -14,11 +14,9 @@
 // limitations under the License.
 
 use common::{
-    chain::{TxInput, TxOutput},
+    chain::{output_value::OutputValue, tokens::TokenData, TxInput, TxOutput},
     primitives::Amount,
 };
-
-use crate::account::currency_grouper::output_currency_value;
 
 use super::UtxoSelectorError;
 
@@ -56,7 +54,35 @@ impl OutputGroup {
         long_term_fee: Amount,
         weight: u32,
     ) -> Result<Self, UtxoSelectorError> {
-        let (_, value) = output_currency_value(&output.1)?;
+        let output_value = match &output.1 {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+            TxOutput::IssueNft(token_id, _, _) => {
+                OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::DataDeposit(_) => {
+                return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
+                    output.1.clone(),
+                )))
+            }
+        };
+        let value = match output_value {
+            OutputValue::Coin(output_amount) => output_amount,
+            OutputValue::TokenV0(token_data) => {
+                let token_data = token_data.as_ref();
+                match token_data {
+                    TokenData::TokenTransfer(token_transfer) => token_transfer.amount,
+                    TokenData::TokenIssuance(token_issuance) => token_issuance.amount_to_issue,
+                    TokenData::NftIssuance(_) => Amount::from_atoms(1),
+                }
+            }
+            OutputValue::TokenV1(_, output_amount) => output_amount,
+        };
 
         Ok(Self {
             outputs: vec![output],

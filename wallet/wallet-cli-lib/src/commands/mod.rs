@@ -416,7 +416,7 @@ pub enum WalletCommand {
     },
 
     /// Sweep all spendable coins or tokens from an address or addresses to a given address.
-    /// Sepndable coins are any coins that are not locked, and tokens that are not frozen or locked.
+    /// Spendable coins are any coins that are not locked, and tokens that are not frozen or locked.
     /// The wallet will automatically calculate the required fees
     #[clap(name = "address-sweep-spendable")]
     SweepFromAddress {

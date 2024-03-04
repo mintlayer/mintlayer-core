@@ -195,7 +195,7 @@ class WalletSweepAddresses(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.freeze_token(frozen_token_id, 'unfreezable'))
             addresses.append(tokens_address)
 
-            # get a coin address to inclode in the sweep to pay for the sweep tx fees
+            # get a coin address to include in the sweep to pay for the sweep tx fees
             fee_address = await wallet.new_address()
             assert_in("The transaction was submitted successfully", await wallet.send_to_address(fee_address, 1))
             addresses.append(fee_address)
@@ -208,16 +208,16 @@ class WalletSweepAddresses(BitcoinTestFramework):
 
             # check the balance
             balance = await wallet.get_balance()
-            # frozen tokens can't be transfered so they should be here
+            # frozen tokens can't be transferred so they should be here
             assert_in(f"{frozen_token_id} amount: 10000", balance)
             # the other token should not be in the acc1 balance any more
             assert_not_in(f"{token_id}", balance)
 
             await wallet.select_account(0)
             balance = await wallet.get_balance()
-            # frozen tokens can't be transfered so they are not in acc0 balance
+            # frozen tokens can't be transferred so they are not in acc0 balance
             assert_not_in(f"{frozen_token_id}", balance)
-            # the other token should be fully transfered in the acc0 balance
+            # the other token should be fully transferred in the acc0 balance
             assert_in(f"{token_id} amount: 10000", balance)
 
 

@@ -81,7 +81,7 @@ use wallet_types::{
     KeychainUsageState, WalletTx,
 };
 
-use self::currency_grouper::{output_currency_value, Currency};
+use self::currency_grouper::Currency;
 pub use self::output_cache::{
     DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
@@ -588,7 +588,7 @@ impl Account {
             .into_iter()
             .filter_map(|(currency, (amount, _))| {
                 let value = match currency {
-                    Currency::Coin => None?,
+                    Currency::Coin => return None,
                     Currency::Token(token_id) => OutputValue::TokenV1(token_id, amount),
                 };
 
@@ -1665,13 +1665,18 @@ impl Account {
 
     pub fn get_balance(
         &self,
-        utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         median_time: BlockTimestamp,
         with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<currency_grouper::Currency, Amount>> {
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time, utxo_states, with_locked).into_iter(),
+            self.get_utxos(
+                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+                median_time,
+                utxo_states,
+                with_locked,
+            )
+            .into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -2115,8 +2120,34 @@ fn group_preselected_inputs(
 
         match input {
             TxInput::Utxo(_) => {
-                let (currency, value) =
-                    output_currency_value(utxo.as_ref().expect("must be present"))?;
+                let output = utxo.as_ref().expect("must be present");
+                let (currency, value) = match output {
+                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+                        OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
+                        OutputValue::TokenV0(_) => {
+                            return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                                output.clone(),
+                            )))
+                        }
+                        OutputValue::TokenV1(token_id, output_amount) => {
+                            (Currency::Token(*token_id), *output_amount)
+                        }
+                    },
+                    TxOutput::IssueNft(token_id, _, _) => {
+                        (Currency::Token(*token_id), Amount::from_atoms(1))
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::DataDeposit(_) => {
+                        return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                            output.clone(),
+                        )))
+                    }
+                };
                 update_preselected_inputs(currency, value, *fee)?;
             }
             TxInput::Account(outpoint) => match outpoint.account() {
