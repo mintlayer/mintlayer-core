@@ -114,7 +114,7 @@ impl<'a> MethodMeta<'a> {
                 let unsub_name = match unsub_name.as_str() {
                     "" => match name.strip_prefix("subscribe") {
                         Some(name) => format!("unsubscribe{name}"),
-                        None => return Err(syn::Error::new(meta.span(), "No unsubscibe")),
+                        None => return Err(syn::Error::new(meta.span(), "No unsubscribe")),
                     },
                     _ => unsub_name,
                 };
@@ -126,7 +126,7 @@ impl<'a> MethodMeta<'a> {
             (None, None) => {
                 return Err(syn::Error::new(
                     item.span(),
-                    "Neither method nor subscribtion",
+                    "Neither method nor subscription",
                 ))
             }
             (Some(method_name), None) => {
