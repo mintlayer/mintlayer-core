@@ -2411,6 +2411,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-rpc-docs"
+version = "0.3.0"
+dependencies = [
+ "blockprod",
+ "chainstate",
+ "clap",
+ "mempool",
+ "node-lib",
+ "p2p",
+ "rpc-description",
+ "test-rpc-functions",
+ "wallet-rpc-lib",
+]
+
+[[package]]
 name = "generator"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
