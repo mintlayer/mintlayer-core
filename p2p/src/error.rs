@@ -30,10 +30,6 @@ use crate::{net::types::PeerRole, peer_manager::peerdb_common, protocol::Protoco
 /// and the peer getting banned.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ProtocolError {
-    #[error("Peer has an unsupported network protocol: {0:?}")]
-    UnsupportedProtocol(ProtocolVersion),
-    #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
-    DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer is unresponsive")]
     Unresponsive,
     #[error("Locator size ({0}) exceeds allowed limit ({1})")]
@@ -86,25 +82,12 @@ pub enum PeerError {
         new_peer_addr: SocketAddress,
         new_peer_role: PeerRole,
     },
-    #[error("Address {0} is banned")]
-    BannedAddress(String),
-    #[error("Address {0} is discouraged")]
-    DiscouragedAddress(String),
-    #[error("PeerManager has too many peers")]
-    TooManyPeers,
     #[error("Connection to address {0} already pending")]
     Pending(String),
-    #[error("Peer time {0:?} out of the acceptable range {1:?}")]
-    TimeDiff(Time, std::ops::RangeInclusive<Time>),
-    #[error("Selected services are empty")]
-    EmptyServices,
-    #[error(
-        "Unexpected services, expected: {expected_services:?}, available: {available_services:?}"
-    )]
-    UnexpectedServices {
-        expected_services: Services,
-        available_services: Services,
-    },
+    /// This error is used by backend to drop the connection after the peer has informed us
+    /// about an impending disconnection.
+    #[error("The peer is going to disconnect us")]
+    PeerWillDisconnect,
 }
 
 /// Errors related to establishing a connection with a remote peer
@@ -128,6 +111,43 @@ pub enum MessageCodecError {
     MessageTooLarge { actual_size: usize, max_size: usize },
     #[error("Cannot decode data: {0}")]
     InvalidEncodedData(serialization::Error),
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionValidationError {
+    #[error("Peer has an unsupported network protocol: {peer_protocol_version:?}")]
+    UnsupportedProtocol {
+        peer_protocol_version: ProtocolVersion,
+    },
+    #[error("Peer time {remote_time:?} out of the acceptable range {accepted_peer_time:?}")]
+    TimeDiff {
+        remote_time: Time,
+        accepted_peer_time: std::ops::RangeInclusive<Time>,
+    },
+    #[error(
+        "Peer is in different network. Our network {our_network:?}, their network {their_network:?}"
+    )]
+    DifferentNetwork {
+        our_network: [u8; 4],
+        their_network: [u8; 4],
+    },
+    #[error("Too many peers")]
+    TooManyInboundPeersAndThisOneIsDiscouraged,
+    #[error("Too many peers")]
+    TooManyInboundPeersAndCannotEvictAnyone,
+    #[error("Address {address} is banned")]
+    AddressBanned { address: String },
+    #[error("Address {address} is discouraged")]
+    AddressDiscouraged { address: String },
+    #[error("No common services")]
+    NoCommonServices,
+    #[error(
+        "Insufficient services, needed: {needed_services:?}, available: {available_services:?}"
+    )]
+    InsufficientServices {
+        needed_services: Services,
+        available_services: Services,
+    },
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -161,6 +181,8 @@ pub enum P2pError {
     MempoolError(#[from] MempoolError),
     #[error("Message codec error: {0}")]
     MessageCodecError(#[from] MessageCodecError),
+    #[error("Connection validation failed: {0}")]
+    ConnectionValidationFailed(#[from] ConnectionValidationError),
 }
 
 impl From<DialError> for P2pError {
@@ -219,6 +241,7 @@ impl BanScore for P2pError {
             } => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
             P2pError::MessageCodecError(_) => 0,
+            P2pError::ConnectionValidationFailed(_) => 0,
         }
     }
 }
@@ -226,8 +249,6 @@ impl BanScore for P2pError {
 impl BanScore for ProtocolError {
     fn ban_score(&self) -> u32 {
         match self {
-            ProtocolError::UnsupportedProtocol(_) => 0,
-            ProtocolError::DifferentNetwork(_, _) => 0, // Do not ban peers if after deploying a new testnet
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
             ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
@@ -267,7 +288,8 @@ impl TryAsRef<storage::Error> for P2pError {
                 actual_version: _,
             }
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_) => None,
+            | P2pError::MessageCodecError(_)
+            | P2pError::ConnectionValidationFailed(_) => None,
             P2pError::StorageFailure(err) => Some(err),
         }
     }

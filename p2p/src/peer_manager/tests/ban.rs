@@ -20,6 +20,7 @@ use rstest::rstest;
 use crate::{
     ban_config::BanConfig,
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
     message::{AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::types::{Command, Message},
@@ -187,7 +188,13 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
     assert!(is_banned);
 
     let cmd = expect_recv!(cmd_receiver);
-    assert_eq!(cmd, Command::Disconnect { peer_id });
+    assert_eq!(
+        cmd,
+        Command::Disconnect {
+            peer_id,
+            reason: Some(DisconnectionReason::AddressBanned)
+        }
+    );
 
     wait_for_no_recv(&mut peer_mgr_notification_receiver).await;
 
@@ -254,7 +261,13 @@ async fn reject_incoming_connection_from_banned_peer(#[case] seed: Seed) {
         &chain_config,
     );
     let cmd = expect_recv!(cmd_receiver);
-    assert_eq!(cmd, Command::Disconnect { peer_id: peer1_id });
+    assert_eq!(
+        cmd,
+        Command::Disconnect {
+            peer_id: peer1_id,
+            reason: Some(DisconnectionReason::AddressBanned)
+        }
+    );
 
     // Connection from the normal peer is accepted.
     let peer2_id = inbound_block_relay_peer_accepted_by_backend(

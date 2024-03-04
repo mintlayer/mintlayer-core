@@ -48,7 +48,7 @@ use p2p::{
     },
 };
 use tokio::sync::mpsc;
-use utils::ensure;
+use utils::{ensure, tap_log::TapLog};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -268,6 +268,16 @@ where
                 Ok(())
             }
             PeerManagerMessage::PingResponse(_) => Ok(()),
+
+            PeerManagerMessage::WillDisconnect(_) => {
+                // Since the peer is going to disconnect us anyway, do it ourselves right away.
+                // We don't care about any errors here.
+                let _ = self
+                    .conn
+                    .disconnect(peer_id, None)
+                    .log_lvl_pfx(log::Level::Debug, "disconnection failed");
+                Ok(())
+            }
         }
     }
 
@@ -383,7 +393,7 @@ where
                 .expect("send_message must succeed");
             }
             CrawlerCommand::Disconnect { peer_id } => {
-                conn.disconnect(peer_id).expect("disconnect must succeed");
+                conn.disconnect(peer_id, None).expect("disconnect must succeed");
             }
             CrawlerCommand::UpdateAddress {
                 address,

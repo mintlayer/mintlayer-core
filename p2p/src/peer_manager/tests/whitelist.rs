@@ -17,6 +17,7 @@ use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use crate::{
     config::{NodeType, P2pConfig},
+    disconnection_reason::DisconnectionReason,
     net::{
         default_backend::{types::Command, ConnectivityHandle},
         types::{PeerInfo, PeerRole, Role},
@@ -331,7 +332,9 @@ fn manual_ban_overrides_whitelisting() {
 
     // Peer is disconnected by the peer manager
     match cmd_receiver.try_recv() {
-        Ok(Command::Disconnect { peer_id }) if peer_id == peer_id_1 => {}
+        Ok(Command::Disconnect { peer_id, reason }) if peer_id == peer_id_1 => {
+            assert_eq!(reason, Some(DisconnectionReason::AddressBanned));
+        }
         v => panic!("unexpected command: {v:?}"),
     }
 

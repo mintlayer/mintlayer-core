@@ -27,20 +27,22 @@ use logging::log;
 
 use crate::{
     config::P2pConfig,
-    error::{P2pError, PeerError, ProtocolError},
-    message::{BlockSyncMessage, TransactionSyncMessage},
+    disconnection_reason::DisconnectionReason,
+    error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
+    message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
     net::default_backend::{
         transport::{ConnectedSocketInfo, TransportSocket},
         types::{BackendEvent, PeerEvent},
     },
-    protocol::{choose_common_protocol_version, ProtocolVersion},
+    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
 };
 
 use super::{
     transport::BufferedTranscoder,
     types::{
-        peer_event, CategorizedMessage, HandshakeMessage, HandshakeNonce, Message, P2pTimestamp,
+        can_send_will_disconnect, peer_event, CategorizedMessage, HandshakeMessage, HandshakeNonce,
+        Message, P2pTimestamp,
     },
 };
 
@@ -78,6 +80,9 @@ pub struct Peer<T: TransportSocket> {
     /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
 
+    /// The chosen common protocol version; available only after the handshake has completed.
+    common_protocol_version: Option<SupportedProtocolVersion>,
+
     /// Time getter
     time_getter: TimeGetter,
 }
@@ -110,6 +115,7 @@ where
             backend_event_receiver,
             node_protocol_version,
             time_getter,
+            common_protocol_version: None,
         }
     }
 
@@ -148,8 +154,71 @@ where
 
         utils::ensure!(
             accepted_peer_time.contains(&remote_time),
-            P2pError::PeerError(PeerError::TimeDiff(remote_time, accepted_peer_time)),
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::TimeDiff {
+                remote_time,
+                accepted_peer_time
+            }),
         );
+
+        Ok(())
+    }
+
+    async fn maybe_send_will_disconnect(
+        &mut self,
+        reason: Option<DisconnectionReason>,
+        peer_protocol_version: ProtocolVersion,
+    ) -> crate::Result<()> {
+        if can_send_will_disconnect(peer_protocol_version) {
+            if let Some(reason) = reason {
+                log::debug!(
+                    "Sending WillDisconnect to peer {}, reason: {:?}",
+                    self.peer_id,
+                    reason
+                );
+                self.socket
+                    .send(Message::WillDisconnect(WillDisconnectMessage {
+                        reason: reason.to_string(),
+                    }))
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate peer handshake info after Hello or HelloAck message has been received.
+    /// Set self.common_protocol_version.
+    async fn validate_handshake(
+        &mut self,
+        handshake_init_time: Time,
+        remote_time: P2pTimestamp,
+        peer_protocol_version: ProtocolVersion,
+    ) -> crate::Result<()> {
+        let recv_time = self.time_getter.get_time();
+        let result = (|| {
+            Self::validate_peer_time(
+                &self.p2p_config,
+                handshake_init_time,
+                recv_time,
+                remote_time,
+            )?;
+
+            choose_common_protocol_version(peer_protocol_version, self.node_protocol_version).ok_or(
+                P2pError::ConnectionValidationFailed(
+                    ConnectionValidationError::UnsupportedProtocol {
+                        peer_protocol_version,
+                    },
+                ),
+            )
+        })();
+
+        self.maybe_send_will_disconnect(
+            DisconnectionReason::from_result(&result),
+            peer_protocol_version,
+        )
+        .await?;
+
+        self.common_protocol_version = Some(result?);
 
         Ok(())
     }
@@ -168,7 +237,7 @@ where
         match self.connection_info {
             ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
-                    protocol_version,
+                    protocol_version: peer_protocol_version,
                     network,
                     services: remote_services,
                     user_agent,
@@ -181,15 +250,13 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
-                let recv_time = self.time_getter.get_time();
-                Self::validate_peer_time(&self.p2p_config, init_time, recv_time, remote_time)?;
+                self.validate_handshake(init_time, remote_time, peer_protocol_version).await?;
+                let common_protocol_version = self
+                    .common_protocol_version
+                    .expect("common_protocol_version must be set by validate_handshake");
 
                 let local_services: Services = (*self.p2p_config.node_type).into();
-
                 let common_services = local_services & remote_services;
-
-                let common_protocol_version =
-                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
 
                 // Note: we send `PeerInfoReceived` to `Backend` before sending `HelloAck`
                 // to the remote peer. `Backend` expects to receive `PeerInfoReceived` before
@@ -256,26 +323,36 @@ where
                     }))
                     .await?;
 
+                let hello_response = self.socket.recv().await?;
+
                 let Message::Handshake(HandshakeMessage::HelloAck {
-                    protocol_version,
+                    protocol_version: peer_protocol_version,
                     network,
                     user_agent,
                     software_version,
                     services: remote_services,
                     receiver_address: node_address_as_seen_by_peer,
                     current_time: remote_time,
-                }) = self.socket.recv().await?
+                }) = hello_response
                 else {
-                    return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
+                    if let Message::WillDisconnect(msg) = hello_response {
+                        log::warn!(
+                            "Peer {} is going to disconnect us with the reason: '{}'",
+                            self.peer_id,
+                            msg.reason
+                        );
+                        return Err(P2pError::PeerError(PeerError::PeerWillDisconnect));
+                    } else {
+                        return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
+                    }
                 };
 
-                let recv_time = self.time_getter.get_time();
-                Self::validate_peer_time(&self.p2p_config, init_time, recv_time, remote_time)?;
+                self.validate_handshake(init_time, remote_time, peer_protocol_version).await?;
+                let common_protocol_version = self
+                    .common_protocol_version
+                    .expect("common_protocol_version must be set by validate_handshake");
 
                 let common_services = local_services & remote_services;
-
-                let common_protocol_version =
-                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
 
                 self.peer_event_sender
                     .send(PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
@@ -384,6 +461,18 @@ where
                         sync_msg_senders_opt = Some((block_sync_msg_sender, transaction_sync_msg_sender));
                     },
                     BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
+                    BackendEvent::Disconnect {reason} => {
+                        log::debug!("Disconnection requested for peer {}, the reason is {:?}", self.peer_id, reason);
+                        if let Some(common_protocol_version) = self.common_protocol_version {
+                            self.maybe_send_will_disconnect(reason, common_protocol_version.into()).await?;
+                        } else {
+                            // Getting here means that we've got a disconnection request when
+                            // the handshake hasn't been completed yet.
+                            log::debug!("self.common_protocol_version is not set when BackendEvent::Disconnect is received");
+                        }
+
+                        return Ok(());
+                    },
                 },
                 event = self.socket.recv(), if sync_msg_senders_opt.is_some() => match event {
                     Ok(message) => {
@@ -808,7 +897,10 @@ mod tests {
         100000,
         100014,
         Duration::from_secs(2),
-        |res| assert!(matches!(res, Err(P2pError::PeerError(PeerError::TimeDiff(_, _))))),
+        |res| assert!(matches!(res, Err(P2pError::ConnectionValidationFailed(ConnectionValidationError::TimeDiff {
+            remote_time: _,
+            accepted_peer_time: _
+        })))),
     )]
     #[case::peer_behind_within_tolerance(
         100009,
@@ -820,7 +912,10 @@ mod tests {
         100014,
         100000,
         Duration::from_secs(2),
-        |res| assert!(matches!(res, Err(P2pError::PeerError(PeerError::TimeDiff(_, _))))),
+        |res| assert!(matches!(res, Err(P2pError::ConnectionValidationFailed(ConnectionValidationError::TimeDiff {
+            remote_time: _,
+            accepted_peer_time: _
+        })))),
     )]
     #[case::peer_in_sync_but_times_out(
         100000,

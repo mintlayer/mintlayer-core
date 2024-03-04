@@ -24,7 +24,7 @@ use p2p_types::{
 
 use crate::{
     config::{NodeType, P2pConfig},
-    error::{P2pError, PeerError},
+    error::{ConnectionValidationError, P2pError},
     net::{
         default_backend::{
             transport::TcpTransportSocket, ConnectivityHandle, DefaultNetworkingService,
@@ -114,7 +114,12 @@ fn validate_services() {
                 );
 
                 if services.is_empty() {
-                    assert_eq!(res, Err(P2pError::PeerError(PeerError::EmptyServices)));
+                    assert_eq!(
+                        res,
+                        Err(P2pError::ConnectionValidationFailed(
+                            ConnectionValidationError::NoCommonServices
+                        ))
+                    );
                 } else {
                     let expected_services: Option<Services> = match peer_role {
                         PeerRole::Inbound
@@ -146,10 +151,12 @@ fn validate_services() {
                         } else {
                             assert_eq!(
                                 res,
-                                Err(P2pError::PeerError(PeerError::UnexpectedServices {
-                                    expected_services,
-                                    available_services: services
-                                }))
+                                Err(P2pError::ConnectionValidationFailed(
+                                    ConnectionValidationError::InsufficientServices {
+                                        needed_services: expected_services,
+                                        available_services: services
+                                    }
+                                ))
                             );
                         }
                     } else {

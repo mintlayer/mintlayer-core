@@ -312,7 +312,7 @@ impl TestNodeGroup {
                 if let Ok(peer_event) = data_item.node.peer_manager_event_receiver.try_recv() {
                     match peer_event {
                         PeerManagerEvent::Connect(_, _)
-                        | PeerManagerEvent::Disconnect(_, _, _)
+                        | PeerManagerEvent::Disconnect(_, _, _, _)
                         | PeerManagerEvent::GetPeerCount(_)
                         | PeerManagerEvent::GetBindAddresses(_)
                         | PeerManagerEvent::GetConnectedPeers(_)

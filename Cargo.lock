@@ -4598,6 +4598,7 @@ dependencies = [
  "hex",
  "itertools 0.12.1",
  "jsonrpsee",
+ "lazy_static",
  "logging",
  "mempool",
  "num",

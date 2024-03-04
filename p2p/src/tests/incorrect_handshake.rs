@@ -149,7 +149,7 @@ where
     // we end the test.
     test_node.wait_for_ban_score_adjustment().await;
 
-    // The peer address should be banned.
+    // The peer address should be discouraged.
     let test_node_remnants = test_node.join().await;
     // TODO: check the actual address instead of the count, same in other places.
     assert!(test_node_remnants.peer_mgr.peerdb().list_discouraged().count() > 0);

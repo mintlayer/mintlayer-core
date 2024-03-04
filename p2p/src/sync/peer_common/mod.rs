@@ -92,7 +92,8 @@ pub async fn handle_message_processing_result(
         | P2pError::PeerError(_)
         | P2pError::NoiseHandshakeError(_)
         | P2pError::InvalidConfigurationValue(_)
-        | P2pError::MessageCodecError(_)) => panic!("Unexpected error {e:?}"),
+        | P2pError::MessageCodecError(_)
+        | P2pError::ConnectionValidationFailed(_)) => panic!("Unexpected error {e:?}"),
 
         // Fatal errors, simply propagate them to stop the sync manager.
         // Note/TODO: due to how error types are currently organized, a storage error can

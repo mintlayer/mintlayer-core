@@ -24,6 +24,7 @@ use test_utils::random::Seed;
 
 use crate::{
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
     net::default_backend::types::Command,
     peer_manager::{
         config::PeerManagerConfig,
@@ -280,7 +281,8 @@ mod dont_evict_if_blocks_in_flight {
         assert_eq!(
             cmd,
             Command::Disconnect {
-                peer_id: expected_peer_to_disconnect
+                peer_id: expected_peer_to_disconnect,
+                reason: Some(DisconnectionReason::PeerEvicted),
             }
         );
 

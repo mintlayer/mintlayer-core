@@ -48,18 +48,18 @@ use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
-    error::{P2pError, PeerError, ProtocolError},
+    disconnection_reason::DisconnectionReason,
+    error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
-        PingResponse,
+        PingResponse, WillDisconnectMessage,
     },
     net::{
         types::{
             services::{Service, Services},
-            ConnectivityEvent,
+            ConnectivityEvent, PeerInfo, PeerRole, Role,
         },
-        types::{PeerInfo, PeerRole, Role},
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
@@ -523,7 +523,12 @@ where
         }
 
         for peer_id in to_disconnect {
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::AddressBanned),
+                None,
+            );
         }
     }
 
@@ -543,7 +548,12 @@ where
         }
 
         for peer_id in to_disconnect {
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::AddressDiscouraged),
+                None,
+            );
         }
     }
 
@@ -571,11 +581,15 @@ where
         let is_discouraged = self.peerdb.is_address_discouraged(&bannable_address);
         ensure!(
             !is_banned || is_reserved,
-            P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::AddressBanned {
+                address: address.to_string()
+            }),
         );
         ensure!(
             !is_discouraged || is_reserved,
-            P2pError::PeerError(PeerError::DiscouragedAddress(address.to_string())),
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::AddressDiscouraged {
+                address: address.to_string()
+            }),
         );
 
         self.peer_connectivity_handle.connect(address, local_services_override)?;
@@ -625,7 +639,11 @@ where
     }
 
     // Try to disconnect a connected peer
-    fn try_disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
+    fn try_disconnect(
+        &mut self,
+        peer_id: PeerId,
+        reason: Option<DisconnectionReason>,
+    ) -> crate::Result<()> {
         ensure!(
             !self.pending_disconnects.contains_key(&peer_id),
             P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
@@ -636,7 +654,7 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        self.peer_connectivity_handle.disconnect(peer_id)?;
+        self.peer_connectivity_handle.disconnect(peer_id, reason)?;
 
         Ok(())
     }
@@ -652,10 +670,11 @@ where
         &mut self,
         peer_id: PeerId,
         peerdb_action: PeerDisconnectionDbAction,
+        reason: Option<DisconnectionReason>,
         response_sender: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
         log::debug!("disconnect peer {peer_id}");
-        let res = self.try_disconnect(peer_id);
+        let res = self.try_disconnect(peer_id, reason);
 
         match res {
             Ok(()) => {
@@ -707,12 +726,14 @@ where
         // allowed, we only check the banned status here.
         ensure!(
             !self.peerdb.is_address_banned(&address.as_bannable()),
-            P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::AddressBanned {
+                address: address.to_string()
+            }),
         );
 
         ensure!(
             !info.common_services.is_empty(),
-            P2pError::PeerError(PeerError::EmptyServices),
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::NoCommonServices),
         );
 
         match peer_role {
@@ -727,12 +748,16 @@ where
                 {
                     if self.peerdb.is_address_discouraged(&address.as_bannable()) {
                         log::info!("Rejecting inbound connection from a discouraged address - too many peers");
-                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                        return Err(P2pError::ConnectionValidationFailed(
+                            ConnectionValidationError::TooManyInboundPeersAndThisOneIsDiscouraged,
+                        ));
                     }
 
                     if !self.try_evict_random_inbound_connection() {
                         log::info!("Rejecting inbound connection - too many peers and none of them can be evicted");
-                        return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                        return Err(P2pError::ConnectionValidationFailed(
+                            ConnectionValidationError::TooManyInboundPeersAndCannotEvictAnyone,
+                        ));
                     }
                 }
             }
@@ -740,24 +765,28 @@ where
             PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {}
 
             PeerRole::OutboundFullRelay => {
-                let expected: Services = (*self.p2p_config.node_type).into();
+                let needed_services: Services = (*self.p2p_config.node_type).into();
                 utils::ensure!(
-                    info.common_services == expected,
-                    P2pError::PeerError(PeerError::UnexpectedServices {
-                        expected_services: expected,
-                        available_services: info.common_services,
-                    })
+                    info.common_services == needed_services,
+                    P2pError::ConnectionValidationFailed(
+                        ConnectionValidationError::InsufficientServices {
+                            needed_services,
+                            available_services: info.common_services,
+                        }
+                    )
                 );
             }
 
             PeerRole::OutboundBlockRelay => {
-                let expected: Services = [Service::Blocks].as_slice().into();
+                let needed_services: Services = [Service::Blocks].as_slice().into();
                 utils::ensure!(
-                    info.common_services == expected,
-                    P2pError::PeerError(PeerError::UnexpectedServices {
-                        expected_services: expected,
-                        available_services: info.common_services,
-                    })
+                    info.common_services == needed_services,
+                    P2pError::ConnectionValidationFailed(
+                        ConnectionValidationError::InsufficientServices {
+                            needed_services,
+                            available_services: info.common_services,
+                        }
+                    )
                 );
             }
         }
@@ -795,7 +824,12 @@ where
             &mut make_pseudo_rng(),
         ) {
             log::info!("inbound peer {peer_id} is selected for eviction");
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::PeerEvicted),
+                None,
+            );
             true
         } else {
             false
@@ -811,7 +845,12 @@ where
             &mut make_pseudo_rng(),
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::PeerEvicted),
+                None,
+            );
         }
     }
 
@@ -824,7 +863,12 @@ where
             &mut make_pseudo_rng(),
         ) {
             log::info!("full relay peer {peer_id} is selected for eviction");
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::PeerEvicted),
+                None,
+            );
         }
     }
 
@@ -1005,6 +1049,8 @@ where
         if let Err(accept_err) = &accept_res {
             log::debug!("connection rejected for peer {peer_id}: {accept_err}");
 
+            let disconnection_reason = DisconnectionReason::from_error(accept_err);
+
             // Disconnect should always succeed unless the node is shutting down.
             // But at this moment there is a possibility for backend to be shut down
             // before peer manager, at least in tests, so we don't "expect" and log
@@ -1015,7 +1061,8 @@ where
             // shutdown. Probably, peer manager should accept the "shutdown" flag, like other
             // p2p components do, and ignore/log::info the errors it it's set (this also applies
             // to other places, search for "log::error" in this file).
-            let disconnect_result = self.peer_connectivity_handle.disconnect(peer_id);
+            let disconnect_result =
+                self.peer_connectivity_handle.disconnect(peer_id, disconnection_reason);
             if let Err(err) = disconnect_result {
                 log::error!("disconnect failed unexpectedly: {err:?}");
             }
@@ -1023,14 +1070,17 @@ where
             if peer_role.is_outbound() {
                 self.peerdb.report_outbound_failure(peer_address);
             }
+        } else if peer_role == PeerRole::Feeler {
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::FeelerConnection),
+                None,
+            );
         }
 
         if let Some(response_sender) = response_sender {
             response_sender.send(accept_res);
-        }
-
-        if peer_role == PeerRole::Feeler {
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -1330,6 +1380,9 @@ where
                 self.handle_addr_list_response(peer, r.addresses)
             }
             PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
+            PeerManagerMessage::WillDisconnect(msg) => {
+                self.handle_will_disconnect_messgae(peer, msg)
+            }
         }
     }
 
@@ -1494,6 +1547,17 @@ where
         }
     }
 
+    fn handle_will_disconnect_messgae(&mut self, peer_id: PeerId, msg: WillDisconnectMessage) {
+        log::warn!(
+            "Peer {peer_id} is going to disconnect us with the reason: {}",
+            msg.reason
+        );
+
+        // Initiate the disconnection as well, to prevent malfunctioning/malicious peers from
+        // flooding us with "WillDisconnect", while not actually disconnecting.
+        self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None, None);
+    }
+
     /// Handle control event.
     ///
     /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager.
@@ -1503,8 +1567,8 @@ where
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.connect(address, OutboundConnectType::Manual { response_sender });
             }
-            PeerManagerEvent::Disconnect(peer_id, peerdb_action, response_sender) => {
-                self.disconnect(peer_id, peerdb_action, Some(response_sender));
+            PeerManagerEvent::Disconnect(peer_id, peerdb_action, reason, response_sender) => {
+                self.disconnect(peer_id, peerdb_action, reason, Some(response_sender));
             }
             PeerManagerEvent::AdjustPeerScore(peer_id, score, response_sender) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
@@ -1838,7 +1902,12 @@ where
         }
 
         for peer_id in dead_peers {
-            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
+            self.disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::Keep,
+                Some(DisconnectionReason::PingIgnored),
+                None,
+            );
         }
 
         self.last_ping_check_time = Some(now);

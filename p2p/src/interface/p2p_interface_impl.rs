@@ -24,6 +24,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
+    disconnection_reason::DisconnectionReason,
     error::P2pError,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
     net::NetworkingService,
@@ -53,6 +54,7 @@ where
             .send(PeerManagerEvent::Disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::RemoveIfOutbound,
+                Some(DisconnectionReason::ManualDisconnect),
                 response_sender,
             ))
             .map_err(|_| P2pError::ChannelClosed)?;

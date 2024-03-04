@@ -35,6 +35,8 @@ use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
+    error::ConnectionValidationError,
     message::AddrListRequest,
     net::{
         default_backend::{
@@ -520,10 +522,12 @@ where
             peer_info,
             None
         ),
-        Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-            [1, 2, 3, 4],
-            *config::create_unit_test_config().magic_bytes(),
-        )))
+        Err(P2pError::ConnectionValidationFailed(
+            ConnectionValidationError::DifferentNetwork {
+                our_network: [1, 2, 3, 4],
+                their_network: *config::create_unit_test_config().magic_bytes(),
+            }
+        ))
     );
 }
 
@@ -586,7 +590,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id),
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id, None),
         Ok(())
     );
     assert!(std::matches!(
@@ -1762,7 +1766,8 @@ async fn feeler_connections_test_impl(seed: Seed) {
             assert_eq!(
                 cmd,
                 Command::Disconnect {
-                    peer_id: cur_peer_id
+                    peer_id: cur_peer_id,
+                    reason: Some(DisconnectionReason::FeelerConnection)
                 }
             );
 

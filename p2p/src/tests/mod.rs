@@ -16,10 +16,13 @@
 //! A module for tests that behave like integration tests but still need access to private data
 //! via methods under #[cfg(test)],
 
+mod bad_time_diff;
 mod correct_handshake;
+mod disconnect_on_will_disconnect_msg;
 mod incorrect_handshake;
 mod misbehavior;
 mod peer_discovery_on_stale_tip;
+mod same_handshake_nonce;
 mod unsupported_version;
 
 pub mod helpers;

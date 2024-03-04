@@ -279,7 +279,7 @@ where
             peer_info,
             node_address_as_seen_by_peer: _,
         } => {
-            conn2.disconnect(peer_info.peer_id).unwrap();
+            conn2.disconnect(peer_info.peer_id, None).unwrap();
         }
         _ => panic!("invalid event received, expected incoming connection"),
     }

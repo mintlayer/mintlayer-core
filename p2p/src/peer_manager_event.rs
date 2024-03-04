@@ -23,8 +23,9 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
-    interface::types::ConnectedPeer, peer_manager::PeerManagerInterface,
-    sync::sync_status::PeerBlockSyncStatus, types::peer_id::PeerId, utils::oneshot_nofail,
+    disconnection_reason::DisconnectionReason, interface::types::ConnectedPeer,
+    peer_manager::PeerManagerInterface, sync::sync_status::PeerBlockSyncStatus,
+    types::peer_id::PeerId, utils::oneshot_nofail,
 };
 
 #[derive(Debug)]
@@ -47,6 +48,7 @@ pub enum PeerManagerEvent {
     Disconnect(
         PeerId,
         PeerDisconnectionDbAction,
+        Option<DisconnectionReason>,
         oneshot_nofail::Sender<crate::Result<()>>,
     ),
 
