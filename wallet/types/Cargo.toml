@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
+rpc-description = { path = "../../rpc/description" }
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 

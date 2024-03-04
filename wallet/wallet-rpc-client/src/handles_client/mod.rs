@@ -34,7 +34,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig,
 };
 use wallet_rpc_lib::{
@@ -364,7 +364,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     async fn transaction_inspect(
         &self,
         transaction: String,
-    ) -> Result<InsepectTransaction, Self::Error> {
+    ) -> Result<InspectTransaction, Self::Error> {
         self.wallet_rpc
             .transaction_inspect(transaction)
             .await

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rpc_description::ValueHint as VH;
+use rpc::description::{Described, Interface};
 
-/// Enum used to specify whether to include locked balance/utxos for wallet commands
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum WithLocked {
-    Any,
-    Unlocked,
-    Locked,
-}
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-impl rpc_description::HasValueHint for WithLocked {
-    const HINT: VH =
-        VH::Choice(&[&VH::StrLit("Any"), &VH::StrLit("Unlocked"), &VH::StrLit("Locked")]);
+fn main() {
+    let modules = std::iter::once(wallet_rpc_lib::WalletRpcDescription::DESCRIPTION);
+    let interface = Interface::from_iter(modules);
+
+    println!("# RPC documentation for Mintlayer node wallet\n");
+    println!("Version `{VERSION}`.\n");
+    print!("{interface}");
 }

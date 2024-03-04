@@ -54,10 +54,10 @@ Parameters:
         number,
         number OR null,
     ],
-    "third": [
+    "third": { string: [
         secs number,
         nanos number,
-    ],
+    ], .. },
 }
 ```
 

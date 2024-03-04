@@ -24,11 +24,17 @@ pub enum ValueHint {
     /// Primitive
     Prim(&'static str),
 
+    /// Fixed string literal
+    StrLit(&'static str),
+
     /// A choice between a number of hints
     Choice(&'static [&'static ValueHint]),
 
     /// A map with static members
     Object(&'static [(&'static str, &'static ValueHint)]),
+
+    /// A dynamic key-value map
+    Map(&'static ValueHint, &'static ValueHint),
 
     /// Array of elements of uniform type
     Array(&'static ValueHint),
@@ -45,6 +51,7 @@ impl ValueHint {
     pub const NULL: VH = VH::Prim("null");
     pub const NUMBER: VH = VH::Prim("number");
     pub const STRING: VH = VH::Prim("string");
+    pub const BECH32_STRING: VH = VH::Prim("bech32 string");
     pub const HEX_STRING: VH = VH::Prim("hex string");
     pub const GENERIC_OBJECT: VH = VH::Prim("object");
     pub const JSON: VH = VH::Prim("json");
@@ -74,6 +81,10 @@ impl<T: HasValueHint, E> HasValueHint for Result<T, E> {
 
 impl<T: HasValueHint> HasValueHint for Vec<T> {
     const HINT: VH = VH::Array(&T::HINT);
+}
+
+impl<K: HasValueHint, V: HasValueHint> HasValueHint for std::collections::BTreeMap<K, V> {
+    const HINT: VH = VH::Map(&K::HINT, &V::HINT);
 }
 
 impl<T0: HasValueHint> HasValueHint for (T0,) {

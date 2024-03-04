@@ -17,6 +17,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock, SignedTransaction},
     primitives::{Amount, Id},
 };
+use rpc::description::ValueHint as VH;
 use serialization::{Compact, Encode};
 
 use crate::pool::fee::Fee;
@@ -34,8 +35,8 @@ pub enum PackingStrategy {
 }
 
 impl rpc::description::HasValueHint for PackingStrategy {
-    const HINT: rpc::description::ValueHint =
-        rpc::description::ValueHint::Prim("\"FillSpaceFromMempool\" OR \"LeaveEmptySpace\"");
+    const HINT: VH =
+        VH::Choice(&[&VH::StrLit("FillSpaceFromMempool"), &VH::StrLit("LeaveEmptySpace")]);
 }
 
 pub trait TransactionAccumulator: Send {

@@ -113,6 +113,8 @@ impl ValueHint {
         match self {
             ValueHint::Prim(h) => f.write_str(h)?,
 
+            ValueHint::StrLit(s) => write!(f, "{s:?}")?,
+
             ValueHint::Choice(hints) => {
                 if hints.is_empty() {
                     f.write_str("impossible")?;
@@ -140,6 +142,14 @@ impl ValueHint {
                     write!(f, ",\n{:indent$}", "")?;
                 }
                 f.write_str("}")?;
+            }
+
+            ValueHint::Map(key, val) => {
+                f.write_str("{ ")?;
+                key.fmt_indent(indent, f)?;
+                f.write_str(": ")?;
+                val.fmt_indent(indent, f)?;
+                f.write_str(", .. }")?;
             }
 
             ValueHint::Tuple(hints) => {

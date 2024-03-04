@@ -26,11 +26,18 @@ pub use common::primitives::DecimalAmount;
 use common::primitives::H256;
 pub use seed_phrase::SeedWithPassPhrase;
 pub use transaction::{
-    InsepectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
+    InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WalletInfo {
     pub wallet_id: H256,
     pub account_names: Vec<Option<String>>,
+}
+
+impl rpc_description::HasValueHint for WalletInfo {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
+        ("wallet_id", &rpc_description::ValueHint::HEX_STRING),
+        ("account_names", &<Vec<Option<String>>>::HINT),
+    ]);
 }

@@ -16,6 +16,7 @@ logging = { path = "../../logging" }
 mempool-types = { path = "../../mempool/types" }
 mempool = { path = "../../mempool" }
 node-comm = { path = "../wallet-node-client" }
+rpc-description = { path = "../../rpc/description" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }

@@ -38,7 +38,7 @@ use std::{
     time::Duration,
 };
 use types::{
-    Balances, InsepectTransaction, SeedWithPassPhrase, SignatureStats, TransactionToInspect,
+    Balances, InspectTransaction, SeedWithPassPhrase, SignatureStats, TransactionToInspect,
     ValidatedSignatures, WalletInfo,
 };
 
@@ -639,7 +639,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn inspect_transaction(
         &self,
         tx: TransactionToInspect,
-    ) -> Result<InsepectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<T>> {
         let result = match tx {
             TransactionToInspect::Tx(tx) => self.inspect_tx(tx).await?,
             TransactionToInspect::Partial(ptx) => self.inspect_partial_tx(ptx).await?,
@@ -652,7 +652,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     async fn inspect_signed_tx(
         &self,
         stx: SignedTransaction,
-    ) -> Result<InsepectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<T>> {
         let (fees, num_valid_signatures) =
             match self.calculate_fees_and_valid_signatures(&stx).await {
                 Ok((fees, num_valid_signatures)) => (Some(fees), Some(num_valid_signatures)),
@@ -669,7 +669,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
         });
 
-        Ok(InsepectTransaction {
+        Ok(InspectTransaction {
             tx: stx.take_transaction().into(),
             fees,
             stats: SignatureStats {
@@ -726,7 +726,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     async fn inspect_partial_tx(
         &self,
         ptx: PartiallySignedTransaction,
-    ) -> Result<InsepectTransaction, ControllerError<T>> {
+    ) -> Result<InspectTransaction, ControllerError<T>> {
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
         let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
@@ -753,7 +753,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let num_invalid_signatures = signatures_status.iter().copied().filter(|x| !*x).count();
         let num_inputs = ptx.count_inputs();
         let total_signatures = num_valid_signatures + num_invalid_signatures;
-        Ok(InsepectTransaction {
+        Ok(InspectTransaction {
             tx: ptx.take_tx().into(),
             fees: Some(fees),
             stats: SignatureStats {
@@ -767,7 +767,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         })
     }
 
-    async fn inspect_tx(&self, tx: Transaction) -> Result<InsepectTransaction, ControllerError<T>> {
+    async fn inspect_tx(&self, tx: Transaction) -> Result<InspectTransaction, ControllerError<T>> {
         let inputs: Vec<_> = tx
             .inputs()
             .iter()
@@ -782,7 +782,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             Err(_) => None,
         };
         let num_inputs = tx.inputs().len();
-        Ok(InsepectTransaction {
+        Ok(InspectTransaction {
             tx: tx.into(),
             fees,
             stats: SignatureStats {

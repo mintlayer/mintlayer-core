@@ -31,7 +31,7 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{Balances, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
 };
 use wallet_rpc_lib::{
@@ -307,7 +307,7 @@ impl WalletInterface for ClientWalletRpc {
     async fn transaction_inspect(
         &self,
         transaction: String,
-    ) -> Result<InsepectTransaction, Self::Error> {
+    ) -> Result<InspectTransaction, Self::Error> {
         WalletRpcClient::transaction_inspect(&self.http_client, transaction)
             .await
             .map_err(WalletRpcError::ResponseError)

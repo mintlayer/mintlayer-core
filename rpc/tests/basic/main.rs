@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, path::PathBuf};
+use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
 use crypto::random::{
     distributions::{Alphanumeric, DistString},
@@ -48,7 +48,7 @@ pub trait SubsystemRpc {
         &self,
         first: Option<bool>,
         second: (String, u64, Option<usize>),
-        third: std::time::Duration,
+        third: BTreeMap<String, std::time::Duration>,
     ) -> RpcResult<Vec<String>>;
 }
 
@@ -89,7 +89,7 @@ impl SubsystemRpcServer for SubsystemRpcImpl {
         &self,
         _first: Option<bool>,
         _second: (String, u64, Option<usize>),
-        _third: std::time::Duration,
+        _third: BTreeMap<String, std::time::Duration>,
     ) -> RpcResult<Vec<String>> {
         Ok(Vec::new())
     }

@@ -15,6 +15,7 @@ logging = { path = "../logging" }
 pos-accounting = { path = "../pos-accounting" }
 serialization = { path = "../serialization" }
 mempool = { path = "../mempool" }
+rpc-description = { path = "../rpc/description" }
 storage = { path = "../storage", features = ["inmemory"] }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 chainstate = { path = "../chainstate" }

@@ -39,8 +39,16 @@ pub struct SignatureStats {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct InsepectTransaction {
+pub struct InspectTransaction {
     pub tx: HexEncoded<Transaction>,
     pub fees: Option<Balances>,
     pub stats: SignatureStats,
+}
+
+impl rpc_description::HasValueHint for InspectTransaction {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
+        ("tx", &<HexEncoded<Transaction>>::HINT),
+        ("fees", &<Option<Balances>>::HINT),
+        ("stats", &rpc_description::ValueHint::GENERIC_OBJECT),
+    ]);
 }

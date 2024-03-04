@@ -510,7 +510,7 @@ Parameters:
 {
     "tx": hex string,
     "options": {
-        "trust_policy": "trusted" OR "untrusted" (default),
+        "trust_policy": "Trusted" OR "Untrusted",
     },
 }
 ```
@@ -837,7 +837,7 @@ Parameters:
 {
     "tx": hex string,
     "options": {
-        "trust_policy": "trusted" OR "untrusted" (default),
+        "trust_policy": "Trusted" OR "Untrusted",
     },
 }
 ```

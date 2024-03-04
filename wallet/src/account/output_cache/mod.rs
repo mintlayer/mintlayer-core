@@ -37,6 +37,7 @@ use common::{
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use pos_accounting::make_delegation_id;
+use rpc_description::ValueHint as VH;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
@@ -65,6 +66,14 @@ impl TxInfo {
             timestamp,
         }
     }
+}
+
+impl rpc_description::HasValueHint for TxInfo {
+    const HINT: VH = VH::Object(&[
+        ("id", &<Id<Transaction>>::HINT),
+        ("height", &BlockHeight::HINT),
+        ("timestamp", &BlockTimestamp::HINT),
+    ]);
 }
 
 pub struct DelegationData {

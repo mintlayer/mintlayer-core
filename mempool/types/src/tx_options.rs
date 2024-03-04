@@ -95,6 +95,6 @@ pub struct TxOptionsOverrides {
 impl rpc_description::HasValueHint for TxOptionsOverrides {
     const HINT: VH = VH::Object(&[(
         "trust_policy",
-        &VH::Prim("\"trusted\" OR \"untrusted\" (default)"),
+        &VH::Choice(&[&VH::StrLit("Trusted"), &VH::StrLit("Untrusted")]),
     )]);
 }
