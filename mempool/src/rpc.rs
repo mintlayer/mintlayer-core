@@ -53,23 +53,27 @@ trait MempoolRpc {
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
     /// Returns True if a transaction defined by the given id is found in the mempool's orphans.
-    /// An orphan transaction is a transaction with one or more inputs
+    ///
+    /// An orphan transaction is a transaction with one or more inputs, whose utxos cannot be found.
     #[method(name = "contains_orphan_tx")]
     async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
     /// Returns the transaction defined by the provided id, given that it is in the pool.
+    ///
     /// The returned transaction is returned in an object that contains more information about the transaction.
     /// Returns `None` (null) if the transaction is not found.
     #[method(name = "get_transaction")]
     async fn get_transaction(&self, tx_id: Id<Transaction>) -> RpcResult<Option<GetTxResponse>>;
 
     /// Get all mempool transactions in a Vec/List, with hex-encoding.
+    ///
     /// Notice that this call may be expensive. Use it with caution.
     /// This function is mostly used for testing purposes.
     #[method(name = "transactions")]
     async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
     /// Submit a transaction to the mempool.
+    ///
     /// Note that submitting a transaction to the mempool does not guarantee broadcasting it.
     /// Use the p2p rpc interface for that.
     #[method(name = "submit_transaction")]
@@ -80,6 +84,7 @@ trait MempoolRpc {
     ) -> RpcResult<()>;
 
     /// Return the id of the best block, as seen by the mempool.
+    ///
     /// Typically this agrees with chainstate, but there could be some delay in responding to chainstate.
     #[method(name = "local_best_block_id")]
     async fn local_best_block_id(&self) -> RpcResult<Id<GenBlock>>;
@@ -93,6 +98,7 @@ trait MempoolRpc {
     async fn get_size_limit(&self) -> RpcResult<usize>;
 
     /// Set the maximum allowed size of all transactions in the mempool.
+    ///
     /// The parameter is a string, can be written with proper units, such as "100 MB", or "500 KB"
     #[method(name = "set_size_limit")]
     async fn set_size_limit(&self, max_size: String) -> RpcResult<()>;

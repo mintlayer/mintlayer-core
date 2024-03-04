@@ -61,6 +61,7 @@ trait BlockProductionRpc {
     async fn e2e_public_key(&self) -> RpcResult<HexEncoded<ephemeral_e2e::EndToEndPublicKey>>;
 
     /// Same as `generate_block`, but with end-to-end encryption.
+    ///
     /// The end-to-end encryption helps in protecting the signing key, so that it is much harder
     /// for an eavesdropper to get it with pure http/websocket connection.
     /// The e2e_public_key is the pubic key for end-to-end encryption of the client.

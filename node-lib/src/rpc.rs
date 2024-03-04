@@ -34,6 +34,7 @@ pub trait NodeRpc {
     fn version(&self) -> RpcResult<String>;
 
     /// Set mock time for the node.
+    ///
     /// The value 0 is equivalent to "Nothing", making the node use real, wall-clock time.
     /// WARNING: This function is strictly used for testing purposes. Using it will obstruct normal node functionality.
     #[method(name = "set_mock_time")]

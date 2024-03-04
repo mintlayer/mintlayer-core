@@ -45,11 +45,13 @@ trait ChainstateRpc {
     async fn best_block_id(&self) -> RpcResult<Id<GenBlock>>;
 
     /// Get block ID at a given height in the mainchain.
+    ///
     /// Returns `None` (null) if the block at the given height does not exist.
     #[method(name = "block_id_at_height")]
     async fn block_id_at_height(&self, height: BlockHeight) -> RpcResult<Option<Id<GenBlock>>>;
 
     /// Returns a hex-encoded serialized block with the given id.
+    ///
     /// Returns `None` (null) if a block with the given id is not found.
     /// Note that genesis cannot be retrieved with this function.
     #[method(name = "get_block")]
@@ -60,6 +62,7 @@ trait ChainstateRpc {
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>>;
 
     /// Returns hex-encoded serialized blocks from the mainchain starting from a given block height.
+    ///
     /// The number of returned blocks can be capped using the `max_count` parameter.
     #[method(name = "get_mainchain_blocks")]
     async fn get_mainchain_blocks(
@@ -73,12 +76,14 @@ trait ChainstateRpc {
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
 
     /// Submit a block to be included in the blockchain.
+    ///
     /// Note that the submission does not circumvent any validation process.
     /// This function is used by the wallet to submit valid blocks after successful staking.
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
 
     /// Invalidate the specified block and its descendants.
+    ///
     /// Use this function with caution, as invalidating a block that the network approves
     /// of can lead to staying behind.
     #[method(name = "invalidate_block")]
@@ -109,12 +114,14 @@ trait ChainstateRpc {
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>>;
 
     /// Returns the balance of the pool associated with the given pool id.
+    ///
     /// The balance contains both delegated balance and staker balance.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "stake_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
     /// Returns the balance of the staker (pool owner) of the pool associated with the given pool address.
+    ///
     /// This excludes the delegation balances.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "staker_balance")]
@@ -150,6 +157,7 @@ trait ChainstateRpc {
     async fn info(&self) -> RpcResult<ChainInfo>;
 
     /// Subscribe to chainstate events, such as new tip.
+    ///
     /// After a successful subscription, the node will message the subscriber with a message on every event.
     /// NOTE: This only works with websocket.
     #[subscription(name = "subscribe_events", item = RpcEvent)]

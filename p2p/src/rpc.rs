@@ -28,6 +28,7 @@ use rpc::RpcResult;
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
     /// Attempt to connect to a remote node (just once).
+    ///
     /// For persistent connections see `add_reserved_node` should be used.
     /// Keep in mind that `add_reserved_node` works completely differently.
     #[method(name = "connect")]
@@ -50,6 +51,7 @@ trait P2pRpc {
     async fn unban(&self, address: BannableAddress) -> RpcResult<()>;
 
     /// List peers that have been discouraged.
+    ///
     /// Discouraged peers are peers that have misbehaved in the network.
     #[method(name = "list_discouraged")]
     async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
@@ -71,12 +73,14 @@ trait P2pRpc {
     async fn get_reserved_nodes(&self) -> RpcResult<Vec<SocketAddress>>;
 
     /// Add the address to the reserved nodes list.
+    ///
     /// The node will try to keep connections open to all reserved peers.
     /// A reserved peer is a peer that you trust and you want your node to remain connected to, no matter what they do.
     #[method(name = "add_reserved_node")]
     async fn add_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
     /// Remove the address from the reserved nodes list.
+    ///
     /// Existing connection to the peer is not closed.
     #[method(name = "remove_reserved_node")]
     async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
