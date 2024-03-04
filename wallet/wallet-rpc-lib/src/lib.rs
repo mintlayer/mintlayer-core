@@ -73,9 +73,13 @@ pub async fn start_services(
         wallet_config.node_rpc_address.unwrap_or_else(default_addr)
     };
 
-    let node_rpc = wallet_controller::make_rpc_client(rpc_address, wallet_config.node_credentials)
-        .await
-        .map_err(|err| StartupError::WalletService(service::InitError::NodeRpc(err)))?;
+    let node_rpc = wallet_controller::make_rpc_client(
+        wallet_config.chain_config.clone(),
+        rpc_address,
+        wallet_config.node_credentials,
+    )
+    .await
+    .map_err(|err| StartupError::WalletService(service::InitError::NodeRpc(err)))?;
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
         wallet_config.wallet_file,

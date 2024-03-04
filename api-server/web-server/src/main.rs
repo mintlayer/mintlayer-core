@@ -88,7 +88,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
 
         let rpc_address = args.node_rpc_address.unwrap_or_else(default_rpc_bind_address);
 
-        make_rpc_client(rpc_address.to_string(), rpc_auth)
+        make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth)
             .await
             .map_err(ApiServerWebServerInitError::RpcError)?
     };

@@ -18,6 +18,7 @@ pub mod cold_wallet_client;
 
 use std::sync::Arc;
 
+use common::address::AddressError;
 use common::chain::ChainConfig;
 use rpc::new_http_client;
 use rpc::ClientError;
@@ -36,6 +37,8 @@ pub enum NodeRpcError {
     ClientCreationError(ClientError),
     #[error("Response error: {0}")]
     ResponseError(ClientError),
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
 }
 
 #[derive(Clone, Debug)]
@@ -52,10 +55,12 @@ impl ColdWalletClient {
 #[derive(Clone, Debug)]
 pub struct NodeRpcClient {
     http_client: RpcHttpClient,
+    chain_config: Arc<ChainConfig>,
 }
 
 impl NodeRpcClient {
     pub async fn new(
+        chain_config: Arc<ChainConfig>,
         remote_socket_address: String,
         rpc_auth: RpcAuthData,
     ) -> Result<Self, NodeRpcError> {
@@ -64,7 +69,10 @@ impl NodeRpcClient {
         let http_client =
             new_http_client(host, rpc_auth).map_err(NodeRpcError::ClientCreationError)?;
 
-        let client = Self { http_client };
+        let client = Self {
+            http_client,
+            chain_config,
+        };
 
         client
             .get_best_block_id()
