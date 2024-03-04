@@ -119,14 +119,14 @@ trait ChainstateRpc {
     /// The balance contains both delegated balance and staker balance.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "stake_pool_balance")]
-    async fn stake_pool_balance(&self, pool_id: String) -> RpcResult<Option<Amount>>;
+    async fn stake_pool_balance(&self, pool_address: String) -> RpcResult<Option<Amount>>;
 
     /// Returns the balance of the staker (pool owner) of the pool associated with the given pool address.
     ///
     /// This excludes the delegation balances.
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "staker_balance")]
-    async fn staker_balance(&self, pool_id: String) -> RpcResult<Option<Amount>>;
+    async fn staker_balance(&self, pool_address: String) -> RpcResult<Option<Amount>>;
 
     /// Given a pool defined by a pool address, and a delegation address,
     /// returns the amount of coins owned by that delegation in that pool.
