@@ -139,6 +139,7 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
     new_tip: Id<Block>,
     work_queue: &mut WorkQueue,
 ) -> Result<(), ReorgError> {
+    log::debug!("New tip {new_tip}");
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
     let (is_ibd, actual_tip) = mempool.blocking_chainstate_handle().call(|cs| {
@@ -203,6 +204,8 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
 
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
+        log::debug!("trying to re-insert dissconected tx {tx_id} after new tip/reorg");
+
         let origin = LocalTxOrigin::PastBlock.into();
         if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
@@ -212,6 +215,7 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     // Re-populate the verifier with transactions from mempool
     for tx in old_transactions {
         let tx_id = *tx.tx_id();
+        log::debug!("trying to re-insert old mempool tx {tx_id} after new tip/reorg");
         if let Err(e) = mempool.add_transaction_entry(tx) {
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }

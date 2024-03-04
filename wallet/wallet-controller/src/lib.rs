@@ -1005,6 +1005,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 }
                 Ok(txs) => {
                     for tx in txs {
+                        log::debug!(
+                            "Rebroadcasting {} transaction to the mempool",
+                            tx.transaction().get_id()
+                        );
                         let tx_id = tx.transaction().get_id();
                         let res = self.rpc_client.submit_transaction(tx, Default::default()).await;
                         if let Err(e) = res {

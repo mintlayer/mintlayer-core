@@ -19,7 +19,7 @@ use std::num::NonZeroUsize;
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
-    primitives::Id,
+    primitives::{Id, Idable},
 };
 use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
 use serialization::hex_encoded::HexEncoded;
@@ -123,10 +123,12 @@ impl MempoolRpcServer for super::MempoolHandle {
         tx: HexEncoded<SignedTransaction>,
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<()> {
+        let tx = tx.take();
+        logging::log::debug!("New tx is being submited: {}", tx.transaction().get_id());
         let origin = LocalTxOrigin::Mempool;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
         let res = self
-            .call_mut(move |m| m.add_transaction_local(tx.take(), origin, options))
+            .call_mut(move |m| m.add_transaction_local(tx, origin, options))
             .await
             .log_err();
         rpc::handle_result(res)
