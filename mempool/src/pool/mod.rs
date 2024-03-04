@@ -794,7 +794,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
-    pub fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
+    pub fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
         if max_size > self.max_size {
             self.drop_rolling_fee();
         }

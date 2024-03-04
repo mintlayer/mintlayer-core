@@ -25,11 +25,11 @@ use subsystem::ShutdownTrigger;
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "node")]
 pub trait NodeRpc {
-    /// Order the node to shutdown
+    /// Order the node to shutdown.
     #[method(name = "shutdown")]
     fn shutdown(&self) -> RpcResult<()>;
 
-    /// Get node software version
+    /// Get node software version.
     #[method(name = "version")]
     fn version(&self) -> RpcResult<String>;
 

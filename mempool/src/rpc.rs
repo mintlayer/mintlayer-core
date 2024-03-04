@@ -15,7 +15,7 @@
 
 //! Mempool subsystem RPC handler
 
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, str::FromStr};
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -48,19 +48,30 @@ impl rpc::description::HasValueHint for GetTxResponse {
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "mempool")]
 trait MempoolRpc {
+    /// Returns True if a transaction defined by the given id is found in the mempool.
     #[method(name = "contains_tx")]
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
+    /// Returns True if a transaction defined by the given id is found in the mempool's orphans.
+    /// An orphan transaction is a transaction with one or more inputs
     #[method(name = "contains_orphan_tx")]
     async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
+    /// Returns the transaction defined by the provided id, given that it is in the pool.
+    /// The returned transaction is returned in an object that contains more information about the transaction.
+    /// Returns `None` (null) if the transaction is not found.
     #[method(name = "get_transaction")]
     async fn get_transaction(&self, tx_id: Id<Transaction>) -> RpcResult<Option<GetTxResponse>>;
 
-    /// Get all mempool transaction IDs
+    /// Get all mempool transactions in a Vec/List, with hex-encoding.
+    /// Notice that this call may be expensive. Use it with caution.
+    /// This function is mostly used for testing purposes.
     #[method(name = "transactions")]
     async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
+    /// Submit a transaction to the mempool.
+    /// Note that submitting a transaction to the mempool does not guarantee broadcasting it.
+    /// Use the p2p rpc interface for that.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(
         &self,
@@ -68,23 +79,30 @@ trait MempoolRpc {
         options: TxOptionsOverrides,
     ) -> RpcResult<()>;
 
+    /// Return the id of the best block, as seen by the mempool.
+    /// Typically this agrees with chainstate, but there could be some delay in responding to chainstate.
     #[method(name = "local_best_block_id")]
     async fn local_best_block_id(&self) -> RpcResult<Id<GenBlock>>;
 
+    /// The total estimated used memory by the mempool.
     #[method(name = "memory_usage")]
     async fn memory_usage(&self) -> RpcResult<usize>;
 
-    #[method(name = "get_max_size")]
-    async fn get_max_size(&self) -> RpcResult<usize>;
+    /// Get the maximum allowed size of all transactions in the mempool.
+    #[method(name = "get_size_limit")]
+    async fn get_size_limit(&self) -> RpcResult<usize>;
 
-    // TODO: We should accept more convenient ways of setting the size in addition to plain byte
-    // count, e.g. "200MB" instead of 200000000
-    #[method(name = "set_max_size")]
-    async fn set_max_size(&self, max_size: usize) -> RpcResult<()>;
+    /// Set the maximum allowed size of all transactions in the mempool.
+    /// The parameter is a string, can be written with proper units, such as "100 MB", or "500 KB"
+    #[method(name = "set_size_limit")]
+    async fn set_size_limit(&self, max_size: String) -> RpcResult<()>;
 
+    /// Get the current fee rate of the mempool, that puts the transaction in the top X MBs of the mempool.
+    /// X, in this description, is provided as a parameter.
     #[method(name = "get_fee_rate")]
     async fn get_fee_rate(&self, in_top_x_mb: usize) -> RpcResult<FeeRate>;
 
+    /// Get the curve data points that represent the fee rate as a function of transaction size.
     #[method(name = "get_fee_rate_points")]
     async fn get_fee_rate_points(&self) -> RpcResult<Vec<(usize, FeeRate)>>;
 }
@@ -150,13 +168,14 @@ impl MempoolRpcServer for super::MempoolHandle {
         rpc::handle_result(self.call(|this| this.memory_usage()).await)
     }
 
-    async fn get_max_size(&self) -> rpc::RpcResult<usize> {
-        rpc::handle_result(self.call(|this| this.get_max_size().as_bytes()).await)
+    async fn get_size_limit(&self) -> rpc::RpcResult<usize> {
+        rpc::handle_result(self.call(|this| this.get_size_limit().as_bytes()).await)
     }
 
-    async fn set_max_size(&self, max_size: usize) -> rpc::RpcResult<()> {
-        let max_size = MempoolMaxSize::from_bytes(max_size);
-        rpc::handle_result(self.call_mut(move |this| this.set_max_size(max_size)).await)
+    async fn set_size_limit(&self, max_size: String) -> rpc::RpcResult<()> {
+        let bytes: byte_unit::Byte = rpc::handle_result(byte_unit::Byte::from_str(&max_size))?;
+        let max_size = MempoolMaxSize::from_bytes(bytes.as_u64() as usize);
+        rpc::handle_result(self.call_mut(move |this| this.set_size_limit(max_size)).await)
     }
 
     async fn get_fee_rate(&self, in_top_x_mb: usize) -> rpc::RpcResult<FeeRate> {
