@@ -105,6 +105,7 @@ where
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote node
+    /// `reason` - reason for the disconnection
     fn disconnect(
         &mut self,
         peer_id: PeerId,

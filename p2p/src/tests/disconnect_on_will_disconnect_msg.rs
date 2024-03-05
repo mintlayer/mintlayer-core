@@ -94,10 +94,10 @@ where
         .unwrap();
 
     // The peer responds with a header list and sends its own header list request.
-    // Note that we don't check results of the send calls, because the connection may or may not
-    // be dropped by now by the node.
+    // Note that we don't check results of subsequent send calls, because the connection may be
+    // dropped by the node at any moment.
     let _ = msg_stream.send(Message::HeaderList(HeaderList::new(vec![]))).await;
-    // Note: if we send HeaderListRequest right away, there's the chance that the message will be
+    // Note: if we send HeaderListRequest right away, there's a chance that the message will be
     // handled by the sync manager before the disconnection command reaches backend.
     std::thread::sleep(Duration::from_secs(1));
     let _ = msg_stream

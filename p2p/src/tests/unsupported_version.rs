@@ -86,7 +86,8 @@ where
     // The connection should be closed.
     msg_stream.recv().await.unwrap_err();
 
-    // Note: no peer discouragement here, because peers are not banned during "manual outbound" connections.
+    // Note: no peer discouragement here, because peers are not discouraged during
+    // "manual outbound" connections.
     let test_node_remnants = test_node.join().await;
     assert_eq!(
         test_node_remnants.peer_mgr.peerdb().list_discouraged().count(),

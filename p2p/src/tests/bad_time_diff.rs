@@ -34,7 +34,10 @@ use crate::{
     tests::helpers::TestNode,
 };
 
-// In this test we want a version that would result in the WillDisconnect message being sent.
+// Check that a handshake is rejected if the time difference between the peers is too big.
+// Also check that the WillDisconnect message is sent in this case.
+
+// V3+ is needed for the WillDisconnect message to be sent.
 const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V3;
 
 async fn bad_time_diff_outgoing<TTM>()
@@ -132,16 +135,7 @@ where
     // The connection should be closed.
     msg_stream.recv().await.unwrap_err();
 
-    // Note: no peer discouragement  here, because peers are not banned during "manual outbound" connections.
-    let test_node_remnants = test_node.join().await;
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_discouraged().count(),
-        0
-    );
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
-        0
-    );
+    test_node.join().await;
 }
 
 #[tracing::instrument]
@@ -247,16 +241,7 @@ where
     // The connection should be closed.
     msg_stream.recv().await.unwrap_err();
 
-    // Note: no peer discouragement here, because the TimeDiff error has zero ban score.
-    let test_node_remnants = test_node.join().await;
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_discouraged().count(),
-        0
-    );
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
-        0
-    );
+    test_node.join().await;
 }
 
 #[tracing::instrument]

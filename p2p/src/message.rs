@@ -170,7 +170,7 @@ pub struct PingResponse {
     pub nonce: u64,
 }
 
-// Note: 'reason' is a string here, because we want ot be able to add more reasons without upping
+// Note: 'reason' is a string here, because we want to be able to add more reasons without upping
 // the protocol version.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct WillDisconnectMessage {
