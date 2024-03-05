@@ -677,6 +677,28 @@ pub fn encode_signed_transaction(
     Ok(tx.encode())
 }
 
+/// Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
+/// The effective balance is how the influence of a pool is calculated due to its balance.
+#[wasm_bindgen]
+pub fn effective_pool_balance(
+    network: Network,
+    pledge_amount: &str,
+    pool_balance: &str,
+) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let pledge_amount = parse_amount(pledge_amount)?;
+    let pool_balance = parse_amount(pool_balance)?;
+    let final_supply = chain_config.final_supply().ok_or(Error::FinalSupplyError)?;
+    let final_supply = final_supply.to_amount_atoms();
+
+    let effective_balance =
+        consensus::calculate_effective_pool_balance(pledge_amount, pool_balance, final_supply)
+            .map_err(|e| Error::EffectiveBalanceCalculationFailed(e.to_string()))?;
+
+    Ok(effective_balance.into_fixedpoint_str(chain_config.coin_decimals()))
+}
+
 #[cfg(test)]
 mod tests {
     use crypto::random::Rng;

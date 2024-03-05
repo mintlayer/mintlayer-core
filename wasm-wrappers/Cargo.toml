@@ -11,6 +11,7 @@ rust-version.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+consensus = { path = '../consensus' }
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 common = { path = "../common" }

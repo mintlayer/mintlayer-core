@@ -29,6 +29,7 @@ import {
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
   staking_pool_spend_maturity_block_count,
+  effective_pool_balance,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -618,5 +619,37 @@ export async function run_test() {
     console.log(
       `estimated size ${estimated_size} vs real ${expected_signed_tx.length}`
     );
+  }
+
+  {
+    const eff_bal = effective_pool_balance(Network.Mainnet, "0", "0");
+    if (eff_bal != "0") {
+      throw new Error(`Effective balance test failed ${eff_bal}`);
+    }
+  }
+
+  {
+    const eff_bal = effective_pool_balance(Network.Mainnet, "4000000000000000", "20000000000000000");
+    if (eff_bal != "186791.47907594054") {
+      throw new Error(`Effective balance test failed ${eff_bal}`);
+    }
+  }
+
+  {
+    // capped
+    const eff_bal = effective_pool_balance(Network.Mainnet, "59999080000000000", "59999080000000000");
+    if (eff_bal != "599990.8") {
+      throw new Error(`Effective balance test failed ${eff_bal}`);
+    }
+  }
+
+  {
+    // over capped
+    const over_capped = Math.floor(Math.random() * 4);
+    const capped = 6 + over_capped;
+    const eff_bal = effective_pool_balance(Network.Mainnet, `${capped}0000000000000000`, `${capped}0000000000000000`);
+    if (eff_bal != "599990.8") {
+      throw new Error(`Effective balance test failed ${eff_bal}`);
+    }
   }
 }

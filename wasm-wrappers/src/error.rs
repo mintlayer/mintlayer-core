@@ -51,6 +51,10 @@ pub enum Error {
     InvalidTransaction,
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
+    #[error("Final supply calculation error")]
+    FinalSupplyError,
+    #[error("Calculating effective balance failed: {0}")]
+    EffectiveBalanceCalculationFailed(String),
 }
 
 // This is required to make an error readable in JavaScript
