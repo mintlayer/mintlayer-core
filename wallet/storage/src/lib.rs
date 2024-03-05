@@ -29,8 +29,9 @@ use std::collections::BTreeMap;
 
 use wallet_types::{
     account_info::AccountVrfKeys, chain_info::ChainInfo, keys::RootKeys,
-    seed_phrase::SerializableSeedPhrase, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    seed_phrase::SerializableSeedPhrase, wallet_type::WalletType, AccountDerivationPathId,
+    AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
+    KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -63,6 +64,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait WalletStorageReadLocked {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
+    fn get_wallet_type(&self) -> Result<WalletType>;
     fn get_chain_info(&self) -> Result<ChainInfo>;
     fn get_transaction(&self, id: &AccountWalletTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(
@@ -114,6 +116,7 @@ pub trait WalletStorageEncryptionRead {
 pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_wallet_type(&mut self, wallet_type: WalletType) -> Result<()>;
     fn set_chain_info(&mut self, chain_info: &ChainInfo) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;

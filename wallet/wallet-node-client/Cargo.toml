@@ -21,6 +21,7 @@ rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 utils-networking = { path = "../../utils/networking" }
+wallet-types = { path = "../types" }
 
 async-trait.workspace = true
 base64.workspace = true

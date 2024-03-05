@@ -227,7 +227,14 @@ fn verify_wallet_balance(
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
     let db_copy = wallet.db.clone();
-    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy, None, |_| Ok(())).unwrap();
+    let wallet = Wallet::load_wallet(
+        Arc::clone(chain_config),
+        db_copy,
+        None,
+        |_| Ok(()),
+        WalletType::Hot,
+    )
+    .unwrap();
     let coin_balance = get_coin_balance(&wallet);
     // Check that the loaded wallet has the same balance
     assert_eq!(coin_balance, expected_balance);
@@ -251,8 +258,8 @@ fn create_wallet_with_mnemonic(
         mnemonic,
         None,
         StoreSeedPhrase::DoNotStore,
-        BlockHeight::new(0),
-        genesis_block_id,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
     )
     .unwrap()
 }
@@ -309,7 +316,13 @@ fn wallet_creation_in_memory() {
     let empty_db = create_wallet_in_memory().unwrap();
 
     // fail to load an empty wallet
-    match Wallet::load_wallet(Arc::clone(&chain_config), empty_db, None, |_| Ok(())) {
+    match Wallet::load_wallet(
+        Arc::clone(&chain_config),
+        empty_db,
+        None,
+        |_| Ok(()),
+        WalletType::Hot,
+    ) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
     }
@@ -319,7 +332,14 @@ fn wallet_creation_in_memory() {
     let initialized_db = wallet.db;
 
     // successfully load a wallet from initialized db
-    let _wallet = Wallet::load_wallet(chain_config, initialized_db, None, |_| Ok(())).unwrap();
+    let _wallet = Wallet::load_wallet(
+        chain_config,
+        initialized_db,
+        None,
+        |_| Ok(()),
+        WalletType::Hot,
+    )
+    .unwrap();
 }
 
 #[rstest]
@@ -353,8 +373,8 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         MNEMONIC,
         None,
         StoreSeedPhrase::DoNotStore,
-        BlockHeight::new(0),
-        genesis_block_id,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
     )
     .unwrap();
     verify_wallet_balance(&chain_config, &wallet, genesis_amount);
@@ -398,8 +418,14 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
 
     let new_db = Store::new_from_dump(DefaultBackend::new_in_memory(), raw_db).unwrap();
 
-    let wallet =
-        Wallet::load_wallet(Arc::clone(&chain_config), new_db, password, |_| Ok(())).unwrap();
+    let wallet = Wallet::load_wallet(
+        Arc::clone(&chain_config),
+        new_db,
+        password,
+        |_| Ok(()),
+        WalletType::Hot,
+    )
+    .unwrap();
 
     // Migration has been done and new version is v2
     assert_eq!(
@@ -444,8 +470,8 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         MNEMONIC,
         wallet_passphrase.as_ref().map(|p| p.as_ref()),
         StoreSeedPhrase::Store,
-        BlockHeight::new(0),
-        genesis_block_id,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
     )
     .unwrap();
 
@@ -533,8 +559,8 @@ fn wallet_seed_phrase_check_address() {
         MNEMONIC,
         wallet_passphrase.as_ref().map(|p| p.as_ref()),
         StoreSeedPhrase::Store,
-        BlockHeight::new(0),
-        genesis_block_id,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
     )
     .unwrap();
 
@@ -558,8 +584,8 @@ fn wallet_seed_phrase_check_address() {
         MNEMONIC,
         wallet_passphrase.as_ref().map(|p| p.as_ref()),
         StoreSeedPhrase::Store,
-        BlockHeight::new(0),
-        genesis_block_id,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
     )
     .unwrap();
 
@@ -876,7 +902,14 @@ fn test_wallet_accounts(
     assert_eq!(accounts, expected_accounts);
 
     let db_copy = wallet.db.clone();
-    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy, None, |_| Ok(())).unwrap();
+    let wallet = Wallet::load_wallet(
+        Arc::clone(chain_config),
+        db_copy,
+        None,
+        |_| Ok(()),
+        WalletType::Hot,
+    )
+    .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
 }

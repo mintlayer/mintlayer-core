@@ -55,6 +55,7 @@ def get_transfer_coins_and_address(output):
 class WalletColdSend(BitcoinTestFramework):
 
     def set_test_params(self):
+        self.wallet_controller = WalletCliController
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
@@ -97,7 +98,7 @@ class WalletColdSend(BitcoinTestFramework):
         node = self.nodes[0]
         cold_wallet_pk = b""
 
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 
@@ -119,7 +120,7 @@ class WalletColdSend(BitcoinTestFramework):
         total_cold_wallet_coins = 50_000
         to_send = randint(1, 100)
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new hot wallet
             await wallet.create_wallet("hot_wallet")
 
@@ -163,7 +164,15 @@ class WalletColdSend(BitcoinTestFramework):
 
         signed_tx = ""
 
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        # try to open the cold wallet file in hot mode
+        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            assert_in("A Hot wallet is trying to open a Cold wallet file", await wallet.open_wallet("cold_wallet"))
+
+        # try to open the hot wallet file in cold mode
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+            assert_in("A Cold wallet is trying to open a Hot wallet file", await wallet.open_wallet("hot_wallet"))
+
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # open cold wallet
             await wallet.open_wallet("cold_wallet")
 
@@ -171,7 +180,7 @@ class WalletColdSend(BitcoinTestFramework):
             signed_tx_output = await wallet.sign_raw_transaction(send_req)
             signed_tx = signed_tx_output.split('\n')[2]
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # open hot wallet
             await wallet.open_wallet("hot_wallet")
 
