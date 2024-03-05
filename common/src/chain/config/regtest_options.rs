@@ -21,7 +21,7 @@ use crate::{
     chain::{
         config::{
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
-            Builder, ChainType, EmissionScheduleTabular,
+            Builder, ChainType, EmissionScheduleTabular, MagicBytes,
         },
         pos::{DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_BLOCK_COUNT_V0},
         pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
@@ -135,13 +135,13 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
         };
     }
 
-    let magic_bytes_from_string = |magic_string: String| -> Result<[u8; 4]> {
+    let magic_bytes_from_string = |magic_string: String| -> Result<MagicBytes> {
         ensure!(magic_string.len() == 4, "Invalid size of magic_bytes");
         let mut result: [u8; 4] = [0; 4];
         for (i, byte) in magic_string.bytes().enumerate() {
             result[i] = byte;
         }
-        Ok(result)
+        Ok(MagicBytes::new(result))
     };
     update_builder!(magic_bytes, magic_bytes_from_string, map_err);
     update_builder!(max_future_block_time_offset, Duration::from_secs);

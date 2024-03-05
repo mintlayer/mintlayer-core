@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
-    chain::{Block, Transaction},
+    chain::{config::MagicBytes, Block, Transaction},
     primitives::{time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
@@ -125,11 +125,11 @@ pub enum ConnectionValidationError {
         accepted_peer_time: std::ops::RangeInclusive<Time>,
     },
     #[error(
-        "Peer is in different network. Our network {our_network:?}, their network {their_network:?}"
+        "Peer is in different network. Our network is '{our_network}', their network is '{their_network}'"
     )]
     DifferentNetwork {
-        our_network: [u8; 4],
-        their_network: [u8; 4],
+        our_network: MagicBytes,
+        their_network: MagicBytes,
     },
     #[error("Too many peers")]
     TooManyInboundPeersAndThisOneIsDiscouraged,

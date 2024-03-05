@@ -18,7 +18,7 @@ pub use crate::types::services;
 use std::fmt::{Debug, Display};
 
 use common::{
-    chain::ChainConfig,
+    chain::{config::MagicBytes, ChainConfig},
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
 use p2p_types::socket_address::SocketAddress;
@@ -106,7 +106,7 @@ pub struct PeerInfo {
     pub protocol_version: SupportedProtocolVersion,
 
     /// Peer network
-    pub network: [u8; 4],
+    pub network: MagicBytes,
 
     /// Peer software version
     pub software_version: SemVer,

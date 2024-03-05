@@ -41,6 +41,8 @@ use crate::{
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
+use super::MagicBytes;
+
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance,
@@ -273,7 +275,7 @@ impl GenesisBlockInit {
 pub struct Builder {
     chain_type: ChainType,
     bip44_coin_type: ChildNumber,
-    magic_bytes: [u8; 4],
+    magic_bytes: MagicBytes,
     p2p_port: u16,
     dns_seeds: Vec<&'static str>,
     predefined_peer_addresses: Vec<SocketAddr>,
@@ -320,7 +322,7 @@ impl Builder {
             bip44_coin_type: chain_type.default_bip44_coin_type(),
             coin_decimals: CoinUnit::DECIMALS,
             coin_ticker: chain_type.coin_ticker(),
-            magic_bytes: chain_type.default_magic_bytes(),
+            magic_bytes: chain_type.magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
             dns_seeds: chain_type.dns_seeds(),
             predefined_peer_addresses: chain_type.predefined_peer_addresses(),
@@ -504,7 +506,7 @@ macro_rules! builder_method {
 impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(bip44_coin_type: ChildNumber);
-    builder_method!(magic_bytes: [u8; 4]);
+    builder_method!(magic_bytes: MagicBytes);
     builder_method!(p2p_port: u16);
     builder_method!(dns_seeds: Vec<&'static str>);
     builder_method!(predefined_peer_addresses: Vec<SocketAddr>);

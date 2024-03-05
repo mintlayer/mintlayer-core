@@ -24,9 +24,12 @@ use crypto::vrf::VRFPublicKey;
 use emission_schedule::CoinUnit;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
+use std::fmt::{Debug, Display};
 use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
 
 use hex::FromHex;
+
+use serialization::{Decode, Encode};
 
 use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::transaction::Destination;
@@ -53,7 +56,7 @@ use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
-// DEFAULT_EPOCH_LENGTH = 3600
+
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
         Some(v) => v,
@@ -71,6 +74,41 @@ pub const MINTLAYER_COIN_TYPE_TEST: ChildNumber =
 
 pub type EpochIndex = u64;
 
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
+#[repr(transparent)]
+pub struct MagicBytes([u8; 4]);
+
+impl MagicBytes {
+    pub const fn new(bytes: [u8; 4]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn bytes(&self) -> [u8; 4] {
+        self.0
+    }
+}
+
+impl Display for MagicBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(chain_type) = ChainType::from_magic_bytes(*self) {
+            write!(f, "{}", chain_type.name())
+        } else {
+            write!(f, "{:?}", self)
+        }
+    }
+}
+
+impl Debug for MagicBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MagicBytes(0x")?;
+        for byte in self.0 {
+            write!(f, "{byte:02X}")?;
+        }
+        write!(f, ")")?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
@@ -81,6 +119,11 @@ pub enum ChainType {
 
 impl ChainType {
     pub const ALL: [ChainType; 4] = [Self::Mainnet, Self::Testnet, Self::Regtest, Self::Signet];
+
+    pub const MAINNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xB0, 0x07, 0x5F, 0xA0]);
+    pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0x2b, 0x7e, 0x19, 0xf8]);
+    pub const REGTEST_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xaa, 0xbb, 0xcc, 0xdd]);
+    pub const SIGNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xf3, 0xf7, 0x7b, 0x45]);
 
     pub const fn name(&self) -> &'static str {
         match self {
@@ -100,12 +143,22 @@ impl ChainType {
         }
     }
 
-    const fn default_magic_bytes(&self) -> [u8; 4] {
+    const fn magic_bytes(&self) -> MagicBytes {
         match self {
-            ChainType::Mainnet => [0xB0, 0x07, 0x5F, 0xA0],
-            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf8],
-            ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
-            ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
+            ChainType::Mainnet => Self::MAINNET_MAGIC_BYTES,
+            ChainType::Testnet => Self::TESTNET_MAGIC_BYTES,
+            ChainType::Regtest => Self::REGTEST_MAGIC_BYTES,
+            ChainType::Signet => Self::SIGNET_MAGIC_BYTES,
+        }
+    }
+
+    pub fn from_magic_bytes(magic_bytes: MagicBytes) -> Option<Self> {
+        match magic_bytes {
+            Self::MAINNET_MAGIC_BYTES => Some(ChainType::Mainnet),
+            Self::TESTNET_MAGIC_BYTES => Some(ChainType::Testnet),
+            Self::REGTEST_MAGIC_BYTES => Some(ChainType::Regtest),
+            Self::SIGNET_MAGIC_BYTES => Some(ChainType::Signet),
+            _ => None,
         }
     }
 
@@ -206,7 +259,7 @@ pub struct ChainConfig {
     height_checkpoint_data: Checkpoints,
     consensus_upgrades: NetUpgrades<ConsensusUpgrade>,
     chainstate_upgrades: NetUpgrades<ChainstateUpgrade>,
-    magic_bytes: [u8; 4],
+    magic_bytes: MagicBytes,
     p2p_port: u16,
     dns_seeds: Vec<&'static str>,
     predefined_peer_addresses: Vec<SocketAddr>,
@@ -309,7 +362,7 @@ impl ChainConfig {
 
     /// The bytes that are used to prefix p2p communication to uniquely identify this chain
     #[must_use]
-    pub fn magic_bytes(&self) -> &[u8; 4] {
+    pub fn magic_bytes(&self) -> &MagicBytes {
         &self.magic_bytes
     }
 
@@ -907,9 +960,56 @@ mod tests {
     #[test]
     fn different_magic_bytes() {
         let config1 = Builder::new(ChainType::Regtest).build();
-        let config2 = Builder::new(ChainType::Regtest).magic_bytes([1, 2, 3, 4]).build();
+        let config2 = Builder::new(ChainType::Regtest)
+            .magic_bytes(MagicBytes::new([1, 2, 3, 4]))
+            .build();
 
         assert_ne!(config1.magic_bytes(), config2.magic_bytes());
+    }
+
+    #[test]
+    fn chain_type_magic_bytes_correspondense() {
+        for chain_type in ChainType::ALL {
+            let magic_bytes = chain_type.magic_bytes();
+            let chain_type_from_magic_bytes = ChainType::from_magic_bytes(magic_bytes);
+            assert_eq!(chain_type_from_magic_bytes, Some(chain_type));
+        }
+    }
+
+    #[test]
+    fn magic_bytes_display() {
+        assert_eq!(format!("{}", ChainType::Mainnet.magic_bytes()), "mainnet");
+        assert_eq!(format!("{}", ChainType::Testnet.magic_bytes()), "testnet");
+        assert_eq!(format!("{}", ChainType::Regtest.magic_bytes()), "regtest");
+        assert_eq!(format!("{}", ChainType::Signet.magic_bytes()), "signet");
+        assert_eq!(
+            format!("{}", MagicBytes::new([0xAB, 0xCD, 0xEF, 0x12])),
+            "MagicBytes(0xABCDEF12)"
+        );
+    }
+
+    #[test]
+    fn magic_bytes_debug() {
+        assert_eq!(
+            format!("{:?}", ChainType::Mainnet.magic_bytes()),
+            "MagicBytes(0xB0075FA0)"
+        );
+        assert_eq!(
+            format!("{:?}", ChainType::Testnet.magic_bytes()),
+            "MagicBytes(0x2B7E19F8)"
+        );
+        assert_eq!(
+            format!("{:?}", ChainType::Regtest.magic_bytes()),
+            "MagicBytes(0xAABBCCDD)"
+        );
+        assert_eq!(
+            format!("{:?}", ChainType::Signet.magic_bytes()),
+            "MagicBytes(0xF3F77B45)"
+        );
+        assert_eq!(
+            format!("{:?}", MagicBytes::new([0xAB, 0xCD, 0xEF, 0x12])),
+            "MagicBytes(0xABCDEF12)"
+        );
     }
 
     #[rstest]

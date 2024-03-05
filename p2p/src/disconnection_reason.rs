@@ -15,7 +15,7 @@
 
 use std::fmt::Display;
 
-use common::primitives::time::Time;
+use common::{chain::config::MagicBytes, primitives::time::Time};
 
 use p2p_types::services::Services;
 
@@ -36,14 +36,13 @@ pub enum DisconnectionReason {
     SyncRequestsIgnored,
     TooManyInboundPeersAndThisOneIsDiscouraged,
     TooManyInboundPeersAndCannotEvictAnyone,
-
     UnsupportedProtocol,
     TimeDiff {
         remote_time: Time,
         accepted_peer_time: std::ops::RangeInclusive<Time>,
     },
     DifferentNetwork {
-        our_network: [u8; 4],
+        our_network: MagicBytes,
     },
     NoCommonServices,
     InsufficientServices {
@@ -90,7 +89,7 @@ impl Display for DisconnectionReason {
                 remote_time, accepted_peer_time
             ),
             DisconnectionReason::DifferentNetwork { our_network } => {
-                write!(f, "Wrong network; out network is {our_network:?}")
+                write!(f, "Wrong network; out network is '{our_network}'")
             }
             DisconnectionReason::NoCommonServices => write!(f, "No common services"),
             DisconnectionReason::InsufficientServices { needed_services } => {

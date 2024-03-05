@@ -18,7 +18,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc::Sender, oneshot};
 
 use common::{
-    chain::Transaction,
+    chain::{config::MagicBytes, Transaction},
     primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id},
 };
 use p2p_types::socket_address::SocketAddress;
@@ -83,6 +83,8 @@ impl P2pTimestamp {
 }
 
 pub mod peer_event {
+    use common::chain::config::MagicBytes;
+
     use super::*;
 
     /// The "peer info" from PeerEvent's perspective.
@@ -92,7 +94,7 @@ pub mod peer_event {
     #[derive(Debug, PartialEq, Eq)]
     pub struct PeerInfo {
         pub protocol_version: SupportedProtocolVersion,
-        pub network: [u8; 4],
+        pub network: MagicBytes,
         pub common_services: Services,
         pub user_agent: UserAgent,
         pub software_version: SemVer,
@@ -148,7 +150,7 @@ pub enum HandshakeMessage {
     #[codec(index = 0)]
     Hello {
         protocol_version: ProtocolVersion,
-        network: [u8; 4],
+        network: MagicBytes,
         services: Services,
         user_agent: UserAgent,
         software_version: SemVer,
@@ -164,7 +166,7 @@ pub enum HandshakeMessage {
     #[codec(index = 1)]
     HelloAck {
         protocol_version: ProtocolVersion,
-        network: [u8; 4],
+        network: MagicBytes,
         services: Services,
         user_agent: UserAgent,
         software_version: SemVer,

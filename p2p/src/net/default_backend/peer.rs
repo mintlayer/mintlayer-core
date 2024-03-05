@@ -514,6 +514,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use common::chain::config::MagicBytes;
     use futures::FutureExt;
     use std::time::Duration;
     use test_utils::{
@@ -779,7 +780,7 @@ mod tests {
             .send(Message::Handshake(HandshakeMessage::Hello {
                 protocol_version: TEST_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
-                network: [1, 2, 3, 4],
+                network: MagicBytes::new([1, 2, 3, 4]),
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,

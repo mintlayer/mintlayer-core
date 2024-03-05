@@ -27,7 +27,7 @@ use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
-        config::EpochIndex,
+        config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
         AccountNonce, AccountType, Block, GenBlock,
@@ -68,7 +68,7 @@ pub trait BlockchainStorageRead:
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
 
     /// Get magic bytes
-    fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
+    fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>>;
 
     /// Get chain type name
     fn get_chain_type(&self) -> crate::Result<Option<String>>;
@@ -146,7 +146,7 @@ pub trait BlockchainStorageWrite:
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;
 
     /// Set magic bytes
-    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> Result<()>;
+    fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> Result<()>;
 
     /// Set chain type name
     fn set_chain_type(&mut self, chain: &str) -> Result<()>;
