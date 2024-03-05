@@ -1,6 +1,6 @@
 import init from "../pkg/wasm_wrappers.js";
 
-import { run_test } from "./crypto_test.js";
+import { run_test } from "./wasm_test.js";
 
 async function web_run() {
   // Initialize the wasm module

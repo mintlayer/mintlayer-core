@@ -1,4 +1,4 @@
-import { run_test } from "./crypto_test.js";
+import { run_test } from "./wasm_test.js";
 
 async function node_run() {
   await run_test();
