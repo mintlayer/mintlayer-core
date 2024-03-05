@@ -168,6 +168,7 @@ async fn start_hot_wallet(
             node_rpc,
             wallet_rpc_config,
         },
+        false,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -200,6 +201,7 @@ async fn start_cold_wallet(
             node_rpc: make_cold_wallet_rpc_client(chain_config),
             wallet_rpc_config,
         },
+        true,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)
@@ -252,6 +254,7 @@ async fn connect_to_rpc_wallet(
             remote_socket_address,
             rpc_auth,
         },
+        false,
     )
     .await?;
     Ok(repl_handle.join().expect("Should not panic")?)

@@ -23,6 +23,7 @@ use common::{
     },
     primitives::BlockHeight,
 };
+use rpc::RpcAuthData;
 use test_utils::{test_dir::TestRoot, test_root};
 use wallet_controller::NodeRpcClient;
 use wallet_rpc_lib::{config::WalletServiceConfig, types::AccountArg, WalletHandle, WalletService};
@@ -104,16 +105,28 @@ impl TestFramework {
             let ws_config = WalletServiceConfig::new(chain_type, Some(wallet_path), vec![])
                 .with_regtest_options(chain_config_options)
                 .unwrap()
-                .with_custom_chain_config(chain_config)
-                .with_node_rpc_address(node_rpc_addr.to_string())
-                .with_username_and_password(RPC_USERNAME.to_string(), RPC_PASSWORD.to_string());
+                .with_custom_chain_config(chain_config.clone());
             let bind_addr = "127.0.0.1:0".parse().unwrap();
             let rpc_config = wallet_rpc_lib::config::WalletRpcConfig {
                 bind_addr,
                 auth_credentials: None,
             };
 
-            wallet_rpc_lib::start_services(ws_config, rpc_config).await.unwrap()
+            let rpc_address = node_rpc_addr.to_string();
+            let node_rpc = wallet_controller::make_rpc_client(
+                chain_config,
+                rpc_address,
+                RpcAuthData::Basic {
+                    username: RPC_USERNAME.to_string(),
+                    password: RPC_PASSWORD.to_string(),
+                },
+            )
+            .await
+            .unwrap();
+
+            wallet_rpc_lib::start_services(ws_config, rpc_config, node_rpc, false)
+                .await
+                .unwrap()
         };
 
         TestFramework {

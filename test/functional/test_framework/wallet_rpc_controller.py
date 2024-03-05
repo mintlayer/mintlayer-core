@@ -79,7 +79,11 @@ class WalletRpcController:
         bind_addr = f"{url}:{port}"
         self.log.info(f"node url: {self.node.url}")
         wallet_rpc = os.path.join(self.config["environment"]["BUILDDIR"], "test_rpc_wallet"+self.config["environment"]["EXEEXT"] )
-        wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+        # if it is a cold wallet don't specify node address and cookie
+        if "--cold-wallet" in self.wallet_args:
+            wallet_args = ["regtest", "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+        else:
+            wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
 
@@ -325,3 +329,30 @@ class WalletRpcController:
     async def abandon_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_abandon", [self.account, tx_id])['result']
 
+    async def sign_challenge_plain(self, message: str, address: str) -> str:
+        result = self._write_command('challenge_sign_plain', [self.account, message, address])
+        if 'result' in result:
+            return f"The generated hex encoded signature is\n\n{result['result']}"
+        else:
+            return result['error']['message']
+
+    async def sign_challenge_hex(self, message: str, address: str) -> str:
+        result =  self._write_command('challenge_sign_hex', [self.account, message, address])
+        if 'result' in result:
+            return f"The generated hex encoded signature is\n\n{result['result']}"
+        else:
+            return result['error']['message']
+
+    async def verify_challenge_plain(self, message: str, signature: str, address: str) -> str:
+        result = self._write_command('challenge_verify_plain', [message, signature, address])
+        if 'result' in result:
+            return f"The provided signature is correct"
+        else:
+            return result['error']['message']
+
+    async def verify_challenge_hex(self, message: str, signature: str, address: str) -> str:
+        result = self._write_command('challenge_verify_hex', [message, signature, address])
+        if 'result' in result:
+            return f"The provided signature is correct"
+        else:
+            return result['error']['message']
