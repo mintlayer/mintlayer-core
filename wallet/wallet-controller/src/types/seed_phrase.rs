@@ -15,7 +15,7 @@
 
 use wallet_types::seed_phrase::SerializableSeedPhrase;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct SeedWithPassPhrase {
     pub seed_phrase: Vec<String>,
     pub passphrase: Option<String>,
@@ -34,11 +34,4 @@ impl SeedWithPassPhrase {
             },
         }
     }
-}
-
-impl rpc_description::HasValueHint for SeedWithPassPhrase {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
-        ("seed_phrase", &<Vec<String>>::HINT),
-        ("passphrase", &<Option<String>>::HINT),
-    ]);
 }

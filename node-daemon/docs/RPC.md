@@ -169,9 +169,9 @@ Parameters:
 {
     "outpoint": {
         "id": {
-            "BlockReward": hex string,
-        } OR {
             "Transaction": hex string,
+        } OR {
+            "BlockReward": hex string,
         },
         "index": number,
     },
@@ -312,7 +312,7 @@ Returns `None` (null) if the pool is not found.
 Parameters:
 ```
 {
-    "pool_id": hex string,
+    "pool_address": string,
 }
 ```
 
@@ -335,7 +335,7 @@ Returns `None` (null) if the pool is not found.
 Parameters:
 ```
 {
-    "pool_id": hex string,
+    "pool_address": string,
 }
 ```
 
@@ -356,8 +356,8 @@ returns the amount of coins owned by that delegation in that pool.
 Parameters:
 ```
 {
-    "pool_id": hex string,
-    "delegation_id": hex string,
+    "pool_address": string,
+    "delegation_address": string,
 }
 ```
 
@@ -371,13 +371,13 @@ Returns:
 
 ### Method `chainstate_token_info`
 
-Get token information, given a token id.
+Get token information, given a token id, in address form.
 
 
 Parameters:
 ```
 {
-    "token_id": hex string,
+    "token_id": string,
 }
 ```
 
@@ -443,8 +443,12 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": number,
-    "median_time": number,
+    "best_block_timestamp": {
+        "timestamp": number,
+    },
+    "median_time": {
+        "timestamp": number,
+    },
     "is_initial_block_download": bool,
 }
 ```
@@ -534,7 +538,7 @@ Returns:
 ```
 {
     "id": hex string,
-    "status": string,
+    "status": "InMempool" OR "InMempoolDuplicate" OR "InOrphanPool" OR "InOrphanPoolDuplicate",
     "transaction": hex string,
 } OR null
 ```
@@ -669,7 +673,9 @@ Parameters:
 Returns:
 ```
 {
-    "amount_per_kb": number,
+    "amount_per_kb": {
+        "val": number,
+    },
 }
 ```
 
@@ -689,7 +695,9 @@ Returns:
 [ [
     number,
     {
-        "amount_per_kb": number,
+        "amount_per_kb": {
+            "val": number,
+        },
     },
 ], .. ]
 ```
@@ -749,7 +757,7 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
+    string,
     {
         "time": [
             secs number,
@@ -768,7 +776,7 @@ Ban a peer by their address for a given amount of time.
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
     "duration": [
         secs number,
         nanos number,
@@ -790,7 +798,7 @@ Unban a banned peer by their IP address.
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
 }
 ```
 
@@ -815,7 +823,7 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
+    string,
     {
         "time": [
             secs number,
@@ -870,7 +878,17 @@ Parameters:
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "peer_id": number,
+    "address": string,
+    "peer_role": "Inbound" OR "OutboundFullRelay" OR "OutboundBlockRelay" OR "OutboundReserved" OR "OutboundManual" OR "Feeler",
+    "ban_score": number,
+    "user_agent": string,
+    "software_version": string,
+    "ping_wait": number OR null,
+    "ping_last": number OR null,
+    "ping_min": number OR null,
+}, .. ]
 ```
 
 

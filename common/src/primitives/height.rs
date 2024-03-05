@@ -33,6 +33,7 @@ type DistanceIntType = i64;
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub struct BlockHeight(#[codec(compact)] HeightIntType);
 
@@ -162,10 +163,6 @@ impl BlockHeight {
     pub const fn into_int(self) -> HeightIntType {
         self.0
     }
-}
-
-impl rpc_description::HasValueHint for BlockHeight {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
 }
 
 /////////////////////////////

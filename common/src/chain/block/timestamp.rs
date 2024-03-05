@@ -24,7 +24,18 @@ use crate::primitives::time::Time;
 pub type BlockTimestampInternalType = u64;
 
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, PartialOrd, Ord, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub struct BlockTimestamp {
     #[codec(compact)]
@@ -67,10 +78,6 @@ impl BlockTimestamp {
     pub fn add_int_seconds(&self, seconds: BlockTimestampInternalType) -> Option<BlockTimestamp> {
         self.timestamp.checked_add(seconds).map(|ts| Self { timestamp: ts })
     }
-}
-
-impl rpc_description::HasValueHint for BlockTimestamp {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
 }
 
 #[cfg(test)]

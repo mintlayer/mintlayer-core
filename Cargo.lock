@@ -1130,6 +1130,7 @@ dependencies = [
  "oneshot",
  "pos-accounting",
  "rpc",
+ "rpc-description",
  "rstest",
  "serde",
  "serde_json",
@@ -4760,6 +4761,7 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rpc",
+ "rpc-description",
  "rstest",
  "serde",
  "serialization",
@@ -5886,6 +5888,7 @@ dependencies = [
 name = "rpc-description"
 version = "0.3.0"
 dependencies = [
+ "rpc-description-macro",
  "serde_json",
 ]
 
@@ -8243,6 +8246,7 @@ dependencies = [
  "node-comm",
  "p2p-types",
  "rpc",
+ "rpc-description",
  "rstest",
  "serde",
  "serde_json",

@@ -25,30 +25,22 @@ pub enum TransactionToInspect {
     Signed(SignedTransaction),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct ValidatedSignatures {
     pub num_valid_signatures: usize,
     pub num_invalid_signatures: usize,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct SignatureStats {
     pub num_inputs: usize,
     pub total_signatures: usize,
     pub validated_signatures: Option<ValidatedSignatures>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct InspectTransaction {
     pub tx: HexEncoded<Transaction>,
     pub fees: Option<Balances>,
     pub stats: SignatureStats,
-}
-
-impl rpc_description::HasValueHint for InspectTransaction {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
-        ("tx", &<HexEncoded<Transaction>>::HINT),
-        ("fees", &<Option<Balances>>::HINT),
-        ("stats", &rpc_description::ValueHint::GENERIC_OBJECT),
-    ]);
 }

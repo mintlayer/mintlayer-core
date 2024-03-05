@@ -18,7 +18,7 @@ mempool-types = { path = 'types' }
 p2p-types = { path = '../p2p/types' }
 pos-accounting = { path = '../pos-accounting' }
 rpc = { path = '../rpc' }
-rpc-description = { path = "../rpc/description" }
+rpc-description = { path = '../rpc/description' }
 serialization = { path = '../serialization' }
 subsystem = { path = '../subsystem' }
 tokens-accounting = { path = '../tokens-accounting' }

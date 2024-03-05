@@ -102,6 +102,10 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
+impl rpc_description::HasValueHint for H256 {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 #[derive(PartialEq, Eq, Encode, Decode, RefCast)]
 #[repr(transparent)]
 pub struct Id<T> {

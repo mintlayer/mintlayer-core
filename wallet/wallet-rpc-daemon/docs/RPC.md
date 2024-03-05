@@ -44,7 +44,12 @@ Parameters:
 
 Returns:
 ```
-object
+"UserProvidedMenmonic" OR {
+    "NewlyGeneratedMnemonic": [
+        string,
+        string OR null,
+    ],
+}
 ```
 
 
@@ -288,7 +293,7 @@ Parameters:
 Returns:
 ```
 [ {
-    "address": bech32 string,
+    "address": string,
     "index": string,
     "used": bool,
 }, .. ]
@@ -307,7 +312,7 @@ Parameters:
 Returns:
 ```
 {
-    "address": bech32 string,
+    "address": string,
     "index": string,
 }
 ```
@@ -397,9 +402,9 @@ Parameters:
     "amount": decimal string,
     "selected_utxos": [ {
         "id": {
-            "BlockReward": hex string,
-        } OR {
             "Transaction": hex string,
+        } OR {
+            "BlockReward": hex string,
         },
         "index": number,
     }, .. ],
@@ -427,9 +432,9 @@ Parameters:
     "amount_str": decimal string,
     "selected_utxo": {
         "id": {
-            "BlockReward": hex string,
-        } OR {
             "Transaction": hex string,
+        } OR {
+            "BlockReward": hex string,
         },
         "index": number,
     },
@@ -443,7 +448,7 @@ Parameters:
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "fees": {
         "coins": decimal string,
         "tokens": { hex string: decimal string, .. },
@@ -469,7 +474,14 @@ Returns:
         "coins": decimal string,
         "tokens": { hex string: decimal string, .. },
     } OR null,
-    "stats": object,
+    "stats": {
+        "num_inputs": number,
+        "total_signatures": number,
+        "validated_signatures": {
+            "num_valid_signatures": number,
+            "num_invalid_signatures": number,
+        } OR null,
+    },
 }
 ```
 
@@ -664,7 +676,18 @@ Parameters:
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "pool_id": string,
+    "pledge": decimal string,
+    "balance": decimal string,
+    "height": number,
+    "block_timestamp": {
+        "timestamp": number,
+    },
+    "vrf_public_key": string,
+    "decommission_key": string,
+    "staker": string,
+}, .. ]
 ```
 
 
@@ -717,7 +740,7 @@ Returns:
 [ {
     "id": hex string,
     "height": number,
-    "pool_id": bech32 string,
+    "pool_id": string,
 }, .. ]
 ```
 
@@ -784,7 +807,16 @@ Parameters:
 {
     "account": number,
     "destination_address": string,
-    "metadata": object,
+    "metadata": {
+        "media_hash": string,
+        "name": string,
+        "description": string,
+        "ticker": string,
+        "creator": hex string OR null,
+        "icon_uri": string OR null,
+        "media_uri": string OR null,
+        "additional_metadata_uri": string OR null,
+    },
     "options": {
         "in_top_x_mb": number,
     },
@@ -807,7 +839,15 @@ Parameters:
 {
     "account": number,
     "destination_address": string,
-    "metadata": object,
+    "metadata": {
+        "token_ticker": string,
+        "number_of_decimals": number,
+        "metadata_uri": string,
+        "token_supply": {
+            "Fixed": decimal string,
+        } OR "Lockable" OR "Unlimited",
+        "is_freezable": bool,
+    },
     "options": {
         "in_top_x_mb": number,
     },
@@ -1007,7 +1047,9 @@ Parameters:
 
 Returns:
 ```
-string
+{
+    "version": string,
+}
 ```
 
 
@@ -1064,7 +1106,7 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
+    string,
     {
         "time": [
             secs number,
@@ -1080,7 +1122,7 @@ Returns:
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
     "duration": [
         secs number,
         nanos number,
@@ -1099,7 +1141,7 @@ nothing
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
 }
 ```
 
@@ -1119,7 +1161,7 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
+    string,
     {
         "time": [
             secs number,
@@ -1152,7 +1194,17 @@ Parameters:
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "peer_id": number,
+    "address": string,
+    "peer_role": "Inbound" OR "OutboundFullRelay" OR "OutboundBlockRelay" OR "OutboundReserved" OR "OutboundManual" OR "Feeler",
+    "ban_score": number,
+    "user_agent": string,
+    "software_version": string,
+    "ping_wait": number OR null,
+    "ping_last": number OR null,
+    "ping_min": number OR null,
+}, .. ]
 ```
 
 
@@ -1226,8 +1278,12 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": number,
-    "median_time": number,
+    "best_block_timestamp": {
+        "timestamp": number,
+    },
+    "median_time": {
+        "timestamp": number,
+    },
     "is_initial_block_download": bool,
 }
 ```
@@ -1280,7 +1336,9 @@ Returns:
 [ {
     "id": hex string,
     "height": number,
-    "timestamp": number,
+    "timestamp": {
+        "timestamp": number,
+    },
 }, .. ]
 ```
 
@@ -1333,7 +1391,7 @@ Parameters:
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "is_complete": bool,
 }
 ```
@@ -1430,9 +1488,9 @@ Parameters:
 {
     "inputs": [ {
         "id": {
-            "BlockReward": hex string,
-        } OR {
             "Transaction": hex string,
+        } OR {
+            "BlockReward": hex string,
         },
         "index": number,
     }, .. ],
@@ -1444,7 +1502,7 @@ Parameters:
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "fees": {
         "coins": decimal string,
         "tokens": { hex string: decimal string, .. },

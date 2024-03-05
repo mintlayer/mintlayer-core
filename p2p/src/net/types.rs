@@ -46,7 +46,16 @@ pub enum Role {
 
 // TODO: Rename to ConnectionType
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub enum PeerRole {
     Inbound,

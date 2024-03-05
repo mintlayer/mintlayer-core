@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use rpc_description_macro::HasValueHint;
+
 /// Value hint associated with given type
 pub trait HasValueHint {
     const HINT: ValueHint;
@@ -134,5 +136,9 @@ impl_value_hint!({
     usize => VH::NUMBER;
     String => VH::STRING;
     std::path::Path => VH::STRING;
+    std::net::SocketAddr => VH::STRING;
+    std::net::IpAddr => VH::STRING;
+    std::net::Ipv4Addr => VH::STRING;
+    std::net::Ipv6Addr => VH::STRING;
     serde_json::Value => VH::JSON;
 });

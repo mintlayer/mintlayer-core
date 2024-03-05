@@ -16,10 +16,9 @@
 use std::collections::BTreeMap;
 
 use common::{chain::tokens::TokenId, primitives::DecimalAmount};
-use rpc_description::ValueHint as VH;
 
 /// Balances of coins and tokens
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct Balances {
     coins: DecimalAmount,
     tokens: BTreeMap<TokenId, DecimalAmount>,
@@ -46,11 +45,4 @@ impl Balances {
         let Self { coins, tokens } = self;
         (coins, tokens)
     }
-}
-
-impl rpc_description::HasValueHint for Balances {
-    const HINT: VH = VH::Object(&[
-        ("coins", &DecimalAmount::HINT),
-        ("tokens", &<BTreeMap<TokenId, DecimalAmount>>::HINT),
-    ]);
 }
