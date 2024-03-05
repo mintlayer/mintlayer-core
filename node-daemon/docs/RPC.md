@@ -637,13 +637,13 @@ number
 
 Set the maximum allowed size of all transactions in the mempool.
 
-The parameter is a string, can be written with proper units, such as "100 MB", or "500 KB"
+The parameter is either a string, can be written with proper units, such as "100 MB", or "500 KB", or an integer taken as bytes.
 
 
 Parameters:
 ```
 {
-    "max_size": string,
+    "max_size": String with units, such as MB/KB/GB, or integer for bytes,
 }
 ```
 
