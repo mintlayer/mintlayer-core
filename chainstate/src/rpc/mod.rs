@@ -71,7 +71,8 @@ trait ChainstateRpc {
         max_count: usize,
     ) -> RpcResult<Vec<HexEncoded<Block>>>;
 
-    /// Returns the TxOutput for a specified UtxoOutPoint. The Utxo must be unspent.
+    /// Returns the TxOutput for a specified UtxoOutPoint.
+    /// Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
     #[method(name = "get_utxo")]
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
 

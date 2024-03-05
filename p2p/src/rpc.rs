@@ -34,7 +34,7 @@ trait P2pRpc {
     #[method(name = "connect")]
     async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
-    /// Disconnect peer the pool given by its id
+    /// Disconnect peer, given its id.
     #[method(name = "disconnect")]
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
@@ -60,7 +60,7 @@ trait P2pRpc {
     #[method(name = "get_peer_count")]
     async fn get_peer_count(&self) -> RpcResult<usize>;
 
-    /// Get p2p bind address(es) of the this node.
+    /// Get p2p bind address(es) of this node.
     #[method(name = "get_bind_addresses")]
     async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>>;
 
