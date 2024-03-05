@@ -178,7 +178,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
 
     let rpc_address = rpc_address.unwrap_or_else(default_rpc_bind_address);
 
-    let rpc_client = make_rpc_client(rpc_address.to_string(), rpc_auth)
+    let rpc_client = make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth)
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 

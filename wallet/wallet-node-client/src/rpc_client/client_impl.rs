@@ -18,6 +18,7 @@ use std::time::Duration;
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
+    address::Address,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
         Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
@@ -106,13 +107,15 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_id)
+        let pool_address = Address::new(&self.chain_config, &pool_id)?;
+        ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_address.to_string())
             .await
             .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        ChainstateRpcClient::staker_balance(&self.http_client, pool_id)
+        let pool_address = Address::new(&self.chain_config, &pool_id)?;
+        ChainstateRpcClient::staker_balance(&self.http_client, pool_address.to_string())
             .await
             .map_err(NodeRpcError::ResponseError)
     }
@@ -122,12 +125,15 @@ impl NodeInterface for NodeRpcClient {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        ChainstateRpcClient::delegation_share(&self.http_client, pool_id, delegation_id)
+        let pool_address = Address::new(&self.chain_config, &pool_id)?.to_string();
+        let delegation_address = Address::new(&self.chain_config, &delegation_id)?.to_string();
+        ChainstateRpcClient::delegation_share(&self.http_client, pool_address, delegation_address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        let token_id = Address::new(&self.chain_config, &token_id)?.to_string();
         ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
             .map_err(NodeRpcError::ResponseError)

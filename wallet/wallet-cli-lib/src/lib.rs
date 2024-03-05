@@ -159,7 +159,7 @@ async fn start_hot_wallet(
     let (repl_handle, wallet_rpc_config) =
         setup_events_and_repl(cli_args, mode, output, input, event_tx, chain_type)?;
 
-    let node_rpc = make_rpc_client(rpc_address.to_string(), rpc_auth).await?;
+    let node_rpc = make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth).await?;
     cli_event_loop::run(
         &chain_config.clone(),
         event_rx,

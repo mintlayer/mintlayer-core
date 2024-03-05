@@ -30,10 +30,11 @@ pub mod node_traits;
 pub mod rpc_client;
 
 pub async fn make_rpc_client(
+    chain_config: Arc<ChainConfig>,
     remote_socket_address: String,
     rpc_auth: RpcAuthData,
 ) -> Result<rpc_client::NodeRpcClient, NodeRpcError> {
-    rpc_client::NodeRpcClient::new(remote_socket_address, rpc_auth).await
+    rpc_client::NodeRpcClient::new(chain_config, remote_socket_address, rpc_auth).await
 }
 
 pub fn make_cold_wallet_rpc_client(chain_config: Arc<ChainConfig>) -> rpc_client::ColdWalletClient {
