@@ -154,23 +154,52 @@ impl UtxoLock {
     }
 }
 
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
+pub struct UtxoWithExtraInfo {
+    pub output: TxOutput,
+    pub token_decimals: Option<u8>,
+}
+
+impl UtxoWithExtraInfo {
+    pub fn new(output: TxOutput, token_decimals: Option<u8>) -> Self {
+        Self {
+            output,
+            token_decimals,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LockedUtxo {
-    output: TxOutput,
+    utxo: UtxoWithExtraInfo,
     lock: UtxoLock,
 }
 
 impl LockedUtxo {
-    pub fn new(output: TxOutput, lock: UtxoLock) -> Self {
-        Self { output, lock }
+    pub fn new_with_info(utxo: UtxoWithExtraInfo, lock: UtxoLock) -> Self {
+        Self { utxo, lock }
+    }
+
+    pub fn new(output: TxOutput, token_decimals: Option<u8>, lock: UtxoLock) -> Self {
+        Self {
+            utxo: UtxoWithExtraInfo {
+                output,
+                token_decimals,
+            },
+            lock,
+        }
+    }
+
+    pub fn utxo_with_extra_info(&self) -> &UtxoWithExtraInfo {
+        &self.utxo
     }
 
     pub fn output(&self) -> &TxOutput {
-        &self.output
+        &self.utxo.output
     }
 
     pub fn into_output(self) -> TxOutput {
-        self.output
+        self.utxo.output
     }
 
     pub fn lock(&self) -> UtxoLock {
@@ -180,21 +209,35 @@ impl LockedUtxo {
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Utxo {
-    output: TxOutput,
+    utxo: UtxoWithExtraInfo,
     spent: bool,
 }
 
 impl Utxo {
-    pub fn new(output: TxOutput, spent: bool) -> Self {
-        Self { output, spent }
+    pub fn new_with_info(utxo: UtxoWithExtraInfo, spent: bool) -> Self {
+        Self { utxo, spent }
+    }
+
+    pub fn new(output: TxOutput, token_decimals: Option<u8>, spent: bool) -> Self {
+        Self {
+            utxo: UtxoWithExtraInfo {
+                output,
+                token_decimals,
+            },
+            spent,
+        }
+    }
+
+    pub fn utxo_with_extra_info(&self) -> &UtxoWithExtraInfo {
+        &self.utxo
     }
 
     pub fn output(&self) -> &TxOutput {
-        &self.output
+        &self.utxo.output
     }
 
     pub fn into_output(self) -> TxOutput {
-        self.output
+        self.utxo.output
     }
 
     pub fn spent(&self) -> bool {
@@ -250,6 +293,7 @@ impl FungibleTokenData {
 pub struct TxAdditionalInfo {
     pub fee: Amount,
     pub input_utxos: Vec<Option<TxOutput>>,
+    pub token_decimals: BTreeMap<TokenId, u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -374,18 +418,18 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_address_available_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_address_all_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_locked_utxos_until_now(
         &self,
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError>;
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError>;
 
     async fn get_delegations_from_address(
         &self,
@@ -401,6 +445,11 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         token_id: TokenId,
     ) -> Result<Option<NftIssuance>, ApiServerStorageError>;
+
+    async fn get_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

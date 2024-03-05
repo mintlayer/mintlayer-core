@@ -140,7 +140,7 @@ async fn ok(#[case] seed: Seed) {
                             "no error in encoding"
                         ).get(),
                         "is_locked": token_data.is_locked,
-                        "circulating_supply": amount_to_json(token_data.circulating_supply),
+                        "circulating_supply": amount_to_json(token_data.circulating_supply, token_data.number_of_decimals),
                         "metadata_uri": token_data.metadata_uri,
                         "number_of_decimals": token_data.number_of_decimals,
                         "total_supply": token_data.total_supply,

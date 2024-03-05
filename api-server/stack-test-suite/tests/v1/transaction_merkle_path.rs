@@ -117,6 +117,7 @@ async fn get_block_failed(#[case] seed: Seed) {
                     additinal_info: TxAdditionalInfo {
                         fee: Amount::from_atoms(rng.gen_range(0..100)),
                         input_utxos: vec![],
+                        token_decimals: BTreeMap::new(),
                     },
                 };
 
@@ -245,6 +246,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
                     additinal_info: TxAdditionalInfo {
                         fee: Amount::from_atoms(rng.gen_range(0..100)),
                         input_utxos: vec![],
+                        token_decimals: BTreeMap::new(),
                     },
                 };
                 db_tx.set_transaction(transaction_id, None, &tx_info).await.unwrap();

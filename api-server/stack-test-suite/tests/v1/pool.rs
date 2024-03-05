@@ -213,7 +213,10 @@ async fn ok(#[case] seed: Seed) {
         );
         assert_eq!(
             body.get("staker_balance").unwrap(),
-            &serde_json::json!(amount_to_json(pool_data.pledge()))
+            &serde_json::json!(amount_to_json(
+                pool_data.pledge(),
+                chain_config.coin_decimals()
+            ))
         );
 
         assert_eq!(
@@ -223,7 +226,10 @@ async fn ok(#[case] seed: Seed) {
 
         assert_eq!(
             body.get("cost_per_block").unwrap(),
-            &serde_json::json!(amount_to_json(pool_data.cost_per_block()))
+            &serde_json::json!(amount_to_json(
+                pool_data.cost_per_block(),
+                chain_config.coin_decimals()
+            ))
         );
 
         let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
@@ -260,7 +266,7 @@ async fn ok(#[case] seed: Seed) {
 
             assert_eq!(
                 resp.get("balance").unwrap(),
-                &serde_json::json!(amount_to_json(delegation.1))
+                &serde_json::json!(amount_to_json(delegation.1, chain_config.coin_decimals()))
             );
 
             let destination = Address::new(&chain_config, &delegation.2).unwrap();
@@ -286,7 +292,7 @@ async fn ok(#[case] seed: Seed) {
             );
             assert_eq!(
                 body.get("balance").unwrap(),
-                &serde_json::json!(amount_to_json(balance))
+                &serde_json::json!(amount_to_json(balance, chain_config.coin_decimals()))
             );
             let destination = Address::new(&chain_config, &destination).unwrap();
             assert_eq!(body.get("spend_destination").unwrap(), destination.get());

@@ -191,11 +191,11 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 "flags": transaction.flags(),
                 "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
                     "input": inp,
-                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config)),
+                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
                 "outputs": transaction.outputs()
                             .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config))
+                            .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
                             .collect::<Vec<_>>(),
                 });
 
@@ -335,11 +335,11 @@ async fn ok(#[case] seed: Seed) {
                 "flags": transaction.flags(),
                 "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
                     "input": inp,
-                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config)),
+                    "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
                 "outputs": transaction.outputs()
                             .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config))
+                            .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
                             .collect::<Vec<_>>(),
                 });
 

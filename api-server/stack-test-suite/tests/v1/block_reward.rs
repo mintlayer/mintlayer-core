@@ -187,7 +187,9 @@ async fn has_reward(#[case] seed: Seed) {
                             .block_reward()
                             .outputs()
                             .iter()
-                            .map(|out| txoutput_to_json(out, &chain_config))
+                            .map(|out| {
+                                txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None))
+                            })
                             .collect::<serde_json::Value>(),
                     ));
 

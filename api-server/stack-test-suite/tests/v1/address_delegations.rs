@@ -173,7 +173,7 @@ async fn ok(#[case] seed: Seed) {
                                 ).get(),
                                 "next_nonce": AccountNonce::new(0),
                                 "spend_destination": alice_address.get(),
-                                "balance": amount_to_json(amount),
+                                "balance": amount_to_json(amount, chain_config.coin_decimals()),
                             })})
                             .collect::<Vec<_>>()
                             .into(),

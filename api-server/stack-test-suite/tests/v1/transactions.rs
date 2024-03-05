@@ -126,6 +126,7 @@ async fn ok(#[case] seed: Seed) {
                                 additinal_info: TxAdditionalInfo {
                                     input_utxos: utxos,
                                     fee: Amount::ZERO,
+                                    token_decimals: BTreeMap::new(),
                                 },
                             },
                             &chain_config,

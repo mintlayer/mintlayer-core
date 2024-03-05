@@ -231,7 +231,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                             .map(|utxo| {
                                 json!({
                                 "outpoint": utxo.0,
-                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
                             .into(),
@@ -243,7 +243,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                             .map(|utxo| {
                                 json!({
                                 "outpoint": utxo.0,
-                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
                             .into(),
@@ -474,7 +474,7 @@ async fn ok(#[case] seed: Seed) {
                             .map(|utxo| {
                                 json!({
                                 "outpoint": utxo.0,
-                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
                             .into(),
@@ -486,7 +486,7 @@ async fn ok(#[case] seed: Seed) {
                             .map(|utxo| {
                                 json!({
                                 "outpoint": utxo.0,
-                                "utxo": txoutput_to_json(&utxo.1, &chain_config)})
+                                "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
                             .into(),

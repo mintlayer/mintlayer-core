@@ -25,7 +25,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
         AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction,
-        TxOutput, UtxoOutPoint,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -36,7 +36,7 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo,
-        PoolBlockStats, TransactionInfo, Utxo,
+        PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -1461,20 +1461,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let serialized_data: Vec<u8> = row.get(0);
         let spent: bool = row.get(1);
 
-        let output = TxOutput::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Utxo for outpoint {:?} deserialization failed: {}",
-                outpoint, e
-            ))
-        })?;
+        let output =
+            UtxoWithExtraInfo::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Utxo for outpoint {:?} deserialization failed: {}",
+                    outpoint, e
+                ))
+            })?;
 
-        Ok(Some(Utxo::new(output, spent)))
+        Ok(Some(Utxo::new_with_info(output, spent)))
     }
 
     pub async fn get_address_available_utxos(
         &mut self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let rows = self
             .tx
             .query(
@@ -1502,7 +1503,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ))
                 })?;
 
-                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                let output = UtxoWithExtraInfo::decode_all(&mut utxo.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Utxo for address {:?} deserialization failed: {}",
                         address, e
@@ -1516,7 +1517,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_address_all_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let rows = self
             .tx
             .query(
@@ -1546,7 +1547,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     ))
                 })?;
 
-                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                let output = UtxoWithExtraInfo::decode_all(&mut utxo.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Utxo for address {:?} deserialization failed: {}",
                         address, e
@@ -1561,7 +1562,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         &self,
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let block_height = Self::block_height_to_postgres_friendly(block_height);
         let from_time = Self::block_time_to_postgres_friendly(time_range.0)?;
         let to_time = Self::block_time_to_postgres_friendly(time_range.1)?;
@@ -1588,7 +1589,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         "Outpoint deserialization failed: {e}",
                     ))
                 })?;
-                let output = TxOutput::decode_all(&mut utxo.as_slice()).map_err(|e| {
+                let output = UtxoWithExtraInfo::decode_all(&mut utxo.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
                         "Utxo deserialization failed: {e}",
                     ))
@@ -1614,7 +1615,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 "INSERT INTO ml_utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2;",
-                &[&outpoint.encode(), &utxo.output().encode(), &spent, &address, &height],
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &address, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1639,7 +1640,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 "INSERT INTO ml_locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
                     VALUES ($1, $2, $3, $4, $5, $6);",
-                &[&outpoint.encode(), &utxo.into_output().encode(), &lock_time, &lock_height, &address, &height],
+                &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &address, &height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1730,6 +1731,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             })?;
 
         Ok(Some(issuance))
+    }
+
+    pub async fn get_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        if let Some(data) = self.get_fungible_token_issuance(token_id).await? {
+            return Ok(Some(data.number_of_decimals));
+        }
+
+        Ok(self.get_nft_token_issuance(token_id).await?.map(|_| 0))
     }
 
     pub async fn get_nft_token_issuance(

@@ -15,7 +15,7 @@
 
 use crate::{
     api::json_helpers::{
-        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json, TokenDecimals,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -160,7 +160,7 @@ pub async fn block<T: ApiServerStorage>(
         "reward": block.block.block_reward()
             .outputs()
             .iter()
-            .map(|out| txoutput_to_json(out, &state.chain_config))
+            .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
             .collect::<Vec<_>>(),
         "transactions": block.block.transactions()
                             .iter()
@@ -193,7 +193,7 @@ pub async fn block_reward<T: ApiServerStorage>(
         .block_reward()
         .outputs()
         .iter()
-        .map(|out| txoutput_to_json(out, &state.chain_config))
+        .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
         .collect::<Vec<_>>())))
 }
 
@@ -229,7 +229,7 @@ pub async fn chain_genesis<T: ApiServerStorage>(
         "timestamp": genesis.timestamp(),
         "utxos": genesis.utxos()
                  .iter()
-                 .map(|out| txoutput_to_json(out, &state.chain_config))
+                 .map(|out| txoutput_to_json(out, &state.chain_config, &TokenDecimals::Single(None)))
                  .collect::<Vec<_>>(),
     })))
 }
@@ -621,8 +621,8 @@ pub async fn address<T: ApiServerStorage>(
         .unwrap_or(Amount::ZERO);
 
     Ok(Json(json!({
-    "coin_balance": amount_to_json(coin_balance),
-    "locked_coin_balance": amount_to_json(locked_coin_balance),
+    "coin_balance": amount_to_json(coin_balance, state.chain_config.coin_decimals()),
+    "locked_coin_balance": amount_to_json(locked_coin_balance, state.chain_config.coin_decimals()),
     "transaction_history": transaction_history
     //TODO "token_balances": destination_summary.token_balances(),
     })))
@@ -658,7 +658,7 @@ pub async fn address_utxos<T: ApiServerStorage>(
             .map(|utxo| {
                 json!({
                 "outpoint": utxo.0,
-                "utxo": txoutput_to_json(&utxo.1, &state.chain_config)})
+                "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
     ))
@@ -694,7 +694,7 @@ pub async fn all_address_utxos<T: ApiServerStorage>(
             .map(|utxo| {
                 json!({
                 "outpoint": utxo.0,
-                "utxo": txoutput_to_json(&utxo.1, &state.chain_config)})
+                "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
     ))
@@ -736,7 +736,7 @@ pub async fn address_delegations<T: ApiServerStorage>(
             "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
                 "no error in encoding"
             ).get(),
-            "balance": amount_to_json(*delegation.balance()),
+            "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         })
         ).collect::<Vec<_>>(),
     ))
@@ -832,9 +832,9 @@ pub async fn pools<T: ApiServerStorage>(
         json!({
             "pool_id": pool_id.get(),
             "decommission_destination": decommission_destination.get(),
-            "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow")),
+            "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
             "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
-            "cost_per_block": amount_to_json(pool_data.cost_per_block()),
+            "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
             "vrf_public_key": vrf_key.get(),
         })
     });
@@ -877,9 +877,9 @@ pub async fn pool<T: ApiServerStorage>(
         .expect("no error in encoding");
     Ok(Json(json!({
         "decommission_destination": decommission_destination.get(),
-        "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow")),
+        "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
         "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
-        "cost_per_block": amount_to_json(pool_data.cost_per_block()),
+        "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
         "vrf_public_key": vrf_key.get(),
     })))
 }
@@ -968,7 +968,7 @@ pub async fn pool_delegations<T: ApiServerStorage>(
             "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
                 "no error in encoding"
             ).get(),
-            "balance": amount_to_json(*delegation.balance()),
+            "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         })
         ).collect::<Vec<_>>(),
     ))
@@ -1006,7 +1006,7 @@ pub async fn delegation<T: ApiServerStorage>(
         "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
             "no error in encoding"
         ).get(),
-        "balance": amount_to_json(*delegation.balance()),
+        "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         "next_nonce": delegation.next_nonce(),
         "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
             "no error in encoding"
@@ -1047,7 +1047,7 @@ pub async fn token<T: ApiServerStorage>(
             "no error in encoding"
         ).get(),
         "is_locked": token.is_locked,
-        "circulating_supply": amount_to_json(token.circulating_supply),
+        "circulating_supply": amount_to_json(token.circulating_supply, token.number_of_decimals),
         "metadata_uri": token.metadata_uri,
         "number_of_decimals": token.number_of_decimals,
         "total_supply": token.total_supply,

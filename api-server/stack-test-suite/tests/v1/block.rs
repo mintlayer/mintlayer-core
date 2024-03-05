@@ -19,7 +19,7 @@ use common::{
     primitives::{per_thousand::PerThousand, time::get_time, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use std::sync::RwLock;
+use std::{collections::BTreeMap, sync::RwLock};
 
 use api_web_server::{
     api::json_helpers::{block_header_to_json, tx_to_json, txoutput_to_json},
@@ -151,7 +151,7 @@ async fn ok(#[case] seed: Seed) {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, tf.chain_config()))
+                        .map(|out| txoutput_to_json(out, tf.chain_config(), &TokenDecimals::Single(None)))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
@@ -203,7 +203,7 @@ async fn ok(#[case] seed: Seed) {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, tf.chain_config()))
+                        .map(|out| txoutput_to_json(out, tf.chain_config(), &TokenDecimals::Single(None)))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
@@ -286,6 +286,7 @@ async fn get_tx_additional_data(
         tx_additional_data.push(TxAdditionalInfo {
             input_utxos,
             fee: Amount::ZERO,
+            token_decimals: BTreeMap::new(),
         });
     }
     tx_additional_data
