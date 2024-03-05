@@ -149,7 +149,7 @@ trait ChainstateRpc {
         include_orphans: bool,
     ) -> RpcResult<()>;
 
-    /// Imports a a bootstrap file's blocks to this node
+    /// Imports a bootstrap file's blocks to this node
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
 
