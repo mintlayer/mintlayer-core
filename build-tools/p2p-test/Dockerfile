@@ -4,7 +4,7 @@ WORKDIR /src/
 
 RUN apt-get update && \
     apt-get install -y \
-    ca-certificates libgtk-3-dev \
+    ca-certificates \
     nmap procps net-tools iputils-ping dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
