@@ -15,7 +15,10 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::{chain::SignedTransaction, primitives::time::Time};
+use common::{
+    chain::SignedTransaction,
+    primitives::{time::Time, Idable},
+};
 use mempool::{
     tx_options::{TxOptions, TxOptionsOverrides},
     tx_origin::LocalTxOrigin,
@@ -145,6 +148,10 @@ where
         options: TxOptionsOverrides,
     ) -> crate::Result<()> {
         let origin = LocalTxOrigin::P2p;
+        logging::log::debug!(
+            "New tx is being submited from P2p: {}",
+            tx.transaction().get_id()
+        );
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
         let res = self
             .mempool_handle

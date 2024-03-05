@@ -124,7 +124,10 @@ impl MempoolRpcServer for super::MempoolHandle {
         options: TxOptionsOverrides,
     ) -> rpc::RpcResult<()> {
         let tx = tx.take();
-        logging::log::debug!("New tx is being submited: {}", tx.transaction().get_id());
+        logging::log::debug!(
+            "New tx is being submited from mempool RPC: {}",
+            tx.transaction().get_id()
+        );
         let origin = LocalTxOrigin::Mempool;
         let options = TxOptions::default_for(origin.into()).with_overrides(options);
         let res = self

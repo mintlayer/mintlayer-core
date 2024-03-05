@@ -213,6 +213,10 @@ where
                 self.handle_transaction_request(id).await
             }
             TransactionSyncMessage::TransactionResponse(tx) => {
+                log::debug!(
+                    "[peer id = {}] Handling tx sync message from the peer",
+                    self.id()
+                );
                 self.handle_transaction_response(tx).await
             }
         };
@@ -280,6 +284,11 @@ where
             let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
             let options = TxOptions::default_for(origin.into());
             let txid = transaction.transaction().get_id();
+            log::warn!(
+                "[peer id = {}] TransactionResponse for tx {}",
+                self.id,
+                txid
+            );
             let tx_status = self
                 .mempool_handle
                 .call_mut(move |m| m.add_transaction_remote(transaction, origin, options))
