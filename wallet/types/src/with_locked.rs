@@ -13,10 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rpc_description::ValueHint as VH;
+
 /// Enum used to specify whether to include locked balance/utxos for wallet commands
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum WithLocked {
     Any,
     Unlocked,
     Locked,
+}
+
+impl rpc_description::HasValueHint for WithLocked {
+    const HINT: VH =
+        VH::Choice(&[&VH::StrLit("Any"), &VH::StrLit("Unlocked"), &VH::StrLit("Locked")]);
 }

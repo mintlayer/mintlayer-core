@@ -164,6 +164,10 @@ impl BlockHeight {
     }
 }
 
+impl rpc_description::HasValueHint for BlockHeight {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
+}
+
 /////////////////////////////
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]

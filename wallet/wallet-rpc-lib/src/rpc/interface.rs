@@ -21,7 +21,7 @@ use common::{
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -40,6 +40,7 @@ trait WalletEventsRpc {
     async fn subscribe_wallet_events(&self) -> rpc::subscription::Reply;
 }
 
+#[rpc::describe]
 #[rpc::rpc(server, client)]
 trait WalletRpc {
     #[method(name = "shutdown")]
@@ -166,8 +167,7 @@ trait WalletRpc {
     ) -> rpc::RpcResult<ComposedTransaction>;
 
     #[method(name = "transaction_inspect")]
-    async fn transaction_inspect(&self, transaction: String)
-        -> rpc::RpcResult<InsepectTransaction>;
+    async fn transaction_inspect(&self, transaction: String) -> rpc::RpcResult<InspectTransaction>;
 
     #[method(name = "staking_create_pool")]
     async fn create_stake_pool(

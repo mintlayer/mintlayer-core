@@ -18,6 +18,11 @@ mod rpc_auth;
 pub mod rpc_creds;
 pub mod subscription;
 
+/// Data structures describing an RPC interface
+pub use rpc_description as description;
+/// A macro to generate RPC interface description for given trait. Has to come before `#[rpc(...)]`
+pub use rpc_description_macro::describe;
+
 use std::{net::SocketAddr, path::PathBuf};
 
 use base64::Engine;
@@ -250,6 +255,3 @@ fn make_http_header_value(username: &str, password: &str) -> http::HeaderValue {
     let creds = base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"));
     http::HeaderValue::from_str(&format!("Basic {creds}")).expect("Should not fail")
 }
-
-#[cfg(test)]
-mod tests;

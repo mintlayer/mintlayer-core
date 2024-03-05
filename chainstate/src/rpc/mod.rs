@@ -37,6 +37,7 @@ use common::{
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 
+#[rpc::describe]
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
     /// Get the best block ID

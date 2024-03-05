@@ -295,3 +295,7 @@ impl TextSummary for TxOutput {
         }
     }
 }
+
+impl rpc_description::HasValueHint for TxOutput {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
+}

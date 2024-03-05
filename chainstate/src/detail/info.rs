@@ -19,6 +19,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use rpc::description::ValueHint as VH;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChainInfo {
@@ -27,4 +28,14 @@ pub struct ChainInfo {
     pub best_block_timestamp: BlockTimestamp,
     pub median_time: BlockTimestamp,
     pub is_initial_block_download: bool,
+}
+
+impl rpc::description::HasValueHint for ChainInfo {
+    const HINT: VH = VH::Object(&[
+        ("best_block_height", &BlockHeight::HINT),
+        ("best_block_id", &<Id<GenBlock>>::HINT),
+        ("best_block_timestamp", &BlockTimestamp::HINT),
+        ("median_time", &BlockTimestamp::HINT),
+        ("is_initial_block_download", &bool::HINT),
+    ]);
 }

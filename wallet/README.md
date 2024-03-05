@@ -54,3 +54,9 @@ The server that can be used as a service. The wallet-cli cannot be used as a sys
 The RPC for the wallet (whether from the daemon or cli) has the default port values 3034 for mainnet and 13034 for testnet. There are different modes of authentication similar to those of the node. Run the `wallet-rpc-daemon` with the command-line argument `--help` to see the available options.
 
 Any http and websocket RPC client can communicate with the RPC daemon. To see examples, [visit this readme file](wallet-rpc-daemon/README.md).
+
+#### Cold-wallet mode
+
+Both the `wallet-cli` and `wallet-rpc-daemon` support a "cold wallet" mode, by using the command-line argument `--cold-wallet`. In this mode, the wallet does not attempt communication with a node. This wallet is assumed to not be connected to the internet.
+
+It is highly recommended to not use the cold-wallet file for both cold- and hot-wallets. A cold-wallet file is assumed to only be used for the cold-wallet.

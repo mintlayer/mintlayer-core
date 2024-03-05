@@ -69,6 +69,10 @@ impl BlockTimestamp {
     }
 }
 
+impl rpc_description::HasValueHint for BlockTimestamp {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

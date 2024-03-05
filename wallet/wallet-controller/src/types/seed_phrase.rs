@@ -35,3 +35,10 @@ impl SeedWithPassPhrase {
         }
     }
 }
+
+impl rpc_description::HasValueHint for SeedWithPassPhrase {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
+        ("seed_phrase", &<Vec<String>>::HINT),
+        ("passphrase", &<Option<String>>::HINT),
+    ]);
+}

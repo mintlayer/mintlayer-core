@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::tx_origin::{LocalTxOrigin, TxOrigin};
+use rpc_description::ValueHint as VH;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize, Default)]
 pub enum TxTrustPolicy {
@@ -89,4 +90,11 @@ impl TxOptions {
 pub struct TxOptionsOverrides {
     /// Override transaction trust policy.
     trust_policy: Option<TxTrustPolicy>,
+}
+
+impl rpc_description::HasValueHint for TxOptionsOverrides {
+    const HINT: VH = VH::Object(&[(
+        "trust_policy",
+        &VH::Choice(&[&VH::StrLit("Trusted"), &VH::StrLit("Untrusted")]),
+    )]);
 }

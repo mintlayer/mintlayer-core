@@ -5,7 +5,9 @@ to generate addresses, query balances, submit transactions, stake coins and more
 
 At the moment, the wallet needs to connect to a full node to be operational.
 
-The full set of methods is specified in [wallet-rpc-lib/src/rpc/interface.rs](/wallet/wallet-rpc-lib/src/rpc/interface.rs).
+## Available commands for the wallet RPC
+
+The full set of methods is specified in [this readme file](./docs/RPC.md).
 
 ## Accessing from command line
 

@@ -34,6 +34,7 @@ use serialization::{hex::HexDecode, hex::HexEncode, hex_encoded::HexEncoded};
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 
+#[rpc::describe]
 #[rpc::rpc(server, namespace = "test_functions")]
 trait RpcTestFunctionsRpc {
     #[method(name = "genesis_pool_id")]

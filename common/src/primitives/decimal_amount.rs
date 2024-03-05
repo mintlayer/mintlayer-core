@@ -151,6 +151,10 @@ impl serde::Serialize for DecimalAmount {
     }
 }
 
+impl rpc_description::HasValueHint for DecimalAmount {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim("decimal string");
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum StringOrUint {

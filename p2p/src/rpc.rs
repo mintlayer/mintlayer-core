@@ -24,6 +24,7 @@ use utils_networking::IpOrSocketAddress;
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use rpc::RpcResult;
 
+#[rpc::describe]
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
     /// Try to connect to a remote node (just once).

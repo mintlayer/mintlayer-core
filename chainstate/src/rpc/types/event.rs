@@ -17,6 +17,7 @@ use common::{
     chain::Block,
     primitives::{BlockHeight, Id},
 };
+use rpc::description::ValueHint as VH;
 
 use crate::ChainstateEvent;
 
@@ -31,4 +32,11 @@ impl RpcEvent {
             ChainstateEvent::NewTip(id, height) => Self::NewTip { id, height },
         }
     }
+}
+
+impl rpc::description::HasValueHint for RpcEvent {
+    const HINT: VH = VH::Object(&[(
+        "NewTip",
+        &VH::Object(&[("id", &<Id<Block>>::HINT), ("height", &BlockHeight::HINT)]),
+    )]);
 }

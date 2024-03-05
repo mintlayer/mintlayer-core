@@ -32,7 +32,7 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InsepectTransaction,
+    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
     NewTransaction, NftMetadata, SignatureStats, TokenMetadata, ValidatedSignatures,
 };
 
@@ -995,7 +995,7 @@ where
             }
 
             WalletCommand::InspectTransaction { transaction } => {
-                let InsepectTransaction {
+                let InspectTransaction {
                     tx,
                     stats:
                         SignatureStats {

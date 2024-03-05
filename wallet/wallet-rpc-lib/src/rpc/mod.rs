@@ -46,11 +46,13 @@ use common::{
         Idable,
     },
 };
-pub use interface::{WalletEventsRpcServer, WalletRpcClient, WalletRpcServer};
+pub use interface::{
+    WalletEventsRpcServer, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+};
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, InsepectTransaction, SeedWithPassPhrase,
+        Balances, BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase,
         TransactionToInspect, WalletInfo,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
@@ -577,7 +579,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn transaction_inspect(&self, raw_tx: String) -> WRpcResult<InsepectTransaction, N> {
+    pub async fn transaction_inspect(&self, raw_tx: String) -> WRpcResult<InspectTransaction, N> {
         let hex_bytes = hex::decode(raw_tx).map_err(|_| RpcError::InvalidRawTransaction)?;
         let mut bytes = hex_bytes.as_slice();
         let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;

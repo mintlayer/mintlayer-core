@@ -17,6 +17,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock, SignedTransaction},
     primitives::{Amount, Id},
 };
+use rpc::description::ValueHint as VH;
 use serialization::{Compact, Encode};
 
 use crate::pool::fee::Fee;
@@ -31,6 +32,11 @@ pub enum TxAccumulatorError {
 pub enum PackingStrategy {
     FillSpaceFromMempool,
     LeaveEmptySpace,
+}
+
+impl rpc::description::HasValueHint for PackingStrategy {
+    const HINT: VH =
+        VH::Choice(&[&VH::StrLit("FillSpaceFromMempool"), &VH::StrLit("LeaveEmptySpace")]);
 }
 
 pub trait TransactionAccumulator: Send {

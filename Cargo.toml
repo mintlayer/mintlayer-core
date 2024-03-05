@@ -38,6 +38,9 @@ members = [
   "p2p/types",                          # P2p support types with minimal dependencies.
   "pos-accounting",                     # PoS accounting and balances abstractions.
   "rpc",                                # Rpc abstraction and implementation.
+  "rpc/description",                    # Data types describing an RPC interface.
+  "rpc/description-macro",              # Macro to generate rpc interface description.
+  "rpc/gen-rpc-docs",                   # A tool to generate RPC documentation.
   "script",                             # Bitcoin script and its interfaces.
   "serialization",                      # Full featured serialization interfaces and implementations.
   "serialization/core",                 # Serialization core tools.
@@ -68,7 +71,7 @@ members = [
   "wallet/wallet-rpc-daemon",           # Wallet RPC daemon binary.
   "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
   "wallet/wallet-test-node",            # Node for wallet testing as a library.
-  "wasm-wrappers",                      # WASM wrappers for various components
+  "wasm-wrappers",                      # WASM wrappers for various components.
 ]
 
 default-members = [

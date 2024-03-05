@@ -222,6 +222,10 @@ impl<T> AsRef<[u8]> for Id<T> {
     }
 }
 
+impl<T> rpc_description::HasValueHint for Id<T> {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
 pub trait Idable {
     type Tag: TypeName;

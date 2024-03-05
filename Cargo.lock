@@ -1287,6 +1287,7 @@ dependencies = [
  "proptest",
  "ref-cast",
  "regex",
+ "rpc-description",
  "rstest",
  "script",
  "serde",
@@ -2407,6 +2408,21 @@ dependencies = [
  "pango-sys",
  "pkg-config",
  "system-deps",
+]
+
+[[package]]
+name = "gen-rpc-docs"
+version = "0.3.0"
+dependencies = [
+ "blockprod",
+ "chainstate",
+ "clap",
+ "mempool",
+ "node-lib",
+ "p2p",
+ "rpc-description",
+ "test-rpc-functions",
+ "wallet-rpc-lib",
 ]
 
 [[package]]
@@ -3753,6 +3769,7 @@ name = "mempool-types"
 version = "0.3.0"
 dependencies = [
  "p2p-types",
+ "rpc-description",
  "serde",
 ]
 
@@ -4590,6 +4607,7 @@ version = "0.3.0"
 dependencies = [
  "common",
  "parity-scale-codec",
+ "rpc-description",
  "serde",
  "serialization",
 ]
@@ -5559,10 +5577,13 @@ dependencies = [
  "async-trait",
  "base64 0.22.0",
  "crypto",
+ "expect-test",
  "http",
  "hyper",
  "jsonrpsee",
  "logging",
+ "rpc-description",
+ "rpc-description-macro",
  "rstest",
  "serde",
  "serde_json",
@@ -5574,6 +5595,22 @@ dependencies = [
  "tower-http",
  "utils",
  "utils-networking",
+]
+
+[[package]]
+name = "rpc-description"
+version = "0.3.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "rpc-description-macro"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -6074,6 +6111,7 @@ name = "serialization"
 version = "0.3.0"
 dependencies = [
  "hex",
+ "rpc-description",
  "serde",
  "serde_json",
  "serialization-core",
@@ -7537,6 +7575,7 @@ version = "0.3.0"
 dependencies = [
  "addr",
  "itertools 0.12.1",
+ "rpc-description",
  "serde_test",
  "serde_with",
  "test-utils",
@@ -7654,6 +7693,7 @@ dependencies = [
  "mempool",
  "parity-scale-codec",
  "pos-accounting",
+ "rpc-description",
  "rstest",
  "serde",
  "serialization",
@@ -7772,6 +7812,7 @@ dependencies = [
  "mempool-types",
  "node-comm",
  "p2p-types",
+ "rpc-description",
  "rstest",
  "serde",
  "serialization",
@@ -7913,6 +7954,7 @@ dependencies = [
  "hex",
  "itertools 0.12.1",
  "parity-scale-codec",
+ "rpc-description",
  "rstest",
  "serde",
  "serialization",

@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
-
-use super::*;
+use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
 use crypto::random::{
     distributions::{Alphanumeric, DistString},
@@ -26,7 +24,15 @@ use jsonrpsee::rpc_params;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-#[rpc(server, namespace = "some_subsystem")]
+use rpc::{
+    new_http_client, new_ws_client, rpc_creds::RpcCreds, subscription, Builder, Rpc, RpcAuthData,
+    RpcClientResult, RpcResult,
+};
+
+mod desc;
+
+#[rpc::describe]
+#[rpc::rpc(server, namespace = "some_subsystem")]
 pub trait SubsystemRpc {
     #[method(name = "name")]
     fn name(&self) -> RpcResult<String>;
@@ -36,9 +42,17 @@ pub trait SubsystemRpc {
 
     #[subscription(name = "subscribe_squares", item = u32)]
     async fn subscribe_squares(&self) -> subscription::Reply;
+
+    #[method(name = "convoluted")]
+    fn convoluted(
+        &self,
+        first: Option<bool>,
+        second: (String, u64, Option<usize>),
+        third: BTreeMap<String, std::time::Duration>,
+    ) -> RpcResult<Vec<String>>;
 }
 
-#[rpc(server, namespace = "example_server")]
+#[rpc::rpc(server, namespace = "example_server")]
 trait RpcInfo {
     #[method(name = "protocol_version")]
     fn protocol_version(&self) -> RpcResult<String>;
@@ -70,13 +84,23 @@ impl SubsystemRpcServer for SubsystemRpcImpl {
         }
         Ok(())
     }
+
+    fn convoluted(
+        &self,
+        _first: Option<bool>,
+        _second: (String, u64, Option<usize>),
+        _third: BTreeMap<String, std::time::Duration>,
+    ) -> RpcResult<Vec<String>> {
+        Ok(Vec::new())
+    }
 }
 
 #[tokio::test]
 async fn method_list() -> anyhow::Result<()> {
-    const METHOD_LIST: [&str; 5] = [
+    const METHOD_LIST: [&str; 6] = [
         "method_list",
         "some_subsystem_add",
+        "some_subsystem_convoluted",
         "some_subsystem_name",
         "some_subsystem_subscribe_squares",
         "some_subsystem_unsubscribe_squares",

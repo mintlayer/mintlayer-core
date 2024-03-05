@@ -167,6 +167,11 @@ impl Display for Time {
     }
 }
 
+impl rpc_description::HasValueHint for Time {
+    const HINT: rpc_description::ValueHint =
+        rpc_description::ValueHint::Object(&[("time", &Duration::HINT)]);
+}
+
 #[cfg(test)]
 mod tests {
     use logging::log;
