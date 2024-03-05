@@ -15,7 +15,7 @@
 
 //! Mempool subsystem RPC handler
 
-use std::{num::NonZeroUsize, str::FromStr};
+use std::num::NonZeroUsize;
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -99,9 +99,9 @@ trait MempoolRpc {
 
     /// Set the maximum allowed size of all transactions in the mempool.
     ///
-    /// The parameter is a string, can be written with proper units, such as "100 MB", or "500 KB"
+    /// The parameter is either a string, can be written with proper units, such as "100 MB", or "500 KB", or an integer taken as bytes.
     #[method(name = "set_size_limit")]
-    async fn set_size_limit(&self, max_size: String) -> RpcResult<()>;
+    async fn set_size_limit(&self, max_size: MempoolMaxSize) -> RpcResult<()>;
 
     /// Get the current fee rate of the mempool, that puts the transaction in the top X MBs of the mempool.
     /// X, in this description, is provided as a parameter.
@@ -178,9 +178,7 @@ impl MempoolRpcServer for super::MempoolHandle {
         rpc::handle_result(self.call(|this| this.get_size_limit().as_bytes()).await)
     }
 
-    async fn set_size_limit(&self, max_size: String) -> rpc::RpcResult<()> {
-        let bytes: byte_unit::Byte = rpc::handle_result(byte_unit::Byte::from_str(&max_size))?;
-        let max_size = MempoolMaxSize::from_bytes(bytes.as_u64() as usize);
+    async fn set_size_limit(&self, max_size: MempoolMaxSize) -> rpc::RpcResult<()> {
         rpc::handle_result(self.call_mut(move |this| this.set_size_limit(max_size)).await)
     }
 

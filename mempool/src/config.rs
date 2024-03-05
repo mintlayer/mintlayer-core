@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use common::primitives::{Amount, BlockDistance};
+use rpc::description::HasValueHint;
 use utils::make_config_setting;
 
 use crate::FeeRate;
@@ -44,6 +45,61 @@ impl std::fmt::Display for MempoolMaxSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}B", self.0)
     }
+}
+
+impl serde::Serialize for MempoolMaxSize {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u64(self.0 as u64)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum StringOrUint {
+    String(String),
+    UInt(u64),
+}
+
+impl<'de> serde::Deserialize<'de> for MempoolMaxSize {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        match StringOrUint::deserialize(deserializer)? {
+            StringOrUint::String(s) => {
+                let bytes: byte_unit::Byte = rpc::handle_result(byte_unit::Byte::from_str(&s))
+                    .map_err(|e| {
+                        D::Error::custom(format!(
+                            "Conversion to integer from data size failed: {e}"
+                        ))
+                    })?;
+
+                let bytes: usize = bytes.as_u64().try_into().map_err(|_| {
+                    D::Error::custom(format!("Integer {} is too large to fit", bytes))
+                })?;
+
+                let max_size = MempoolMaxSize::from_bytes(bytes);
+
+                Ok(max_size)
+            }
+            StringOrUint::UInt(bytes) => {
+                let bytes: usize = bytes.try_into().map_err(|_| {
+                    D::Error::custom(format!("Integer {} is too large to fit", bytes))
+                })?;
+
+                let max_size = MempoolMaxSize::from_bytes(bytes);
+
+                Ok(max_size)
+            }
+        }
+    }
+}
+
+impl HasValueHint for MempoolMaxSize {
+    const HINT: rpc_description::ValueHint =
+        rpc_description::ValueHint::Prim("Size with units, such as MB/KB/GB, or integer for bytes");
 }
 
 pub const ENABLE_RBF: bool = false;
