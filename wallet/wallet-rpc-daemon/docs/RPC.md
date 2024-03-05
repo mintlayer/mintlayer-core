@@ -37,17 +37,25 @@ Parameters:
 {
     "path": string,
     "store_seed_phrase": bool,
-    "mnemonic": string OR null,
-    "passphrase": string OR null,
+    "mnemonic": EITHER OF
+         1) string
+         2) null,
+    "passphrase": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-"UserProvidedMenmonic" OR { "NewlyGeneratedMnemonic": [
-    string,
-    string OR null,
-] }
+EITHER OF
+     1) "UserProvidedMenmonic"
+     2) { "NewlyGeneratedMnemonic": [
+            string,
+            EITHER OF
+                 1) string
+                 2) null,
+        ] }
 ```
 
 
@@ -57,7 +65,9 @@ Parameters:
 ```
 {
     "path": string,
-    "password": string OR null,
+    "password": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -91,7 +101,9 @@ Returns:
 ```
 {
     "wallet_id": hex string,
-    "account_names": [ string OR null, .. ],
+    "account_names": [ EITHER OF
+         1) string
+         2) null, .. ],
 }
 ```
 
@@ -131,10 +143,14 @@ Parameters:
 
 Returns:
 ```
-{
-    "seed_phrase": [ string, .. ],
-    "passphrase": string OR null,
-} OR null
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
 ```
 
 
@@ -147,10 +163,14 @@ Parameters:
 
 Returns:
 ```
-{
-    "seed_phrase": [ string, .. ],
-    "passphrase": string OR null,
-} OR null
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
 ```
 
 
@@ -242,14 +262,18 @@ Returns:
 
 Parameters:
 ```
-{ "name": string OR null }
+{ "name": EITHER OF
+     1) string
+     2) null }
 ```
 
 Returns:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -260,7 +284,9 @@ Parameters:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -268,7 +294,9 @@ Returns:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -331,7 +359,11 @@ Parameters:
 ```
 {
     "account": number,
-    "with_locked": "Any" OR "Unlocked" OR "Locked" OR null,
+    "with_locked": EITHER OF
+         1) "Any"
+         2) "Unlocked"
+         3) "Locked"
+         4) null,
 }
 ```
 
@@ -364,7 +396,9 @@ Parameters:
 {
     "tx": hex string,
     "do_not_store": bool,
-    "options": { "trust_policy": "Trusted" OR "Untrusted" },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
@@ -383,7 +417,9 @@ Parameters:
     "address": string,
     "amount": decimal string,
     "selected_utxos": [ {
-        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     }, .. ],
     "options": { "in_top_x_mb": number },
@@ -405,10 +441,14 @@ Parameters:
     "address": string,
     "amount_str": decimal string,
     "selected_utxo": {
-        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     },
-    "change_address": string OR null,
+    "change_address": EITHER OF
+         1) string
+         2) null,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -436,17 +476,21 @@ Returns:
 ```
 {
     "tx": hex string,
-    "fees": {
-        "coins": decimal string,
-        "tokens": { hex string: decimal string, .. },
-    } OR null,
+    "fees": EITHER OF
+         1) {
+                "coins": decimal string,
+                "tokens": { hex string: decimal string, .. },
+            }
+         2) null,
     "stats": {
         "num_inputs": number,
         "total_signatures": number,
-        "validated_signatures": {
-            "num_valid_signatures": number,
-            "num_invalid_signatures": number,
-        } OR null,
+        "validated_signatures": EITHER OF
+             1) {
+                    "num_valid_signatures": number,
+                    "num_invalid_signatures": number,
+                }
+             2) null,
     },
 }
 ```
@@ -479,7 +523,9 @@ Parameters:
 {
     "account": number,
     "pool_id": string,
-    "output_address": string OR null,
+    "output_address": EITHER OF
+         1) string
+         2) null,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -497,7 +543,9 @@ Parameters:
 {
     "account": number,
     "pool_id": string,
-    "output_address": string OR null,
+    "output_address": EITHER OF
+         1) string
+         2) null,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -601,7 +649,9 @@ Parameters:
 
 Returns:
 ```
-"Staking" OR "NotStaking"
+EITHER OF
+     1) "Staking"
+     2) "NotStaking"
 ```
 
 
@@ -636,7 +686,9 @@ Parameters:
 
 Returns:
 ```
-{ "balance": string OR null }
+{ "balance": EITHER OF
+     1) string
+     2) null }
 ```
 
 
@@ -732,10 +784,18 @@ Parameters:
         "name": string,
         "description": string,
         "ticker": string,
-        "creator": hex string OR null,
-        "icon_uri": string OR null,
-        "media_uri": string OR null,
-        "additional_metadata_uri": string OR null,
+        "creator": EITHER OF
+             1) hex string
+             2) null,
+        "icon_uri": EITHER OF
+             1) string
+             2) null,
+        "media_uri": EITHER OF
+             1) string
+             2) null,
+        "additional_metadata_uri": EITHER OF
+             1) string
+             2) null,
     },
     "options": { "in_top_x_mb": number },
 }
@@ -761,7 +821,10 @@ Parameters:
         "token_ticker": string,
         "number_of_decimals": number,
         "metadata_uri": string,
-        "token_supply": { "Fixed": decimal string } OR "Lockable" OR "Unlimited",
+        "token_supply": EITHER OF
+             1) { "Fixed": decimal string }
+             2) "Lockable"
+             3) "Unlimited",
         "is_freezable": bool,
     },
     "options": { "in_top_x_mb": number },
@@ -1067,13 +1130,25 @@ Returns:
 [ {
     "peer_id": number,
     "address": string,
-    "peer_role": "Inbound" OR "OutboundFullRelay" OR "OutboundBlockRelay" OR "OutboundReserved" OR "OutboundManual" OR "Feeler",
+    "peer_role": EITHER OF
+         1) "Inbound"
+         2) "OutboundFullRelay"
+         3) "OutboundBlockRelay"
+         4) "OutboundReserved"
+         5) "OutboundManual"
+         6) "Feeler",
     "ban_score": number,
     "user_agent": string,
     "software_version": string,
-    "ping_wait": number OR null,
-    "ping_last": number OR null,
-    "ping_min": number OR null,
+    "ping_wait": EITHER OF
+         1) number
+         2) null,
+    "ping_last": EITHER OF
+         1) number
+         2) null,
+    "ping_min": EITHER OF
+         1) number
+         2) null,
 }, .. ]
 ```
 
@@ -1184,7 +1259,9 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string OR null,
+    "address": EITHER OF
+         1) string
+         2) null,
     "limit": number,
 }
 ```
@@ -1341,7 +1418,9 @@ Parameters:
 ```
 {
     "inputs": [ {
-        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     }, .. ],
     "outputs": [ object, .. ],
@@ -1396,7 +1475,9 @@ Parameters:
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
 
 
@@ -1441,7 +1522,9 @@ Parameters:
 
 Returns:
 ```
-string OR null
+EITHER OF
+     1) string
+     2) null
 ```
 
 

@@ -48,11 +48,15 @@ Unsubscribe using `some_subsystem_unsubscribe_squares`.
 Parameters:
 ```
 {
-    "first": bool OR null,
+    "first": EITHER OF
+         1) bool
+         2) null,
     "second": [
         string,
         number,
-        number OR null,
+        EITHER OF
+             1) number
+             2) null,
     ],
     "third": { string: [
         secs number,

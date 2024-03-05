@@ -99,11 +99,25 @@ impl std::fmt::Display for Method {
 }
 
 impl ValueHint {
+    fn collect_choices<'a>(start: &'a [&'a Self]) -> Vec<&'a Self> {
+        let mut out = Vec::new();
+        Self::collect_choices_impl(&mut out, start);
+        out
+    }
+
+    fn collect_choices_impl<'a>(out: &mut Vec<&'a Self>, hints: &'a [&'a Self]) {
+        for hint in hints {
+            match *hint {
+                Self::Choice(subhints) => Self::collect_choices_impl(out, subhints),
+                hint => out.push(hint),
+            }
+        }
+    }
+
     fn fmt_indent(&self, indent: usize, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let indent_str = "    ";
-        let bullet = "  * ";
-        let next_indent = indent + indent_str.len();
-        assert_eq!(indent_str.len(), bullet.len());
+        let indent_len = indent_str.len();
+        let next_indent = indent + indent_len;
 
         // Implementing indentation can be a bit tricky. Here are some general rules:
         //
@@ -118,39 +132,41 @@ impl ValueHint {
             ValueHint::StrLit(s) => write!(f, "{s:?}")?,
 
             ValueHint::Choice(hints) => {
-                if hints.is_empty() {
-                    f.write_str("impossible")?;
-                    return Ok(());
-                }
-                let mut hints = hints.iter();
-                if let Some(hint) = hints.next() {
-                    hint.fmt_indent(indent, f)?;
-                }
-                for hint in hints {
-                    f.write_str(" OR ")?;
-                    hint.fmt_indent(indent, f)?;
+                match Self::collect_choices(hints).as_slice() {
+                    [] => f.write_str("impossible")?,
+                    [hint] => hint.fmt_indent(indent, f)?,
+                    hints => {
+                        write!(f, "EITHER OF\n{:indent$}", "")?;
+                        let pad = 2 * indent_len - 2;
+                        for (n, hint) in hints.iter().enumerate() {
+                            let n = n + 1;
+                            write!(f, "{n:pad$}) ")?;
+                            hint.fmt_indent(next_indent + indent_len, f)?;
+                            if n < hints.len() {
+                                write!(f, "\n{:indent$}", "")?;
+                            }
+                        }
+                    }
                 }
             }
 
-            ValueHint::Object(hints) => {
-                match *hints {
-                    [] => f.write_str("{}")?,
-                    [(name, hint)] => {
-                        write!(f, "{{ {name:?}: ")?;
-                        hint.fmt_indent(indent, f)?;
-                        f.write_str(" }")?;
+            ValueHint::Object(hints) => match *hints {
+                [] => f.write_str("{}")?,
+                [(name, hint)] => {
+                    write!(f, "{{ {name:?}: ")?;
+                    hint.fmt_indent(indent, f)?;
+                    f.write_str(" }")?;
+                }
+                hints => {
+                    write!(f, "{{\n{:indent$}", "")?;
+                    for (name, hint) in hints {
+                        write!(f, "{indent_str}{name:?}: ")?;
+                        hint.fmt_indent(next_indent, f)?;
+                        write!(f, ",\n{:indent$}", "")?;
                     }
-                    hints => {
-                        write!(f, "{{\n{:indent$}", "")?;
-                        for (name, hint) in hints {
-                            write!(f, "{indent_str}{name:?}: ")?;
-                            hint.fmt_indent(next_indent, f)?;
-                            write!(f, ",\n{:indent$}", "")?;
-                        }
-                        f.write_str("}")?;
-                    }
-                };
-            }
+                    f.write_str("}")?;
+                }
+            },
 
             ValueHint::Map(key, val) => {
                 f.write_str("{ ")?;

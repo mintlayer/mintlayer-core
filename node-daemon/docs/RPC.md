@@ -90,7 +90,9 @@ Parameters:
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
 
 
@@ -109,7 +111,9 @@ Parameters:
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
 
 
@@ -125,7 +129,9 @@ Parameters:
 
 Returns:
 ```
-json OR null
+EITHER OF
+     1) json
+     2) null
 ```
 
 
@@ -159,14 +165,18 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 Parameters:
 ```
 { "outpoint": {
-    "id": { "Transaction": hex string } OR { "BlockReward": hex string },
+    "id": EITHER OF
+         1) { "Transaction": hex string }
+         2) { "BlockReward": hex string },
     "index": number,
 } }
 ```
 
 Returns:
 ```
-object OR null
+EITHER OF
+     1) object
+     2) null
 ```
 
 
@@ -236,7 +246,9 @@ Parameters:
 
 Returns:
 ```
-number OR null
+EITHER OF
+     1) number
+     2) null
 ```
 
 
@@ -272,10 +284,12 @@ Parameters:
 
 Returns:
 ```
-[
-    hex string,
-    number,
-] OR null
+EITHER OF
+     1) [
+            hex string,
+            number,
+        ]
+     2) null
 ```
 
 
@@ -294,7 +308,9 @@ Parameters:
 
 Returns:
 ```
-{ "val": number } OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
 
 
@@ -313,7 +329,9 @@ Parameters:
 
 Returns:
 ```
-{ "val": number } OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
 
 
@@ -333,7 +351,9 @@ Parameters:
 
 Returns:
 ```
-{ "val": number } OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
 
 
@@ -349,7 +369,10 @@ Parameters:
 
 Returns:
 ```
-{ "FungibleToken": object } OR { "NonFungibleToken": object } OR null
+EITHER OF
+     1) { "FungibleToken": object }
+     2) { "NonFungibleToken": object }
+     3) null
 ```
 
 
@@ -484,11 +507,17 @@ Parameters:
 
 Returns:
 ```
-{
-    "id": hex string,
-    "status": "InMempool" OR "InMempoolDuplicate" OR "InOrphanPool" OR "InOrphanPoolDuplicate",
-    "transaction": hex string,
-} OR null
+EITHER OF
+     1) {
+            "id": hex string,
+            "status": EITHER OF
+                 1) "InMempool"
+                 2) "InMempoolDuplicate"
+                 3) "InOrphanPool"
+                 4) "InOrphanPoolDuplicate",
+            "transaction": hex string,
+        }
+     2) null
 ```
 
 
@@ -523,7 +552,9 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": { "trust_policy": "Trusted" OR "Untrusted" },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
@@ -805,13 +836,25 @@ Returns:
 [ {
     "peer_id": number,
     "address": string,
-    "peer_role": "Inbound" OR "OutboundFullRelay" OR "OutboundBlockRelay" OR "OutboundReserved" OR "OutboundManual" OR "Feeler",
+    "peer_role": EITHER OF
+         1) "Inbound"
+         2) "OutboundFullRelay"
+         3) "OutboundBlockRelay"
+         4) "OutboundReserved"
+         5) "OutboundManual"
+         6) "Feeler",
     "ban_score": number,
     "user_agent": string,
     "software_version": string,
-    "ping_wait": number OR null,
-    "ping_last": number OR null,
-    "ping_min": number OR null,
+    "ping_wait": EITHER OF
+         1) number
+         2) null,
+    "ping_last": EITHER OF
+         1) number
+         2) null,
+    "ping_min": EITHER OF
+         1) number
+         2) null,
 }, .. ]
 ```
 
@@ -878,7 +921,9 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": { "trust_policy": "Trusted" OR "Untrusted" },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
@@ -940,7 +985,9 @@ Parameters:
     "input_data": hex string,
     "transactions": [ hex string, .. ],
     "transaction_ids": [ hex string, .. ],
-    "packing_strategy": "FillSpaceFromMempool" OR "LeaveEmptySpace",
+    "packing_strategy": EITHER OF
+         1) "FillSpaceFromMempool"
+         2) "LeaveEmptySpace",
 }
 ```
 
@@ -982,7 +1029,9 @@ Parameters:
     "e2e_public_key": hex string,
     "transactions": [ hex string, .. ],
     "transaction_ids": [ hex string, .. ],
-    "packing_strategy": "FillSpaceFromMempool" OR "LeaveEmptySpace",
+    "packing_strategy": EITHER OF
+         1) "FillSpaceFromMempool"
+         2) "LeaveEmptySpace",
 }
 ```
 
