@@ -26,6 +26,7 @@ utxo = { path = '../utxo' }
 
 anyhow.workspace = true
 async-trait.workspace = true
+byte-unit.workspace = true
 hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 parking_lot.workspace = true

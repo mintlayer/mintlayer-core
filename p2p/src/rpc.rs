@@ -27,36 +27,44 @@ use rpc::RpcResult;
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
-    /// Try to connect to a remote node (just once).
-    /// For persistent connections `add_reserved_node` should be used.
+    /// Attempt to connect to a remote node (just once).
+    ///
+    /// For persistent connections see `add_reserved_node` should be used.
+    /// Keep in mind that `add_reserved_node` works completely differently.
     #[method(name = "connect")]
     async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
-    /// Disconnect peer
+    /// Disconnect peer, given its id.
     #[method(name = "disconnect")]
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
+    /// List banned peers and their ban expiry time.
     #[method(name = "list_banned")]
     async fn list_banned(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
 
+    /// Ban a peer by their address for a given amount of time.
     #[method(name = "ban")]
     async fn ban(&self, address: BannableAddress, duration: Duration) -> RpcResult<()>;
 
+    /// Unban a banned peer by their IP address.
     #[method(name = "unban")]
     async fn unban(&self, address: BannableAddress) -> RpcResult<()>;
 
+    /// List peers that have been discouraged.
+    ///
+    /// Discouraged peers are peers that have misbehaved in the network.
     #[method(name = "list_discouraged")]
     async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
 
-    /// Get the number of peers
+    /// Get the number of peers connected to this node.
     #[method(name = "get_peer_count")]
     async fn get_peer_count(&self) -> RpcResult<usize>;
 
-    /// Get bind address of the local node
+    /// Get p2p bind address(es) of this node.
     #[method(name = "get_bind_addresses")]
     async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>>;
 
-    /// Get details of connected peers
+    /// Get details of connected peers.
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>>;
 
@@ -65,16 +73,19 @@ trait P2pRpc {
     async fn get_reserved_nodes(&self) -> RpcResult<Vec<SocketAddress>>;
 
     /// Add the address to the reserved nodes list.
+    ///
     /// The node will try to keep connections open to all reserved peers.
+    /// A reserved peer is a peer that you trust and you want your node to remain connected to, no matter what they do.
     #[method(name = "add_reserved_node")]
     async fn add_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
     /// Remove the address from the reserved nodes list.
+    ///
     /// Existing connection to the peer is not closed.
     #[method(name = "remove_reserved_node")]
     async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
-    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
+    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network as well.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(
         &self,

@@ -56,7 +56,7 @@ class MempoolTxEvictionTest(BitcoinTestFramework):
         assert node.mempool_contains_tx(tx3_id)
 
         # Set the mempool limit to evict the last transaction
-        node.mempool_set_max_size(node.mempool_memory_usage() - 1)
+        node.mempool_set_size_limit(str(node.mempool_memory_usage() - 1))
         assert node.mempool_contains_tx(tx1_id)
         assert node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
@@ -65,14 +65,14 @@ class MempoolTxEvictionTest(BitcoinTestFramework):
         assert_raises_rpc_error(None, "fee threshold not met", node.mempool_submit_transaction, tx3, {})
 
         # Set the mempool limit to evict the second last transaction too
-        node.mempool_set_max_size(node.mempool_memory_usage() - 1)
+        node.mempool_set_size_limit(str(node.mempool_memory_usage() - 1))
         assert node.mempool_contains_tx(tx1_id)
         assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
 
         # Reset the mempool size to fit all transactions. Submit the missing transactions again
         # in the opposite order, check they both make their way in.
-        node.mempool_set_max_size(300_000_000)
+        node.mempool_set_size_limit(str(300_000_000))
         assert_raises_rpc_error(None, "Orphans not supported", node.mempool_submit_transaction, tx3, {})
         node.mempool_submit_transaction(tx2, {})
         assert node.mempool_contains_tx(tx1_id)
@@ -80,8 +80,8 @@ class MempoolTxEvictionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # Evict all transactions and reset the size afterwards
-        node.mempool_set_max_size(20)
-        node.mempool_set_max_size(300_000_000)
+        node.mempool_set_size_limit("20")
+        node.mempool_set_size_limit(str(300_000_000))
         assert not node.mempool_contains_tx(tx1_id)
 
         # Add a transaction that pays two outputs
@@ -95,7 +95,7 @@ class MempoolTxEvictionTest(BitcoinTestFramework):
         node.mempool_submit_transaction(tx3a, {})
 
         # Limit the mempool size so no more transactions fit
-        node.mempool_set_max_size(node.mempool_memory_usage())
+        node.mempool_set_size_limit(str(node.mempool_memory_usage()))
         assert node.mempool_contains_tx(tx1_id)
         assert node.mempool_contains_tx(tx2a_id)
         assert node.mempool_contains_tx(tx3a_id)

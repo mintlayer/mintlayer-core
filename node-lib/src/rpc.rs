@@ -25,15 +25,18 @@ use subsystem::ShutdownTrigger;
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "node")]
 pub trait NodeRpc {
-    /// Order the node to shutdown
+    /// Order the node to shutdown.
     #[method(name = "shutdown")]
     fn shutdown(&self) -> RpcResult<()>;
 
-    /// Get node software version
+    /// Get node software version.
     #[method(name = "version")]
     fn version(&self) -> RpcResult<String>;
 
-    /// Set mock time for the node (for testing purposes only)
+    /// Set mock time for the node.
+    ///
+    /// The value 0 is equivalent to "Nothing", making the node use real, wall-clock time.
+    /// WARNING: This function is strictly used for testing purposes. Using it will obstruct normal node functionality.
     #[method(name = "set_mock_time")]
     fn set_mock_time(&self, time: u64) -> RpcResult<()>;
 }

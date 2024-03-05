@@ -63,8 +63,8 @@ mockall::mock! {
 
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
         fn memory_usage(&self) -> usize;
-        fn get_max_size(&self) -> MempoolMaxSize;
-        fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
+        fn get_size_limit(&self) -> MempoolMaxSize;
+        fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
         fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate;
         fn get_fee_rate_points(&self, num_points: NonZeroUsize) -> Result<Vec<(usize, FeeRate)>, Error>;
 

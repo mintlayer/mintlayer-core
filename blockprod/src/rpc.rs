@@ -32,19 +32,21 @@ use crate::detail::job_manager::JobKey;
 #[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
     /// When called, the job manager will be notified to send a signal
-    /// to all currently running jobs to stop running
+    /// to all currently running jobs to stop running to stop block production.
     #[method(name = "stop_all")]
     async fn stop_all(&self) -> RpcResult<usize>;
 
     /// When called, the job manager will be notified to send a signal
-    /// to the specified job to stop running
+    /// to the specified job to stop running.
     #[method(name = "stop_job")]
     async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> RpcResult<bool>;
 
     /// Generate a block with the given transactions
     ///
     /// If `transactions` is `None`, the block will be generated with
-    /// available transactions in the mempool
+    /// available transactions in the mempool.
+    /// If transaction_ids is provided, those from the mempool will be exclusively used or prioritized,
+    /// depending on the PackingStrategy chosen.
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
@@ -54,14 +56,20 @@ trait BlockProductionRpc {
         packing_strategy: PackingStrategy,
     ) -> RpcResult<HexEncoded<Block>>;
 
+    /// Get the public key to be used for end-to-end encryption.
     #[method(name = "e2e_public_key")]
     async fn e2e_public_key(&self) -> RpcResult<HexEncoded<ephemeral_e2e::EndToEndPublicKey>>;
 
+    /// Same as `generate_block`, but with end-to-end encryption.
+    ///
+    /// The end-to-end encryption helps in protecting the signing key, so that it is much harder
+    /// for an eavesdropper to get it with pure http/websocket connection.
+    /// The e2e_public_key is the pubic key for end-to-end encryption of the client.
     #[method(name = "generate_block_e2e")]
     async fn generate_block_e2e(
         &self,
         encrypted_input_data: Vec<u8>,
-        public_key: HexEncoded<EndToEndPublicKey>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
@@ -128,19 +136,19 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
     async fn generate_block_e2e(
         &self,
         encrypted_input_data: Vec<u8>,
-        public_key: HexEncoded<EndToEndPublicKey>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> RpcResult<HexEncoded<Block>> {
         let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
-        let public_key = public_key.take();
+        let e2e_public_key = e2e_public_key.take();
 
         let block: Block = rpc::handle_result(
             self.call_async_mut(move |this| {
                 this.generate_block_e2e(
                     encrypted_input_data,
-                    public_key,
+                    e2e_public_key,
                     transactions,
                     transaction_ids,
                     packing_strategy,

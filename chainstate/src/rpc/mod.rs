@@ -40,23 +40,30 @@ use serialization::hex_encoded::HexEncoded;
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
-    /// Get the best block ID
+    /// Get the best block ID, which is the tip of the blockchain (i.e., longest chain, or mainchain).
     #[method(name = "best_block_id")]
     async fn best_block_id(&self) -> RpcResult<Id<GenBlock>>;
 
-    /// Get block ID at given height in the mainchain
+    /// Get block ID at a given height in the mainchain.
+    ///
+    /// Returns `None` (null) if the block at the given height does not exist.
     #[method(name = "block_id_at_height")]
     async fn block_id_at_height(&self, height: BlockHeight) -> RpcResult<Option<Id<GenBlock>>>;
 
     /// Returns a hex-encoded serialized block with the given id.
+    ///
+    /// Returns `None` (null) if a block with the given id is not found.
+    /// Note that genesis cannot be retrieved with this function.
     #[method(name = "get_block")]
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
 
-    /// Returns a json-encoded serialized block with the given id.
+    /// Same as get_block, but returns the block information in json format.
     #[method(name = "get_block_json")]
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<serde_json::Value>>;
 
-    /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
+    /// Returns hex-encoded serialized blocks from the mainchain starting from a given block height.
+    ///
+    /// The number of returned blocks can be capped using the `max_count` parameter.
     #[method(name = "get_mainchain_blocks")]
     async fn get_mainchain_blocks(
         &self,
@@ -65,14 +72,21 @@ trait ChainstateRpc {
     ) -> RpcResult<Vec<HexEncoded<Block>>>;
 
     /// Returns the TxOutput for a specified UtxoOutPoint.
+    /// Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
     #[method(name = "get_utxo")]
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
 
-    /// Submit a block to be included in the chain
+    /// Submit a block to be included in the blockchain.
+    ///
+    /// Note that the submission does not circumvent any validation process.
+    /// This function is used by the wallet to submit valid blocks after successful staking.
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
 
     /// Invalidate the specified block and its descendants.
+    ///
+    /// Use this function with caution, as invalidating a block that the network approves
+    /// of can lead to staying behind.
     #[method(name = "invalidate_block")]
     async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()>;
 
@@ -80,19 +94,19 @@ trait ChainstateRpc {
     #[method(name = "reset_block_failure_flags")]
     async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()>;
 
-    /// Get block height in main chain
+    /// Get block height in mainchain, given a block id.
     #[method(name = "block_height_in_main_chain")]
     async fn block_height_in_main_chain(
         &self,
         block_id: Id<GenBlock>,
     ) -> RpcResult<Option<BlockHeight>>;
 
-    /// Get best block height in main chain
+    /// Get best block height in mainchain.
     #[method(name = "best_block_height")]
     async fn best_block_height(&self) -> RpcResult<BlockHeight>;
 
     /// Returns last common block id and height of two chains.
-    /// Returns None if no block indexes are found and therefore the last common ancestor is unknown.
+    /// Returns None if no blocks are found and therefore the last common ancestor is unknown.
     #[method(name = "last_common_ancestor_by_id")]
     async fn last_common_ancestor_by_id(
         &self,
@@ -100,12 +114,22 @@ trait ChainstateRpc {
         second_block: Id<GenBlock>,
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>>;
 
+    /// Returns the balance of the pool associated with the given pool id.
+    ///
+    /// The balance contains both delegated balance and staker balance.
+    /// Returns `None` (null) if the pool is not found.
     #[method(name = "stake_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
+    /// Returns the balance of the staker (pool owner) of the pool associated with the given pool address.
+    ///
+    /// This excludes the delegation balances.
+    /// Returns `None` (null) if the pool is not found.
     #[method(name = "staker_balance")]
     async fn staker_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
+    /// Given a pool defined by a pool address, and a delegation address,
+    /// returns the amount of coins owned by that delegation in that pool.
     #[method(name = "delegation_share")]
     async fn delegation_share(
         &self,
@@ -113,11 +137,11 @@ trait ChainstateRpc {
         delegation_id: DelegationId,
     ) -> RpcResult<Option<Amount>>;
 
-    /// Get token information
+    /// Get token information, given a token id.
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>>;
 
-    /// Write blocks to disk
+    /// Exports a "bootstrap file", which contains all blocks
     #[method(name = "export_bootstrap_file")]
     async fn export_bootstrap_file(
         &self,
@@ -125,14 +149,18 @@ trait ChainstateRpc {
         include_orphans: bool,
     ) -> RpcResult<()>;
 
-    /// Reads blocks from disk
+    /// Imports a bootstrap file's blocks to this node
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
 
-    /// Return information about the chain.
+    /// Return generic information about the chain, including the current best block, best block height and more.
     #[method(name = "info")]
     async fn info(&self) -> RpcResult<ChainInfo>;
 
+    /// Subscribe to chainstate events, such as new tip.
+    ///
+    /// After a successful subscription, the node will message the subscriber with a message on every event.
+    /// NOTE: This only works with websocket.
     #[subscription(name = "subscribe_events", item = RpcEvent)]
     async fn subscribe_events(&self) -> rpc::subscription::Reply;
 }

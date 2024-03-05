@@ -202,12 +202,12 @@ impl MempoolInterface for MempoolImpl {
         Mempool::memory_usage(&self.mempool)
     }
 
-    fn get_max_size(&self) -> MempoolMaxSize {
+    fn get_size_limit(&self) -> MempoolMaxSize {
         self.mempool.max_size()
     }
 
-    fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
-        self.mempool.set_max_size(max_size)
+    fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
+        self.mempool.set_size_limit(max_size)
     }
 
     fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
