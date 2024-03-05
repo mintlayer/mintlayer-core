@@ -101,7 +101,9 @@ impl std::fmt::Display for Method {
 impl ValueHint {
     fn fmt_indent(&self, indent: usize, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let indent_str = "    ";
+        let bullet = "  * ";
         let next_indent = indent + indent_str.len();
+        assert_eq!(indent_str.len(), bullet.len());
 
         // Implementing indentation can be a bit tricky. Here are some general rules:
         //
@@ -131,17 +133,23 @@ impl ValueHint {
             }
 
             ValueHint::Object(hints) => {
-                if hints.is_empty() {
-                    f.write_str("{}")?;
-                    return Ok(());
-                }
-                write!(f, "{{\n{:indent$}", "")?;
-                for (name, hint) in *hints {
-                    write!(f, "{indent_str}{name:?}: ")?;
-                    hint.fmt_indent(next_indent, f)?;
-                    write!(f, ",\n{:indent$}", "")?;
-                }
-                f.write_str("}")?;
+                match *hints {
+                    [] => f.write_str("{}")?,
+                    [(name, hint)] => {
+                        write!(f, "{{ {name:?}: ")?;
+                        hint.fmt_indent(indent, f)?;
+                        f.write_str(" }")?;
+                    }
+                    hints => {
+                        write!(f, "{{\n{:indent$}", "")?;
+                        for (name, hint) in hints {
+                            write!(f, "{indent_str}{name:?}: ")?;
+                            hint.fmt_indent(next_indent, f)?;
+                            write!(f, ",\n{:indent$}", "")?;
+                        }
+                        f.write_str("}")?;
+                    }
+                };
             }
 
             ValueHint::Map(key, val) => {
@@ -152,19 +160,23 @@ impl ValueHint {
                 f.write_str(", .. }")?;
             }
 
-            ValueHint::Tuple(hints) => {
-                if hints.is_empty() {
-                    f.write_str("[]")?;
-                    return Ok(());
+            ValueHint::Tuple(hints) => match *hints {
+                [] => f.write_str("[]")?,
+                [hint] => {
+                    f.write_str(" [")?;
+                    hint.fmt_indent(indent, f)?;
+                    f.write_str(" ]")?;
                 }
-                write!(f, "[\n{:indent$}", "")?;
-                for hint in *hints {
-                    f.write_str(indent_str)?;
-                    hint.fmt_indent(next_indent, f)?;
-                    write!(f, ",\n{:indent$}", "")?;
+                hints => {
+                    write!(f, "[\n{:indent$}", "")?;
+                    for hint in hints {
+                        f.write_str(indent_str)?;
+                        hint.fmt_indent(next_indent, f)?;
+                        write!(f, ",\n{:indent$}", "")?;
+                    }
+                    f.write_str("]")?;
                 }
-                f.write_str("]")?;
-            }
+            },
 
             ValueHint::Array(inner) => {
                 f.write_str("[ ")?;

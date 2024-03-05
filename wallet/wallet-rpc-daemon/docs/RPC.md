@@ -44,12 +44,10 @@ Parameters:
 
 Returns:
 ```
-"UserProvidedMenmonic" OR {
-    "NewlyGeneratedMnemonic": [
-        string,
-        string OR null,
-    ],
-}
+"UserProvidedMenmonic" OR { "NewlyGeneratedMnemonic": [
+    string,
+    string OR null,
+] }
 ```
 
 
@@ -176,9 +174,7 @@ nothing
 
 Parameters:
 ```
-{
-    "password": string,
-}
+{ "password": string }
 ```
 
 Returns:
@@ -204,9 +200,7 @@ nothing
 
 Parameters:
 ```
-{
-    "password": string,
-}
+{ "password": string }
 ```
 
 Returns:
@@ -248,9 +242,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "name": string OR null,
-}
+{ "name": string OR null }
 ```
 
 Returns:
@@ -285,9 +277,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -304,9 +294,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -360,9 +348,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -378,17 +364,13 @@ Parameters:
 {
     "tx": hex string,
     "do_not_store": bool,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": "Trusted" OR "Untrusted" },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -401,24 +383,16 @@ Parameters:
     "address": string,
     "amount": decimal string,
     "selected_utxos": [ {
-        "id": {
-            "Transaction": hex string,
-        } OR {
-            "BlockReward": hex string,
-        },
+        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
         "index": number,
     }, .. ],
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -431,17 +405,11 @@ Parameters:
     "address": string,
     "amount_str": decimal string,
     "selected_utxo": {
-        "id": {
-            "Transaction": hex string,
-        } OR {
-            "BlockReward": hex string,
-        },
+        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
         "index": number,
     },
     "change_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -461,9 +429,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "transaction": string,
-}
+{ "transaction": string }
 ```
 
 Returns:
@@ -496,17 +462,13 @@ Parameters:
     "cost_per_block": decimal string,
     "margin_ratio_per_thousand": string,
     "decommission_address": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -518,17 +480,13 @@ Parameters:
     "account": number,
     "pool_id": string,
     "output_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -540,9 +498,7 @@ Parameters:
     "account": number,
     "pool_id": string,
     "output_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -560,9 +516,7 @@ Parameters:
     "account": number,
     "address": string,
     "pool_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -583,17 +537,13 @@ Parameters:
     "account": number,
     "amount": decimal string,
     "delegation_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -606,17 +556,13 @@ Parameters:
     "address": string,
     "amount": decimal string,
     "delegation_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -624,9 +570,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -639,9 +583,7 @@ nothing
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -654,9 +596,7 @@ nothing
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -669,9 +609,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -681,9 +619,7 @@ Returns:
     "pledge": decimal string,
     "balance": decimal string,
     "height": number,
-    "block_timestamp": {
-        "timestamp": number,
-    },
+    "block_timestamp": { "timestamp": number },
     "vrf_public_key": string,
     "decommission_key": string,
     "staker": string,
@@ -695,16 +631,12 @@ Returns:
 
 Parameters:
 ```
-{
-    "pool_id": string,
-}
+{ "pool_id": string }
 ```
 
 Returns:
 ```
-{
-    "balance": string OR null,
-}
+{ "balance": string OR null }
 ```
 
 
@@ -712,9 +644,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -730,9 +660,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -749,9 +677,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -768,16 +694,12 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
-{
-    "vrf_public_key": hex string,
-}
+{ "vrf_public_key": hex string }
 ```
 
 
@@ -785,9 +707,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -817,9 +737,7 @@ Parameters:
         "media_uri": string OR null,
         "additional_metadata_uri": string OR null,
     },
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -843,14 +761,10 @@ Parameters:
         "token_ticker": string,
         "number_of_decimals": number,
         "metadata_uri": string,
-        "token_supply": {
-            "Fixed": decimal string,
-        } OR "Lockable" OR "Unlimited",
+        "token_supply": { "Fixed": decimal string } OR "Lockable" OR "Unlimited",
         "is_freezable": bool,
     },
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -871,17 +785,13 @@ Parameters:
     "account": number,
     "token_id": string,
     "address": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -894,17 +804,13 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -916,17 +822,13 @@ Parameters:
     "account": number,
     "token_id": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -937,17 +839,13 @@ Parameters:
 {
     "account_index": number,
     "token_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -959,17 +857,13 @@ Parameters:
     "account": number,
     "token_id": string,
     "is_unfreezable": bool,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -980,17 +874,13 @@ Parameters:
 {
     "account": number,
     "token_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -1003,17 +893,13 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -1024,17 +910,13 @@ Parameters:
 {
     "account": number,
     "data": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 
@@ -1047,9 +929,7 @@ Parameters:
 
 Returns:
 ```
-{
-    "version": string,
-}
+{ "version": string }
 ```
 
 
@@ -1070,9 +950,7 @@ nothing
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
@@ -1085,9 +963,7 @@ nothing
 
 Parameters:
 ```
-{
-    "peer_id": number,
-}
+{ "peer_id": number }
 ```
 
 Returns:
@@ -1107,12 +983,10 @@ Returns:
 ```
 [ [
     string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
 
@@ -1140,9 +1014,7 @@ nothing
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
@@ -1162,12 +1034,10 @@ Returns:
 ```
 [ [
     string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
 
@@ -1225,9 +1095,7 @@ Returns:
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
@@ -1240,9 +1108,7 @@ nothing
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
@@ -1255,9 +1121,7 @@ nothing
 
 Parameters:
 ```
-{
-    "block": hex string,
-}
+{ "block": hex string }
 ```
 
 Returns:
@@ -1278,12 +1142,8 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": {
-        "timestamp": number,
-    },
-    "median_time": {
-        "timestamp": number,
-    },
+    "best_block_timestamp": { "timestamp": number },
+    "median_time": { "timestamp": number },
     "is_initial_block_download": bool,
 }
 ```
@@ -1309,9 +1169,7 @@ nothing
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -1336,9 +1194,7 @@ Returns:
 [ {
     "id": hex string,
     "height": number,
-    "timestamp": {
-        "timestamp": number,
-    },
+    "timestamp": { "timestamp": number },
 }, .. ]
 ```
 
@@ -1382,9 +1238,7 @@ Parameters:
 {
     "account": number,
     "raw_tx": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -1487,11 +1341,7 @@ Parameters:
 ```
 {
     "inputs": [ {
-        "id": {
-            "Transaction": hex string,
-        } OR {
-            "BlockReward": hex string,
-        },
+        "id": { "Transaction": hex string } OR { "BlockReward": hex string },
         "index": number,
     }, .. ],
     "outputs": [ object, .. ],
@@ -1541,9 +1391,7 @@ number
 
 Parameters:
 ```
-{
-    "block_height": number,
-}
+{ "block_height": number }
 ```
 
 Returns:
@@ -1588,9 +1436,7 @@ nothing
 
 Parameters:
 ```
-{
-    "block_id": string,
-}
+{ "block_id": string }
 ```
 
 Returns:

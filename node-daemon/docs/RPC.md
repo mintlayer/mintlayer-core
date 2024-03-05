@@ -49,9 +49,7 @@ WARNING: This function is strictly used for testing purposes. Using it will obst
 
 Parameters:
 ```
-{
-    "time": number,
-}
+{ "time": number }
 ```
 
 Returns:
@@ -87,9 +85,7 @@ Returns `None` (null) if the block at the given height does not exist.
 
 Parameters:
 ```
-{
-    "height": number,
-}
+{ "height": number }
 ```
 
 Returns:
@@ -108,9 +104,7 @@ Note that genesis cannot be retrieved with this function.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
@@ -126,9 +120,7 @@ Same as get_block, but returns the block information in json format.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
@@ -166,16 +158,10 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 
 Parameters:
 ```
-{
-    "outpoint": {
-        "id": {
-            "Transaction": hex string,
-        } OR {
-            "BlockReward": hex string,
-        },
-        "index": number,
-    },
-}
+{ "outpoint": {
+    "id": { "Transaction": hex string } OR { "BlockReward": hex string },
+    "index": number,
+} }
 ```
 
 Returns:
@@ -194,9 +180,7 @@ This function is used by the wallet to submit valid blocks after successful stak
 
 Parameters:
 ```
-{
-    "block_hex": hex string,
-}
+{ "block_hex": hex string }
 ```
 
 Returns:
@@ -215,9 +199,7 @@ of can lead to staying behind.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
@@ -233,9 +215,7 @@ Reset failure flags for the specified block and its descendants.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
@@ -251,9 +231,7 @@ Get block height in mainchain, given a block id.
 
 Parameters:
 ```
-{
-    "block_id": hex string,
-}
+{ "block_id": hex string }
 ```
 
 Returns:
@@ -311,16 +289,12 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{
-    "pool_address": string,
-}
+{ "pool_address": string }
 ```
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+{ "val": number } OR null
 ```
 
 
@@ -334,16 +308,12 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{
-    "pool_address": string,
-}
+{ "pool_address": string }
 ```
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+{ "val": number } OR null
 ```
 
 
@@ -363,9 +333,7 @@ Parameters:
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+{ "val": number } OR null
 ```
 
 
@@ -376,18 +344,12 @@ Get token information, given a token id, in address form.
 
 Parameters:
 ```
-{
-    "token_id": string,
-}
+{ "token_id": string }
 ```
 
 Returns:
 ```
-{
-    "FungibleToken": object,
-} OR {
-    "NonFungibleToken": object,
-} OR null
+{ "FungibleToken": object } OR { "NonFungibleToken": object } OR null
 ```
 
 
@@ -417,9 +379,7 @@ Imports a bootstrap file's blocks to this node
 
 Parameters:
 ```
-{
-    "file_path": string,
-}
+{ "file_path": string }
 ```
 
 Returns:
@@ -443,12 +403,8 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": {
-        "timestamp": number,
-    },
-    "median_time": {
-        "timestamp": number,
-    },
+    "best_block_timestamp": { "timestamp": number },
+    "median_time": { "timestamp": number },
     "is_initial_block_download": bool,
 }
 ```
@@ -469,12 +425,10 @@ Parameters:
 
 Produces:
 ```
-{
-    "NewTip": {
-        "id": hex string,
-        "height": number,
-    },
-}
+{ "NewTip": {
+    "id": hex string,
+    "height": number,
+} }
 ```
 
 Unsubscribe using `chainstate_unsubscribe_events`.
@@ -488,9 +442,7 @@ Returns True if a transaction defined by the given id is found in the mempool.
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
@@ -508,9 +460,7 @@ An orphan transaction is a transaction with one or more inputs, whose utxos cann
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
@@ -529,9 +479,7 @@ Returns `None` (null) if the transaction is not found.
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
@@ -575,9 +523,7 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": "Trusted" OR "Untrusted" },
 }
 ```
 
@@ -646,9 +592,7 @@ The parameter is either a string, can be written with proper units, such as "100
 
 Parameters:
 ```
-{
-    "max_size": String with units, such as MB/KB/GB, or integer for bytes,
-}
+{ "max_size": String with units, such as MB/KB/GB, or integer for bytes }
 ```
 
 Returns:
@@ -665,18 +609,12 @@ X, in this description, is provided as a parameter.
 
 Parameters:
 ```
-{
-    "in_top_x_mb": number,
-}
+{ "in_top_x_mb": number }
 ```
 
 Returns:
 ```
-{
-    "amount_per_kb": {
-        "val": number,
-    },
-}
+{ "amount_per_kb": { "val": number } }
 ```
 
 
@@ -694,11 +632,7 @@ Returns:
 ```
 [ [
     number,
-    {
-        "amount_per_kb": {
-            "val": number,
-        },
-    },
+    { "amount_per_kb": { "val": number } },
 ], .. ]
 ```
 
@@ -715,9 +649,7 @@ Keep in mind that `add_reserved_node` works completely differently.
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
@@ -733,9 +665,7 @@ Disconnect peer, given its id.
 
 Parameters:
 ```
-{
-    "peer_id": number,
-}
+{ "peer_id": number }
 ```
 
 Returns:
@@ -758,12 +688,10 @@ Returns:
 ```
 [ [
     string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
 
@@ -797,9 +725,7 @@ Unban a banned peer by their IP address.
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
@@ -824,12 +750,10 @@ Returns:
 ```
 [ [
     string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
 
@@ -918,9 +842,7 @@ A reserved peer is a peer that you trust and you want your node to remain connec
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
@@ -938,9 +860,7 @@ Existing connection to the peer is not closed.
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
@@ -958,9 +878,7 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": "Trusted" OR "Untrusted" },
 }
 ```
 
@@ -997,9 +915,7 @@ to the specified job to stop running.
 
 Parameters:
 ```
-{
-    "job_id": hex string,
-}
+{ "job_id": hex string }
 ```
 
 Returns:
