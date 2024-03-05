@@ -88,11 +88,10 @@ impl std::fmt::Display for Method {
                 item_type,
             } => {
                 code_block("Produces", item_type, f)?;
-                writeln!(f, "Unsubscribe using `{unsubscribe_name}`.")?;
+                writeln!(f, "Unsubscribe using `{unsubscribe_name}`.\n")?;
+                writeln!(f, "Note: Subscriptions only work over WebSockets.\n")?;
             }
         }
-
-        f.write_str("\n")?;
 
         Ok(())
     }

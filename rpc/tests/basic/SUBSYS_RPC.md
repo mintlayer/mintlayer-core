@@ -12,7 +12,6 @@ Returns:
 string
 ```
 
-
 ### Method `some_subsystem_add`
 
 Parameters:
@@ -28,7 +27,6 @@ Returns:
 number
 ```
 
-
 ### Subscription `some_subsystem_subscribe_squares`
 
 Parameters:
@@ -42,6 +40,8 @@ number
 ```
 
 Unsubscribe using `some_subsystem_unsubscribe_squares`.
+
+Note: Subscriptions only work over WebSockets.
 
 ### Method `some_subsystem_convoluted`
 
@@ -69,6 +69,5 @@ Returns:
 ```
 [ string, .. ]
 ```
-
 
 

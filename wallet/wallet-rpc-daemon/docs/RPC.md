@@ -16,7 +16,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `version`
 
 Parameters:
@@ -28,7 +27,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `wallet_create`
 
@@ -58,7 +56,6 @@ EITHER OF
         ] }
 ```
 
-
 ### Method `wallet_open`
 
 Parameters:
@@ -76,7 +73,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_close`
 
 Parameters:
@@ -88,7 +84,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_info`
 
@@ -107,7 +102,6 @@ Returns:
 }
 ```
 
-
 ### Method `wallet_sync`
 
 Parameters:
@@ -120,7 +114,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_rescan`
 
 Parameters:
@@ -132,7 +125,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_show_seed_phrase`
 
@@ -153,7 +145,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `wallet_purge_seed_phrase`
 
 Parameters:
@@ -173,7 +164,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `wallet_set_lookahead_size`
 
 Parameters:
@@ -189,7 +179,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_encrypt_private_keys`
 
 Parameters:
@@ -201,7 +190,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_disable_private_keys_encryption`
 
@@ -215,7 +203,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_unlock_private_keys`
 
 Parameters:
@@ -228,7 +215,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_lock_private_keys`
 
 Parameters:
@@ -240,7 +226,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_best_block`
 
@@ -256,7 +241,6 @@ Returns:
     "height": number,
 }
 ```
-
 
 ### Method `account_create`
 
@@ -276,7 +260,6 @@ Returns:
          2) null,
 }
 ```
-
 
 ### Method `account_rename`
 
@@ -300,7 +283,6 @@ Returns:
 }
 ```
 
-
 ### Method `address_show`
 
 Parameters:
@@ -317,7 +299,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `address_new`
 
 Parameters:
@@ -332,7 +313,6 @@ Returns:
     "index": string,
 }
 ```
-
 
 ### Method `address_reveal_public_key`
 
@@ -351,7 +331,6 @@ Returns:
     "public_key_address": bech32 string,
 }
 ```
-
 
 ### Method `account_balance`
 
@@ -375,7 +354,6 @@ Returns:
 }
 ```
 
-
 ### Method `account_utxos`
 
 Parameters:
@@ -387,7 +365,6 @@ Returns:
 ```
 [ json, .. ]
 ```
-
 
 ### Method `node_submit_transaction`
 
@@ -406,7 +383,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `address_send`
 
@@ -430,7 +406,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `transaction_create_from_cold_input`
 
@@ -464,7 +439,6 @@ Returns:
 }
 ```
 
-
 ### Method `transaction_inspect`
 
 Parameters:
@@ -495,7 +469,6 @@ Returns:
 }
 ```
 
-
 ### Method `staking_create_pool`
 
 Parameters:
@@ -514,7 +487,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `staking_decommission_pool`
 
@@ -535,7 +507,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `staking_decommission_pool_request`
 
 Parameters:
@@ -554,7 +525,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `delegation_create`
 
@@ -576,7 +546,6 @@ Returns:
 }
 ```
 
-
 ### Method `delegation_stake`
 
 Parameters:
@@ -593,7 +562,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `delegation_withdraw`
 
@@ -613,7 +581,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `staking_start`
 
 Parameters:
@@ -626,7 +593,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `staking_stop`
 
 Parameters:
@@ -638,7 +604,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `staking_status`
 
@@ -653,7 +618,6 @@ EITHER OF
      1) "Staking"
      2) "NotStaking"
 ```
-
 
 ### Method `staking_list_pool_ids`
 
@@ -676,7 +640,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `staking_pool_balance`
 
 Parameters:
@@ -690,7 +653,6 @@ Returns:
      1) string
      2) null }
 ```
-
 
 ### Method `delegation_list_ids`
 
@@ -706,7 +668,6 @@ Returns:
     "balance": decimal string,
 }, .. ]
 ```
-
 
 ### Method `staking_list_created_block_ids`
 
@@ -724,7 +685,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `staking_new_vrf_public_key`
 
 Parameters:
@@ -741,7 +701,6 @@ Returns:
 }
 ```
 
-
 ### Method `staking_show_legacy_vrf_key`
 
 Parameters:
@@ -753,7 +712,6 @@ Returns:
 ```
 { "vrf_public_key": hex string }
 ```
-
 
 ### Method `staking_show_vrf_public_keys`
 
@@ -770,7 +728,6 @@ Returns:
     "used": bool,
 }, .. ]
 ```
-
 
 ### Method `token_nft_issue_new`
 
@@ -809,7 +766,6 @@ Returns:
 }
 ```
 
-
 ### Method `token_issue_new`
 
 Parameters:
@@ -839,7 +795,6 @@ Returns:
 }
 ```
 
-
 ### Method `token_change_authority`
 
 Parameters:
@@ -856,7 +811,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `token_mint`
 
@@ -876,7 +830,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `token_unmint`
 
 Parameters:
@@ -894,7 +847,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `token_lock_supply`
 
 Parameters:
@@ -910,7 +862,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `token_freeze`
 
@@ -929,7 +880,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `token_unfreeze`
 
 Parameters:
@@ -945,7 +895,6 @@ Returns:
 ```
 { "tx_id": hex string }
 ```
-
 
 ### Method `token_send`
 
@@ -965,7 +914,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `address_deposit_data`
 
 Parameters:
@@ -982,7 +930,6 @@ Returns:
 { "tx_id": hex string }
 ```
 
-
 ### Method `node_version`
 
 Parameters:
@@ -994,7 +941,6 @@ Returns:
 ```
 { "version": string }
 ```
-
 
 ### Method `node_shutdown`
 
@@ -1008,7 +954,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_connect_to_peer`
 
 Parameters:
@@ -1021,7 +966,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_disconnect_peer`
 
 Parameters:
@@ -1033,7 +977,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_list_banned_peers`
 
@@ -1053,7 +996,6 @@ Returns:
 ], .. ]
 ```
 
-
 ### Method `node_ban_peer_address`
 
 Parameters:
@@ -1072,7 +1014,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_unban_peer_address`
 
 Parameters:
@@ -1084,7 +1025,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_list_discouraged_peers`
 
@@ -1104,7 +1044,6 @@ Returns:
 ], .. ]
 ```
 
-
 ### Method `node-peer-count`
 
 Parameters:
@@ -1116,7 +1055,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `node_list_connected_peers`
 
@@ -1152,7 +1090,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `node_list_reserved_peers`
 
 Parameters:
@@ -1164,7 +1101,6 @@ Returns:
 ```
 [ string, .. ]
 ```
-
 
 ### Method `node_add_reserved_peer`
 
@@ -1178,7 +1114,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_remove_reserved_peer`
 
 Parameters:
@@ -1191,7 +1126,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_submit_block`
 
 Parameters:
@@ -1203,7 +1137,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_chainstate_info`
 
@@ -1223,7 +1156,6 @@ Returns:
 }
 ```
 
-
 ### Method `transaction_abandon`
 
 Parameters:
@@ -1239,7 +1171,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `transaction_list_pending`
 
 Parameters:
@@ -1251,7 +1182,6 @@ Returns:
 ```
 [ hex string, .. ]
 ```
-
 
 ### Method `transaction_list_by_address`
 
@@ -1275,7 +1205,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `transaction_get`
 
 Parameters:
@@ -1291,7 +1220,6 @@ Returns:
 json
 ```
 
-
 ### Method `transaction_get_raw`
 
 Parameters:
@@ -1306,7 +1234,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `account_sign_raw_transaction`
 
@@ -1327,7 +1254,6 @@ Returns:
 }
 ```
 
-
 ### Method `account_sign_challenge_plain`
 
 Parameters:
@@ -1343,7 +1269,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `account_sign_challenge_hex`
 
@@ -1361,7 +1286,6 @@ Returns:
 string
 ```
 
-
 ### Method `verify_challenge_plain`
 
 Parameters:
@@ -1377,7 +1301,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `verify_challenge_hex`
 
@@ -1395,7 +1318,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `transaction_get_signed_raw`
 
 Parameters:
@@ -1410,7 +1332,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `transaction_compose`
 
@@ -1439,7 +1360,6 @@ Returns:
 }
 ```
 
-
 ### Method `node_best_block_id`
 
 Parameters:
@@ -1452,7 +1372,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `node_best_block_height`
 
 Parameters:
@@ -1464,7 +1383,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `node_block_id`
 
@@ -1479,7 +1397,6 @@ EITHER OF
      1) hex string
      2) null
 ```
-
 
 ### Method `node_generate_block`
 
@@ -1496,7 +1413,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_generate_blocks`
 
 Parameters:
@@ -1512,7 +1428,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_get_block`
 
 Parameters:
@@ -1526,5 +1441,4 @@ EITHER OF
      1) string
      2) null
 ```
-
 

@@ -64,3 +64,7 @@ impl TryFrom<Vec<u8>> for PublicKeyHash {
         Ok(Self(array))
     }
 }
+
+impl rpc_description::HasValueHint for PublicKeyHash {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}

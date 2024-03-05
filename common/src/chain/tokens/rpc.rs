@@ -21,11 +21,10 @@ use crate::{
     chain::{Block, Destination, Transaction},
     primitives::{Amount, Id},
 };
-use rpc_description::ValueHint as VH;
+use rpc_description::HasValueHint;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
-
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
     NonFungibleToken(Box<RPCNonFungibleTokenInfo>),
@@ -55,15 +54,7 @@ impl RPCTokenInfo {
     }
 }
 
-impl rpc_description::HasValueHint for RPCTokenInfo {
-    // TODO This should be more detailed
-    const HINT: rpc_description::ValueHint = VH::Choice(&[
-        &VH::Object(&[("FungibleToken", &VH::GENERIC_OBJECT)]),
-        &VH::Object(&[("NonFungibleToken", &VH::GENERIC_OBJECT)]),
-    ]);
-}
-
-#[derive(Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum RPCTokenTotalSupply {
     Fixed(Amount),
     Lockable,
@@ -81,7 +72,9 @@ impl From<TokenTotalSupply> for RPCTokenTotalSupply {
 }
 
 // Indicates whether a token an be frozen
-#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+)]
 pub enum RPCIsTokenFreezable {
     #[codec(index = 0)]
     No,
@@ -99,7 +92,9 @@ impl From<IsTokenFreezable> for RPCIsTokenFreezable {
 }
 
 // Indicates whether a token an be unfrozen after being frozen
-#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+)]
 pub enum RPCIsTokenUnfreezable {
     #[codec(index = 0)]
     No,
@@ -119,7 +114,9 @@ impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
-#[derive(Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+)]
 pub enum RPCIsTokenFrozen {
     #[codec(index = 0)]
     No(RPCIsTokenFreezable),
@@ -136,7 +133,7 @@ impl RPCIsTokenFrozen {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
@@ -177,7 +174,7 @@ impl RPCFungibleTokenInfo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenInfo {
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
@@ -201,7 +198,7 @@ impl RPCNonFungibleTokenInfo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCTokenCreator(Vec<u8>);
 
 impl From<&TokenCreator> for RPCTokenCreator {
@@ -211,7 +208,7 @@ impl From<&TokenCreator> for RPCTokenCreator {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenMetadata {
     pub creator: Option<RPCTokenCreator>,
     pub name: Vec<u8>,

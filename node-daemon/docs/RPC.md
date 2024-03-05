@@ -22,7 +22,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_version`
 
 Get node software version.
@@ -37,7 +36,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `node_set_mock_time`
 
@@ -57,7 +55,6 @@ Returns:
 nothing
 ```
 
-
 ## Module `chainstate`
 
 ### Method `chainstate_best_block_id`
@@ -74,7 +71,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `chainstate_block_id_at_height`
 
@@ -94,7 +90,6 @@ EITHER OF
      1) hex string
      2) null
 ```
-
 
 ### Method `chainstate_get_block`
 
@@ -116,7 +111,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_get_block_json`
 
 Same as get_block, but returns the block information in json format.
@@ -133,7 +127,6 @@ EITHER OF
      1) json
      2) null
 ```
-
 
 ### Method `chainstate_get_mainchain_blocks`
 
@@ -154,7 +147,6 @@ Returns:
 ```
 [ hex string, .. ]
 ```
-
 
 ### Method `chainstate_get_utxo`
 
@@ -179,7 +171,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_submit_block`
 
 Submit a block to be included in the blockchain.
@@ -197,7 +188,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_invalidate_block`
 
@@ -217,7 +207,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `chainstate_reset_block_failure_flags`
 
 Reset failure flags for the specified block and its descendants.
@@ -232,7 +221,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_block_height_in_main_chain`
 
@@ -251,7 +239,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_best_block_height`
 
 Get best block height in mainchain.
@@ -266,7 +253,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `chainstate_last_common_ancestor_by_id`
 
@@ -292,7 +278,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_stake_pool_balance`
 
 Returns the balance of the pool associated with the given pool id.
@@ -313,7 +298,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_staker_balance`
 
 Returns the balance of the staker (pool owner) of the pool associated with the given pool address.
@@ -333,7 +317,6 @@ EITHER OF
      1) { "val": number }
      2) null
 ```
-
 
 ### Method `chainstate_delegation_share`
 
@@ -356,7 +339,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `chainstate_token_info`
 
 Get token information, given a token id, in address form.
@@ -370,11 +352,50 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "FungibleToken": object }
-     2) { "NonFungibleToken": object }
+     1) { "FungibleToken": {
+            "token_id": hex string,
+            "token_ticker": [ number, .. ],
+            "number_of_decimals": number,
+            "metadata_uri": [ number, .. ],
+            "circulating_supply": { "val": number },
+            "total_supply": EITHER OF
+                 1) { "Fixed": { "val": number } }
+                 2) "Lockable"
+                 3) "Unlimited",
+            "is_locked": bool,
+            "frozen": EITHER OF
+                 1) { "No": EITHER OF
+                         1) "No"
+                         2) "Yes" }
+                 2) { "Yes": EITHER OF
+                         1) "No"
+                         2) "Yes" },
+            "authority": EITHER OF
+                 1) "AnyoneCanSpend"
+                 2) { "PublicKeyHash": hex string }
+                 3) { "PublicKey": hex string }
+                 4) { "ScriptHash": hex string }
+                 5) { "ClassicMultisig": hex string },
+        } }
+     2) { "NonFungibleToken": {
+            "token_id": hex string,
+            "creation_tx_id": hex string,
+            "creation_block_id": hex string,
+            "metadata": {
+                "creator": EITHER OF
+                     1) [ number, .. ]
+                     2) null,
+                "name": [ number, .. ],
+                "description": [ number, .. ],
+                "ticker": [ number, .. ],
+                "icon_uri": [ number, .. ],
+                "additional_metadata_uri": [ number, .. ],
+                "media_uri": [ number, .. ],
+                "media_hash": [ number, .. ],
+            },
+        } }
      3) null
 ```
-
 
 ### Method `chainstate_export_bootstrap_file`
 
@@ -394,7 +415,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `chainstate_import_bootstrap_file`
 
 Imports a bootstrap file's blocks to this node
@@ -409,7 +429,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_info`
 
@@ -432,13 +451,11 @@ Returns:
 }
 ```
 
-
 ### Subscription `chainstate_subscribe_events`
 
 Subscribe to chainstate events, such as new tip.
 
 After a successful subscription, the node will message the subscriber with a message on every event.
-NOTE: This only works with websocket.
 
 
 Parameters:
@@ -455,6 +472,8 @@ Produces:
 ```
 
 Unsubscribe using `chainstate_unsubscribe_events`.
+
+Note: Subscriptions only work over WebSockets.
 
 ## Module `mempool`
 
@@ -473,7 +492,6 @@ Returns:
 bool
 ```
 
-
 ### Method `mempool_contains_orphan_tx`
 
 Returns True if a transaction defined by the given id is found in the mempool's orphans.
@@ -490,7 +508,6 @@ Returns:
 ```
 bool
 ```
-
 
 ### Method `mempool_get_transaction`
 
@@ -520,7 +537,6 @@ EITHER OF
      2) null
 ```
 
-
 ### Method `mempool_transactions`
 
 Get all mempool transactions in a Vec/List, with hex-encoding.
@@ -538,7 +554,6 @@ Returns:
 ```
 [ hex string, .. ]
 ```
-
 
 ### Method `mempool_submit_transaction`
 
@@ -563,7 +578,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `mempool_local_best_block_id`
 
 Return the id of the best block, as seen by the mempool.
@@ -581,7 +595,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `mempool_memory_usage`
 
 The total estimated used memory by the mempool.
@@ -597,7 +610,6 @@ Returns:
 number
 ```
 
-
 ### Method `mempool_get_size_limit`
 
 Get the maximum allowed size of all transactions in the mempool.
@@ -612,7 +624,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `mempool_set_size_limit`
 
@@ -631,7 +642,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `mempool_get_fee_rate`
 
 Get the current fee rate of the mempool, that puts the transaction in the top X MBs of the mempool.
@@ -647,7 +657,6 @@ Returns:
 ```
 { "amount_per_kb": { "val": number } }
 ```
-
 
 ### Method `mempool_get_fee_rate_points`
 
@@ -666,7 +675,6 @@ Returns:
     { "amount_per_kb": { "val": number } },
 ], .. ]
 ```
-
 
 ## Module `p2p`
 
@@ -688,7 +696,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `p2p_disconnect`
 
 Disconnect peer, given its id.
@@ -703,7 +710,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_list_banned`
 
@@ -726,7 +732,6 @@ Returns:
 ], .. ]
 ```
 
-
 ### Method `p2p_ban`
 
 Ban a peer by their address for a given amount of time.
@@ -748,7 +753,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `p2p_unban`
 
 Unban a banned peer by their IP address.
@@ -763,7 +767,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_list_discouraged`
 
@@ -788,7 +791,6 @@ Returns:
 ], .. ]
 ```
 
-
 ### Method `p2p_get_peer_count`
 
 Get the number of peers connected to this node.
@@ -804,7 +806,6 @@ Returns:
 number
 ```
 
-
 ### Method `p2p_get_bind_addresses`
 
 Get p2p bind address(es) of this node.
@@ -819,7 +820,6 @@ Returns:
 ```
 [ string, .. ]
 ```
-
 
 ### Method `p2p_get_connected_peers`
 
@@ -858,7 +858,6 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `p2p_get_reserved_nodes`
 
 Get addresses of reserved nodes.
@@ -873,7 +872,6 @@ Returns:
 ```
 [ string, .. ]
 ```
-
 
 ### Method `p2p_add_reserved_node`
 
@@ -893,7 +891,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `p2p_remove_reserved_node`
 
 Remove the address from the reserved nodes list.
@@ -910,7 +907,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_submit_transaction`
 
@@ -932,7 +928,6 @@ Returns:
 nothing
 ```
 
-
 ## Module `blockprod`
 
 ### Method `blockprod_stop_all`
@@ -951,7 +946,6 @@ Returns:
 number
 ```
 
-
 ### Method `blockprod_stop_job`
 
 When called, the job manager will be notified to send a signal
@@ -967,7 +961,6 @@ Returns:
 ```
 bool
 ```
-
 
 ### Method `blockprod_generate_block`
 
@@ -996,7 +989,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `blockprod_e2e_public_key`
 
 Get the public key to be used for end-to-end encryption.
@@ -1011,7 +1003,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `blockprod_generate_block_e2e`
 
@@ -1039,5 +1030,4 @@ Returns:
 ```
 hex string
 ```
-
 

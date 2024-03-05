@@ -72,6 +72,10 @@ impl<'d> serde::Deserialize<'d> for PublicKey {
     }
 }
 
+impl rpc_description::HasValueHint for PublicKey {
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
 impl PrivateKey {
     pub fn new_from_entropy(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         Self::new_from_rng(&mut make_true_rng(), key_kind)
