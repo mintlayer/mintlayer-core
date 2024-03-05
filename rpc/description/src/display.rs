@@ -130,24 +130,22 @@ impl ValueHint {
 
             ValueHint::StrLit(s) => write!(f, "{s:?}")?,
 
-            ValueHint::Choice(hints) => {
-                match Self::collect_choices(hints).as_slice() {
-                    [] => f.write_str("impossible")?,
-                    [hint] => hint.fmt_indent(indent, f)?,
-                    hints => {
-                        write!(f, "EITHER OF\n{:indent$}", "")?;
-                        let pad = 2 * indent_len - 2;
-                        for (n, hint) in hints.iter().enumerate() {
-                            let n = n + 1;
-                            write!(f, "{n:pad$}) ")?;
-                            hint.fmt_indent(next_indent + indent_len, f)?;
-                            if n < hints.len() {
-                                write!(f, "\n{:indent$}", "")?;
-                            }
+            ValueHint::Choice(hints) => match Self::collect_choices(hints).as_slice() {
+                [] => f.write_str("impossible")?,
+                [hint] => hint.fmt_indent(indent, f)?,
+                hints => {
+                    write!(f, "EITHER OF\n{:indent$}", "")?;
+                    let pad = 2 * indent_len - 2;
+                    for (n, hint) in hints.iter().enumerate() {
+                        let n = n + 1;
+                        write!(f, "{n:pad$}) ")?;
+                        hint.fmt_indent(next_indent + indent_len, f)?;
+                        if n < hints.len() {
+                            write!(f, "\n{:indent$}", "")?;
                         }
                     }
                 }
-            }
+            },
 
             ValueHint::Object(hints) => match *hints {
                 [] => f.write_str("{}")?,

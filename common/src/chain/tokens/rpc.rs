@@ -54,7 +54,9 @@ impl RPCTokenInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(
+    Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+)]
 pub enum RPCTokenTotalSupply {
     Fixed(Amount),
     Lockable,
