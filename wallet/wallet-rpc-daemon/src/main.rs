@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use logging::log;
-use wallet_rpc_lib::{cmdline, error::RunError};
+use wallet_rpc_lib::cmdline;
 
-async fn run() -> Result<(), RunError> {
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (ws_config, rpc_config) =
         <cmdline::WalletRpcDaemonArgs as clap::Parser>::parse().into_config()?;
 

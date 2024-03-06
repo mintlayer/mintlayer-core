@@ -15,24 +15,23 @@
 
 pub mod cmdline;
 pub mod config;
-pub mod error;
 mod rpc;
 mod service;
 
 pub use rpc::{
-    types, RpcCreds, RpcError, WalletEventsRpcServer, WalletRpc, WalletRpcClient,
-    WalletRpcDescription, WalletRpcServer,
+    types, ColdWalletRpcClient, ColdWalletRpcServer, RpcCreds, RpcError, WalletEventsRpcServer,
+    WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
 pub use service::{
     CreatedWallet, Event, EventStream, TxState, WalletHandle,
     /* WalletResult, */ WalletService,
 };
-use wallet_controller::NodeRpcClient;
+use wallet_controller::{NodeInterface, NodeRpcClient};
 
-use std::time::Duration;
+use std::{fmt::Debug, time::Duration};
 
-use config::WalletRpcConfig;
 pub use config::WalletServiceConfig;
+use config::{NodeRpc, WalletRpcConfig};
 use logging::log;
 
 use utils::shallow_clone::ShallowClone;
@@ -40,9 +39,9 @@ use utils::shallow_clone::ShallowClone;
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(thiserror::Error, Debug)]
-pub enum StartupError {
+pub enum StartupError<N: NodeInterface> {
     #[error(transparent)]
-    WalletService(#[from] service::InitError<NodeRpcClient>),
+    WalletService(#[from] service::InitError<N>),
 
     #[error("Failed to start RPC server: {0}")]
     Rpc(anyhow::Error),
@@ -52,34 +51,57 @@ pub enum StartupError {
 pub async fn run(
     wallet_config: WalletServiceConfig,
     rpc_config: WalletRpcConfig,
-) -> Result<(), StartupError> {
-    let (wallet_service, rpc_server) = start_services(wallet_config, rpc_config).await?;
-    wait_for_shutdown(wallet_service, rpc_server).await;
+) -> Result<(), Box<dyn std::error::Error>> {
+    match wallet_config.node_rpc.clone() {
+        NodeRpc::HotWallet {
+            node_rpc_address,
+            node_auth_data,
+        } => {
+            let rpc_address = {
+                let default_addr = || {
+                    format!(
+                        "127.0.0.1:{}",
+                        wallet_config.chain_config.default_rpc_port()
+                    )
+                };
+                node_rpc_address.unwrap_or_else(default_addr)
+            };
+            let node_rpc = wallet_controller::make_rpc_client(
+                wallet_config.chain_config.clone(),
+                rpc_address,
+                node_auth_data,
+            )
+            .await
+            .map_err(|err| {
+                StartupError::WalletService(service::InitError::<NodeRpcClient>::NodeRpc(err))
+            })?;
+
+            let (wallet_service, rpc_server) =
+                start_services(wallet_config, rpc_config, node_rpc, false).await?;
+            wait_for_shutdown(wallet_service, rpc_server).await;
+        }
+        NodeRpc::ColdWallet => {
+            let node_rpc =
+                wallet_controller::make_cold_wallet_rpc_client(wallet_config.chain_config.clone());
+            let (wallet_service, rpc_server) =
+                start_services(wallet_config, rpc_config, node_rpc, true).await?;
+            wait_for_shutdown(wallet_service, rpc_server).await;
+        }
+    }
+
     Ok(())
 }
 
-pub async fn start_services(
+pub async fn start_services<N>(
     wallet_config: WalletServiceConfig,
     rpc_config: WalletRpcConfig,
-) -> Result<(WalletService<NodeRpcClient>, rpc::Rpc), StartupError> {
+    node_rpc: N,
+    cold_wallet: bool,
+) -> Result<(WalletService<N>, rpc::Rpc), StartupError<N>>
+where
+    N: NodeInterface + Clone + Sync + Send + 'static + Debug,
+{
     // Start the wallet service
-    let rpc_address = {
-        let default_addr = || {
-            format!(
-                "127.0.0.1:{}",
-                wallet_config.chain_config.default_rpc_port()
-            )
-        };
-        wallet_config.node_rpc_address.unwrap_or_else(default_addr)
-    };
-
-    let node_rpc = wallet_controller::make_rpc_client(
-        wallet_config.chain_config.clone(),
-        rpc_address,
-        wallet_config.node_credentials,
-    )
-    .await
-    .map_err(|err| StartupError::WalletService(service::InitError::NodeRpc(err)))?;
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
         wallet_config.wallet_file,
@@ -93,16 +115,25 @@ pub async fn start_services(
         let wallet_handle = wallet_service.handle().shallow_clone();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().shallow_clone();
-        rpc::start(wallet_handle, node_rpc, rpc_config, chain_config)
-            .await
-            .map_err(StartupError::Rpc)?
+        rpc::start(
+            wallet_handle,
+            node_rpc,
+            rpc_config,
+            chain_config,
+            cold_wallet,
+        )
+        .await
+        .map_err(StartupError::Rpc)?
     };
 
     Ok((wallet_service, rpc_server))
 }
 
 /// Run a wallet daemon with RPC interface
-pub async fn wait_for_shutdown(wallet_service: WalletService<NodeRpcClient>, rpc_server: rpc::Rpc) {
+pub async fn wait_for_shutdown<N>(wallet_service: WalletService<N>, rpc_server: rpc::Rpc)
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     // Start the wallet service
     let wallet_handle = wallet_service.handle();
 

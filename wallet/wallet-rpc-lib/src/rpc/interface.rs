@@ -42,7 +42,7 @@ trait WalletEventsRpc {
 
 #[rpc::describe]
 #[rpc::rpc(server, client)]
-trait WalletRpc {
+trait ColdWalletRpc {
     #[method(name = "shutdown")]
     async fn shutdown(&self) -> rpc::RpcResult<()>;
 
@@ -67,11 +67,17 @@ trait WalletRpc {
     #[method(name = "wallet_info")]
     async fn wallet_info(&self) -> rpc::RpcResult<WalletInfo>;
 
-    #[method(name = "wallet_sync")]
-    async fn sync(&self) -> rpc::RpcResult<()>;
+    #[method(name = "wallet_encrypt_private_keys")]
+    async fn encrypt_private_keys(&self, password: String) -> rpc::RpcResult<()>;
 
-    #[method(name = "wallet_rescan")]
-    async fn rescan(&self) -> rpc::RpcResult<()>;
+    #[method(name = "wallet_disable_private_keys_encryption")]
+    async fn remove_private_key_encryption(&self) -> rpc::RpcResult<()>;
+
+    #[method(name = "wallet_unlock_private_keys")]
+    async fn unlock_private_keys(&self, password: String) -> rpc::RpcResult<()>;
+
+    #[method(name = "wallet_lock_private_keys")]
+    async fn lock_private_key_encryption(&self) -> rpc::RpcResult<()>;
 
     #[method(name = "wallet_show_seed_phrase")]
     async fn get_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>>;
@@ -85,31 +91,6 @@ trait WalletRpc {
         lookahead_size: u32,
         i_know_what_i_am_doing: bool,
     ) -> rpc::RpcResult<()>;
-
-    #[method(name = "wallet_encrypt_private_keys")]
-    async fn encrypt_private_keys(&self, password: String) -> rpc::RpcResult<()>;
-
-    #[method(name = "wallet_disable_private_keys_encryption")]
-    async fn remove_private_key_encryption(&self) -> rpc::RpcResult<()>;
-
-    #[method(name = "wallet_unlock_private_keys")]
-    async fn unlock_private_keys(&self, password: String) -> rpc::RpcResult<()>;
-
-    #[method(name = "wallet_lock_private_keys")]
-    async fn lock_private_key_encryption(&self) -> rpc::RpcResult<()>;
-
-    #[method(name = "wallet_best_block")]
-    async fn best_block(&self) -> rpc::RpcResult<BlockInfo>;
-
-    #[method(name = "account_create")]
-    async fn create_account(&self, name: Option<String>) -> rpc::RpcResult<NewAccountInfo>;
-
-    #[method(name = "account_rename")]
-    async fn rename_account(
-        &self,
-        account: AccountArg,
-        name: Option<String>,
-    ) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "address_show")]
     async fn get_issued_addresses(
@@ -126,6 +107,84 @@ trait WalletRpc {
         account: AccountArg,
         address: String,
     ) -> rpc::RpcResult<PublicKeyInfo>;
+
+    #[method(name = "staking_new_vrf_public_key")]
+    async fn new_vrf_public_key(&self, account: AccountArg) -> rpc::RpcResult<VrfPublicKeyInfo>;
+
+    #[method(name = "staking_show_legacy_vrf_key")]
+    async fn get_legacy_vrf_public_key(
+        &self,
+        account: AccountArg,
+    ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo>;
+
+    #[method(name = "staking_show_vrf_public_keys")]
+    async fn get_vrf_public_key(
+        &self,
+        account: AccountArg,
+    ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
+
+    #[method(name = "account_sign_raw_transaction")]
+    async fn sign_raw_transaction(
+        &self,
+        account: AccountArg,
+        raw_tx: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<MaybeSignedTransaction>;
+
+    #[method(name = "challenge_sign_plain")]
+    async fn sign_challenge(
+        &self,
+        account: AccountArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String>;
+
+    #[method(name = "challenge_sign_hex")]
+    async fn sign_challenge_hex(
+        &self,
+        account: AccountArg,
+        challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<String>;
+
+    #[method(name = "challenge_verify_plain")]
+    async fn verify_challenge(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()>;
+
+    #[method(name = "challenge_verify_hex")]
+    async fn verify_challenge_hex(
+        &self,
+        message: String,
+        signed_challenge: String,
+        address: String,
+    ) -> rpc::RpcResult<()>;
+}
+
+#[rpc::describe]
+#[rpc::rpc(server, client)]
+trait WalletRpc {
+    #[method(name = "wallet_sync")]
+    async fn sync(&self) -> rpc::RpcResult<()>;
+
+    #[method(name = "wallet_rescan")]
+    async fn rescan(&self) -> rpc::RpcResult<()>;
+
+    #[method(name = "wallet_best_block")]
+    async fn best_block(&self) -> rpc::RpcResult<BlockInfo>;
+
+    #[method(name = "account_create")]
+    async fn create_account(&self, name: Option<String>) -> rpc::RpcResult<NewAccountInfo>;
+
+    #[method(name = "account_rename")]
+    async fn rename_account(
+        &self,
+        account: AccountArg,
+        name: Option<String>,
+    ) -> rpc::RpcResult<NewAccountInfo>;
 
     #[method(name = "account_balance")]
     async fn get_balance(
@@ -268,21 +327,6 @@ trait WalletRpc {
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<CreatedBlockInfo>>;
-
-    #[method(name = "staking_new_vrf_public_key")]
-    async fn new_vrf_public_key(&self, account: AccountArg) -> rpc::RpcResult<VrfPublicKeyInfo>;
-
-    #[method(name = "staking_show_legacy_vrf_key")]
-    async fn get_legacy_vrf_public_key(
-        &self,
-        account: AccountArg,
-    ) -> rpc::RpcResult<LegacyVrfPublicKeyInfo>;
-
-    #[method(name = "staking_show_vrf_public_keys")]
-    async fn get_vrf_public_key(
-        &self,
-        account: AccountArg,
-    ) -> rpc::RpcResult<Vec<VrfPublicKeyInfo>>;
 
     #[method(name = "token_nft_issue_new")]
     async fn issue_new_nft(
@@ -460,46 +504,6 @@ trait WalletRpc {
         account: AccountArg,
         transaction_id: HexEncoded<Id<Transaction>>,
     ) -> rpc::RpcResult<String>;
-
-    #[method(name = "account_sign_raw_transaction")]
-    async fn sign_raw_transaction(
-        &self,
-        account: AccountArg,
-        raw_tx: String,
-        options: TransactionOptions,
-    ) -> rpc::RpcResult<MaybeSignedTransaction>;
-
-    #[method(name = "account_sign_challenge_plain")]
-    async fn sign_challenge(
-        &self,
-        account: AccountArg,
-        challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String>;
-
-    #[method(name = "account_sign_challenge_hex")]
-    async fn sign_challenge_hex(
-        &self,
-        account: AccountArg,
-        challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String>;
-
-    #[method(name = "verify_challenge_plain")]
-    async fn verify_challenge(
-        &self,
-        message: String,
-        signed_challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<()>;
-
-    #[method(name = "verify_challenge_hex")]
-    async fn verify_challenge_hex(
-        &self,
-        message: String,
-        signed_challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<()>;
 
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(

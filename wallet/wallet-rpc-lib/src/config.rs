@@ -22,6 +22,18 @@ use common::chain::config::{
 use crypto::key::hdkd::u31::U31;
 use rpc::{rpc_creds::RpcCreds, RpcAuthData};
 
+#[derive(Clone)]
+pub enum NodeRpc {
+    ColdWallet,
+    HotWallet {
+        /// RPC address of the node to connect to
+        node_rpc_address: Option<String>,
+
+        /// Node RPC authentication
+        node_auth_data: RpcAuthData,
+    },
+}
+
 /// Configuration options for the wallet service
 pub struct WalletServiceConfig {
     /// Chain config to use
@@ -33,11 +45,8 @@ pub struct WalletServiceConfig {
     /// Start staking for account after starting the wallet
     pub start_staking_for_account: Vec<U31>,
 
-    /// RPC address of the node to connect to
-    pub node_rpc_address: Option<String>,
-
-    /// Node RPC authentication
-    pub node_credentials: RpcAuthData,
+    /// Node rpc settings
+    pub node_rpc: NodeRpc,
 }
 
 impl WalletServiceConfig {
@@ -50,8 +59,7 @@ impl WalletServiceConfig {
             chain_config: Arc::new(common::chain::config::Builder::new(chain_type).build()),
             wallet_file,
             start_staking_for_account,
-            node_rpc_address: None,
-            node_credentials: RpcAuthData::None,
+            node_rpc: NodeRpc::ColdWallet,
         }
     }
 
@@ -65,7 +73,19 @@ impl WalletServiceConfig {
     }
 
     pub fn with_node_rpc_address(mut self, node_rpc_address: String) -> Self {
-        self.node_rpc_address = Some(node_rpc_address);
+        self.node_rpc = match self.node_rpc {
+            NodeRpc::ColdWallet => NodeRpc::HotWallet {
+                node_rpc_address: Some(node_rpc_address),
+                node_auth_data: RpcAuthData::None,
+            },
+            NodeRpc::HotWallet {
+                node_rpc_address: _,
+                node_auth_data,
+            } => NodeRpc::HotWallet {
+                node_rpc_address: Some(node_rpc_address),
+                node_auth_data,
+            },
+        };
         self
     }
 
@@ -78,7 +98,19 @@ impl WalletServiceConfig {
     }
 
     pub fn with_node_credentials(mut self, creds: RpcAuthData) -> Self {
-        self.node_credentials = creds;
+        self.node_rpc = match self.node_rpc {
+            NodeRpc::ColdWallet => NodeRpc::HotWallet {
+                node_rpc_address: None,
+                node_auth_data: creds,
+            },
+            NodeRpc::HotWallet {
+                node_rpc_address,
+                node_auth_data: _,
+            } => NodeRpc::HotWallet {
+                node_rpc_address,
+                node_auth_data: creds,
+            },
+        };
         self
     }
 

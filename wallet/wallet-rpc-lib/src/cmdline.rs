@@ -96,6 +96,10 @@ pub struct WalletRpcDaemonChainArgs {
     #[arg(long, value_name("ACC_NUMBER"), requires("wallet_file"))]
     start_staking_for_account: Vec<U31>,
 
+    /// use the wallet without a connection to a node
+    #[arg(long, conflicts_with_all(["start_staking_for_account", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    pub cold_wallet: bool,
+
     /// RPC address of the node to connect to
     #[arg(long, value_name("ADDR"))]
     node_rpc_address: Option<NetworkAddressWithPort>,
@@ -157,32 +161,40 @@ impl WalletRpcDaemonChainArgs {
             rpc_username,
             rpc_password,
             rpc_no_authentication,
+            cold_wallet,
         } = self;
 
         let ws_config = {
-            // Node RPC authentication
-            let node_credentials =
-                match (node_rpc_cookie_file, node_rpc_username, node_rpc_password) {
-                    (Some(cookie_file_path), None, None) => {
-                        RpcAuthData::Cookie { cookie_file_path }
-                    }
-                    (None, Some(username), Some(password)) => {
-                        RpcAuthData::Basic { username, password }
-                    }
-                    (None, None, None) => {
-                        let cookie_file_path =
-                            default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-                        RpcAuthData::Cookie { cookie_file_path }
-                    }
-                    _ => panic!("Should not happen due to arg constraints"),
-                };
+            let service =
+                WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account);
 
-            WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account)
-                .apply_option(
-                    WalletServiceConfig::with_node_rpc_address,
-                    node_rpc_address.map(|addr| addr.to_string()),
-                )
-                .with_node_credentials(node_credentials)
+            if cold_wallet {
+                service
+            } else {
+                // Node RPC authentication
+                let node_credentials =
+                    match (node_rpc_cookie_file, node_rpc_username, node_rpc_password) {
+                        (Some(cookie_file_path), None, None) => {
+                            RpcAuthData::Cookie { cookie_file_path }
+                        }
+                        (None, Some(username), Some(password)) => {
+                            RpcAuthData::Basic { username, password }
+                        }
+                        (None, None, None) => {
+                            let cookie_file_path =
+                                default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+                            RpcAuthData::Cookie { cookie_file_path }
+                        }
+                        _ => panic!("Should not happen due to arg constraints"),
+                    };
+
+                service
+                    .apply_option(
+                        WalletServiceConfig::with_node_rpc_address,
+                        node_rpc_address.map(|addr| addr.to_string()),
+                    )
+                    .with_node_credentials(node_credentials)
+            }
         };
 
         let rpc_config = make_wallet_config(

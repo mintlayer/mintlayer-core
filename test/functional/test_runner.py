@@ -134,6 +134,7 @@ BASE_SCRIPTS = [
     'wallet_conflict.py',
     'wallet_list_txs.py',
     'wallet_sign_message.py',
+    'wallet_sign_message_rpc.py',
     'wallet_cold_wallet_send.py',
     'wallet_tx_compose.py',
     'wallet_data_deposit.py',

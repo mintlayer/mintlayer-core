@@ -20,7 +20,8 @@ use tokio::sync::{mpsc, oneshot};
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
 use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
 use wallet_rpc_lib::{
-    config::WalletRpcConfig, WalletEventsRpcServer, WalletRpc, WalletRpcServer, WalletService,
+    config::WalletRpcConfig, ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc,
+    WalletRpcServer, WalletService,
 };
 
 use crate::{
@@ -52,6 +53,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
     mut event_rx: mpsc::UnboundedReceiver<Event<N>>,
     in_top_x_mb: usize,
     wallet_type: WalletType<N>,
+    cold_wallet: bool,
 ) -> Result<(), WalletCliError<N>> {
     match wallet_type {
         WalletType::Local {
@@ -68,15 +70,21 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
 
             let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
             let server_rpc = if let Some(rpc_config) = wallet_rpc_config {
-                Some(
-                    rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
-                        .with_method_list("list_methods")
+                let builder = rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
+                    .with_method_list("list_methods")
+                    .register(ColdWalletRpcServer::into_rpc(wallet_rpc.clone()));
+                let server_rpc = if cold_wallet {
+                    builder
+                } else {
+                    builder
                         .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
                         .register(WalletEventsRpcServer::into_rpc(wallet_rpc.clone()))
-                        .build()
-                        .await
-                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
-                )
+                }
+                .build()
+                .await
+                .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
+
+                Some(server_rpc)
             } else {
                 None
             };

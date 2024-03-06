@@ -53,7 +53,8 @@ use common::{
     },
 };
 pub use interface::{
-    WalletEventsRpcServer, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+    ColdWalletRpcClient, ColdWalletRpcServer, WalletEventsRpcServer, WalletRpcClient,
+    WalletRpcDescription, WalletRpcServer,
 };
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
@@ -1425,6 +1426,7 @@ pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
     node_rpc: N,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
+    cold_wallet: bool,
 ) -> anyhow::Result<rpc::Rpc> {
     let WalletRpcConfig {
         bind_addr,
@@ -1432,10 +1434,17 @@ pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
     } = config;
 
     let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
-    rpc::Builder::new(bind_addr, auth_credentials)
+    let builder = rpc::Builder::new(bind_addr, auth_credentials)
         .with_method_list("list_methods")
-        .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
-        .register(WalletEventsRpcServer::into_rpc(wallet_rpc))
-        .build()
-        .await
+        .register(ColdWalletRpcServer::into_rpc(wallet_rpc.clone()));
+
+    if !cold_wallet {
+        builder
+            .register(WalletRpcServer::into_rpc(wallet_rpc.clone()))
+            .register(WalletEventsRpcServer::into_rpc(wallet_rpc))
+    } else {
+        builder
+    }
+    .build()
+    .await
 }

@@ -41,7 +41,7 @@ use wallet_rpc_lib::{
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
         StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
     },
-    WalletRpcClient,
+    ColdWalletRpcClient, WalletRpcClient,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -54,13 +54,13 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn shutdown(&mut self) -> Result<(), Self::Error> {
-        WalletRpcClient::shutdown(&self.http_client)
+        ColdWalletRpcClient::shutdown(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn version(&self) -> Result<String, Self::Error> {
-        WalletRpcClient::version(&self.http_client)
+        ColdWalletRpcClient::version(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -76,7 +76,7 @@ impl WalletInterface for ClientWalletRpc {
         mnemonic: Option<String>,
         passphrase: Option<String>,
     ) -> Result<CreatedWallet, Self::Error> {
-        WalletRpcClient::create_wallet(
+        ColdWalletRpcClient::create_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             store_seed_phrase,
@@ -92,7 +92,7 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         password: Option<String>,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::open_wallet(
+        ColdWalletRpcClient::open_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             password,
@@ -102,13 +102,13 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn close_wallet(&self) -> Result<(), Self::Error> {
-        WalletRpcClient::close_wallet(&self.http_client)
+        ColdWalletRpcClient::close_wallet(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn wallet_info(&self) -> Result<WalletInfo, Self::Error> {
-        WalletRpcClient::wallet_info(&self.http_client)
+        ColdWalletRpcClient::wallet_info(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -126,13 +126,13 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn get_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
-        WalletRpcClient::get_seed_phrase(&self.http_client)
+        ColdWalletRpcClient::get_seed_phrase(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn purge_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, Self::Error> {
-        WalletRpcClient::purge_seed_phrase(&self.http_client)
+        ColdWalletRpcClient::purge_seed_phrase(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -142,7 +142,7 @@ impl WalletInterface for ClientWalletRpc {
         lookahead_size: u32,
         i_know_what_i_am_doing: bool,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::set_lookahead_size(
+        ColdWalletRpcClient::set_lookahead_size(
             &self.http_client,
             lookahead_size,
             i_know_what_i_am_doing,
@@ -152,25 +152,25 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn encrypt_private_keys(&self, password: String) -> Result<(), Self::Error> {
-        WalletRpcClient::encrypt_private_keys(&self.http_client, password)
+        ColdWalletRpcClient::encrypt_private_keys(&self.http_client, password)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn remove_private_key_encryption(&self) -> Result<(), Self::Error> {
-        WalletRpcClient::remove_private_key_encryption(&self.http_client)
+        ColdWalletRpcClient::remove_private_key_encryption(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn unlock_private_keys(&self, password: String) -> Result<(), Self::Error> {
-        WalletRpcClient::unlock_private_keys(&self.http_client, password)
+        ColdWalletRpcClient::unlock_private_keys(&self.http_client, password)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn lock_private_key_encryption(&self) -> Result<(), Self::Error> {
-        WalletRpcClient::lock_private_key_encryption(&self.http_client)
+        ColdWalletRpcClient::lock_private_key_encryption(&self.http_client)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -201,13 +201,13 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error> {
-        WalletRpcClient::get_issued_addresses(&self.http_client, account_index.into())
+        ColdWalletRpcClient::get_issued_addresses(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
 
     async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error> {
-        WalletRpcClient::issue_address(&self.http_client, account_index.into())
+        ColdWalletRpcClient::issue_address(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -217,7 +217,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         address: String,
     ) -> Result<PublicKeyInfo, Self::Error> {
-        WalletRpcClient::reveal_public_key(&self.http_client, account_index.into(), address)
+        ColdWalletRpcClient::reveal_public_key(&self.http_client, account_index.into(), address)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -539,7 +539,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
     ) -> Result<VrfPublicKeyInfo, Self::Error> {
-        WalletRpcClient::new_vrf_public_key(&self.http_client, account_index.into())
+        ColdWalletRpcClient::new_vrf_public_key(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -548,7 +548,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
     ) -> Result<Vec<VrfPublicKeyInfo>, Self::Error> {
-        WalletRpcClient::get_vrf_public_key(&self.http_client, account_index.into())
+        ColdWalletRpcClient::get_vrf_public_key(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -557,7 +557,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
     ) -> Result<LegacyVrfPublicKeyInfo, Self::Error> {
-        WalletRpcClient::get_legacy_vrf_public_key(&self.http_client, account_index.into())
+        ColdWalletRpcClient::get_legacy_vrf_public_key(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -948,7 +948,7 @@ impl WalletInterface for ClientWalletRpc {
         let options = TransactionOptions {
             in_top_x_mb: config.in_top_x_mb,
         };
-        WalletRpcClient::sign_raw_transaction(
+        ColdWalletRpcClient::sign_raw_transaction(
             &self.http_client,
             account_index.into(),
             raw_tx,
@@ -977,9 +977,14 @@ impl WalletInterface for ClientWalletRpc {
         challenge: String,
         address: String,
     ) -> Result<String, Self::Error> {
-        WalletRpcClient::sign_challenge(&self.http_client, account_index.into(), challenge, address)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        ColdWalletRpcClient::sign_challenge(
+            &self.http_client,
+            account_index.into(),
+            challenge,
+            address,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn sign_challenge_hex(
@@ -988,7 +993,7 @@ impl WalletInterface for ClientWalletRpc {
         challenge: String,
         address: String,
     ) -> Result<String, Self::Error> {
-        WalletRpcClient::sign_challenge_hex(
+        ColdWalletRpcClient::sign_challenge_hex(
             &self.http_client,
             account_index.into(),
             challenge,
@@ -1004,7 +1009,7 @@ impl WalletInterface for ClientWalletRpc {
         signed_challenge: String,
         address: String,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::verify_challenge(&self.http_client, message, signed_challenge, address)
+        ColdWalletRpcClient::verify_challenge(&self.http_client, message, signed_challenge, address)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -1015,9 +1020,14 @@ impl WalletInterface for ClientWalletRpc {
         signed_challenge: String,
         address: String,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::verify_challenge_hex(&self.http_client, message, signed_challenge, address)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        ColdWalletRpcClient::verify_challenge_hex(
+            &self.http_client,
+            message,
+            signed_challenge,
+            address,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn compose_transaction(
