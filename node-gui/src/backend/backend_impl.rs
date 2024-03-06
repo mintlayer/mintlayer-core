@@ -36,7 +36,9 @@ use wallet_controller::{
     read::ReadOnlyController, synced_controller::SyncedController, ControllerConfig,
     HandlesController, UtxoState, WalletHandlesClient, DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
+};
 
 use crate::main_window::ImportOrCreate;
 
@@ -120,9 +122,13 @@ impl Backend {
     async fn open_wallet(&mut self, file_path: PathBuf) -> Result<WalletInfo, BackendError> {
         log::debug!("Try to open wallet file {file_path:?}...");
 
-        let wallet =
-            GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone(), None)
-                .map_err(|e| BackendError::WalletError(e.to_string()))?;
+        let wallet = GuiController::open_wallet(
+            Arc::clone(&self.chain_config),
+            file_path.clone(),
+            None,
+            WalletType::Hot,
+        )
+        .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         self.add_wallet(file_path, wallet).await
     }
@@ -148,9 +154,10 @@ impl Backend {
                 mnemonic,
                 None,
                 StoreSeedPhrase::Store,
+                WalletType::Hot,
             ),
             ImportOrCreate::Create => {
-                let (best_block_height, best_block_id) = self
+                let best_block = self
                     .controller
                     .chainstate
                     .call(|c| Ok((c.get_best_block_height()?, c.get_best_block_id()?)))
@@ -164,8 +171,8 @@ impl Backend {
                     mnemonic,
                     None,
                     StoreSeedPhrase::Store,
-                    best_block_height,
-                    best_block_id,
+                    best_block,
+                    WalletType::Hot,
                 )
             }
         }

@@ -38,6 +38,7 @@ use p2p::{
 };
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
+use wallet_types::wallet_type::WalletType;
 
 use crate::node_traits::NodeInterface;
 
@@ -46,6 +47,10 @@ use super::{NodeRpcClient, NodeRpcError};
 #[async_trait::async_trait]
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
+
+    fn is_cold_wallet_node(&self) -> WalletType {
+        WalletType::Hot
+    }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
         ChainstateRpcClient::info(&self.http_client)

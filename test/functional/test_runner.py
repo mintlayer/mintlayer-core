@@ -136,6 +136,7 @@ BASE_SCRIPTS = [
     'wallet_sign_message.py',
     'wallet_sign_message_rpc.py',
     'wallet_cold_wallet_send.py',
+    'wallet_cold_wallet_send_rpc.py',
     'wallet_tx_compose.py',
     'wallet_data_deposit.py',
     'wallet_submit_tx.py',

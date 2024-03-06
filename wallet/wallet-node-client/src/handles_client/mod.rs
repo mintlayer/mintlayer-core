@@ -37,6 +37,7 @@ use p2p::{
 };
 use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
+use wallet_types::wallet_type::WalletType;
 
 use crate::node_traits::NodeInterface;
 
@@ -98,6 +99,10 @@ impl WalletHandlesClient {
 #[async_trait::async_trait]
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
+
+    fn is_cold_wallet_node(&self) -> WalletType {
+        WalletType::Hot
+    }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
         let result = self.chainstate.call(move |this| this.info()).await??;

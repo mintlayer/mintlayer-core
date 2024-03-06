@@ -69,6 +69,7 @@ use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
+use wallet_types::wallet_type::WalletType;
 use wallet_types::with_locked::WithLocked;
 use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
 
@@ -79,13 +80,16 @@ pub const WALLET_VERSION_V3: u32 = 3;
 pub const WALLET_VERSION_V4: u32 = 4;
 pub const WALLET_VERSION_V5: u32 = 5;
 pub const WALLET_VERSION_V6: u32 = 6;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V6;
+pub const WALLET_VERSION_V7: u32 = 7;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V7;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum WalletError {
     #[error("Wallet is not initialized")]
     WalletNotInitialized,
+    #[error("A {0} wallet is trying to open a {1} wallet file")]
+    DifferentWalletType(WalletType, WalletType),
     #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
     #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
@@ -259,13 +263,19 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
-        best_block_height: BlockHeight,
-        best_block_id: Id<GenBlock>,
+        best_block: (BlockHeight, Id<GenBlock>),
+        wallet_type: WalletType,
     ) -> WalletResult<Self> {
-        let mut wallet =
-            Self::new_wallet(chain_config, db, mnemonic, passphrase, save_seed_phrase)?;
+        let mut wallet = Self::new_wallet(
+            chain_config,
+            db,
+            mnemonic,
+            passphrase,
+            save_seed_phrase,
+            wallet_type,
+        )?;
 
-        wallet.set_best_block(best_block_height, best_block_id)?;
+        wallet.set_best_block(best_block.0, best_block.1)?;
 
         Ok(wallet)
     }
@@ -276,8 +286,16 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+        wallet_type: WalletType,
     ) -> WalletResult<Self> {
-        Self::new_wallet(chain_config, db, mnemonic, passphrase, save_seed_phrase)
+        Self::new_wallet(
+            chain_config,
+            db,
+            mnemonic,
+            passphrase,
+            save_seed_phrase,
+            wallet_type,
+        )
     }
 
     fn new_wallet(
@@ -286,6 +304,7 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+        wallet_type: WalletType,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
@@ -300,6 +319,7 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
+        db_tx.set_wallet_type(wallet_type)?;
 
         let default_account = Wallet::<B>::create_next_unused_account(
             U31::ZERO,
@@ -447,11 +467,40 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    fn migration_v7(
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+        wallet_type: WalletType,
+    ) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None)?;
+        let accs = db_tx.get_accounts_info()?;
+        // if all accounts are still on genesis this is a cold wallet
+        let cold_wallet =
+            accs.values().all(|acc| acc.best_block_id() == chain_config.genesis_block_id());
+
+        ensure!(
+            wallet_type == WalletType::Hot || cold_wallet,
+            WalletError::DifferentWalletType(wallet_type, WalletType::Hot)
+        );
+
+        db_tx.set_wallet_type(wallet_type)?;
+
+        db_tx.set_storage_version(WALLET_VERSION_V7)?;
+        db_tx.commit()?;
+
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            WALLET_VERSION_V7
+        );
+        Ok(())
+    }
+
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         pre_migration: F,
+        wallet_type: WalletType,
     ) -> WalletResult<()> {
         let version = db.transaction_ro()?.get_storage_version()?;
 
@@ -477,23 +526,34 @@ impl<B: storage::Backend> Wallet<B> {
                 pre_migration(WALLET_VERSION_V5)?;
                 Self::migration_v6(db, chain_config.clone())?;
             }
+            WALLET_VERSION_V6 => {
+                pre_migration(WALLET_VERSION_V6)?;
+                Self::migration_v7(db, chain_config.clone(), wallet_type)?;
+            }
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
                 return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
             }
         }
 
-        Self::check_and_migrate_db(db, chain_config, pre_migration)
+        Self::check_and_migrate_db(db, chain_config, pre_migration, wallet_type)
     }
 
     fn validate_chain_info(
         chain_config: &ChainConfig,
         db_tx: &impl WalletStorageReadLocked,
+        wallet_type: WalletType,
     ) -> WalletResult<()> {
         let chain_info = db_tx.get_chain_info()?;
         ensure!(
             chain_info.is_same(chain_config),
             WalletError::DifferentChainType
+        );
+
+        let this_wallet_type = db_tx.get_wallet_type()?;
+        ensure!(
+            this_wallet_type == wallet_type,
+            WalletError::DifferentWalletType(wallet_type, this_wallet_type)
         );
 
         Ok(())
@@ -595,17 +655,18 @@ impl<B: storage::Backend> Wallet<B> {
         mut db: Store<B>,
         password: Option<String>,
         pre_migration: F,
+        wallet_type: WalletType,
     ) -> WalletResult<Self> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
         }
-        Self::check_and_migrate_db(&db, chain_config.clone(), pre_migration)?;
+        Self::check_and_migrate_db(&db, chain_config.clone(), pre_migration, wallet_type)?;
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
 
-        Self::validate_chain_info(chain_config.as_ref(), &db_tx)?;
+        Self::validate_chain_info(chain_config.as_ref(), &db_tx, wallet_type)?;
 
         let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), &db_tx)?;
 

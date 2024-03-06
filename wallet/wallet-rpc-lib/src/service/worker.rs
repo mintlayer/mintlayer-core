@@ -177,8 +177,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        let wallet =
-            WalletController::open_wallet(self.chain_config.clone(), wallet_path, password)?;
+
+        let wallet = WalletController::open_wallet(
+            self.chain_config.clone(),
+            wallet_path,
+            password,
+            self.node_rpc.is_cold_wallet_node(),
+        )?;
 
         let controller = WalletController::new(
             self.chain_config.clone(),
@@ -221,8 +226,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 mnemonic.clone(),
                 passphrase_ref,
                 whether_to_store_seed_phrase,
-                info.best_block_height,
-                info.best_block_id,
+                (info.best_block_height, info.best_block_id),
+                self.node_rpc.is_cold_wallet_node(),
             )
         } else {
             WalletController::recover_wallet(
@@ -231,6 +236,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
                 mnemonic.clone(),
                 passphrase_ref,
                 whether_to_store_seed_phrase,
+                self.node_rpc.is_cold_wallet_node(),
             )
         }
         .map_err(RpcError::Controller)?;

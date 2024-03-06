@@ -89,7 +89,9 @@ pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -200,8 +202,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
         whether_to_store_seed_phrase: StoreSeedPhrase,
-        best_block_height: BlockHeight,
-        best_block_id: Id<GenBlock>,
+        best_block: (BlockHeight, Id<GenBlock>),
+        wallet_type: WalletType,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -219,8 +221,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &mnemonic.to_string(),
             passphrase,
             whether_to_store_seed_phrase,
-            best_block_height,
-            best_block_id,
+            best_block,
+            wallet_type,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -233,6 +235,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
         whether_to_store_seed_phrase: StoreSeedPhrase,
+        wallet_type: WalletType,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -250,6 +253,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &mnemonic.to_string(),
             passphrase,
             whether_to_store_seed_phrase,
+            wallet_type,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -287,6 +291,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
+        wallet_type: WalletType,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -299,11 +304,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let db = wallet::wallet::open_or_create_wallet_file(&file_path)
             .map_err(ControllerError::WalletError)?;
 
-        let wallet =
-            wallet::Wallet::load_wallet(Arc::clone(&chain_config), db, password, |version| {
-                Self::make_backup_wallet_file(file_path.as_ref(), version)
-            })
-            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::load_wallet(
+            Arc::clone(&chain_config),
+            db,
+            password,
+            |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+            wallet_type,
+        )
+        .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
     }

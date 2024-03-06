@@ -4275,6 +4275,7 @@ dependencies = [
  "tokio",
  "tower",
  "utils-networking",
+ "wallet-types",
 ]
 
 [[package]]

@@ -68,6 +68,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
                     chain_config.shallow_clone(),
                     wallet_file,
                     wallet_password,
+                    node_rpc.is_cold_wallet_node(),
                 )?
             };
 

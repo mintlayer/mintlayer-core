@@ -31,6 +31,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
 use utils_networking::IpOrSocketAddress;
+use wallet_types::wallet_type::WalletType;
 
 use crate::node_traits::NodeInterface;
 
@@ -45,6 +46,10 @@ pub enum ColdWalletRpcError {
 #[async_trait::async_trait]
 impl NodeInterface for ColdWalletClient {
     type Error = ColdWalletRpcError;
+
+    fn is_cold_wallet_node(&self) -> WalletType {
+        WalletType::Cold
+    }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
         let genesis = self.chain_config.genesis_block();

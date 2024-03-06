@@ -40,6 +40,9 @@ class UtxoOutpoint:
     def __str__(self):
         return f'tx({self.id},{self.index})'
 
+    def to_json(self):
+        return { "id": {"Transaction": self.id}, "index": self.index }
+
 @dataclass
 class PoolData:
     pool_id: str
@@ -136,8 +139,11 @@ class WalletRpcController:
 
     async def open_wallet(self, name: str = "wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        self._write_command("wallet_open", [wallet_file, None])
-        return "Success"
+        output = self._write_command("wallet_open", [wallet_file, None])
+        if 'result' in output:
+            return "Success"
+        else:
+            return output['error']['message']
 
     async def close_wallet(self) -> str:
         return self._write_command("wallet_close", [])['result']
@@ -164,9 +170,10 @@ class WalletRpcController:
         self.account = account_index
         return "Success"
 
-    async def new_public_key(self) -> bytes:
-        addr = await self.new_address()
-        public_key = self._write_command("address_reveal_public_key", [self.account, addr])['result']['public_key_hex']
+    async def new_public_key(self, address: Optional[str] = None) -> bytes:
+        if address is None:
+            address = await self.new_address()
+        public_key = self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_hex']
 
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
@@ -329,6 +336,13 @@ class WalletRpcController:
     async def abandon_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_abandon", [self.account, tx_id])['result']
 
+    async def sign_raw_transaction(self, transaction: str) -> str:
+        result = self._write_command("account_sign_raw_transaction", [self.account, transaction, {'in_top_x_mb': 5}])
+        if 'result' in result:
+            return f"The transaction has been fully signed and is ready to be broadcast to network\n\n{result['result']['hex']}"
+        else:
+            return result['error']['message']
+
     async def sign_challenge_plain(self, message: str, address: str) -> str:
         result = self._write_command('challenge_sign_plain', [self.account, message, address])
         if 'result' in result:
@@ -354,5 +368,13 @@ class WalletRpcController:
         result = self._write_command('challenge_verify_hex', [message, signature, address])
         if 'result' in result:
             return f"The provided signature is correct"
+        else:
+            return result['error']['message']
+
+    async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
+        utxo = { "id": {"Transaction": selected_utxo.id}, "index": selected_utxo.index }
+        result = self._write_command("transaction_create_from_cold_input", [self.account, address, str(amount), utxo, change_address, {'in_top_x_mb': 5}])
+        if 'result' in result:
+            return f"Send transaction created\n\n{result['result']['hex']}"
         else:
             return result['error']['message']

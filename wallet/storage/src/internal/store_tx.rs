@@ -36,6 +36,7 @@ use wallet_types::{
     chain_info::ChainInfo,
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
+    wallet_type::WalletType,
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
@@ -43,7 +44,7 @@ use wallet_types::{
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
-    use wallet_types::{account_info::AccountVrfKeys, chain_info::ChainInfo};
+    use wallet_types::{account_info::AccountVrfKeys, chain_info::ChainInfo, wallet_type};
 
     use super::Codec;
 
@@ -71,6 +72,7 @@ mod well_known {
     declare_entry!(StoreChainInfo: ChainInfo);
     declare_entry!(LookaheadSize: u32);
     declare_entry!(LegacyVfrPubKey: AccountVrfKeys);
+    declare_entry!(WalletType: wallet_type::WalletType);
 }
 
 #[derive(PartialEq, Clone)]
@@ -151,6 +153,11 @@ macro_rules! impl_read_ops {
         impl<'st, B: storage::Backend> WalletStorageReadLocked for $TxType<'st, B> {
             fn get_storage_version(&self) -> crate::Result<u32> {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            }
+
+            fn get_wallet_type(&self) -> crate::Result<WalletType> {
+                self.read_value::<well_known::WalletType>()
+                    .and_then(|v| v.ok_or(crate::Error::WalletDbInconsistentState))
             }
 
             fn get_chain_info(&self) -> crate::Result<ChainInfo> {
@@ -373,6 +380,10 @@ macro_rules! impl_write_ops {
         impl<'st, B: storage::Backend> WalletStorageWriteLocked for $TxType<'st, B> {
             fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
                 self.write_value::<well_known::StoreVersion>(&version)
+            }
+
+            fn set_wallet_type(&mut self, wallet_type: WalletType) -> crate::Result<()> {
+                self.write_value::<well_known::WalletType>(&wallet_type)
             }
 
             fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()> {
