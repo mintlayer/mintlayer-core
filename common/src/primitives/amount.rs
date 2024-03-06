@@ -200,7 +200,7 @@ impl Sum<Amount> for Option<Amount> {
 
 impl rpc_description::HasValueHint for Amount {
     const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::NUMBER)]);
+        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::STRING)]);
 }
 
 #[macro_export]
