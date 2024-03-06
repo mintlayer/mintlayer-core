@@ -131,7 +131,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert_equal(0, output["inputs"][0]["Utxo"]["index"])
 
                 assert_equal(1, len(output["outputs"]))
-                assert_equal(coins_to_send * ATOMS_PER_COIN, output["outputs"][0]["Transfer"][0]["Coin"]["val"])
+                assert_equal(coins_to_send * ATOMS_PER_COIN, output["outputs"][0]["Transfer"][0]["Coin"]["atoms"])
 
                 # check the raw encoding
                 output = await wallet2.get_raw_signed_transaction(tx_id)

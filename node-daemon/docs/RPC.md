@@ -294,7 +294,7 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "val": number }
+     1) { "atoms": number }
      2) null
 ```
 
@@ -314,7 +314,7 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "val": number }
+     1) { "atoms": number }
      2) null
 ```
 
@@ -335,7 +335,7 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "val": number }
+     1) { "atoms": number }
      2) null
 ```
 
@@ -357,9 +357,9 @@ EITHER OF
             "token_ticker": [ number, .. ],
             "number_of_decimals": number,
             "metadata_uri": [ number, .. ],
-            "circulating_supply": { "val": number },
+            "circulating_supply": { "atoms": number },
             "total_supply": EITHER OF
-                 1) { "Fixed": { "val": number } }
+                 1) { "Fixed": { "atoms": number } }
                  2) "Lockable"
                  3) "Unlimited",
             "is_locked": bool,
@@ -655,7 +655,7 @@ Parameters:
 
 Returns:
 ```
-{ "amount_per_kb": { "val": number } }
+{ "amount_per_kb": { "atoms": number } }
 ```
 
 ### Method `mempool_get_fee_rate_points`
@@ -672,7 +672,7 @@ Returns:
 ```
 [ [
     number,
-    { "amount_per_kb": { "val": number } },
+    { "amount_per_kb": { "atoms": number } },
 ], .. ]
 ```
 

@@ -43,7 +43,7 @@ pub type UnsignedIntType = u128;
 #[must_use]
 pub struct Amount {
     #[codec(compact)]
-    val: UnsignedIntType,
+    atoms: UnsignedIntType,
 }
 
 impl Amount {
@@ -51,11 +51,11 @@ impl Amount {
     pub const ZERO: Self = Self::from_atoms(0);
 
     pub const fn from_atoms(v: UnsignedIntType) -> Self {
-        Amount { val: v }
+        Amount { atoms: v }
     }
 
     pub const fn into_atoms(&self) -> UnsignedIntType {
-        self.val
+        self.atoms
     }
 
     pub fn from_signed(amount: SignedAmount) -> Option<Self> {
@@ -65,7 +65,7 @@ impl Amount {
     }
 
     pub fn into_signed(self) -> Option<SignedAmount> {
-        let atoms = self.val;
+        let atoms = self.atoms;
         let signed_atoms: super::signed_amount::SignedIntType = atoms.try_into().ok()?;
         Some(SignedAmount::from_atoms(signed_atoms))
     }
@@ -91,7 +91,7 @@ impl std::ops::Add for Amount {
     type Output = Option<Self>;
 
     fn add(self, other: Self) -> Option<Self> {
-        self.val.checked_add(other.val).map(|n| Amount { val: n })
+        self.atoms.checked_add(other.atoms).map(|n| Amount { atoms: n })
     }
 }
 
@@ -99,7 +99,7 @@ impl std::ops::Sub for Amount {
     type Output = Option<Self>;
 
     fn sub(self, other: Self) -> Option<Self> {
-        self.val.checked_sub(other.val).map(|n| Amount { val: n })
+        self.atoms.checked_sub(other.atoms).map(|n| Amount { atoms: n })
     }
 }
 
@@ -107,7 +107,7 @@ impl std::ops::Mul<UnsignedIntType> for Amount {
     type Output = Option<Self>;
 
     fn mul(self, other: UnsignedIntType) -> Option<Self> {
-        self.val.checked_mul(other).map(|n| Amount { val: n })
+        self.atoms.checked_mul(other).map(|n| Amount { atoms: n })
     }
 }
 
@@ -115,7 +115,7 @@ impl std::ops::Div<UnsignedIntType> for Amount {
     type Output = Option<Amount>;
 
     fn div(self, other: UnsignedIntType) -> Option<Amount> {
-        self.val.checked_div(other).map(|n| Amount { val: n })
+        self.atoms.checked_div(other).map(|n| Amount { atoms: n })
     }
 }
 
@@ -123,7 +123,7 @@ impl std::ops::Rem<UnsignedIntType> for Amount {
     type Output = Option<Self>;
 
     fn rem(self, other: UnsignedIntType) -> Option<Self> {
-        self.val.checked_rem(other).map(|n| Amount { val: n })
+        self.atoms.checked_rem(other).map(|n| Amount { atoms: n })
     }
 }
 
@@ -132,14 +132,14 @@ impl std::ops::BitAnd for Amount {
 
     fn bitand(self, other: Self) -> Self {
         Amount {
-            val: self.val.bitand(other.val),
+            atoms: self.atoms.bitand(other.atoms),
         }
     }
 }
 
 impl std::ops::BitAndAssign for Amount {
     fn bitand_assign(&mut self, other: Self) {
-        self.val.bitand_assign(other.val)
+        self.atoms.bitand_assign(other.atoms)
     }
 }
 
@@ -148,14 +148,14 @@ impl std::ops::BitOr for Amount {
 
     fn bitor(self, other: Self) -> Self {
         Amount {
-            val: self.val.bitor(other.val),
+            atoms: self.atoms.bitor(other.atoms),
         }
     }
 }
 
 impl std::ops::BitOrAssign for Amount {
     fn bitor_assign(&mut self, other: Self) {
-        self.val.bitor_assign(other.val)
+        self.atoms.bitor_assign(other.atoms)
     }
 }
 
@@ -164,14 +164,14 @@ impl std::ops::BitXor for Amount {
 
     fn bitxor(self, other: Self) -> Self {
         Amount {
-            val: self.val.bitxor(other.val),
+            atoms: self.atoms.bitxor(other.atoms),
         }
     }
 }
 
 impl std::ops::BitXorAssign for Amount {
     fn bitxor_assign(&mut self, other: Self) {
-        self.val.bitxor_assign(other.val)
+        self.atoms.bitxor_assign(other.atoms)
     }
 }
 
@@ -180,7 +180,7 @@ impl std::ops::Not for Amount {
 
     fn not(self) -> Self {
         Amount {
-            val: self.val.not(),
+            atoms: self.atoms.not(),
         }
     }
 }
@@ -189,7 +189,7 @@ impl std::ops::Shl<u32> for Amount {
     type Output = Option<Self>;
 
     fn shl(self, other: u32) -> Option<Self> {
-        self.val.checked_shl(other).map(|v| Amount { val: v })
+        self.atoms.checked_shl(other).map(|v| Amount { atoms: v })
     }
 }
 
@@ -197,7 +197,7 @@ impl std::ops::Shr<u32> for Amount {
     type Output = Option<Self>;
 
     fn shr(self, other: u32) -> Option<Self> {
-        self.val.checked_shr(other).map(|v| Amount { val: v })
+        self.atoms.checked_shr(other).map(|v| Amount { atoms: v })
     }
 }
 
@@ -212,7 +212,7 @@ impl Sum<Amount> for Option<Amount> {
 
 impl rpc_description::HasValueHint for Amount {
     const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("val", &rpc_description::ValueHint::NUMBER)]);
+        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::NUMBER)]);
 }
 
 #[macro_export]
@@ -242,69 +242,69 @@ mod tests {
     #[test]
     fn creation() {
         let x = Amount::from_atoms(555);
-        assert_eq!(x, Amount { val: 555 });
+        assert_eq!(x, Amount { atoms: 555 });
 
         let y = Amount::from_atoms(123);
-        assert_eq!(y, Amount { val: 123 });
+        assert_eq!(y, Amount { atoms: 123 });
     }
 
     #[test]
     fn add_some() {
         assert_eq!(
-            Amount { val: 2 } + Amount { val: 2 },
-            Some(Amount { val: 4 })
+            Amount { atoms: 2 } + Amount { atoms: 2 },
+            Some(Amount { atoms: 4 })
         );
     }
 
     #[test]
     fn sub_some() {
         assert_eq!(
-            Amount { val: 4 } - Amount { val: 2 },
-            Some(Amount { val: 2 })
+            Amount { atoms: 4 } - Amount { atoms: 2 },
+            Some(Amount { atoms: 2 })
         );
     }
 
     #[test]
     fn mul_some() {
-        assert_eq!(Amount { val: 3 } * 3, Some(Amount { val: 9 }));
+        assert_eq!(Amount { atoms: 3 } * 3, Some(Amount { atoms: 9 }));
     }
 
     #[test]
     fn div_some() {
-        assert_eq!(Amount { val: 9 } / 3, Some(Amount { val: 3 }));
+        assert_eq!(Amount { atoms: 9 } / 3, Some(Amount { atoms: 3 }));
     }
 
     #[test]
     fn rem_some() {
-        assert_eq!(Amount { val: 9 } % 4, Some(Amount { val: 1 }));
+        assert_eq!(Amount { atoms: 9 } % 4, Some(Amount { atoms: 1 }));
     }
 
     #[test]
     fn add_overflow() {
         assert_eq!(
             Amount {
-                val: UnsignedIntType::MAX
-            } + Amount { val: 1 },
+                atoms: UnsignedIntType::MAX
+            } + Amount { atoms: 1 },
             None
         );
     }
 
     #[test]
     fn sum_some() {
-        let amounts = vec![Amount { val: 1 }, Amount { val: 2 }, Amount { val: 3 }];
+        let amounts = vec![Amount { atoms: 1 }, Amount { atoms: 2 }, Amount { atoms: 3 }];
         assert_eq!(
             amounts.into_iter().sum::<Option<Amount>>(),
-            Some(Amount { val: 6 })
+            Some(Amount { atoms: 6 })
         );
     }
 
     #[test]
     fn sum_overflow() {
         let amounts = vec![
-            Amount { val: 1 },
-            Amount { val: 2 },
+            Amount { atoms: 1 },
+            Amount { atoms: 2 },
             Amount {
-                val: UnsignedIntType::MAX - 2,
+                atoms: UnsignedIntType::MAX - 2,
             },
         ];
         assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
@@ -322,8 +322,8 @@ mod tests {
     fn sub_underflow() {
         assert_eq!(
             Amount {
-                val: UnsignedIntType::MIN
-            } - Amount { val: 1 },
+                atoms: UnsignedIntType::MIN
+            } - Amount { atoms: 1 },
             None
         );
     }
@@ -332,7 +332,7 @@ mod tests {
     fn mul_overflow() {
         assert_eq!(
             Amount {
-                val: UnsignedIntType::MAX / 2 + 1
+                atoms: UnsignedIntType::MAX / 2 + 1
             } * 2,
             None
         );
@@ -340,54 +340,54 @@ mod tests {
 
     #[test]
     fn comparison() {
-        assert!(Amount { val: 1 } != Amount { val: 2 });
-        assert!(Amount { val: 1 } < Amount { val: 2 });
-        assert!(Amount { val: 1 } <= Amount { val: 2 });
-        assert!(Amount { val: 2 } <= Amount { val: 2 });
-        assert!(Amount { val: 2 } == Amount { val: 2 });
-        assert!(Amount { val: 2 } >= Amount { val: 2 });
-        assert!(Amount { val: 3 } > Amount { val: 2 });
+        assert!(Amount { atoms: 1 } != Amount { atoms: 2 });
+        assert!(Amount { atoms: 1 } < Amount { atoms: 2 });
+        assert!(Amount { atoms: 1 } <= Amount { atoms: 2 });
+        assert!(Amount { atoms: 2 } <= Amount { atoms: 2 });
+        assert!(Amount { atoms: 2 } == Amount { atoms: 2 });
+        assert!(Amount { atoms: 2 } >= Amount { atoms: 2 });
+        assert!(Amount { atoms: 3 } > Amount { atoms: 2 });
     }
 
     #[test]
     fn bit_ops() {
-        let x = Amount { val: 5 };
-        let y = Amount { val: 1 };
-        let z = Amount { val: 2 };
+        let x = Amount { atoms: 5 };
+        let y = Amount { atoms: 1 };
+        let z = Amount { atoms: 2 };
         let zero: UnsignedIntType = 0;
-        assert_eq!(x | y, Amount { val: 5 });
-        assert_eq!(x & z, Amount { val: 0 });
-        assert_eq!(x ^ y, Amount { val: 4 });
+        assert_eq!(x | y, Amount { atoms: 5 });
+        assert_eq!(x & z, Amount { atoms: 0 });
+        assert_eq!(x ^ y, Amount { atoms: 4 });
         assert_eq!(!zero, UnsignedIntType::MAX);
     }
 
     #[test]
     fn bit_ops_assign() {
-        let mut x = Amount { val: 5 };
+        let mut x = Amount { atoms: 5 };
 
-        x ^= Amount { val: 1 };
-        assert_eq!(x, Amount { val: 4 });
+        x ^= Amount { atoms: 1 };
+        assert_eq!(x, Amount { atoms: 4 });
 
-        x |= Amount { val: 2 };
-        assert_eq!(x, Amount { val: 6 });
+        x |= Amount { atoms: 2 };
+        assert_eq!(x, Amount { atoms: 6 });
 
-        x &= Amount { val: 5 };
-        assert_eq!(x, Amount { val: 4 });
+        x &= Amount { atoms: 5 };
+        assert_eq!(x, Amount { atoms: 4 });
     }
 
     #[test]
     fn bit_shifts() {
-        let x = Amount { val: 1 };
-        assert_eq!(x << 1, Some(Amount { val: 2 }));
-        assert_eq!(x << 2, Some(Amount { val: 4 }));
-        assert_eq!(x << 4, Some(Amount { val: 16 }));
-        assert_eq!(x << 6, Some(Amount { val: 64 }));
+        let x = Amount { atoms: 1 };
+        assert_eq!(x << 1, Some(Amount { atoms: 2 }));
+        assert_eq!(x << 2, Some(Amount { atoms: 4 }));
+        assert_eq!(x << 4, Some(Amount { atoms: 16 }));
+        assert_eq!(x << 6, Some(Amount { atoms: 64 }));
 
-        let y = Amount { val: 128 };
-        assert_eq!(y >> 1, Some(Amount { val: 64 }));
-        assert_eq!(y >> 2, Some(Amount { val: 32 }));
-        assert_eq!(y >> 4, Some(Amount { val: 8 }));
-        assert_eq!(y >> 6, Some(Amount { val: 2 }));
+        let y = Amount { atoms: 128 };
+        assert_eq!(y >> 1, Some(Amount { atoms: 64 }));
+        assert_eq!(y >> 2, Some(Amount { atoms: 32 }));
+        assert_eq!(y >> 4, Some(Amount { atoms: 8 }));
+        assert_eq!(y >> 6, Some(Amount { atoms: 2 }));
     }
 
     #[rstest]
@@ -501,57 +501,57 @@ mod tests {
     #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_8_decimals() {
-        assert_eq!(Amount::from_fixedpoint_str("987654321", 8).unwrap(), Amount { val: 98765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("87654321", 8).unwrap(), Amount { val: 8765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("7654321", 8).unwrap(), Amount { val: 765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("654321", 8).unwrap(), Amount { val: 65432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("54321", 8).unwrap(), Amount { val: 5432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("4321", 8).unwrap(), Amount { val: 432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("321", 8).unwrap(), Amount { val: 32100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21", 8).unwrap(), Amount { val: 2100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("1", 8).unwrap(), Amount { val: 100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.2", 8).unwrap(), Amount { val: 120000000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.23", 8).unwrap(), Amount { val: 123000000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.234", 8).unwrap(), Amount { val: 123400000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.2345", 8).unwrap(), Amount { val: 123450000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.23456", 8).unwrap(), Amount { val: 123456000 });
-        assert_eq!(Amount::from_fixedpoint_str("1.234567", 8).unwrap(), Amount { val: 123456700 });
-        assert_eq!(Amount::from_fixedpoint_str("1.2345678", 8).unwrap(), Amount { val: 123456780 });
-        assert_eq!(Amount::from_fixedpoint_str("1.23456789", 8).unwrap(), Amount { val: 123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("21.23456789", 8).unwrap(), Amount { val: 2123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("321.23456789", 8).unwrap(), Amount { val: 32123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("4321.23456789", 8).unwrap(), Amount { val: 432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("54321.23456789", 8).unwrap(), Amount { val: 5432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("654321.23456789", 8).unwrap(), Amount { val: 65432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("7654321.23456789", 8).unwrap(), Amount { val: 765432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("87654321.23456789", 8).unwrap(), Amount { val: 8765432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("987654321.23456789", 8).unwrap(), Amount { val: 98765432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("1987654321.23456789", 8).unwrap(), Amount { val: 198765432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.23456789", 8).unwrap(), Amount { val: 2198765432123456789 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.2345678", 8).unwrap(), Amount { val: 2198765432123456780 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.234567", 8).unwrap(), Amount { val: 2198765432123456700 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.23456", 8).unwrap(), Amount { val: 2198765432123456000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.2345", 8).unwrap(), Amount { val: 2198765432123450000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.234", 8).unwrap(), Amount { val: 2198765432123400000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.23", 8).unwrap(), Amount { val: 2198765432123000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.2", 8).unwrap(), Amount { val: 2198765432120000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.0", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.00", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.0000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.00000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.000000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.0000000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.00000000", 8).unwrap(), Amount { val: 2198765432100000000 });
-        assert_eq!(Amount::from_fixedpoint_str(".2", 8).unwrap(), Amount { val: 20000000 });
-        assert_eq!(Amount::from_fixedpoint_str(".23", 8).unwrap(), Amount { val: 23000000 });
-        assert_eq!(Amount::from_fixedpoint_str(".234", 8).unwrap(), Amount { val: 23400000 });
-        assert_eq!(Amount::from_fixedpoint_str(".2345", 8).unwrap(), Amount { val: 23450000 });
-        assert_eq!(Amount::from_fixedpoint_str(".23456", 8).unwrap(), Amount { val: 23456000 });
-        assert_eq!(Amount::from_fixedpoint_str(".234567", 8).unwrap(), Amount { val: 23456700 });
-        assert_eq!(Amount::from_fixedpoint_str(".2345678", 8).unwrap(), Amount { val: 23456780 });
-        assert_eq!(Amount::from_fixedpoint_str(".23456789", 8).unwrap(), Amount { val: 23456789 });
+        assert_eq!(Amount::from_fixedpoint_str("987654321", 8).unwrap(), Amount { atoms: 98765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("87654321", 8).unwrap(), Amount { atoms: 8765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("7654321", 8).unwrap(), Amount { atoms: 765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("654321", 8).unwrap(), Amount { atoms: 65432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("54321", 8).unwrap(), Amount { atoms: 5432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("4321", 8).unwrap(), Amount { atoms: 432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("321", 8).unwrap(), Amount { atoms: 32100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21", 8).unwrap(), Amount { atoms: 2100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("1", 8).unwrap(), Amount { atoms: 100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.2", 8).unwrap(), Amount { atoms: 120000000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.23", 8).unwrap(), Amount { atoms: 123000000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.234", 8).unwrap(), Amount { atoms: 123400000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.2345", 8).unwrap(), Amount { atoms: 123450000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.23456", 8).unwrap(), Amount { atoms: 123456000 });
+        assert_eq!(Amount::from_fixedpoint_str("1.234567", 8).unwrap(), Amount { atoms: 123456700 });
+        assert_eq!(Amount::from_fixedpoint_str("1.2345678", 8).unwrap(), Amount { atoms: 123456780 });
+        assert_eq!(Amount::from_fixedpoint_str("1.23456789", 8).unwrap(), Amount { atoms: 123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("21.23456789", 8).unwrap(), Amount { atoms: 2123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("321.23456789", 8).unwrap(), Amount { atoms: 32123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("4321.23456789", 8).unwrap(), Amount { atoms: 432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("54321.23456789", 8).unwrap(), Amount { atoms: 5432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("654321.23456789", 8).unwrap(), Amount { atoms: 65432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("7654321.23456789", 8).unwrap(), Amount { atoms: 765432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("87654321.23456789", 8).unwrap(), Amount { atoms: 8765432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("987654321.23456789", 8).unwrap(), Amount { atoms: 98765432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("1987654321.23456789", 8).unwrap(), Amount { atoms: 198765432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.23456789", 8).unwrap(), Amount { atoms: 2198765432123456789 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.2345678", 8).unwrap(), Amount { atoms: 2198765432123456780 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.234567", 8).unwrap(), Amount { atoms: 2198765432123456700 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.23456", 8).unwrap(), Amount { atoms: 2198765432123456000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.2345", 8).unwrap(), Amount { atoms: 2198765432123450000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.234", 8).unwrap(), Amount { atoms: 2198765432123400000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.23", 8).unwrap(), Amount { atoms: 2198765432123000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.2", 8).unwrap(), Amount { atoms: 2198765432120000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.0", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.00", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.0000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.00000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.000000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.0000000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.00000000", 8).unwrap(), Amount { atoms: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".2", 8).unwrap(), Amount { atoms: 20000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".23", 8).unwrap(), Amount { atoms: 23000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".234", 8).unwrap(), Amount { atoms: 23400000 });
+        assert_eq!(Amount::from_fixedpoint_str(".2345", 8).unwrap(), Amount { atoms: 23450000 });
+        assert_eq!(Amount::from_fixedpoint_str(".23456", 8).unwrap(), Amount { atoms: 23456000 });
+        assert_eq!(Amount::from_fixedpoint_str(".234567", 8).unwrap(), Amount { atoms: 23456700 });
+        assert_eq!(Amount::from_fixedpoint_str(".2345678", 8).unwrap(), Amount { atoms: 23456780 });
+        assert_eq!(Amount::from_fixedpoint_str(".23456789", 8).unwrap(), Amount { atoms: 23456789 });
         assert!(Amount::from_fixedpoint_str("", 8).is_none());
         assert!(Amount::from_fixedpoint_str(" ", 8).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.000000000", 8).is_none());
@@ -576,24 +576,24 @@ mod tests {
     #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_0_decimals() {
-        assert_eq!(Amount::from_fixedpoint_str("987654321", 0).unwrap(), Amount { val: 987654321 });
-        assert_eq!(Amount::from_fixedpoint_str("87654321", 0).unwrap(), Amount { val: 87654321 });
-        assert_eq!(Amount::from_fixedpoint_str("7654321", 0).unwrap(), Amount { val: 7654321 });
-        assert_eq!(Amount::from_fixedpoint_str("654321", 0).unwrap(), Amount { val: 654321 });
-        assert_eq!(Amount::from_fixedpoint_str("54321", 0).unwrap(), Amount { val: 54321 });
-        assert_eq!(Amount::from_fixedpoint_str("4321", 0).unwrap(), Amount { val: 4321 });
-        assert_eq!(Amount::from_fixedpoint_str("321", 0).unwrap(), Amount { val: 321 });
-        assert_eq!(Amount::from_fixedpoint_str("21", 0).unwrap(), Amount { val: 21 });
-        assert_eq!(Amount::from_fixedpoint_str("1", 0).unwrap(), Amount { val: 1 });
-        assert_eq!(Amount::from_fixedpoint_str("987654321.", 0).unwrap(), Amount { val: 987654321 });
-        assert_eq!(Amount::from_fixedpoint_str("87654321.", 0).unwrap(), Amount { val: 87654321 });
-        assert_eq!(Amount::from_fixedpoint_str("7654321.", 0).unwrap(), Amount { val: 7654321 });
-        assert_eq!(Amount::from_fixedpoint_str("654321.", 0).unwrap(), Amount { val: 654321 });
-        assert_eq!(Amount::from_fixedpoint_str("54321.", 0).unwrap(), Amount { val: 54321 });
-        assert_eq!(Amount::from_fixedpoint_str("4321.", 0).unwrap(), Amount { val: 4321 });
-        assert_eq!(Amount::from_fixedpoint_str("321.", 0).unwrap(), Amount { val: 321 });
-        assert_eq!(Amount::from_fixedpoint_str("21.", 0).unwrap(), Amount { val: 21 });
-        assert_eq!(Amount::from_fixedpoint_str("1.", 0).unwrap(), Amount { val: 1 });
+        assert_eq!(Amount::from_fixedpoint_str("987654321", 0).unwrap(), Amount { atoms: 987654321 });
+        assert_eq!(Amount::from_fixedpoint_str("87654321", 0).unwrap(), Amount { atoms: 87654321 });
+        assert_eq!(Amount::from_fixedpoint_str("7654321", 0).unwrap(), Amount { atoms: 7654321 });
+        assert_eq!(Amount::from_fixedpoint_str("654321", 0).unwrap(), Amount { atoms: 654321 });
+        assert_eq!(Amount::from_fixedpoint_str("54321", 0).unwrap(), Amount { atoms: 54321 });
+        assert_eq!(Amount::from_fixedpoint_str("4321", 0).unwrap(), Amount { atoms: 4321 });
+        assert_eq!(Amount::from_fixedpoint_str("321", 0).unwrap(), Amount { atoms: 321 });
+        assert_eq!(Amount::from_fixedpoint_str("21", 0).unwrap(), Amount { atoms: 21 });
+        assert_eq!(Amount::from_fixedpoint_str("1", 0).unwrap(), Amount { atoms: 1 });
+        assert_eq!(Amount::from_fixedpoint_str("987654321.", 0).unwrap(), Amount { atoms: 987654321 });
+        assert_eq!(Amount::from_fixedpoint_str("87654321.", 0).unwrap(), Amount { atoms: 87654321 });
+        assert_eq!(Amount::from_fixedpoint_str("7654321.", 0).unwrap(), Amount { atoms: 7654321 });
+        assert_eq!(Amount::from_fixedpoint_str("654321.", 0).unwrap(), Amount { atoms: 654321 });
+        assert_eq!(Amount::from_fixedpoint_str("54321.", 0).unwrap(), Amount { atoms: 54321 });
+        assert_eq!(Amount::from_fixedpoint_str("4321.", 0).unwrap(), Amount { atoms: 4321 });
+        assert_eq!(Amount::from_fixedpoint_str("321.", 0).unwrap(), Amount { atoms: 321 });
+        assert_eq!(Amount::from_fixedpoint_str("21.", 0).unwrap(), Amount { atoms: 21 });
+        assert_eq!(Amount::from_fixedpoint_str("1.", 0).unwrap(), Amount { atoms: 1 });
         assert!(Amount::from_fixedpoint_str("1.2", 0).is_none());
         assert!(Amount::from_fixedpoint_str("1.23", 0).is_none());
         assert!(Amount::from_fixedpoint_str("1.234", 0).is_none());
@@ -619,7 +619,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("21987654321.234", 0).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.23", 0).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.2", 0).is_none());
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 0).unwrap(), Amount { val: 21987654321 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 0).unwrap(), Amount { atoms: 21987654321 });
         assert!(Amount::from_fixedpoint_str("21987654321.0", 0).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.00", 0).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.000", 0).is_none());
@@ -652,17 +652,17 @@ mod tests {
     #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_1_decimal() {
-        assert_eq!(Amount::from_fixedpoint_str("987654321", 1).unwrap(), Amount { val: 9876543210 });
-        assert_eq!(Amount::from_fixedpoint_str("87654321", 1).unwrap(), Amount { val: 876543210 });
-        assert_eq!(Amount::from_fixedpoint_str("7654321", 1).unwrap(), Amount { val: 76543210 });
-        assert_eq!(Amount::from_fixedpoint_str("654321", 1).unwrap(), Amount { val: 6543210 });
-        assert_eq!(Amount::from_fixedpoint_str("54321", 1).unwrap(), Amount { val: 543210 });
-        assert_eq!(Amount::from_fixedpoint_str("4321", 1).unwrap(), Amount { val: 43210 });
-        assert_eq!(Amount::from_fixedpoint_str("321", 1).unwrap(), Amount { val: 3210 });
-        assert_eq!(Amount::from_fixedpoint_str("21", 1).unwrap(), Amount { val: 210 });
-        assert_eq!(Amount::from_fixedpoint_str("1", 1).unwrap(), Amount { val: 10 });
-        assert_eq!(Amount::from_fixedpoint_str("1.2", 1).unwrap(), Amount { val: 12 });
-        assert_eq!(Amount::from_fixedpoint_str(".2", 1).unwrap(), Amount { val: 2 });
+        assert_eq!(Amount::from_fixedpoint_str("987654321", 1).unwrap(), Amount { atoms: 9876543210 });
+        assert_eq!(Amount::from_fixedpoint_str("87654321", 1).unwrap(), Amount { atoms: 876543210 });
+        assert_eq!(Amount::from_fixedpoint_str("7654321", 1).unwrap(), Amount { atoms: 76543210 });
+        assert_eq!(Amount::from_fixedpoint_str("654321", 1).unwrap(), Amount { atoms: 6543210 });
+        assert_eq!(Amount::from_fixedpoint_str("54321", 1).unwrap(), Amount { atoms: 543210 });
+        assert_eq!(Amount::from_fixedpoint_str("4321", 1).unwrap(), Amount { atoms: 43210 });
+        assert_eq!(Amount::from_fixedpoint_str("321", 1).unwrap(), Amount { atoms: 3210 });
+        assert_eq!(Amount::from_fixedpoint_str("21", 1).unwrap(), Amount { atoms: 210 });
+        assert_eq!(Amount::from_fixedpoint_str("1", 1).unwrap(), Amount { atoms: 10 });
+        assert_eq!(Amount::from_fixedpoint_str("1.2", 1).unwrap(), Amount { atoms: 12 });
+        assert_eq!(Amount::from_fixedpoint_str(".2", 1).unwrap(), Amount { atoms: 2 });
         assert!(Amount::from_fixedpoint_str("1.23", 1).is_none());
         assert!(Amount::from_fixedpoint_str("1.234", 1).is_none());
         assert!(Amount::from_fixedpoint_str("1.2345", 1).is_none());
@@ -686,9 +686,9 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("21987654321.2345", 1).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.234", 1).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.23", 1).is_none());
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.2", 1).unwrap(), Amount { val: 219876543212 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 1).unwrap(), Amount { val: 219876543210 });
-        assert_eq!(Amount::from_fixedpoint_str("21987654321.0", 1).unwrap(), Amount { val: 219876543210 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.2", 1).unwrap(), Amount { atoms: 219876543212 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.", 1).unwrap(), Amount { atoms: 219876543210 });
+        assert_eq!(Amount::from_fixedpoint_str("21987654321.0", 1).unwrap(), Amount { atoms: 219876543210 });
         assert!(Amount::from_fixedpoint_str("21987654321.00", 1).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.000", 1).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.0000", 1).is_none());
@@ -721,129 +721,129 @@ mod tests {
     #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_8_decimals() {
-        assert_eq!(Amount { val: 0 }.into_fixedpoint_str(8), "0");
-        assert_eq!(Amount { val: 1 }.into_fixedpoint_str(8), "0.00000001");
-        assert_eq!(Amount { val: 12 }.into_fixedpoint_str(8), "0.00000012");
-        assert_eq!(Amount { val: 123 }.into_fixedpoint_str(8), "0.00000123");
-        assert_eq!(Amount { val: 1234 }.into_fixedpoint_str(8), "0.00001234");
-        assert_eq!(Amount { val: 12345 }.into_fixedpoint_str(8), "0.00012345");
-        assert_eq!(Amount { val: 123456 }.into_fixedpoint_str(8), "0.00123456");
-        assert_eq!(Amount { val: 1234567 }.into_fixedpoint_str(8), "0.01234567");
-        assert_eq!(Amount { val: 12345678 }.into_fixedpoint_str(8), "0.12345678");
-        assert_eq!(Amount { val: 112345678 }.into_fixedpoint_str(8), "1.12345678");
-        assert_eq!(Amount { val: 2112345678 }.into_fixedpoint_str(8), "21.12345678");
-        assert_eq!(Amount { val: 32112345678 }.into_fixedpoint_str(8), "321.12345678");
-        assert_eq!(Amount { val: 432112345678 }.into_fixedpoint_str(8), "4321.12345678");
-        assert_eq!(Amount { val: 5432112345678 }.into_fixedpoint_str(8), "54321.12345678");
-        assert_eq!(Amount { val: 65432112345678 }.into_fixedpoint_str(8), "654321.12345678");
-        assert_eq!(Amount { val: 765432112345678 }.into_fixedpoint_str(8), "7654321.12345678");
-        assert_eq!(Amount { val: 8765432112345678 }.into_fixedpoint_str(8), "87654321.12345678");
-        assert_eq!(Amount { val: 98765432112345678 }.into_fixedpoint_str(8), "987654321.12345678");
-        assert_eq!(Amount { val: 10 }.into_fixedpoint_str(8), "0.0000001");
-        assert_eq!(Amount { val: 120 }.into_fixedpoint_str(8), "0.0000012");
-        assert_eq!(Amount { val: 1230 }.into_fixedpoint_str(8), "0.0000123");
-        assert_eq!(Amount { val: 12340 }.into_fixedpoint_str(8), "0.0001234");
-        assert_eq!(Amount { val: 123450 }.into_fixedpoint_str(8), "0.0012345");
-        assert_eq!(Amount { val: 1234560 }.into_fixedpoint_str(8), "0.0123456");
-        assert_eq!(Amount { val: 12345670 }.into_fixedpoint_str(8), "0.1234567");
-        assert_eq!(Amount { val: 123456780 }.into_fixedpoint_str(8), "1.2345678");
-        assert_eq!(Amount { val: 1123456780 }.into_fixedpoint_str(8), "11.2345678");
-        assert_eq!(Amount { val: 100 }.into_fixedpoint_str(8), "0.000001");
-        assert_eq!(Amount { val: 1200 }.into_fixedpoint_str(8), "0.000012");
-        assert_eq!(Amount { val: 12300 }.into_fixedpoint_str(8), "0.000123");
-        assert_eq!(Amount { val: 123400 }.into_fixedpoint_str(8), "0.001234");
-        assert_eq!(Amount { val: 1234500 }.into_fixedpoint_str(8), "0.012345");
-        assert_eq!(Amount { val: 12345600 }.into_fixedpoint_str(8), "0.123456");
-        assert_eq!(Amount { val: 123456700 }.into_fixedpoint_str(8), "1.234567");
-        assert_eq!(Amount { val: 1234567800 }.into_fixedpoint_str(8), "12.345678");
-        assert_eq!(Amount { val: 11234567800 }.into_fixedpoint_str(8), "112.345678");
+        assert_eq!(Amount { atoms: 0 }.into_fixedpoint_str(8), "0");
+        assert_eq!(Amount { atoms: 1 }.into_fixedpoint_str(8), "0.00000001");
+        assert_eq!(Amount { atoms: 12 }.into_fixedpoint_str(8), "0.00000012");
+        assert_eq!(Amount { atoms: 123 }.into_fixedpoint_str(8), "0.00000123");
+        assert_eq!(Amount { atoms: 1234 }.into_fixedpoint_str(8), "0.00001234");
+        assert_eq!(Amount { atoms: 12345 }.into_fixedpoint_str(8), "0.00012345");
+        assert_eq!(Amount { atoms: 123456 }.into_fixedpoint_str(8), "0.00123456");
+        assert_eq!(Amount { atoms: 1234567 }.into_fixedpoint_str(8), "0.01234567");
+        assert_eq!(Amount { atoms: 12345678 }.into_fixedpoint_str(8), "0.12345678");
+        assert_eq!(Amount { atoms: 112345678 }.into_fixedpoint_str(8), "1.12345678");
+        assert_eq!(Amount { atoms: 2112345678 }.into_fixedpoint_str(8), "21.12345678");
+        assert_eq!(Amount { atoms: 32112345678 }.into_fixedpoint_str(8), "321.12345678");
+        assert_eq!(Amount { atoms: 432112345678 }.into_fixedpoint_str(8), "4321.12345678");
+        assert_eq!(Amount { atoms: 5432112345678 }.into_fixedpoint_str(8), "54321.12345678");
+        assert_eq!(Amount { atoms: 65432112345678 }.into_fixedpoint_str(8), "654321.12345678");
+        assert_eq!(Amount { atoms: 765432112345678 }.into_fixedpoint_str(8), "7654321.12345678");
+        assert_eq!(Amount { atoms: 8765432112345678 }.into_fixedpoint_str(8), "87654321.12345678");
+        assert_eq!(Amount { atoms: 98765432112345678 }.into_fixedpoint_str(8), "987654321.12345678");
+        assert_eq!(Amount { atoms: 10 }.into_fixedpoint_str(8), "0.0000001");
+        assert_eq!(Amount { atoms: 120 }.into_fixedpoint_str(8), "0.0000012");
+        assert_eq!(Amount { atoms: 1230 }.into_fixedpoint_str(8), "0.0000123");
+        assert_eq!(Amount { atoms: 12340 }.into_fixedpoint_str(8), "0.0001234");
+        assert_eq!(Amount { atoms: 123450 }.into_fixedpoint_str(8), "0.0012345");
+        assert_eq!(Amount { atoms: 1234560 }.into_fixedpoint_str(8), "0.0123456");
+        assert_eq!(Amount { atoms: 12345670 }.into_fixedpoint_str(8), "0.1234567");
+        assert_eq!(Amount { atoms: 123456780 }.into_fixedpoint_str(8), "1.2345678");
+        assert_eq!(Amount { atoms: 1123456780 }.into_fixedpoint_str(8), "11.2345678");
+        assert_eq!(Amount { atoms: 100 }.into_fixedpoint_str(8), "0.000001");
+        assert_eq!(Amount { atoms: 1200 }.into_fixedpoint_str(8), "0.000012");
+        assert_eq!(Amount { atoms: 12300 }.into_fixedpoint_str(8), "0.000123");
+        assert_eq!(Amount { atoms: 123400 }.into_fixedpoint_str(8), "0.001234");
+        assert_eq!(Amount { atoms: 1234500 }.into_fixedpoint_str(8), "0.012345");
+        assert_eq!(Amount { atoms: 12345600 }.into_fixedpoint_str(8), "0.123456");
+        assert_eq!(Amount { atoms: 123456700 }.into_fixedpoint_str(8), "1.234567");
+        assert_eq!(Amount { atoms: 1234567800 }.into_fixedpoint_str(8), "12.345678");
+        assert_eq!(Amount { atoms: 11234567800 }.into_fixedpoint_str(8), "112.345678");
     }
 
     #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_0_decimals() {
-        assert_eq!(Amount { val: 1 }.into_fixedpoint_str(0), "1");
-        assert_eq!(Amount { val: 12 }.into_fixedpoint_str(0), "12");
-        assert_eq!(Amount { val: 123 }.into_fixedpoint_str(0), "123");
-        assert_eq!(Amount { val: 1234 }.into_fixedpoint_str(0), "1234");
-        assert_eq!(Amount { val: 12345 }.into_fixedpoint_str(0), "12345");
-        assert_eq!(Amount { val: 123456 }.into_fixedpoint_str(0), "123456");
-        assert_eq!(Amount { val: 1234567 }.into_fixedpoint_str(0), "1234567");
-        assert_eq!(Amount { val: 12345678 }.into_fixedpoint_str(0), "12345678");
-        assert_eq!(Amount { val: 123456789 }.into_fixedpoint_str(0), "123456789");
-        assert_eq!(Amount { val: 1234567890 }.into_fixedpoint_str(0), "1234567890");
-        assert_eq!(Amount { val: 12345678901 }.into_fixedpoint_str(0), "12345678901");
-        assert_eq!(Amount { val: 123456789012 }.into_fixedpoint_str(0), "123456789012");
-        assert_eq!(Amount { val: 1234567890123 }.into_fixedpoint_str(0), "1234567890123");
-        assert_eq!(Amount { val: 10 }.into_fixedpoint_str(0), "10");
-        assert_eq!(Amount { val: 120 }.into_fixedpoint_str(0), "120");
-        assert_eq!(Amount { val: 1230 }.into_fixedpoint_str(0), "1230");
-        assert_eq!(Amount { val: 12340 }.into_fixedpoint_str(0), "12340");
-        assert_eq!(Amount { val: 123450 }.into_fixedpoint_str(0), "123450");
-        assert_eq!(Amount { val: 1234560 }.into_fixedpoint_str(0), "1234560");
-        assert_eq!(Amount { val: 12345670 }.into_fixedpoint_str(0), "12345670");
-        assert_eq!(Amount { val: 123456780 }.into_fixedpoint_str(0), "123456780");
-        assert_eq!(Amount { val: 1234567890 }.into_fixedpoint_str(0), "1234567890");
-        assert_eq!(Amount { val: 12345678900 }.into_fixedpoint_str(0), "12345678900");
-        assert_eq!(Amount { val: 123456789010 }.into_fixedpoint_str(0), "123456789010");
-        assert_eq!(Amount { val: 1234567890120 }.into_fixedpoint_str(0), "1234567890120");
-        assert_eq!(Amount { val: 12345678901230 }.into_fixedpoint_str(0), "12345678901230");
-        assert_eq!(Amount { val: 100 }.into_fixedpoint_str(0), "100");
-        assert_eq!(Amount { val: 1200 }.into_fixedpoint_str(0), "1200");
-        assert_eq!(Amount { val: 12300 }.into_fixedpoint_str(0), "12300");
-        assert_eq!(Amount { val: 123400 }.into_fixedpoint_str(0), "123400");
-        assert_eq!(Amount { val: 1234500 }.into_fixedpoint_str(0), "1234500");
-        assert_eq!(Amount { val: 12345600 }.into_fixedpoint_str(0), "12345600");
-        assert_eq!(Amount { val: 123456700 }.into_fixedpoint_str(0), "123456700");
-        assert_eq!(Amount { val: 1234567800 }.into_fixedpoint_str(0), "1234567800");
-        assert_eq!(Amount { val: 12345678900 }.into_fixedpoint_str(0), "12345678900");
-        assert_eq!(Amount { val: 123456789000 }.into_fixedpoint_str(0), "123456789000");
-        assert_eq!(Amount { val: 1234567890100 }.into_fixedpoint_str(0), "1234567890100");
-        assert_eq!(Amount { val: 12345678901200 }.into_fixedpoint_str(0), "12345678901200");
-        assert_eq!(Amount { val: 123456789012300 }.into_fixedpoint_str(0), "123456789012300");
+        assert_eq!(Amount { atoms: 1 }.into_fixedpoint_str(0), "1");
+        assert_eq!(Amount { atoms: 12 }.into_fixedpoint_str(0), "12");
+        assert_eq!(Amount { atoms: 123 }.into_fixedpoint_str(0), "123");
+        assert_eq!(Amount { atoms: 1234 }.into_fixedpoint_str(0), "1234");
+        assert_eq!(Amount { atoms: 12345 }.into_fixedpoint_str(0), "12345");
+        assert_eq!(Amount { atoms: 123456 }.into_fixedpoint_str(0), "123456");
+        assert_eq!(Amount { atoms: 1234567 }.into_fixedpoint_str(0), "1234567");
+        assert_eq!(Amount { atoms: 12345678 }.into_fixedpoint_str(0), "12345678");
+        assert_eq!(Amount { atoms: 123456789 }.into_fixedpoint_str(0), "123456789");
+        assert_eq!(Amount { atoms: 1234567890 }.into_fixedpoint_str(0), "1234567890");
+        assert_eq!(Amount { atoms: 12345678901 }.into_fixedpoint_str(0), "12345678901");
+        assert_eq!(Amount { atoms: 123456789012 }.into_fixedpoint_str(0), "123456789012");
+        assert_eq!(Amount { atoms: 1234567890123 }.into_fixedpoint_str(0), "1234567890123");
+        assert_eq!(Amount { atoms: 10 }.into_fixedpoint_str(0), "10");
+        assert_eq!(Amount { atoms: 120 }.into_fixedpoint_str(0), "120");
+        assert_eq!(Amount { atoms: 1230 }.into_fixedpoint_str(0), "1230");
+        assert_eq!(Amount { atoms: 12340 }.into_fixedpoint_str(0), "12340");
+        assert_eq!(Amount { atoms: 123450 }.into_fixedpoint_str(0), "123450");
+        assert_eq!(Amount { atoms: 1234560 }.into_fixedpoint_str(0), "1234560");
+        assert_eq!(Amount { atoms: 12345670 }.into_fixedpoint_str(0), "12345670");
+        assert_eq!(Amount { atoms: 123456780 }.into_fixedpoint_str(0), "123456780");
+        assert_eq!(Amount { atoms: 1234567890 }.into_fixedpoint_str(0), "1234567890");
+        assert_eq!(Amount { atoms: 12345678900 }.into_fixedpoint_str(0), "12345678900");
+        assert_eq!(Amount { atoms: 123456789010 }.into_fixedpoint_str(0), "123456789010");
+        assert_eq!(Amount { atoms: 1234567890120 }.into_fixedpoint_str(0), "1234567890120");
+        assert_eq!(Amount { atoms: 12345678901230 }.into_fixedpoint_str(0), "12345678901230");
+        assert_eq!(Amount { atoms: 100 }.into_fixedpoint_str(0), "100");
+        assert_eq!(Amount { atoms: 1200 }.into_fixedpoint_str(0), "1200");
+        assert_eq!(Amount { atoms: 12300 }.into_fixedpoint_str(0), "12300");
+        assert_eq!(Amount { atoms: 123400 }.into_fixedpoint_str(0), "123400");
+        assert_eq!(Amount { atoms: 1234500 }.into_fixedpoint_str(0), "1234500");
+        assert_eq!(Amount { atoms: 12345600 }.into_fixedpoint_str(0), "12345600");
+        assert_eq!(Amount { atoms: 123456700 }.into_fixedpoint_str(0), "123456700");
+        assert_eq!(Amount { atoms: 1234567800 }.into_fixedpoint_str(0), "1234567800");
+        assert_eq!(Amount { atoms: 12345678900 }.into_fixedpoint_str(0), "12345678900");
+        assert_eq!(Amount { atoms: 123456789000 }.into_fixedpoint_str(0), "123456789000");
+        assert_eq!(Amount { atoms: 1234567890100 }.into_fixedpoint_str(0), "1234567890100");
+        assert_eq!(Amount { atoms: 12345678901200 }.into_fixedpoint_str(0), "12345678901200");
+        assert_eq!(Amount { atoms: 123456789012300 }.into_fixedpoint_str(0), "123456789012300");
     }
 
     #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_1_decimal() {
-        assert_eq!(Amount { val: 1 }.into_fixedpoint_str(1), "0.1");
-        assert_eq!(Amount { val: 12 }.into_fixedpoint_str(1), "1.2");
-        assert_eq!(Amount { val: 123 }.into_fixedpoint_str(1), "12.3");
-        assert_eq!(Amount { val: 1234 }.into_fixedpoint_str(1), "123.4");
-        assert_eq!(Amount { val: 12345 }.into_fixedpoint_str(1), "1234.5");
-        assert_eq!(Amount { val: 123456 }.into_fixedpoint_str(1), "12345.6");
-        assert_eq!(Amount { val: 1234567 }.into_fixedpoint_str(1), "123456.7");
-        assert_eq!(Amount { val: 12345678 }.into_fixedpoint_str(1), "1234567.8");
-        assert_eq!(Amount { val: 123456789 }.into_fixedpoint_str(1), "12345678.9");
-        assert_eq!(Amount { val: 1234567890 }.into_fixedpoint_str(1), "123456789");
-        assert_eq!(Amount { val: 12345678901 }.into_fixedpoint_str(1), "1234567890.1");
-        assert_eq!(Amount { val: 123456789012 }.into_fixedpoint_str(1), "12345678901.2");
-        assert_eq!(Amount { val: 1234567890123 }.into_fixedpoint_str(1), "123456789012.3");
-        assert_eq!(Amount { val: 10 }.into_fixedpoint_str(1), "1");
-        assert_eq!(Amount { val: 120 }.into_fixedpoint_str(1), "12");
-        assert_eq!(Amount { val: 1230 }.into_fixedpoint_str(1), "123");
-        assert_eq!(Amount { val: 12340 }.into_fixedpoint_str(1), "1234");
-        assert_eq!(Amount { val: 123450 }.into_fixedpoint_str(1), "12345");
-        assert_eq!(Amount { val: 1234560 }.into_fixedpoint_str(1), "123456");
-        assert_eq!(Amount { val: 12345670 }.into_fixedpoint_str(1), "1234567");
-        assert_eq!(Amount { val: 123456780 }.into_fixedpoint_str(1), "12345678");
-        assert_eq!(Amount { val: 1234567890 }.into_fixedpoint_str(1), "123456789");
-        assert_eq!(Amount { val: 12345678900 }.into_fixedpoint_str(1), "1234567890");
-        assert_eq!(Amount { val: 123456789010 }.into_fixedpoint_str(1), "12345678901");
-        assert_eq!(Amount { val: 1234567890120 }.into_fixedpoint_str(1), "123456789012");
-        assert_eq!(Amount { val: 12345678901230 }.into_fixedpoint_str(1), "1234567890123");
-        assert_eq!(Amount { val: 100 }.into_fixedpoint_str(1), "10");
-        assert_eq!(Amount { val: 1200 }.into_fixedpoint_str(1), "120");
-        assert_eq!(Amount { val: 12300 }.into_fixedpoint_str(1), "1230");
-        assert_eq!(Amount { val: 123400 }.into_fixedpoint_str(1), "12340");
-        assert_eq!(Amount { val: 1234500 }.into_fixedpoint_str(1), "123450");
-        assert_eq!(Amount { val: 12345600 }.into_fixedpoint_str(1), "1234560");
-        assert_eq!(Amount { val: 123456700 }.into_fixedpoint_str(1), "12345670");
-        assert_eq!(Amount { val: 1234567800 }.into_fixedpoint_str(1), "123456780");
-        assert_eq!(Amount { val: 12345678900 }.into_fixedpoint_str(1), "1234567890");
-        assert_eq!(Amount { val: 123456789000 }.into_fixedpoint_str(1), "12345678900");
-        assert_eq!(Amount { val: 1234567890100 }.into_fixedpoint_str(1), "123456789010");
-        assert_eq!(Amount { val: 12345678901200 }.into_fixedpoint_str(1), "1234567890120");
-        assert_eq!(Amount { val: 123456789012300 }.into_fixedpoint_str(1), "12345678901230");
+        assert_eq!(Amount { atoms: 1 }.into_fixedpoint_str(1), "0.1");
+        assert_eq!(Amount { atoms: 12 }.into_fixedpoint_str(1), "1.2");
+        assert_eq!(Amount { atoms: 123 }.into_fixedpoint_str(1), "12.3");
+        assert_eq!(Amount { atoms: 1234 }.into_fixedpoint_str(1), "123.4");
+        assert_eq!(Amount { atoms: 12345 }.into_fixedpoint_str(1), "1234.5");
+        assert_eq!(Amount { atoms: 123456 }.into_fixedpoint_str(1), "12345.6");
+        assert_eq!(Amount { atoms: 1234567 }.into_fixedpoint_str(1), "123456.7");
+        assert_eq!(Amount { atoms: 12345678 }.into_fixedpoint_str(1), "1234567.8");
+        assert_eq!(Amount { atoms: 123456789 }.into_fixedpoint_str(1), "12345678.9");
+        assert_eq!(Amount { atoms: 1234567890 }.into_fixedpoint_str(1), "123456789");
+        assert_eq!(Amount { atoms: 12345678901 }.into_fixedpoint_str(1), "1234567890.1");
+        assert_eq!(Amount { atoms: 123456789012 }.into_fixedpoint_str(1), "12345678901.2");
+        assert_eq!(Amount { atoms: 1234567890123 }.into_fixedpoint_str(1), "123456789012.3");
+        assert_eq!(Amount { atoms: 10 }.into_fixedpoint_str(1), "1");
+        assert_eq!(Amount { atoms: 120 }.into_fixedpoint_str(1), "12");
+        assert_eq!(Amount { atoms: 1230 }.into_fixedpoint_str(1), "123");
+        assert_eq!(Amount { atoms: 12340 }.into_fixedpoint_str(1), "1234");
+        assert_eq!(Amount { atoms: 123450 }.into_fixedpoint_str(1), "12345");
+        assert_eq!(Amount { atoms: 1234560 }.into_fixedpoint_str(1), "123456");
+        assert_eq!(Amount { atoms: 12345670 }.into_fixedpoint_str(1), "1234567");
+        assert_eq!(Amount { atoms: 123456780 }.into_fixedpoint_str(1), "12345678");
+        assert_eq!(Amount { atoms: 1234567890 }.into_fixedpoint_str(1), "123456789");
+        assert_eq!(Amount { atoms: 12345678900 }.into_fixedpoint_str(1), "1234567890");
+        assert_eq!(Amount { atoms: 123456789010 }.into_fixedpoint_str(1), "12345678901");
+        assert_eq!(Amount { atoms: 1234567890120 }.into_fixedpoint_str(1), "123456789012");
+        assert_eq!(Amount { atoms: 12345678901230 }.into_fixedpoint_str(1), "1234567890123");
+        assert_eq!(Amount { atoms: 100 }.into_fixedpoint_str(1), "10");
+        assert_eq!(Amount { atoms: 1200 }.into_fixedpoint_str(1), "120");
+        assert_eq!(Amount { atoms: 12300 }.into_fixedpoint_str(1), "1230");
+        assert_eq!(Amount { atoms: 123400 }.into_fixedpoint_str(1), "12340");
+        assert_eq!(Amount { atoms: 1234500 }.into_fixedpoint_str(1), "123450");
+        assert_eq!(Amount { atoms: 12345600 }.into_fixedpoint_str(1), "1234560");
+        assert_eq!(Amount { atoms: 123456700 }.into_fixedpoint_str(1), "12345670");
+        assert_eq!(Amount { atoms: 1234567800 }.into_fixedpoint_str(1), "123456780");
+        assert_eq!(Amount { atoms: 12345678900 }.into_fixedpoint_str(1), "1234567890");
+        assert_eq!(Amount { atoms: 123456789000 }.into_fixedpoint_str(1), "12345678900");
+        assert_eq!(Amount { atoms: 1234567890100 }.into_fixedpoint_str(1), "123456789010");
+        assert_eq!(Amount { atoms: 12345678901200 }.into_fixedpoint_str(1), "1234567890120");
+        assert_eq!(Amount { atoms: 123456789012300 }.into_fixedpoint_str(1), "12345678901230");
     }
 }
