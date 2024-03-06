@@ -22,7 +22,19 @@ use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 
 #[derive(
-    Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode, Serialize, Deserialize,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Debug,
+    Encode,
+    Decode,
+    Serialize,
+    Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub struct PeerId(u64);
 
@@ -55,8 +67,4 @@ impl std::fmt::Display for PeerId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
-}
-
-impl rpc_description::HasValueHint for PeerId {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::NUMBER;
 }

@@ -22,7 +22,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_version`
 
 Get node software version.
@@ -38,7 +37,6 @@ Returns:
 string
 ```
 
-
 ### Method `node_set_mock_time`
 
 Set mock time for the node.
@@ -49,16 +47,13 @@ WARNING: This function is strictly used for testing purposes. Using it will obst
 
 Parameters:
 ```
-{
-    "time": number,
-}
+{ "time": number }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ## Module `chainstate`
 
@@ -77,7 +72,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `chainstate_block_id_at_height`
 
 Get block ID at a given height in the mainchain.
@@ -87,16 +81,15 @@ Returns `None` (null) if the block at the given height does not exist.
 
 Parameters:
 ```
-{
-    "height": number,
-}
+{ "height": number }
 ```
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
-
 
 ### Method `chainstate_get_block`
 
@@ -108,16 +101,15 @@ Note that genesis cannot be retrieved with this function.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
-
 
 ### Method `chainstate_get_block_json`
 
@@ -126,16 +118,15 @@ Same as get_block, but returns the block information in json format.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
 ```
-json OR null
+EITHER OF
+     1) json
+     2) null
 ```
-
 
 ### Method `chainstate_get_mainchain_blocks`
 
@@ -157,7 +148,6 @@ Returns:
 [ hex string, .. ]
 ```
 
-
 ### Method `chainstate_get_utxo`
 
 Returns the TxOutput for a specified UtxoOutPoint.
@@ -166,23 +156,20 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 
 Parameters:
 ```
-{
-    "outpoint": {
-        "id": {
-            "BlockReward": hex string,
-        } OR {
-            "Transaction": hex string,
-        },
-        "index": number,
-    },
-}
+{ "outpoint": {
+    "id": EITHER OF
+         1) { "Transaction": hex string }
+         2) { "BlockReward": hex string },
+    "index": number,
+} }
 ```
 
 Returns:
 ```
-object OR null
+EITHER OF
+     1) object
+     2) null
 ```
-
 
 ### Method `chainstate_submit_block`
 
@@ -194,16 +181,13 @@ This function is used by the wallet to submit valid blocks after successful stak
 
 Parameters:
 ```
-{
-    "block_hex": hex string,
-}
+{ "block_hex": hex string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_invalidate_block`
 
@@ -215,16 +199,13 @@ of can lead to staying behind.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_reset_block_failure_flags`
 
@@ -233,16 +214,13 @@ Reset failure flags for the specified block and its descendants.
 
 Parameters:
 ```
-{
-    "id": hex string,
-}
+{ "id": hex string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_block_height_in_main_chain`
 
@@ -251,16 +229,15 @@ Get block height in mainchain, given a block id.
 
 Parameters:
 ```
-{
-    "block_id": hex string,
-}
+{ "block_id": hex string }
 ```
 
 Returns:
 ```
-number OR null
+EITHER OF
+     1) number
+     2) null
 ```
-
 
 ### Method `chainstate_best_block_height`
 
@@ -276,7 +253,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `chainstate_last_common_ancestor_by_id`
 
@@ -294,12 +270,13 @@ Parameters:
 
 Returns:
 ```
-[
-    hex string,
-    number,
-] OR null
+EITHER OF
+     1) [
+            hex string,
+            number,
+        ]
+     2) null
 ```
-
 
 ### Method `chainstate_stake_pool_balance`
 
@@ -311,18 +288,15 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{
-    "pool_id": hex string,
-}
+{ "pool_address": string }
 ```
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
-
 
 ### Method `chainstate_staker_balance`
 
@@ -334,18 +308,15 @@ Returns `None` (null) if the pool is not found.
 
 Parameters:
 ```
-{
-    "pool_id": hex string,
-}
+{ "pool_address": string }
 ```
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
-
 
 ### Method `chainstate_delegation_share`
 
@@ -356,40 +327,75 @@ returns the amount of coins owned by that delegation in that pool.
 Parameters:
 ```
 {
-    "pool_id": hex string,
-    "delegation_id": hex string,
+    "pool_address": string,
+    "delegation_address": string,
 }
 ```
 
 Returns:
 ```
-{
-    "val": number,
-} OR null
+EITHER OF
+     1) { "val": number }
+     2) null
 ```
-
 
 ### Method `chainstate_token_info`
 
-Get token information, given a token id.
+Get token information, given a token id, in address form.
 
 
 Parameters:
 ```
-{
-    "token_id": hex string,
-}
+{ "token_id": string }
 ```
 
 Returns:
 ```
-{
-    "FungibleToken": object,
-} OR {
-    "NonFungibleToken": object,
-} OR null
+EITHER OF
+     1) { "FungibleToken": {
+            "token_id": hex string,
+            "token_ticker": [ number, .. ],
+            "number_of_decimals": number,
+            "metadata_uri": [ number, .. ],
+            "circulating_supply": { "val": number },
+            "total_supply": EITHER OF
+                 1) { "Fixed": { "val": number } }
+                 2) "Lockable"
+                 3) "Unlimited",
+            "is_locked": bool,
+            "frozen": EITHER OF
+                 1) { "No": EITHER OF
+                         1) "No"
+                         2) "Yes" }
+                 2) { "Yes": EITHER OF
+                         1) "No"
+                         2) "Yes" },
+            "authority": EITHER OF
+                 1) "AnyoneCanSpend"
+                 2) { "PublicKeyHash": hex string }
+                 3) { "PublicKey": hex string }
+                 4) { "ScriptHash": hex string }
+                 5) { "ClassicMultisig": hex string },
+        } }
+     2) { "NonFungibleToken": {
+            "token_id": hex string,
+            "creation_tx_id": hex string,
+            "creation_block_id": hex string,
+            "metadata": {
+                "creator": EITHER OF
+                     1) [ number, .. ]
+                     2) null,
+                "name": [ number, .. ],
+                "description": [ number, .. ],
+                "ticker": [ number, .. ],
+                "icon_uri": [ number, .. ],
+                "additional_metadata_uri": [ number, .. ],
+                "media_uri": [ number, .. ],
+                "media_hash": [ number, .. ],
+            },
+        } }
+     3) null
 ```
-
 
 ### Method `chainstate_export_bootstrap_file`
 
@@ -409,7 +415,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `chainstate_import_bootstrap_file`
 
 Imports a bootstrap file's blocks to this node
@@ -417,16 +422,13 @@ Imports a bootstrap file's blocks to this node
 
 Parameters:
 ```
-{
-    "file_path": string,
-}
+{ "file_path": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `chainstate_info`
 
@@ -443,19 +445,17 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": number,
-    "median_time": number,
+    "best_block_timestamp": { "timestamp": number },
+    "median_time": { "timestamp": number },
     "is_initial_block_download": bool,
 }
 ```
-
 
 ### Subscription `chainstate_subscribe_events`
 
 Subscribe to chainstate events, such as new tip.
 
 After a successful subscription, the node will message the subscriber with a message on every event.
-NOTE: This only works with websocket.
 
 
 Parameters:
@@ -465,15 +465,15 @@ Parameters:
 
 Produces:
 ```
-{
-    "NewTip": {
-        "id": hex string,
-        "height": number,
-    },
-}
+{ "NewTip": {
+    "id": hex string,
+    "height": number,
+} }
 ```
 
 Unsubscribe using `chainstate_unsubscribe_events`.
+
+Note: Subscriptions only work over WebSockets.
 
 ## Module `mempool`
 
@@ -484,16 +484,13 @@ Returns True if a transaction defined by the given id is found in the mempool.
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
 ```
 bool
 ```
-
 
 ### Method `mempool_contains_orphan_tx`
 
@@ -504,16 +501,13 @@ An orphan transaction is a transaction with one or more inputs, whose utxos cann
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
 ```
 bool
 ```
-
 
 ### Method `mempool_get_transaction`
 
@@ -525,20 +519,23 @@ Returns `None` (null) if the transaction is not found.
 
 Parameters:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
 
 Returns:
 ```
-{
-    "id": hex string,
-    "status": string,
-    "transaction": hex string,
-} OR null
+EITHER OF
+     1) {
+            "id": hex string,
+            "status": EITHER OF
+                 1) "InMempool"
+                 2) "InMempoolDuplicate"
+                 3) "InOrphanPool"
+                 4) "InOrphanPoolDuplicate",
+            "transaction": hex string,
+        }
+     2) null
 ```
-
 
 ### Method `mempool_transactions`
 
@@ -558,7 +555,6 @@ Returns:
 [ hex string, .. ]
 ```
 
-
 ### Method `mempool_submit_transaction`
 
 Submit a transaction to the mempool.
@@ -571,9 +567,9 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
@@ -581,7 +577,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `mempool_local_best_block_id`
 
@@ -600,7 +595,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `mempool_memory_usage`
 
 The total estimated used memory by the mempool.
@@ -615,7 +609,6 @@ Returns:
 ```
 number
 ```
-
 
 ### Method `mempool_get_size_limit`
 
@@ -632,7 +625,6 @@ Returns:
 number
 ```
 
-
 ### Method `mempool_set_size_limit`
 
 Set the maximum allowed size of all transactions in the mempool.
@@ -642,16 +634,13 @@ The parameter is either a string, can be written with proper units, such as "100
 
 Parameters:
 ```
-{
-    "max_size": String with units, such as MB/KB/GB, or integer for bytes,
-}
+{ "max_size": String with units, such as MB/KB/GB, or integer for bytes }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `mempool_get_fee_rate`
 
@@ -661,18 +650,13 @@ X, in this description, is provided as a parameter.
 
 Parameters:
 ```
-{
-    "in_top_x_mb": number,
-}
+{ "in_top_x_mb": number }
 ```
 
 Returns:
 ```
-{
-    "amount_per_kb": number,
-}
+{ "amount_per_kb": { "val": number } }
 ```
-
 
 ### Method `mempool_get_fee_rate_points`
 
@@ -688,12 +672,9 @@ Returns:
 ```
 [ [
     number,
-    {
-        "amount_per_kb": number,
-    },
+    { "amount_per_kb": { "val": number } },
 ], .. ]
 ```
-
 
 ## Module `p2p`
 
@@ -707,16 +688,13 @@ Keep in mind that `add_reserved_node` works completely differently.
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_disconnect`
 
@@ -725,16 +703,13 @@ Disconnect peer, given its id.
 
 Parameters:
 ```
-{
-    "peer_id": number,
-}
+{ "peer_id": number }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_list_banned`
 
@@ -749,16 +724,13 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    string,
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
-
 
 ### Method `p2p_ban`
 
@@ -768,7 +740,7 @@ Ban a peer by their address for a given amount of time.
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
     "duration": [
         secs number,
         nanos number,
@@ -781,7 +753,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `p2p_unban`
 
 Unban a banned peer by their IP address.
@@ -789,16 +760,13 @@ Unban a banned peer by their IP address.
 
 Parameters:
 ```
-{
-    "address": ip address string,
-}
+{ "address": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_list_discouraged`
 
@@ -815,16 +783,13 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    string,
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
-
 
 ### Method `p2p_get_peer_count`
 
@@ -841,7 +806,6 @@ Returns:
 number
 ```
 
-
 ### Method `p2p_get_bind_addresses`
 
 Get p2p bind address(es) of this node.
@@ -857,7 +821,6 @@ Returns:
 [ string, .. ]
 ```
 
-
 ### Method `p2p_get_connected_peers`
 
 Get details of connected peers.
@@ -870,9 +833,30 @@ Parameters:
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "peer_id": number,
+    "address": string,
+    "peer_role": EITHER OF
+         1) "Inbound"
+         2) "OutboundFullRelay"
+         3) "OutboundBlockRelay"
+         4) "OutboundReserved"
+         5) "OutboundManual"
+         6) "Feeler",
+    "ban_score": number,
+    "user_agent": string,
+    "software_version": string,
+    "ping_wait": EITHER OF
+         1) number
+         2) null,
+    "ping_last": EITHER OF
+         1) number
+         2) null,
+    "ping_min": EITHER OF
+         1) number
+         2) null,
+}, .. ]
 ```
-
 
 ### Method `p2p_get_reserved_nodes`
 
@@ -889,7 +873,6 @@ Returns:
 [ string, .. ]
 ```
 
-
 ### Method `p2p_add_reserved_node`
 
 Add the address to the reserved nodes list.
@@ -900,16 +883,13 @@ A reserved peer is a peer that you trust and you want your node to remain connec
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_remove_reserved_node`
 
@@ -920,16 +900,13 @@ Existing connection to the peer is not closed.
 
 Parameters:
 ```
-{
-    "addr": string,
-}
+{ "addr": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `p2p_submit_transaction`
 
@@ -940,9 +917,9 @@ Parameters:
 ```
 {
     "tx": hex string,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
@@ -950,7 +927,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ## Module `blockprod`
 
@@ -970,7 +946,6 @@ Returns:
 number
 ```
 
-
 ### Method `blockprod_stop_job`
 
 When called, the job manager will be notified to send a signal
@@ -979,16 +954,13 @@ to the specified job to stop running.
 
 Parameters:
 ```
-{
-    "job_id": hex string,
-}
+{ "job_id": hex string }
 ```
 
 Returns:
 ```
 bool
 ```
-
 
 ### Method `blockprod_generate_block`
 
@@ -1006,7 +978,9 @@ Parameters:
     "input_data": hex string,
     "transactions": [ hex string, .. ],
     "transaction_ids": [ hex string, .. ],
-    "packing_strategy": "FillSpaceFromMempool" OR "LeaveEmptySpace",
+    "packing_strategy": EITHER OF
+         1) "FillSpaceFromMempool"
+         2) "LeaveEmptySpace",
 }
 ```
 
@@ -1014,7 +988,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `blockprod_e2e_public_key`
 
@@ -1030,7 +1003,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `blockprod_generate_block_e2e`
 
@@ -1048,7 +1020,9 @@ Parameters:
     "e2e_public_key": hex string,
     "transactions": [ hex string, .. ],
     "transaction_ids": [ hex string, .. ],
-    "packing_strategy": "FillSpaceFromMempool" OR "LeaveEmptySpace",
+    "packing_strategy": EITHER OF
+         1) "FillSpaceFromMempool"
+         2) "LeaveEmptySpace",
 }
 ```
 
@@ -1056,5 +1030,4 @@ Returns:
 ```
 hex string
 ```
-
 

@@ -9,6 +9,8 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+rpc-description = { path = "../rpc/description" }
 serialization = { path = "../serialization" }
 
 # The following crates don't work well with "workspace.dependencies"

@@ -13,12 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{Debug, Display};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime};
+use std::{
+    fmt::{Debug, Display},
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, SystemTime},
+};
 
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
+
+use rpc_description::HasValueHint;
 
 pub fn duration_to_int(d: &Duration) -> Result<u64, std::num::TryFromIntError> {
     let r = d.as_millis().try_into()?;
@@ -65,7 +69,7 @@ pub fn get_time() -> Time {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, HasValueHint)]
 pub struct Time {
     /// Time, stored as duration since SystemTime::UNIX_EPOCH
     time: Duration,
@@ -165,11 +169,6 @@ impl Display for Time {
             write!(f, "{:?} since Unix epoch", self.time)
         }
     }
-}
-
-impl rpc_description::HasValueHint for Time {
-    const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("time", &Duration::HINT)]);
 }
 
 #[cfg(test)]

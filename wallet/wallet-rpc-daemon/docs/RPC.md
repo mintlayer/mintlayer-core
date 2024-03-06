@@ -16,7 +16,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `version`
 
 Parameters:
@@ -29,7 +28,6 @@ Returns:
 string
 ```
 
-
 ### Method `wallet_create`
 
 Parameters:
@@ -37,16 +35,26 @@ Parameters:
 {
     "path": string,
     "store_seed_phrase": bool,
-    "mnemonic": string OR null,
-    "passphrase": string OR null,
+    "mnemonic": EITHER OF
+         1) string
+         2) null,
+    "passphrase": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
 Returns:
 ```
-object
+EITHER OF
+     1) "UserProvidedMenmonic"
+     2) { "NewlyGeneratedMnemonic": [
+            string,
+            EITHER OF
+                 1) string
+                 2) null,
+        ] }
 ```
-
 
 ### Method `wallet_open`
 
@@ -54,7 +62,9 @@ Parameters:
 ```
 {
     "path": string,
-    "password": string OR null,
+    "password": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -62,7 +72,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_close`
 
@@ -76,7 +85,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_info`
 
 Parameters:
@@ -88,10 +96,11 @@ Returns:
 ```
 {
     "wallet_id": hex string,
-    "account_names": [ string OR null, .. ],
+    "account_names": [ EITHER OF
+         1) string
+         2) null, .. ],
 }
 ```
-
 
 ### Method `wallet_sync`
 
@@ -105,7 +114,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_rescan`
 
 Parameters:
@@ -118,7 +126,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_show_seed_phrase`
 
 Parameters:
@@ -128,12 +135,15 @@ Parameters:
 
 Returns:
 ```
-{
-    "seed_phrase": [ string, .. ],
-    "passphrase": string OR null,
-} OR null
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
 ```
-
 
 ### Method `wallet_purge_seed_phrase`
 
@@ -144,12 +154,15 @@ Parameters:
 
 Returns:
 ```
-{
-    "seed_phrase": [ string, .. ],
-    "passphrase": string OR null,
-} OR null
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
 ```
-
 
 ### Method `wallet_set_lookahead_size`
 
@@ -166,21 +179,17 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_encrypt_private_keys`
 
 Parameters:
 ```
-{
-    "password": string,
-}
+{ "password": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_disable_private_keys_encryption`
 
@@ -194,21 +203,17 @@ Returns:
 nothing
 ```
 
-
 ### Method `wallet_unlock_private_keys`
 
 Parameters:
 ```
-{
-    "password": string,
-}
+{ "password": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_lock_private_keys`
 
@@ -221,7 +226,6 @@ Returns:
 ```
 nothing
 ```
-
 
 ### Method `wallet_best_block`
 
@@ -238,24 +242,24 @@ Returns:
 }
 ```
 
-
 ### Method `account_create`
 
 Parameters:
 ```
-{
-    "name": string OR null,
-}
+{ "name": EITHER OF
+     1) string
+     2) null }
 ```
 
 Returns:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
-
 
 ### Method `account_rename`
 
@@ -263,7 +267,9 @@ Parameters:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
 
@@ -271,47 +277,42 @@ Returns:
 ```
 {
     "account": number,
-    "name": string OR null,
+    "name": EITHER OF
+         1) string
+         2) null,
 }
 ```
-
 
 ### Method `address_show`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
 [ {
-    "address": bech32 string,
+    "address": string,
     "index": string,
     "used": bool,
 }, .. ]
 ```
 
-
 ### Method `address_new`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
 {
-    "address": bech32 string,
+    "address": string,
     "index": string,
 }
 ```
-
 
 ### Method `address_reveal_public_key`
 
@@ -331,14 +332,17 @@ Returns:
 }
 ```
 
-
 ### Method `account_balance`
 
 Parameters:
 ```
 {
     "account": number,
-    "with_locked": "Any" OR "Unlocked" OR "Locked" OR null,
+    "with_locked": EITHER OF
+         1) "Any"
+         2) "Unlocked"
+         3) "Locked"
+         4) null,
 }
 ```
 
@@ -350,21 +354,17 @@ Returns:
 }
 ```
 
-
 ### Method `account_utxos`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
 [ json, .. ]
 ```
-
 
 ### Method `node_submit_transaction`
 
@@ -373,19 +373,16 @@ Parameters:
 {
     "tx": hex string,
     "do_not_store": bool,
-    "options": {
-        "trust_policy": "Trusted" OR "Untrusted",
-    },
+    "options": { "trust_policy": EITHER OF
+         1) "Trusted"
+         2) "Untrusted" },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `address_send`
 
@@ -396,26 +393,53 @@ Parameters:
     "address": string,
     "amount": decimal string,
     "selected_utxos": [ {
-        "id": {
-            "BlockReward": hex string,
-        } OR {
-            "Transaction": hex string,
-        },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     }, .. ],
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
+{ "tx_id": hex string }
+```
+
+### Method `address_sweep_spendable`
+
+Parameters:
+```
 {
-    "tx_id": hex string,
+    "account": number,
+    "destination_address": string,
+    "from_addresses": [ string, .. ],
+    "options": { "in_top_x_mb": number },
 }
 ```
 
+Returns:
+```
+{ "tx_id": hex string }
+```
+
+### Method `staking_sweep_delegation`
+
+Parameters:
+```
+{
+    "account": number,
+    "destination_address": string,
+    "delegation_id": string,
+    "options": { "in_top_x_mb": number },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
 
 ### Method `transaction_create_from_cold_input`
 
@@ -426,24 +450,22 @@ Parameters:
     "address": string,
     "amount_str": decimal string,
     "selected_utxo": {
-        "id": {
-            "BlockReward": hex string,
-        } OR {
-            "Transaction": hex string,
-        },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     },
-    "change_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "change_address": EITHER OF
+         1) string
+         2) null,
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "fees": {
         "coins": decimal string,
         "tokens": { hex string: decimal string, .. },
@@ -451,28 +473,35 @@ Returns:
 }
 ```
 
-
 ### Method `transaction_inspect`
 
 Parameters:
 ```
-{
-    "transaction": string,
-}
+{ "transaction": string }
 ```
 
 Returns:
 ```
 {
     "tx": hex string,
-    "fees": {
-        "coins": decimal string,
-        "tokens": { hex string: decimal string, .. },
-    } OR null,
-    "stats": object,
+    "fees": EITHER OF
+         1) {
+                "coins": decimal string,
+                "tokens": { hex string: decimal string, .. },
+            }
+         2) null,
+    "stats": {
+        "num_inputs": number,
+        "total_signatures": number,
+        "validated_signatures": EITHER OF
+             1) {
+                    "num_valid_signatures": number,
+                    "num_invalid_signatures": number,
+                }
+             2) null,
+    },
 }
 ```
-
 
 ### Method `staking_create_pool`
 
@@ -484,19 +513,14 @@ Parameters:
     "cost_per_block": decimal string,
     "margin_ratio_per_thousand": string,
     "decommission_address": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `staking_decommission_pool`
 
@@ -505,20 +529,17 @@ Parameters:
 {
     "account": number,
     "pool_id": string,
-    "output_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "output_address": EITHER OF
+         1) string
+         2) null,
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `staking_decommission_pool_request`
 
@@ -527,10 +548,10 @@ Parameters:
 {
     "account": number,
     "pool_id": string,
-    "output_address": string OR null,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "output_address": EITHER OF
+         1) string
+         2) null,
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -538,7 +559,6 @@ Returns:
 ```
 hex string
 ```
-
 
 ### Method `delegation_create`
 
@@ -548,9 +568,7 @@ Parameters:
     "account": number,
     "address": string,
     "pool_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -562,7 +580,6 @@ Returns:
 }
 ```
 
-
 ### Method `delegation_stake`
 
 Parameters:
@@ -571,19 +588,14 @@ Parameters:
     "account": number,
     "amount": decimal string,
     "delegation_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `delegation_withdraw`
 
@@ -594,42 +606,32 @@ Parameters:
     "address": string,
     "amount": decimal string,
     "delegation_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `staking_start`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `staking_stop`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -637,61 +639,60 @@ Returns:
 nothing
 ```
 
-
 ### Method `staking_status`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
-"Staking" OR "NotStaking"
+EITHER OF
+     1) "Staking"
+     2) "NotStaking"
 ```
-
 
 ### Method `staking_list_pool_ids`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "pool_id": string,
+    "pledge": decimal string,
+    "balance": decimal string,
+    "height": number,
+    "block_timestamp": { "timestamp": number },
+    "vrf_public_key": string,
+    "decommission_key": string,
+    "staker": string,
+}, .. ]
 ```
-
 
 ### Method `staking_pool_balance`
 
 Parameters:
 ```
-{
-    "pool_id": string,
-}
+{ "pool_id": string }
 ```
 
 Returns:
 ```
-{
-    "balance": string OR null,
-}
+{ "balance": EITHER OF
+     1) string
+     2) null }
 ```
-
 
 ### Method `delegation_list_ids`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -702,14 +703,11 @@ Returns:
 }, .. ]
 ```
 
-
 ### Method `staking_list_created_block_ids`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -717,18 +715,15 @@ Returns:
 [ {
     "id": hex string,
     "height": number,
-    "pool_id": bech32 string,
+    "pool_id": string,
 }, .. ]
 ```
-
 
 ### Method `staking_new_vrf_public_key`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -740,31 +735,23 @@ Returns:
 }
 ```
 
-
 ### Method `staking_show_legacy_vrf_key`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
 ```
-{
-    "vrf_public_key": hex string,
-}
+{ "vrf_public_key": hex string }
 ```
-
 
 ### Method `staking_show_vrf_public_keys`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -775,7 +762,6 @@ Returns:
     "used": bool,
 }, .. ]
 ```
-
 
 ### Method `token_nft_issue_new`
 
@@ -784,10 +770,25 @@ Parameters:
 {
     "account": number,
     "destination_address": string,
-    "metadata": object,
-    "options": {
-        "in_top_x_mb": number,
+    "metadata": {
+        "media_hash": string,
+        "name": string,
+        "description": string,
+        "ticker": string,
+        "creator": EITHER OF
+             1) hex string
+             2) null,
+        "icon_uri": EITHER OF
+             1) string
+             2) null,
+        "media_uri": EITHER OF
+             1) string
+             2) null,
+        "additional_metadata_uri": EITHER OF
+             1) string
+             2) null,
     },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -798,7 +799,6 @@ Returns:
     "tx_id": hex string,
 }
 ```
-
 
 ### Method `token_issue_new`
 
@@ -807,10 +807,17 @@ Parameters:
 {
     "account": number,
     "destination_address": string,
-    "metadata": object,
-    "options": {
-        "in_top_x_mb": number,
+    "metadata": {
+        "token_ticker": string,
+        "number_of_decimals": number,
+        "metadata_uri": string,
+        "token_supply": EITHER OF
+             1) { "Fixed": decimal string }
+             2) "Lockable"
+             3) "Unlimited",
+        "is_freezable": bool,
     },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
@@ -821,7 +828,6 @@ Returns:
     "tx_id": hex string,
 }
 ```
-
 
 ### Method `token_change_authority`
 
@@ -831,19 +837,14 @@ Parameters:
     "account": number,
     "token_id": string,
     "address": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_mint`
 
@@ -854,19 +855,14 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_unmint`
 
@@ -876,19 +872,14 @@ Parameters:
     "account": number,
     "token_id": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_lock_supply`
 
@@ -897,19 +888,14 @@ Parameters:
 {
     "account_index": number,
     "token_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_freeze`
 
@@ -919,19 +905,14 @@ Parameters:
     "account": number,
     "token_id": string,
     "is_unfreezable": bool,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_unfreeze`
 
@@ -940,19 +921,14 @@ Parameters:
 {
     "account": number,
     "token_id": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `token_send`
 
@@ -963,19 +939,14 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": decimal string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `address_deposit_data`
 
@@ -984,19 +955,14 @@ Parameters:
 {
     "account": number,
     "data": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
-{
-    "tx_id": hex string,
-}
+{ "tx_id": hex string }
 ```
-
 
 ### Method `node_version`
 
@@ -1007,9 +973,8 @@ Parameters:
 
 Returns:
 ```
-string
+{ "version": string }
 ```
-
 
 ### Method `node_shutdown`
 
@@ -1023,36 +988,29 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_connect_to_peer`
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_disconnect_peer`
 
 Parameters:
 ```
-{
-    "peer_id": number,
-}
+{ "peer_id": number }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_list_banned_peers`
 
@@ -1064,23 +1022,20 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    string,
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
-
 
 ### Method `node_ban_peer_address`
 
 Parameters:
 ```
 {
-    "address": ip address string,
+    "address": string,
     "duration": [
         secs number,
         nanos number,
@@ -1093,21 +1048,17 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_unban_peer_address`
 
 Parameters:
 ```
-{
-    "address": ip address string,
-}
+{ "address": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_list_discouraged_peers`
 
@@ -1119,16 +1070,13 @@ Parameters:
 Returns:
 ```
 [ [
-    ip address string,
-    {
-        "time": [
-            secs number,
-            nanos number,
-        ],
-    },
+    string,
+    { "time": [
+        secs number,
+        nanos number,
+    ] },
 ], .. ]
 ```
-
 
 ### Method `node-peer-count`
 
@@ -1142,7 +1090,6 @@ Returns:
 number
 ```
 
-
 ### Method `node_list_connected_peers`
 
 Parameters:
@@ -1152,9 +1099,30 @@ Parameters:
 
 Returns:
 ```
-[ object, .. ]
+[ {
+    "peer_id": number,
+    "address": string,
+    "peer_role": EITHER OF
+         1) "Inbound"
+         2) "OutboundFullRelay"
+         3) "OutboundBlockRelay"
+         4) "OutboundReserved"
+         5) "OutboundManual"
+         6) "Feeler",
+    "ban_score": number,
+    "user_agent": string,
+    "software_version": string,
+    "ping_wait": EITHER OF
+         1) number
+         2) null,
+    "ping_last": EITHER OF
+         1) number
+         2) null,
+    "ping_min": EITHER OF
+         1) number
+         2) null,
+}, .. ]
 ```
-
 
 ### Method `node_list_reserved_peers`
 
@@ -1168,51 +1136,41 @@ Returns:
 [ string, .. ]
 ```
 
-
 ### Method `node_add_reserved_peer`
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_remove_reserved_peer`
 
 Parameters:
 ```
-{
-    "address": string,
-}
+{ "address": string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_submit_block`
 
 Parameters:
 ```
-{
-    "block": hex string,
-}
+{ "block": hex string }
 ```
 
 Returns:
 ```
 nothing
 ```
-
 
 ### Method `node_chainstate_info`
 
@@ -1226,12 +1184,11 @@ Returns:
 {
     "best_block_height": number,
     "best_block_id": hex string,
-    "best_block_timestamp": number,
-    "median_time": number,
+    "best_block_timestamp": { "timestamp": number },
+    "median_time": { "timestamp": number },
     "is_initial_block_download": bool,
 }
 ```
-
 
 ### Method `transaction_abandon`
 
@@ -1248,14 +1205,11 @@ Returns:
 nothing
 ```
 
-
 ### Method `transaction_list_pending`
 
 Parameters:
 ```
-{
-    "account": number,
-}
+{ "account": number }
 ```
 
 Returns:
@@ -1263,14 +1217,15 @@ Returns:
 [ hex string, .. ]
 ```
 
-
 ### Method `transaction_list_by_address`
 
 Parameters:
 ```
 {
     "account": number,
-    "address": string OR null,
+    "address": EITHER OF
+         1) string
+         2) null,
     "limit": number,
 }
 ```
@@ -1280,10 +1235,9 @@ Returns:
 [ {
     "id": hex string,
     "height": number,
-    "timestamp": number,
+    "timestamp": { "timestamp": number },
 }, .. ]
 ```
-
 
 ### Method `transaction_get`
 
@@ -1300,7 +1254,6 @@ Returns:
 json
 ```
 
-
 ### Method `transaction_get_raw`
 
 Parameters:
@@ -1316,7 +1269,6 @@ Returns:
 string
 ```
 
-
 ### Method `account_sign_raw_transaction`
 
 Parameters:
@@ -1324,20 +1276,17 @@ Parameters:
 {
     "account": number,
     "raw_tx": string,
-    "options": {
-        "in_top_x_mb": number,
-    },
+    "options": { "in_top_x_mb": number },
 }
 ```
 
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "is_complete": bool,
 }
 ```
-
 
 ### Method `account_sign_challenge_plain`
 
@@ -1355,7 +1304,6 @@ Returns:
 string
 ```
 
-
 ### Method `account_sign_challenge_hex`
 
 Parameters:
@@ -1371,7 +1319,6 @@ Returns:
 ```
 string
 ```
-
 
 ### Method `verify_challenge_plain`
 
@@ -1389,7 +1336,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `verify_challenge_hex`
 
 Parameters:
@@ -1406,7 +1352,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `transaction_get_signed_raw`
 
 Parameters:
@@ -1422,18 +1367,15 @@ Returns:
 string
 ```
 
-
 ### Method `transaction_compose`
 
 Parameters:
 ```
 {
     "inputs": [ {
-        "id": {
-            "BlockReward": hex string,
-        } OR {
-            "Transaction": hex string,
-        },
+        "id": EITHER OF
+             1) { "Transaction": hex string }
+             2) { "BlockReward": hex string },
         "index": number,
     }, .. ],
     "outputs": [ object, .. ],
@@ -1444,14 +1386,13 @@ Parameters:
 Returns:
 ```
 {
-    "hex": hex string,
+    "hex": string,
     "fees": {
         "coins": decimal string,
         "tokens": { hex string: decimal string, .. },
     },
 }
 ```
-
 
 ### Method `node_best_block_id`
 
@@ -1465,7 +1406,6 @@ Returns:
 hex string
 ```
 
-
 ### Method `node_best_block_height`
 
 Parameters:
@@ -1478,21 +1418,19 @@ Returns:
 number
 ```
 
-
 ### Method `node_block_id`
 
 Parameters:
 ```
-{
-    "block_height": number,
-}
+{ "block_height": number }
 ```
 
 Returns:
 ```
-hex string OR null
+EITHER OF
+     1) hex string
+     2) null
 ```
-
 
 ### Method `node_generate_block`
 
@@ -1509,7 +1447,6 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_generate_blocks`
 
 Parameters:
@@ -1525,19 +1462,17 @@ Returns:
 nothing
 ```
 
-
 ### Method `node_get_block`
 
 Parameters:
 ```
-{
-    "block_id": string,
-}
+{ "block_id": string }
 ```
 
 Returns:
 ```
-string OR null
+EITHER OF
+     1) string
+     2) null
 ```
-
 

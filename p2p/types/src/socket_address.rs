@@ -23,7 +23,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{bannable_address::BannableAddress, peer_address::PeerAddress, IsGlobalIp};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Hash,
+    rpc_description::HasValueHint,
+)]
 pub struct SocketAddress(SocketAddr);
 
 impl SocketAddress {
@@ -78,8 +90,4 @@ impl FromStr for SocketAddress {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         SocketAddr::from_str(s).map(SocketAddress)
     }
-}
-
-impl rpc_description::HasValueHint for SocketAddress {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
 }

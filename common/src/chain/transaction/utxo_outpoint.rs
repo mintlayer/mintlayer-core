@@ -15,7 +15,6 @@
 
 use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
 use crate::primitives::Id;
-use rpc_description::ValueHint as VH;
 use serialization::{Decode, Encode};
 
 #[derive(
@@ -29,6 +28,7 @@ use serialization::{Decode, Encode};
     PartialOrd,
     serde::Serialize,
     serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
@@ -70,13 +70,6 @@ impl OutPointSourceId {
     }
 }
 
-impl rpc_description::HasValueHint for OutPointSourceId {
-    const HINT: VH = VH::Choice(&[
-        &VH::Object(&[("BlockReward", &<Id<Block>>::HINT)]),
-        &VH::Object(&[("Transaction", &<Id<Transaction>>::HINT)]),
-    ]);
-}
-
 #[derive(
     Debug,
     Clone,
@@ -88,6 +81,7 @@ impl rpc_description::HasValueHint for OutPointSourceId {
     PartialOrd,
     serde::Serialize,
     serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub struct UtxoOutPoint {
     id: OutPointSourceId,
@@ -109,10 +103,6 @@ impl UtxoOutPoint {
     pub fn output_index(&self) -> u32 {
         self.index
     }
-}
-
-impl rpc_description::HasValueHint for UtxoOutPoint {
-    const HINT: VH = VH::Object(&[("id", &OutPointSourceId::HINT), ("index", &u32::HINT)]);
 }
 
 #[cfg(test)]

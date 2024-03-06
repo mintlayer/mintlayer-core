@@ -29,15 +29,8 @@ pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct WalletInfo {
     pub wallet_id: H256,
     pub account_names: Vec<Option<String>>,
-}
-
-impl rpc_description::HasValueHint for WalletInfo {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
-        ("wallet_id", &rpc_description::ValueHint::HEX_STRING),
-        ("account_names", &<Vec<Option<String>>>::HINT),
-    ]);
 }

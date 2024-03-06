@@ -33,7 +33,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use rpc::description::ValueHint as VH;
+use rpc::description::{HasValueHint, ValueHint as VH};
 use serialization::hex::HexEncode;
 
 pub use mempool_types::tx_options::TxOptionsOverrides;
@@ -110,7 +110,7 @@ impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AccountArg(pub u32);
 
 impl AccountArg {
@@ -125,11 +125,7 @@ impl From<U31> for AccountArg {
     }
 }
 
-impl rpc::description::HasValueHint for AccountArg {
-    const HINT: VH = VH::NUMBER;
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AddressInfo {
     pub address: String,
     pub index: String,
@@ -144,11 +140,7 @@ impl AddressInfo {
     }
 }
 
-impl rpc::description::HasValueHint for AddressInfo {
-    const HINT: VH = VH::Object(&[("address", &VH::BECH32_STRING), ("index", &VH::STRING)]);
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AddressWithUsageInfo {
     pub address: String,
     pub index: String,
@@ -163,14 +155,6 @@ impl AddressWithUsageInfo {
             used,
         }
     }
-}
-
-impl rpc::description::HasValueHint for AddressWithUsageInfo {
-    const HINT: VH = VH::Object(&[
-        ("address", &VH::BECH32_STRING),
-        ("index", &VH::STRING),
-        ("used", &bool::HINT),
-    ]);
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -248,7 +232,7 @@ impl UtxoInfo {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NewAccountInfo {
     pub account: u32,
     pub name: Option<String>,
@@ -261,20 +245,12 @@ impl NewAccountInfo {
     }
 }
 
-impl rpc::description::HasValueHint for NewAccountInfo {
-    const HINT: VH = VH::Object(&[("account", &u32::HINT), ("name", &<Option<String>>::HINT)]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TransactionOptions {
     pub in_top_x_mb: usize,
 }
 
-impl rpc::description::HasValueHint for TransactionOptions {
-    const HINT: VH = VH::Object(&[("in_top_x_mb", &VH::NUMBER)]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct PoolInfo {
     pub pool_id: String,
     pub pledge: DecimalAmount,
@@ -317,10 +293,6 @@ impl PoolInfo {
     }
 }
 
-impl rpc::description::HasValueHint for PoolInfo {
-    const HINT: VH = VH::GENERIC_OBJECT;
-}
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NewDelegation {
     pub tx_id: Id<Transaction>,
@@ -358,7 +330,7 @@ impl DelegationInfo {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NftMetadata {
     pub media_hash: String,
     pub name: String,
@@ -387,11 +359,7 @@ impl NftMetadata {
     }
 }
 
-impl rpc::description::HasValueHint for NftMetadata {
-    const HINT: VH = VH::GENERIC_OBJECT;
-}
-
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum TokenTotalSupply {
     Fixed(DecimalAmount),
     Lockable,
@@ -415,7 +383,7 @@ impl TokenTotalSupply {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TokenMetadata {
     pub token_ticker: String,
     pub number_of_decimals: u8,
@@ -441,17 +409,9 @@ impl TokenMetadata {
     }
 }
 
-impl rpc::description::HasValueHint for TokenMetadata {
-    const HINT: VH = VH::GENERIC_OBJECT;
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct StakePoolBalance {
     pub balance: Option<String>,
-}
-
-impl rpc::description::HasValueHint for StakePoolBalance {
-    const HINT: VH = VH::Object(&[("balance", &<Option<String>>::HINT)]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -464,7 +424,7 @@ impl rpc::description::HasValueHint for RpcTokenId {
     const HINT: VH = VH::Object(&[("token_id", &VH::BECH32_STRING), ("tx_id", &VH::HEX_STRING)]);
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NewTransaction {
     pub tx_id: Id<Transaction>,
 }
@@ -477,20 +437,12 @@ impl NewTransaction {
     }
 }
 
-impl rpc::description::HasValueHint for NewTransaction {
-    const HINT: VH = VH::Object(&[("tx_id", &VH::HEX_STRING)]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NodeVersion {
     pub version: String,
 }
 
-impl rpc::description::HasValueHint for NodeVersion {
-    const HINT: VH = VH::STRING;
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum StakingStatus {
     Staking,
     NotStaking,
@@ -506,36 +458,20 @@ impl StakingStatus {
     }
 }
 
-impl rpc::description::HasValueHint for StakingStatus {
-    const HINT: VH = VH::Choice(&[&VH::StrLit("Staking"), &VH::StrLit("NotStaking")]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum CreatedWallet {
     UserProvidedMenmonic,
     NewlyGeneratedMnemonic(String, Option<String>),
 }
 
-impl rpc::description::HasValueHint for CreatedWallet {
-    const HINT: VH = VH::GENERIC_OBJECT;
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct ComposedTransaction {
     pub hex: String,
     pub fees: Balances,
 }
 
-impl rpc::description::HasValueHint for ComposedTransaction {
-    const HINT: VH = VH::Object(&[("hex", &VH::HEX_STRING), ("fees", &Balances::HINT)]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct MaybeSignedTransaction {
     pub hex: String,
     pub is_complete: bool,
-}
-
-impl rpc::description::HasValueHint for MaybeSignedTransaction {
-    const HINT: VH = VH::Object(&[("hex", &VH::HEX_STRING), ("is_complete", &bool::HINT)]);
 }

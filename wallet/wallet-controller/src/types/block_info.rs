@@ -17,23 +17,16 @@ use common::{
     chain::GenBlock,
     primitives::{BlockHeight, Id},
 };
+use rpc_description::HasValueHint;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct CreatedBlockInfo {
     pub id: Id<GenBlock>,
     pub height: BlockHeight,
     pub pool_id: String,
 }
 
-impl rpc_description::HasValueHint for CreatedBlockInfo {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
-        ("id", &<Id<GenBlock>>::HINT),
-        ("height", &BlockHeight::HINT),
-        ("pool_id", &rpc_description::ValueHint::BECH32_STRING),
-    ]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct BlockInfo {
     pub id: Id<GenBlock>,
     pub height: BlockHeight,
@@ -43,11 +36,4 @@ impl BlockInfo {
     pub fn from_tuple((id, height): (Id<GenBlock>, BlockHeight)) -> Self {
         Self { id, height }
     }
-}
-
-impl rpc_description::HasValueHint for BlockInfo {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Object(&[
-        ("id", &<Id<GenBlock>>::HINT),
-        ("height", &BlockHeight::HINT),
-    ]);
 }

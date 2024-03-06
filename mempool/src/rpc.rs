@@ -22,7 +22,6 @@ use common::{
     primitives::Id,
 };
 use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, TxOptions};
-use rpc::description::ValueHint as VH;
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_log::TapLog;
 
@@ -30,19 +29,11 @@ use crate::{FeeRate, MempoolMaxSize, TxStatus};
 
 use rpc::RpcResult;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, rpc::description::HasValueHint)]
 pub struct GetTxResponse {
     id: Id<Transaction>,
     status: TxStatus,
     transaction: HexEncoded<SignedTransaction>,
-}
-
-impl rpc::description::HasValueHint for GetTxResponse {
-    const HINT: VH = VH::Object(&[
-        ("id", &VH::HEX_STRING),
-        ("status", &VH::STRING),
-        ("transaction", &VH::HEX_STRING),
-    ]);
 }
 
 #[rpc::describe]

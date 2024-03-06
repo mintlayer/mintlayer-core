@@ -17,6 +17,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 mempool = { path = "../mempool/" }
 rpc = { path = "../rpc/" }
+rpc-description = { path = "../rpc/description" }
 serialization = { path = "../serialization/" }
 storage = { path = "../storage" }
 subsystem = { path = "../subsystem/" }

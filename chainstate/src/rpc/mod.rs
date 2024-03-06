@@ -160,7 +160,6 @@ trait ChainstateRpc {
     /// Subscribe to chainstate events, such as new tip.
     ///
     /// After a successful subscription, the node will message the subscriber with a message on every event.
-    /// NOTE: This only works with websocket.
     #[subscription(name = "subscribe_events", item = RpcEvent)]
     async fn subscribe_events(&self) -> rpc::subscription::Reply;
 }

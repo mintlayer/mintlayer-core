@@ -7,4 +7,6 @@ rust-version.workspace = true
 
 [dependencies]
 
+rpc-description-macro = { path = "../description-macro" }
+
 serde_json.workspace = true

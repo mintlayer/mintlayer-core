@@ -15,7 +15,16 @@
 
 /// Result of adding transaction to the mempool
 #[derive(
-    Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Ord,
+    Clone,
+    Copy,
+    serde::Serialize,
+    serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 #[must_use = "Please check whether the tx was accepted to main mempool or orphan pool"]
 pub enum TxStatus {

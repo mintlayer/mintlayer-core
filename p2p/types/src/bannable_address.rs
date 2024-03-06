@@ -21,7 +21,18 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    rpc_description::HasValueHint,
+)]
 pub struct BannableAddress(IpAddr);
 
 impl BannableAddress {
@@ -42,8 +53,4 @@ impl FromStr for BannableAddress {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         IpAddr::from_str(s).map(BannableAddress)
     }
-}
-
-impl rpc_description::HasValueHint for BannableAddress {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim("ip address string");
 }

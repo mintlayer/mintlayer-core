@@ -21,7 +21,7 @@ use crate::{net::types::PeerRole, types::peer_id::PeerId};
 /// Helper type used to return information about a connected peer from RPC.
 ///
 /// `String` is used for types that implement `Display`, but do not have `serde::Serialize`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, rpc_description::HasValueHint)]
 pub struct ConnectedPeer {
     pub peer_id: PeerId,
 
@@ -43,8 +43,4 @@ pub struct ConnectedPeer {
 
     /// Min time for a ping roundtrip, in milliseconds
     pub ping_min: Option<u64>,
-}
-
-impl rpc::description::HasValueHint for ConnectedPeer {
-    const HINT: rpc::description::ValueHint = rpc::description::ValueHint::GENERIC_OBJECT;
 }

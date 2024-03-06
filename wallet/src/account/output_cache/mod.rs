@@ -37,7 +37,7 @@ use common::{
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use pos_accounting::make_delegation_id;
-use rpc_description::ValueHint as VH;
+use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
@@ -51,7 +51,7 @@ use crate::{get_tx_output_destination, WalletError, WalletResult};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TxInfo {
     pub id: Id<Transaction>,
     pub height: BlockHeight,
@@ -66,14 +66,6 @@ impl TxInfo {
             timestamp,
         }
     }
-}
-
-impl rpc_description::HasValueHint for TxInfo {
-    const HINT: VH = VH::Object(&[
-        ("id", &<Id<Transaction>>::HINT),
-        ("height", &BlockHeight::HINT),
-        ("timestamp", &BlockTimestamp::HINT),
-    ]);
 }
 
 pub struct DelegationData {
