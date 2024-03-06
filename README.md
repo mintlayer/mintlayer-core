@@ -132,7 +132,7 @@ The API server is a tool for indexing the blockchain. Its source code is contain
 
 Communication with the node and the wallet is possible through RPC. Details on that can be found in:
 
-- [Node RPC readme](rpc/README.md)
+- [Node RPC readme](node-daemon/docs/README.md)
 - [Wallet RPC readme](wallet/wallet-rpc-daemon/README.md)
 
 ## Security, and running a node in a rented public server or a Virtual Private Server (VPS)
