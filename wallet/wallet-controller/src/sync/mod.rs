@@ -273,7 +273,7 @@ fn scan_new_blocks<T: NodeInterface>(
     match acc {
         AccountType::Account(account) => {
             log::debug!(
-                "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
+                "Node chainstate updated, account: {}, block height: {}, tip block id: {:x}",
                 account,
                 new_height,
                 block_id
@@ -284,7 +284,7 @@ fn scan_new_blocks<T: NodeInterface>(
         }
         AccountType::UnusedAccount => {
             log::debug!(
-                "Node chainstate updated, unused account, block height: {}, tip block id: {}",
+                "Node chainstate updated, unused account, block height: {}, tip block id: {:x}",
                 new_height,
                 block_id
             );
