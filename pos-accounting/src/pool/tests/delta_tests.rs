@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use common::primitives::{amount::SignedAmount, Amount};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

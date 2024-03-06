@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, ops::Neg};
 
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use common::primitives::{amount::SignedAmount, Amount};
 
 use serialization::{Decode, Encode};
 

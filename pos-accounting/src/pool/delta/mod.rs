@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use accounting::{DeltaAmountCollection, DeltaDataUndoCollection};
 use common::{
     chain::{DelegationId, PoolId},
-    primitives::{signed_amount::SignedAmount, Amount, H256},
+    primitives::{amount::SignedAmount, Amount, H256},
 };
 use serialization::{Decode, Encode};
 

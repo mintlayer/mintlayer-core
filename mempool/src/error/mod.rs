@@ -22,7 +22,7 @@ use thiserror::Error;
 
 use common::{
     chain::{GenBlock, Transaction},
-    primitives::{decimal_amount::DisplayAmount, Id, H256},
+    primitives::{amount::DisplayAmount, Id, H256},
 };
 
 use crate::pool::fee::Fee;

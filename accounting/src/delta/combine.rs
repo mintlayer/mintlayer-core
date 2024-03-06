@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use common::primitives::{amount::SignedAmount, Amount};
 
 use crate::{error::Error, DataDelta};
 
@@ -77,7 +77,7 @@ pub mod test {
     use crate::DataDelta;
 
     use super::*;
-    use common::primitives::{amount::UnsignedIntType, signed_amount::SignedIntType};
+    use common::primitives::amount::{signed::SignedIntType, UnsignedIntType};
 
     use rstest::rstest;
 

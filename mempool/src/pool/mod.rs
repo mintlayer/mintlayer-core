@@ -35,7 +35,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction, TxInput,
     },
-    primitives::{amount::Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, DisplayAmount, Id},
     time_getter::TimeGetter,
 };
 use logging::log;

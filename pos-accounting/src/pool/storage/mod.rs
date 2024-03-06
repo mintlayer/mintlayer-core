@@ -22,7 +22,7 @@ use accounting::{
 use chainstate_types::storage_result;
 use common::{
     chain::{DelegationId, PoolId},
-    primitives::{signed_amount::SignedAmount, Amount},
+    primitives::{amount::SignedAmount, Amount},
 };
 
 use crate::{

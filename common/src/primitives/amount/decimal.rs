@@ -17,7 +17,7 @@ use std::fmt::Write;
 
 use utils::ensure;
 
-pub use super::amount::{Amount, UnsignedIntType};
+use super::{Amount, UnsignedIntType};
 
 const TEN: UnsignedIntType = 10;
 

@@ -20,7 +20,7 @@ pub use output_group::{OutputGroup, PayFee};
 
 use common::{
     chain::{TxInput, TxOutput},
-    primitives::{signed_amount::SignedAmount, Amount},
+    primitives::{amount::SignedAmount, Amount},
 };
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use utils::ensure;
