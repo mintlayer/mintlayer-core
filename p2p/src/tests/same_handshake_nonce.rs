@@ -33,97 +33,98 @@ use crate::{
     tests::helpers::TestNode,
 };
 
-// In this test we want a version that would result in the WillDisconnect message being sent.
-const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V3;
-
-// Simulate a self-connection by sending the same nonce in Hello. Check that the WillDisconnect
-// message is sent.
+// Simulate a self-connection by sending the same nonce in Hello.
+// Check that the WillDisconnect message is sent if the protocol version is big enough.
 async fn same_handshake_nonce<TTM>()
 where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let p2p_config = Arc::new(test_p2p_config());
+    for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
+        let time_getter = P2pBasicTestTimeGetter::new();
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let p2p_config = Arc::new(test_p2p_config());
 
-    let test_node = TestNode::<TTM::Transport>::start(
-        time_getter.clone(),
-        Arc::clone(&chain_config),
-        Arc::clone(&p2p_config),
-        TTM::make_transport(),
-        TTM::make_address(),
-        TEST_PROTOCOL_VERSION.into(),
-        None,
-    )
-    .await;
+        let test_node = TestNode::<TTM::Transport>::start(
+            time_getter.clone(),
+            Arc::clone(&chain_config),
+            Arc::clone(&p2p_config),
+            TTM::make_transport(),
+            TTM::make_address(),
+            protocol_version.into(),
+            None,
+        )
+        .await;
 
-    let transport = TTM::make_transport();
-    let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
+        let transport = TTM::make_transport();
+        let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
-    let outgoing_conn_address = listener.local_addresses().unwrap()[0];
-    let _outgoing_connect_result_receiver = test_node.start_connecting(outgoing_conn_address);
+        let outgoing_conn_address = listener.local_addresses().unwrap()[0];
+        let _outgoing_connect_result_receiver = test_node.start_connecting(outgoing_conn_address);
 
-    let (outgoing_conn_stream, _) = listener.accept().await.unwrap();
+        let (outgoing_conn_stream, _) = listener.accept().await.unwrap();
 
-    let mut outgoing_conn_msg_stream = BufferedTranscoder::new(
-        outgoing_conn_stream,
-        *p2p_config.protocol_config.max_message_size,
-    );
+        let mut outgoing_conn_msg_stream = BufferedTranscoder::new(
+            outgoing_conn_stream,
+            *p2p_config.protocol_config.max_message_size,
+        );
 
-    let msg = outgoing_conn_msg_stream.recv().await.unwrap();
-    let Message::Handshake(HandshakeMessage::Hello {
-        protocol_version: _,
-        network: _,
-        services: _,
-        user_agent: _,
-        software_version: _,
-        receiver_address: _,
-        current_time: _,
-        handshake_nonce,
-    }) = msg
-    else {
-        panic!("Unexpected message: {msg:?}");
-    };
-    assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
-
-    let incoming_conn_stream = transport.connect(*test_node.local_address()).await.unwrap();
-
-    let mut incoming_conn_msg_stream = BufferedTranscoder::new(
-        incoming_conn_stream,
-        *p2p_config.protocol_config.max_message_size,
-    );
-
-    incoming_conn_msg_stream
-        .send(Message::Handshake(HandshakeMessage::Hello {
-            protocol_version: TEST_PROTOCOL_VERSION.into(),
-            network: *chain_config.magic_bytes(),
-            user_agent: p2p_config.user_agent.clone(),
-            software_version: *chain_config.software_version(),
-            services: (*p2p_config.node_type).into(),
-            receiver_address: None,
-            current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
+        let msg = outgoing_conn_msg_stream.recv().await.unwrap();
+        let Message::Handshake(HandshakeMessage::Hello {
+            protocol_version: _,
+            network: _,
+            services: _,
+            user_agent: _,
+            software_version: _,
+            receiver_address: _,
+            current_time: _,
             handshake_nonce,
-        }))
-        .await
-        .unwrap();
+        }) = msg
+        else {
+            panic!("Unexpected message: {msg:?}");
+        };
+        assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-    let msg = incoming_conn_msg_stream.recv().await.unwrap();
-    assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
+        let incoming_conn_stream = transport.connect(*test_node.local_address()).await.unwrap();
 
-    // WillDisconnect should be sent.
-    let msg = incoming_conn_msg_stream.recv().await.unwrap();
-    assert_eq!(
-        msg,
-        Message::WillDisconnect(WillDisconnectMessage {
-            reason: (DisconnectionReason::ConnectionFromSelf).to_string()
-        })
-    );
+        let mut incoming_conn_msg_stream = BufferedTranscoder::new(
+            incoming_conn_stream,
+            *p2p_config.protocol_config.max_message_size,
+        );
 
-    // The connection should be closed.
-    incoming_conn_msg_stream.recv().await.unwrap_err();
+        incoming_conn_msg_stream
+            .send(Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: protocol_version.into(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                software_version: *chain_config.software_version(),
+                services: (*p2p_config.node_type).into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
+                handshake_nonce,
+            }))
+            .await
+            .unwrap();
 
-    test_node.join().await;
+        let msg = incoming_conn_msg_stream.recv().await.unwrap();
+        assert_matches!(msg, Message::Handshake(HandshakeMessage::HelloAck { .. }));
+
+        if protocol_version >= SupportedProtocolVersion::V3 {
+            // WillDisconnect should be sent.
+            let msg = incoming_conn_msg_stream.recv().await.unwrap();
+            assert_eq!(
+                msg,
+                Message::WillDisconnect(WillDisconnectMessage {
+                    reason: (DisconnectionReason::ConnectionFromSelf).to_string()
+                })
+            );
+        }
+
+        // The connection should be closed.
+        incoming_conn_msg_stream.recv().await.unwrap_err();
+
+        test_node.join().await;
+    }
 }
 
 #[tracing::instrument]
