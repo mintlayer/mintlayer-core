@@ -442,6 +442,32 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn sweep_addresses(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .sweep_addresses(account_index, destination_address, from_addresses, config)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn sweep_delegation(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        delegation_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .sweep_delegation(account_index, destination_address, delegation_id, config)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn create_stake_pool(
         &self,
         account_index: U31,

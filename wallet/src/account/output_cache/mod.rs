@@ -706,14 +706,9 @@ impl OutputCache {
 
     fn uses_token(&self, unconfirmed_tx: &WalletTx, frozen_token_id: &TokenId) -> bool {
         unconfirmed_tx.inputs().iter().any(|inp| match inp {
-            TxInput::Utxo(outpoint) => {
-                let output = self
-                    .txs
-                    .get(&outpoint.source_id())
-                    .expect("must be present")
-                    .outputs()
-                    .get(outpoint.output_index() as usize)
-                    .expect("must be present");
+            TxInput::Utxo(outpoint) => self.txs.get(&outpoint.source_id()).is_some_and(|tx| {
+                let output =
+                    tx.outputs().get(outpoint.output_index() as usize).expect("must be present");
 
                 match output {
                     TxOutput::Transfer(v, _)
@@ -730,7 +725,7 @@ impl OutputCache {
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _) => false,
                 }
-            }
+            }),
             TxInput::AccountCommand(_, cmd) => match cmd {
                 AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::MintTokens(token_id, _)

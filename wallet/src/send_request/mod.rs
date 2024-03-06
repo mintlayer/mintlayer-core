@@ -244,6 +244,10 @@ impl SendRequest {
         &self.destinations
     }
 
+    pub fn utxos(&self) -> &[Option<TxOutput>] {
+        &self.utxos
+    }
+
     pub fn outputs(&self) -> &[TxOutput] {
         &self.outputs
     }

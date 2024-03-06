@@ -169,12 +169,7 @@ fn get_address(
 
 fn get_coin_balance_for_acc(wallet: &DefaultWallet, account: U31) -> Amount {
     let coin_balance = wallet
-        .get_balance(
-            account,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
+        .get_balance(account, UtxoState::Confirmed.into(), WithLocked::Unlocked)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -186,7 +181,6 @@ fn get_coin_balance_with_inactive(wallet: &DefaultWallet) -> Amount {
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
             UtxoState::Confirmed | UtxoState::Inactive | UtxoState::InMempool,
             WithLocked::Unlocked,
         )
@@ -205,7 +199,6 @@ fn get_currency_balances(wallet: &DefaultWallet) -> (Amount, Vec<(TokenId, Amoun
     let mut currency_balances = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,
         )
@@ -1408,7 +1401,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 
     let selected_utxos = utxos
         .iter()
-        .map(|(outpoint, _)| outpoint)
+        .map(|(outpoint, _, _)| outpoint)
         .take(rng.gen_range(1..utxos.len()))
         .cloned()
         .collect_vec();
@@ -1514,18 +1507,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         1,
     );
 
-    let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        pool_amount
-    );
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -1539,6 +1522,24 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         &pool_data.utxo_outpoint,
         &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
     );
+
+    let mut create_stake_pool_utxos = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::CreateStakePool.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(create_stake_pool_utxos.len(), 1);
+    let (_, output, _) = create_stake_pool_utxos.pop().unwrap();
+    match output {
+        TxOutput::CreateStakePool(id, data) => {
+            assert_eq!(id, *pool_id);
+            assert_eq!(data.pledge(), pool_amount);
+        }
+        _ => panic!("wrong TxOutput type"),
+    };
 
     let pos_data = wallet.get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX, *pool_id).unwrap();
 
@@ -1605,19 +1606,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert!(pool_ids.is_empty());
 
-    let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        pool_amount,
-    );
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, pool_amount,);
 }
 
 #[rstest]
@@ -1790,18 +1780,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         1,
     );
 
-    let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        block1_amount,
-    );
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, (block1_amount - pool_amount).unwrap(),);
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX, WalletPoolsFilter::All).unwrap();
     assert_eq!(pool_ids.len(), 1);
@@ -1919,12 +1899,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
 
     // test that account 1 will receive the money but not register the delegation id as theirs
     let coin_balance = wallet
-        .get_balance(
-            other_acc_idx,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed.into(),
-            WithLocked::Any,
-        )
+        .get_balance(other_acc_idx, UtxoState::Confirmed.into(), WithLocked::Any)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -1938,12 +1913,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
 
     let coin_balance = wallet
-        .get_balance(
-            other_acc_idx,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed.into(),
-            WithLocked::Any,
-        )
+        .get_balance(other_acc_idx, UtxoState::Confirmed.into(), WithLocked::Any)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -2535,7 +2505,6 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
     let conflicted_token_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
             UtxoState::Conflicted.into(),
             WithLocked::Unlocked,
         )
@@ -3340,7 +3309,6 @@ fn lock_then_transfer(#[case] seed: Seed) {
         let currency_balances = wallet
             .get_balance(
                 DEFAULT_ACCOUNT_INDEX,
-                UtxoType::Transfer | UtxoType::LockThenTransfer,
                 UtxoState::Confirmed.into(),
                 WithLocked::Locked,
             )
@@ -3926,18 +3894,8 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
         2,
     );
 
-    let currency_balances = wallet
-        .get_balance(
-            acc_1_index,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        pool_amount,
-    );
+    let coin_balance = get_coin_balance_for_acc(&wallet, acc_1_index);
+    assert_eq!(coin_balance, pool_amount);
 }
 
 #[rstest]
@@ -4216,18 +4174,8 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         2,
     );
 
-    let currency_balances = hot_wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        pool_amount,
-    );
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, pool_amount,);
 }
 
 #[rstest]
@@ -4400,19 +4348,8 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         1,
     );
 
-    let currency_balances = hot_wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap();
-
-    assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        to_send,
-    );
+    let coin_balance = get_coin_balance(&hot_wallet);
+    assert_eq!(coin_balance, to_send,);
 
     // update cold wallet just to check the balance and utxos
     cold_wallet
@@ -4437,7 +4374,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(utxos.len(), 1);
-    let (_, output) = utxos.pop().unwrap();
+    let (_, output, _) = utxos.pop().unwrap();
 
     matches!(output, TxOutput::Transfer(OutputValue::Coin(value), dest)
             if value == balance && dest == cold_wallet_address.decode_object(&chain_config).unwrap());

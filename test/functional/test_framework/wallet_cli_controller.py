@@ -239,6 +239,11 @@ class WalletCliController:
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
+    async def reveal_public_key_as_address(self, address: Optional[str] = None) -> str:
+        if address is None:
+            address = await self.new_address()
+        return await self._write_command(f"address-reveal-public-key-as-address {address}\n")
+
     async def new_address(self) -> str:
         return await self._write_command(f"address-new\n")
 
@@ -265,6 +270,12 @@ class WalletCliController:
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
         change_address_str = '' if change_address is None else f"--change {change_address}"
         return await self._write_command(f"transaction-create-from-cold-input {address} {amount} {str(selected_utxo)} {change_address_str}\n")
+
+    async def sweep_addresses(self, destination_address: str, from_addresses: List[str] = []) -> str:
+        return await self._write_command(f"address-sweep-spendable {destination_address} {' '.join(from_addresses)}\n")
+
+    async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
+        return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")

@@ -279,6 +279,48 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn sweep_addresses(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        from_addresses: Vec<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions {
+            in_top_x_mb: config.in_top_x_mb,
+        };
+        WalletRpcClient::sweep_addresses(
+            &self.http_client,
+            account_index.into(),
+            destination_address,
+            from_addresses,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn sweep_delegation(
+        &self,
+        account_index: U31,
+        destination_address: String,
+        delegation_id: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions {
+            in_top_x_mb: config.in_top_x_mb,
+        };
+        WalletRpcClient::sweep_delegation(
+            &self.http_client,
+            account_index.into(),
+            destination_address,
+            delegation_id,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn transaction_from_cold_input(
         &self,
         account_index: U31,

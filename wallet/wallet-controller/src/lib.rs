@@ -555,7 +555,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 WithLocked::Unlocked,
             )
             .map_err(ControllerError::WalletError)?;
-        let pool_ids = stake_pool_utxos.into_iter().filter_map(|(_, utxo)| match utxo {
+        let pool_ids = stake_pool_utxos.into_iter().filter_map(|(_, utxo, _)| match utxo {
             TxOutput::ProduceBlockFromStake(_, pool_id) | TxOutput::CreateStakePool(pool_id, _) => {
                 Some(pool_id)
             }

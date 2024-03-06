@@ -63,7 +63,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 use serialization::{Decode, Encode};
 use std::cmp::Reverse;
 use std::collections::btree_map::Entry;
@@ -560,6 +560,124 @@ impl Account {
             },
         )
         .try_collect()
+    }
+
+    pub fn sweep_addresses(
+        &mut self,
+        db_tx: &impl WalletStorageReadUnlocked,
+        destination: Destination,
+        request: SendRequest,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let mut grouped_inputs = group_preselected_inputs(
+            &request,
+            current_fee_rate,
+            &self.chain_config,
+            self.account_info.best_block_height(),
+        )?;
+
+        let input_fees = grouped_inputs
+            .values()
+            .map(|(_, fee)| *fee)
+            .sum::<Option<Amount>>()
+            .ok_or(WalletError::OutputAmountOverflow)?;
+
+        let coin_input = grouped_inputs.remove(&Currency::Coin).ok_or(WalletError::NoUtxos)?;
+
+        let mut outputs = grouped_inputs
+            .into_iter()
+            .filter_map(|(currency, (amount, _))| {
+                let value = match currency {
+                    Currency::Coin => return None,
+                    Currency::Token(token_id) => OutputValue::TokenV1(token_id, amount),
+                };
+
+                Some(TxOutput::Transfer(value, destination.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        let coin_output = TxOutput::Transfer(
+            OutputValue::Coin(
+                (coin_input.0 - input_fees)
+                    .ok_or(WalletError::NotEnoughUtxo(coin_input.0, input_fees))?,
+            ),
+            destination.clone(),
+        );
+
+        outputs.push(coin_output);
+        let tx_fee: Amount = current_fee_rate
+            .compute_fee(tx_size_with_outputs(outputs.as_slice()))
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into();
+        outputs.pop();
+
+        let total_fee = (tx_fee + input_fees).ok_or(WalletError::OutputAmountOverflow)?;
+
+        let coin_output = TxOutput::Transfer(
+            OutputValue::Coin(
+                (coin_input.0 - total_fee)
+                    .ok_or(WalletError::NotEnoughUtxo(coin_input.0, input_fees))?,
+            ),
+            destination,
+        );
+        outputs.push(coin_output);
+
+        self.sign_transaction_from_req(request.with_outputs(outputs), db_tx)
+    }
+
+    pub fn sweep_delegation(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        address: Address<Destination>,
+        delegation_id: DelegationId,
+        delegation_share: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let current_block_height = self.best_block().1;
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address.clone(),
+            delegation_share,
+            current_block_height,
+        )?;
+        let delegation_data = self.find_delegation(&delegation_id)?;
+        let nonce = delegation_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
+
+        let outputs = vec![output];
+
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountSpending::DelegationBalance(delegation_id, delegation_share),
+        ));
+        let input_size = serialization::Encode::encoded_size(&tx_input);
+        let total_fee: Amount = current_fee_rate
+            .compute_fee(
+                tx_size_with_outputs(outputs.as_slice())
+                    + input_size
+                    + input_signature_size_from_destination(&delegation_data.destination)?,
+            )
+            .map_err(|_| WalletError::OutputAmountOverflow)?
+            .into();
+
+        let amount = (delegation_share - total_fee).ok_or(UtxoSelectorError::NotEnoughFunds(
+            delegation_share,
+            total_fee,
+        ))?;
+
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address,
+            amount,
+            current_block_height,
+        )?;
+
+        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+
+        self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
+            .into_signed_tx()
     }
 
     pub fn process_send_request(
@@ -1547,13 +1665,18 @@ impl Account {
 
     pub fn get_balance(
         &self,
-        utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         median_time: BlockTimestamp,
         with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<currency_grouper::Currency, Amount>> {
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time, utxo_states, with_locked).into_iter(),
+            self.get_utxos(
+                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+                median_time,
+                utxo_states,
+                with_locked,
+            )
+            .into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -1966,7 +2089,9 @@ fn group_preselected_inputs(
     block_height: BlockHeight,
 ) -> Result<BTreeMap<currency_grouper::Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
-    for (input, destination) in request.inputs().iter().zip(request.destinations()) {
+    for (input, destination, utxo) in
+        izip!(request.inputs(), request.destinations(), request.utxos())
+    {
         let input_size = serialization::Encode::encoded_size(&input);
         let inp_sig_size = input_signature_size_from_destination(destination)?;
 
@@ -1994,7 +2119,37 @@ fn group_preselected_inputs(
         };
 
         match input {
-            TxInput::Utxo(_) => {}
+            TxInput::Utxo(_) => {
+                let output = utxo.as_ref().expect("must be present");
+                let (currency, value) = match output {
+                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+                        OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
+                        OutputValue::TokenV0(_) => {
+                            return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                                output.clone(),
+                            )))
+                        }
+                        OutputValue::TokenV1(token_id, output_amount) => {
+                            (Currency::Token(*token_id), *output_amount)
+                        }
+                    },
+                    TxOutput::IssueNft(token_id, _, _) => {
+                        (Currency::Token(*token_id), Amount::from_atoms(1))
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::DataDeposit(_) => {
+                        return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                            output.clone(),
+                        )))
+                    }
+                };
+                update_preselected_inputs(currency, value, *fee)?;
+            }
             TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(_, amount) => {
                     update_preselected_inputs(currency_grouper::Currency::Coin, *amount, *fee)?;
