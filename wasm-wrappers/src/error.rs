@@ -55,6 +55,8 @@ pub enum Error {
     FinalSupplyError,
     #[error("Calculating effective balance failed: {0}")]
     EffectiveBalanceCalculationFailed(String),
+    #[error("When fixed total supply is selected an amount must be present as well")]
+    FixedTotalSupply,
 }
 
 // This is required to make an error readable in JavaScript

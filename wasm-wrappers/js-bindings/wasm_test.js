@@ -30,6 +30,7 @@ import {
   estimate_transaction_size,
   staking_pool_spend_maturity_block_count,
   effective_pool_balance,
+  Amount,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -215,7 +216,7 @@ export async function run_test() {
     try {
       encode_input_for_withdraw_from_delegation(
         "invalid delegation id",
-        "1",
+        Amount.from_atoms("1"),
         BigInt(1),
         Network.Mainnet
       );
@@ -234,7 +235,7 @@ export async function run_test() {
       "mdelg1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqut3aj8";
     const tx_input2 = encode_input_for_withdraw_from_delegation(
       deleg_id,
-      "1",
+      Amount.from_atoms("1"),
       BigInt(1),
       Network.Mainnet
     );
@@ -248,7 +249,7 @@ export async function run_test() {
     assert_eq_arrays(inputs, expected_inputs);
 
     try {
-      encode_output_coin_burn("invalid amount");
+      encode_output_coin_burn(Amount.from_atoms("invalid amount"));
       throw new Error("Invalid value for amount worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid amount")) {
@@ -262,7 +263,7 @@ export async function run_test() {
     try {
       const invalid_lock = "invalid lock";
       encode_output_lock_then_transfer(
-        "100",
+        Amount.from_atoms("100"),
         address,
         invalid_lock,
         Network.Testnet
@@ -277,7 +278,7 @@ export async function run_test() {
 
     const lock = encode_lock_until_height(BigInt(100));
     const output = encode_output_lock_then_transfer(
-      "100",
+      Amount.from_atoms("100"),
       address,
       lock,
       Network.Testnet
@@ -289,12 +290,12 @@ export async function run_test() {
     try {
       const invalid_margin_ratio_per_thousand = 2000;
       encode_stake_pool_data(
-        "40000",
+        Amount.from_atoms("40000"),
         address,
         vrf_public_key,
         address,
         invalid_margin_ratio_per_thousand,
-        "0",
+        Amount.from_atoms("0"),
         Network.Testnet
       );
       throw new Error("Invalid margin_ratio_per_thousand worked somehow!");
@@ -306,12 +307,12 @@ export async function run_test() {
     }
 
     const pool_data = encode_stake_pool_data(
-      "40000",
+      Amount.from_atoms("40000"),
       address,
       vrf_public_key,
       address,
       100,
-      "0",
+      Amount.from_atoms("0"),
       Network.Testnet
     );
     const expected_pool_data = [
@@ -622,23 +623,23 @@ export async function run_test() {
   }
 
   {
-    const eff_bal = effective_pool_balance(Network.Mainnet, "0", "0");
-    if (eff_bal != "0") {
+    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("0"), Amount.from_atoms("0"));
+    if (eff_bal.atoms() != "0") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
   }
 
   {
-    const eff_bal = effective_pool_balance(Network.Mainnet, "4000000000000000", "20000000000000000");
-    if (eff_bal != "186791.47907594054") {
+    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("4000000000000000"), Amount.from_atoms("20000000000000000"));
+    if (eff_bal.atoms() != "18679147907594054") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
   }
 
   {
     // capped
-    const eff_bal = effective_pool_balance(Network.Mainnet, "59999080000000000", "59999080000000000");
-    if (eff_bal != "599990.8") {
+    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("59999080000000000"), Amount.from_atoms("59999080000000000"));
+    if (eff_bal.atoms() != "59999080000000000") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
   }
@@ -647,8 +648,8 @@ export async function run_test() {
     // over capped
     const over_capped = Math.floor(Math.random() * 4);
     const capped = 6 + over_capped;
-    const eff_bal = effective_pool_balance(Network.Mainnet, `${capped}0000000000000000`, `${capped}0000000000000000`);
-    if (eff_bal != "599990.8") {
+    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms(`${capped}0000000000000000`), Amount.from_atoms(`${capped}0000000000000000`));
+    if (eff_bal.atoms() != "59999080000000000") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
   }
