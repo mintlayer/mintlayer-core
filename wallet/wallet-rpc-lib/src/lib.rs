@@ -19,8 +19,8 @@ mod rpc;
 mod service;
 
 pub use rpc::{
-    types, ColdWalletRpcClient, ColdWalletRpcServer, RpcCreds, RpcError, WalletEventsRpcServer,
-    WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
+    types, ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
+    WalletEventsRpcServer, WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
 pub use service::{
     CreatedWallet, Event, EventStream, TxState, WalletHandle,

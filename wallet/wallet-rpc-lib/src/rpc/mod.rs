@@ -53,8 +53,8 @@ use common::{
     },
 };
 pub use interface::{
-    ColdWalletRpcClient, ColdWalletRpcServer, WalletEventsRpcServer, WalletRpcClient,
-    WalletRpcDescription, WalletRpcServer,
+    ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, WalletEventsRpcServer,
+    WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{

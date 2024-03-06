@@ -60,7 +60,10 @@ fn main() {
         CommandLine::Wallet => {
             let title = "Mintlayer node wallet";
 
-            let modules = vec![wallet_rpc_lib::WalletRpcDescription::DESCRIPTION];
+            let modules = vec![
+                wallet_rpc_lib::WalletRpcDescription::DESCRIPTION,
+                wallet_rpc_lib::ColdWalletRpcDescription::DESCRIPTION,
+            ];
 
             RpcDocs { title, modules }
         }

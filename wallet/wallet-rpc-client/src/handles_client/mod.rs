@@ -121,8 +121,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .create_wallet(path, whether_to_store_seed_phrase, mnemonic, passphrase)
             .await
             .map(|res| match res {
-                wallet_rpc_lib::CreatedWallet::UserProvidedMenmonic => {
-                    CreatedWallet::UserProvidedMenmonic
+                wallet_rpc_lib::CreatedWallet::UserProvidedMnemonic => {
+                    CreatedWallet::UserProvidedMnemonic
                 }
                 wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
                     CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
