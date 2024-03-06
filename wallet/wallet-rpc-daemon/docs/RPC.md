@@ -407,6 +407,40 @@ Returns:
 { "tx_id": hex string }
 ```
 
+### Method `address_sweep_spendable`
+
+Parameters:
+```
+{
+    "account": number,
+    "destination_address": string,
+    "from_addresses": [ string, .. ],
+    "options": { "in_top_x_mb": number },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
+### Method `staking_sweep_delegation`
+
+Parameters:
+```
+{
+    "account": number,
+    "destination_address": string,
+    "delegation_id": string,
+    "options": { "in_top_x_mb": number },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
 ### Method `transaction_create_from_cold_input`
 
 Parameters:
