@@ -27,19 +27,7 @@ pub type UnsignedIntType = u128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[must_use]
 pub struct Amount {
     #[codec(compact)]
@@ -212,7 +200,7 @@ impl Sum<Amount> for Option<Amount> {
 
 impl rpc_description::HasValueHint for Amount {
     const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::NUMBER)]);
+        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::STRING)]);
 }
 
 #[macro_export]
@@ -227,6 +215,63 @@ macro_rules! amount_sum {
         )*
         result
     }}
+}
+
+mod json {
+    use super::{Amount, UnsignedIntType};
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(untagged)]
+    enum StringOrUint {
+        String(String),
+        UInt(UnsignedIntType),
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct JsonAmount {
+        atoms: StringOrUint,
+    }
+
+    impl From<Amount> for JsonAmount {
+        fn from(amount: Amount) -> Self {
+            JsonAmount {
+                atoms: StringOrUint::String(amount.atoms.to_string()),
+            }
+        }
+    }
+
+    impl TryFrom<JsonAmount> for Amount {
+        type Error = Box<dyn std::error::Error>;
+
+        fn try_from(json_amount: JsonAmount) -> Result<Self, Self::Error> {
+            let atoms: UnsignedIntType = match json_amount.atoms {
+                StringOrUint::String(s) => s.parse()?,
+                StringOrUint::UInt(atoms) => atoms,
+            };
+            Ok(Amount { atoms })
+        }
+    }
+}
+
+impl serde::Serialize for Amount {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let json_amount: json::JsonAmount = (*self).into();
+        json_amount.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Amount {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+
+        let json_amount = json::JsonAmount::deserialize(deserializer)?;
+
+        let amount: Amount = json_amount
+            .try_into()
+            .map_err(|e| D::Error::custom(format!("Failed to parse json amount to Amount: {e}")))?;
+
+        Ok(amount)
+    }
 }
 
 #[cfg(test)]
@@ -845,5 +890,50 @@ mod tests {
         assert_eq!(Amount { atoms: 1234567890100 }.into_fixedpoint_str(1), "123456789010");
         assert_eq!(Amount { atoms: 12345678901200 }.into_fixedpoint_str(1), "1234567890120");
         assert_eq!(Amount { atoms: 123456789012300 }.into_fixedpoint_str(1), "12345678901230");
+    }
+
+    #[test]
+    fn serde_serialization() {
+        let amount: Amount = Amount::from_atoms(123553758873844226);
+
+        let serialized = serde_json::to_string(&amount).unwrap();
+
+        // Ensure that these don't change for backwards compatibility
+        assert!(serialized.contains("\"123553758873844226\""));
+        assert!(serialized.contains("\"atoms\""));
+
+        let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
+        assert_eq!(amount, deserialized.try_into().unwrap());
+
+        let deserialized_json_value =
+            serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
+
+        assert_eq!(deserialized_json_value["atoms"], "123553758873844226");
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn serde_serialization_randomized(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let amount: Amount = Amount::from_atoms(rng.gen());
+
+        let serialized = serde_json::to_string(&amount).unwrap();
+
+        // Ensure that these don't change for backwards compatibility
+        assert!(serialized.contains(&format!("\"{}\"", amount.into_atoms())));
+        assert!(serialized.contains("\"atoms\""));
+
+        let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
+        assert_eq!(amount, deserialized.try_into().unwrap());
+
+        let deserialized_json_value =
+            serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
+
+        assert_eq!(
+            deserialized_json_value["atoms"],
+            amount.into_atoms().to_string()
+        );
     }
 }

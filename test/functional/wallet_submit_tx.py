@@ -137,7 +137,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_equal(0, tx_output["inputs"][0]["Utxo"]["index"])
 
             assert_equal(1, len(tx_output["outputs"]))
-            assert_equal(coins_to_send * ATOMS_PER_COIN, tx_output["outputs"][0]["Transfer"][0]["Coin"]["atoms"])
+            assert_equal(str(coins_to_send * ATOMS_PER_COIN), tx_output["outputs"][0]["Transfer"][0]["Coin"]["atoms"])
 
             assert_equal(int(best_block_height), output[1]['Confirmed'][0])
             assert_equal(timestamp, output[1]['Confirmed'][1]['timestamp'])
