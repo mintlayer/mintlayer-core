@@ -168,7 +168,7 @@ class WalletTokens(BitcoinTestFramework):
                         total_tokens_supply = total_tokens_supply - tokens_to_unmint
                         assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                     else:
-                        assert_in(f"Trying to unmint Amount {{ fixed_point_integer: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ fixed_point_integer: {total_tokens_supply * 10**number_of_decimals} }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                        assert_in(f"Trying to unmint Amount {{ atoms: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ atoms: {total_tokens_supply * 10**number_of_decimals} }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                         continue
 
                 # either generate a new block or leave the transaction as in-memory state

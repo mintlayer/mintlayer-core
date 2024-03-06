@@ -111,7 +111,7 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
         assert_equal(len(feerate_points), 1)
         lowest_feerate = feerate_points[0][1]
         expected_lowest_feerate = 1000
-        assert_equal(lowest_feerate['amount_per_kb']['fixed_point_integer'], expected_lowest_feerate)
+        assert_equal(lowest_feerate['amount_per_kb']['atoms'], expected_lowest_feerate)
 
         out_amount = 100_000_000_000
         output = tx_output(out_amount)
@@ -158,7 +158,7 @@ class MempoolFeeratePointsTest(BitcoinTestFramework):
             assert expected_feerate is not None
             self.log.info(f"{expected_point} {expected_feerate} {point} {feerate}")
             assert_equal(expected_point, point)
-            assert_equal(expected_feerate, feerate['amount_per_kb']['fixed_point_integer'])
+            assert_equal(expected_feerate, feerate['amount_per_kb']['atoms'])
 
 
 if __name__ == '__main__':

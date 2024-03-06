@@ -525,12 +525,12 @@ class StakingIncentivesTest(BitcoinTestFramework):
 
         pool_id_1_hex = ScaleBytes(bytes(pool_id_1)).to_hex()[2:]
         pool_1_balance_initial = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_1_hex)['fixed_point_integer']
+            pool_id_1_hex)['atoms']
         self.log.debug("Pool 1 original balance {}".format(pool_1_balance_initial))
 
         pool_id_2_hex = ScaleBytes(bytes(pool_id_2)).to_hex()[2:]
         pool_2_balance_initial = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_2_hex)['fixed_point_integer']
+            pool_id_2_hex)['atoms']
         self.log.debug("Pool 2 original balance {}".format(pool_2_balance_initial))
 
         assert_equal(pool_1_balance_initial, pool_2_balance_initial)
@@ -618,10 +618,10 @@ class StakingIncentivesTest(BitcoinTestFramework):
             195, pool_1_last_block, pool_id_1, stake_pk_1, stake_sk_1, vrf_sk_1, pool_2_last_block, pool_id_2, stake_pk_2, stake_sk_2, vrf_sk_2)
 
         pool_1_reward = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_1_hex)['fixed_point_integer'] - pool_1_balance_initial
+            pool_id_1_hex)['atoms'] - pool_1_balance_initial
         self.log.debug("Pool 1 reward {}".format(pool_1_reward))
         pool_2_reward = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_2_hex)['fixed_point_integer'] - pool_2_balance_initial
+            pool_id_2_hex)['atoms'] - pool_2_balance_initial
         self.log.debug("Pool 2 reward {}".format(pool_2_reward))
         pools_reward_ratio_v0 = pool_1_reward / pool_2_reward
         self.log.debug(
@@ -632,10 +632,10 @@ class StakingIncentivesTest(BitcoinTestFramework):
                                vrf_sk_1, pool_2_last_block, pool_id_2, stake_pk_2, stake_sk_2, vrf_sk_2)
 
         pool_1_reward = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_1_hex)['fixed_point_integer'] - pool_1_balance_initial - pool_1_reward
+            pool_id_1_hex)['atoms'] - pool_1_balance_initial - pool_1_reward
         self.log.debug("Pool 1 reward {}".format(pool_1_reward))
         pool_2_reward = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_2_hex)['fixed_point_integer'] - pool_2_balance_initial - pool_2_reward
+            pool_id_2_hex)['atoms'] - pool_2_balance_initial - pool_2_reward
         pools_reward_ratio_v1 = pool_1_reward / pool_2_reward
         self.log.debug("Pool 2 reward {}".format(pool_2_reward))
         self.log.debug(
