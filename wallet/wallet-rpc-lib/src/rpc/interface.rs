@@ -239,7 +239,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         address: String,
-        amount_str: DecimalAmount,
+        amount: DecimalAmount,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         options: TransactionOptions,

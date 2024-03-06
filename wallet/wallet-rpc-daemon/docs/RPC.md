@@ -203,7 +203,7 @@ Parameters:
 {
     "account": number,
     "address": string,
-    "amount_str": decimal string,
+    "amount": decimal string,
     "selected_utxo": {
         "id": EITHER OF
              1) { "Transaction": hex string }
