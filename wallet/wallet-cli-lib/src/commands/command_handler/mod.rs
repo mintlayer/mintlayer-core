@@ -168,7 +168,7 @@ where
                             mnemonic
                         )
                     }
-                    CreatedWallet::UserProvidedMenmonic => {
+                    CreatedWallet::UserProvidedMnemonic => {
                         "New wallet created successfully".to_owned()
                     }
                 };

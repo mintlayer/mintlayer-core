@@ -1152,7 +1152,7 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) "UserProvidedMenmonic"
+     1) "UserProvidedMnemonic"
      2) { "NewlyGeneratedMnemonic": [
             string,
             EITHER OF

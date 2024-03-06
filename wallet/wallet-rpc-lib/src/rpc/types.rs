@@ -460,7 +460,7 @@ impl StakingStatus {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum CreatedWallet {
-    UserProvidedMenmonic,
+    UserProvidedMnemonic,
     NewlyGeneratedMnemonic(String, Option<String>),
 }
 

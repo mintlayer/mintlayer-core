@@ -53,7 +53,7 @@ pub enum WalletCommand<N> {
 }
 
 pub enum CreatedWallet {
-    UserProvidedMenmonic,
+    UserProvidedMnemonic,
     NewlyGeneratedMnemonic(Mnemonic, Option<String>),
 }
 
@@ -248,7 +248,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
 
         let result = match newly_generated_mnemonic {
             true => CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase),
-            false => CreatedWallet::UserProvidedMenmonic,
+            false => CreatedWallet::UserProvidedMnemonic,
         };
         Ok(result)
     }
