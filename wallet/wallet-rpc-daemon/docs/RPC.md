@@ -4,6 +4,9 @@ Version `0.3.0`.
 
 ## Module `WalletRpc`
 
+RPC methods available in the hot wallet mode.
+
+
 ### Method `wallet_sync`
 
 Parameters:
@@ -1099,5 +1102,385 @@ Returns:
 EITHER OF
      1) string
      2) null
+```
+
+## Module `ColdWalletRpc`
+
+RPC methods available in the cold wallet mode.
+
+
+### Method `shutdown`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `version`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+string
+```
+
+### Method `wallet_create`
+
+Parameters:
+```
+{
+    "path": string,
+    "store_seed_phrase": bool,
+    "mnemonic": EITHER OF
+         1) string
+         2) null,
+    "passphrase": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+EITHER OF
+     1) "UserProvidedMenmonic"
+     2) { "NewlyGeneratedMnemonic": [
+            string,
+            EITHER OF
+                 1) string
+                 2) null,
+        ] }
+```
+
+### Method `wallet_open`
+
+Parameters:
+```
+{
+    "path": string,
+    "password": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_close`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_info`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+{
+    "wallet_id": hex string,
+    "account_names": [ EITHER OF
+         1) string
+         2) null, .. ],
+}
+```
+
+### Method `wallet_encrypt_private_keys`
+
+Parameters:
+```
+{ "password": string }
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_disable_private_keys_encryption`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_unlock_private_keys`
+
+Parameters:
+```
+{ "password": string }
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_lock_private_keys`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `wallet_show_seed_phrase`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
+```
+
+### Method `wallet_purge_seed_phrase`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+EITHER OF
+     1) {
+            "seed_phrase": [ string, .. ],
+            "passphrase": EITHER OF
+                 1) string
+                 2) null,
+        }
+     2) null
+```
+
+### Method `wallet_set_lookahead_size`
+
+Parameters:
+```
+{
+    "lookahead_size": number,
+    "i_know_what_i_am_doing": bool,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `address_show`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+[ {
+    "address": string,
+    "index": string,
+    "used": bool,
+}, .. ]
+```
+
+### Method `address_new`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+{
+    "address": string,
+    "index": string,
+}
+```
+
+### Method `address_reveal_public_key`
+
+Parameters:
+```
+{
+    "account": number,
+    "address": string,
+}
+```
+
+Returns:
+```
+{
+    "public_key_hex": hex string,
+    "public_key_address": bech32 string,
+}
+```
+
+### Method `staking_new_vrf_public_key`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+{
+    "vrf_public_key": hex string,
+    "child_number": number,
+    "used": bool,
+}
+```
+
+### Method `staking_show_legacy_vrf_key`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+{ "vrf_public_key": hex string }
+```
+
+### Method `staking_show_vrf_public_keys`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+[ {
+    "vrf_public_key": hex string,
+    "child_number": number,
+    "used": bool,
+}, .. ]
+```
+
+### Method `account_sign_raw_transaction`
+
+Parameters:
+```
+{
+    "account": number,
+    "raw_tx": string,
+    "options": { "in_top_x_mb": number },
+}
+```
+
+Returns:
+```
+{
+    "hex": string,
+    "is_complete": bool,
+}
+```
+
+### Method `challenge_sign_plain`
+
+Parameters:
+```
+{
+    "account": number,
+    "challenge": string,
+    "address": string,
+}
+```
+
+Returns:
+```
+string
+```
+
+### Method `challenge_sign_hex`
+
+Parameters:
+```
+{
+    "account": number,
+    "challenge": string,
+    "address": string,
+}
+```
+
+Returns:
+```
+string
+```
+
+### Method `challenge_verify_plain`
+
+Parameters:
+```
+{
+    "message": string,
+    "signed_challenge": string,
+    "address": string,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `challenge_verify_hex`
+
+Parameters:
+```
+{
+    "message": string,
+    "signed_challenge": string,
+    "address": string,
+}
+```
+
+Returns:
+```
+nothing
 ```
 

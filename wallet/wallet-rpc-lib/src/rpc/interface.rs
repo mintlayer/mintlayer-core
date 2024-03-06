@@ -40,6 +40,7 @@ trait WalletEventsRpc {
     async fn subscribe_wallet_events(&self) -> rpc::subscription::Reply;
 }
 
+/// RPC methods available in the cold wallet mode.
 #[rpc::describe]
 #[rpc::rpc(server, client)]
 trait ColdWalletRpc {
@@ -164,6 +165,7 @@ trait ColdWalletRpc {
     ) -> rpc::RpcResult<()>;
 }
 
+/// RPC methods available in the hot wallet mode.
 #[rpc::describe]
 #[rpc::rpc(server, client)]
 trait WalletRpc {
