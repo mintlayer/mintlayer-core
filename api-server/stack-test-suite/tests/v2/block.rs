@@ -32,7 +32,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_block_id() {
-    let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id").await;
+    let (task, response) = spawn_webserver("/api/v2/block/invalid-block-id").await;
 
     assert_eq!(response.status(), 400);
 
@@ -47,7 +47,7 @@ async fn invalid_block_id() {
 #[tokio::test]
 async fn block_not_found() {
     let (task, response) = spawn_webserver(
-        "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001",
+        "/api/v2/block/0000000000000000000000000000000000000000000000000000000000000001",
     )
     .await;
 
@@ -235,7 +235,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let (block_id, new_expected_block, old_block_id, old_expected_block) = rx.await.unwrap();
-    let url = format!("/api/v1/block/{block_id}");
+    let url = format!("/api/v2/block/{block_id}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener
@@ -251,7 +251,7 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body, new_expected_block);
 
-    let url = format!("/api/v1/block/{old_block_id}");
+    let url = format!("/api/v2/block/{old_block_id}");
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();

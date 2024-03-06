@@ -17,7 +17,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_transaction_id() {
-    let (task, response) = spawn_webserver("/api/v1/transaction/invalid-transaction-id").await;
+    let (task, response) = spawn_webserver("/api/v2/transaction/invalid-transaction-id").await;
 
     assert_eq!(response.status(), 400);
 
@@ -32,7 +32,7 @@ async fn invalid_transaction_id() {
 #[tokio::test]
 async fn transaction_not_found() {
     let (task, response) = spawn_webserver(
-        "/api/v1/transaction/0000000000000000000000000000000000000000000000000000000000000001",
+        "/api/v2/transaction/0000000000000000000000000000000000000000000000000000000000000001",
     )
     .await;
 
@@ -239,7 +239,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
     });
 
     let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
-    let url = format!("/api/v1/transaction/{transaction_id}");
+    let url = format!("/api/v2/transaction/{transaction_id}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener
@@ -385,7 +385,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
-    let url = format!("/api/v1/transaction/{transaction_id}");
+    let url = format!("/api/v2/transaction/{transaction_id}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener

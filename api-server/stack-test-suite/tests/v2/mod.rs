@@ -79,7 +79,7 @@ use test_utils::random::{make_seedable_rng, Rng, Seed};
 
 #[tokio::test]
 async fn chain_genesis() {
-    let url = "/api/v1/chain/genesis";
+    let url = "/api/v2/chain/genesis";
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();

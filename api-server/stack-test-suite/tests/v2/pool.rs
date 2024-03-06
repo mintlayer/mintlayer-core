@@ -26,7 +26,7 @@ use super::{
 
 #[tokio::test]
 async fn invalid_pool_id() {
-    let (task, response) = spawn_webserver("/api/v1/pool/invalid-transaction-id").await;
+    let (task, response) = spawn_webserver("/api/v2/pool/invalid-transaction-id").await;
 
     assert_eq!(response.status(), 400);
 
@@ -43,7 +43,7 @@ async fn pool_id_not_fund() {
     let pool_id = PoolId::new(H256::zero());
     let chain_config = create_unit_test_config();
     let pool_id = Address::new(&chain_config, &pool_id).unwrap();
-    let (task, response) = spawn_webserver(&format! {"/api/v1/pool/{pool_id}"}).await;
+    let (task, response) = spawn_webserver(&format! {"/api/v2/pool/{pool_id}"}).await;
 
     assert_eq!(response.status(), 404);
 
@@ -191,7 +191,7 @@ async fn ok(#[case] seed: Seed) {
     let pools = rx.await.unwrap();
     for (pool_id, pool_data, delegations, _) in pools {
         let pool_id = Address::new(&chain_config, &pool_id).unwrap();
-        let url = format!("/api/v1/pool/{pool_id}");
+        let url = format!("/api/v2/pool/{pool_id}");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
@@ -238,7 +238,7 @@ async fn ok(#[case] seed: Seed) {
             &serde_json::json!(vrf_key.get())
         );
 
-        let url = format!("/api/v1/pool/{pool_id}/delegations");
+        let url = format!("/api/v2/pool/{pool_id}/delegations");
         let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
@@ -275,7 +275,7 @@ async fn ok(#[case] seed: Seed) {
 
         for (delegation_id, balance, destination, _) in delegations {
             let delegation_id = Address::new(&chain_config, &delegation_id).unwrap();
-            let url = format!("/api/v1/delegation/{delegation_id}");
+            let url = format!("/api/v2/delegation/{delegation_id}");
             let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
                 .await
                 .unwrap();

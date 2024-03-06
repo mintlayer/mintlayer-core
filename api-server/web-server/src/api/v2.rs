@@ -52,7 +52,7 @@ use crate::ApiServerWebServerState;
 
 use super::json_helpers::txoutput_to_json;
 
-pub const API_VERSION: &str = "1.0.0";
+pub const API_VERSION: &str = "2.0.0";
 
 const TX_BODY_LIMIT: usize = 10240;
 

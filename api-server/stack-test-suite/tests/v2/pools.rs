@@ -25,7 +25,7 @@ use super::{
 
 #[tokio::test]
 async fn invalid_offset() {
-    let (task, response) = spawn_webserver("/api/v1/pool?offset=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/pool?offset=asd").await;
 
     assert_eq!(response.status(), 400);
 
@@ -39,7 +39,7 @@ async fn invalid_offset() {
 
 #[tokio::test]
 async fn invalid_num_items() {
-    let (task, response) = spawn_webserver("/api/v1/pool?items=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/pool?items=asd").await;
 
     assert_eq!(response.status(), 400);
 
@@ -58,7 +58,7 @@ async fn invalid_num_items() {
 async fn invalid_num_items_max(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let more_than_max = rng.gen_range(101..1000);
-    let (task, response) = spawn_webserver(&format!("/api/v1/pool?items={more_than_max}")).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/pool?items={more_than_max}")).await;
 
     assert_eq!(response.status(), 400);
 
@@ -72,7 +72,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 
 #[tokio::test]
 async fn invalid_sort_order() {
-    let (task, response) = spawn_webserver("/api/v1/pool?sort=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/pool?sort=asd").await;
 
     assert_eq!(response.status(), 400);
 
@@ -222,7 +222,7 @@ async fn ok(#[case] seed: Seed) {
     {
         pools.reverse();
         let items = pools.len();
-        let url = format!("/api/v1/pool?sort=by_height&items={items}&offset=0");
+        let url = format!("/api/v2/pool?sort=by_height&items={items}&offset=0");
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
         // over)
@@ -280,7 +280,7 @@ async fn ok(#[case] seed: Seed) {
     {
         pools.sort_by_key(|x| Reverse(x.1.pledge()));
         let items = pools.len();
-        let url = format!("/api/v1/pool?sort=by_pledge&items={items}&offset=0");
+        let url = format!("/api/v2/pool?sort=by_pledge&items={items}&offset=0");
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
         // over)

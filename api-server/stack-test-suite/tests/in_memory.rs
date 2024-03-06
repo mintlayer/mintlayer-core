@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod v1;
+mod v2;
 
 use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
 use api_web_server::{api::web_server, ApiServerWebServerState, CachedValues, TxSubmitClient};
@@ -79,7 +79,7 @@ async fn server_status() {
     let (task, response) = spawn_webserver("/").await;
 
     assert_eq!(response.status(), 200);
-    assert_eq!(response.text().await.unwrap(), r#"{"versions":["1.0.0"]}"#);
+    assert_eq!(response.text().await.unwrap(), r#"{"versions":["2.0.0"]}"#);
 
     task.abort();
 }
