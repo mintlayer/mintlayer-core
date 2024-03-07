@@ -13,90 +13,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use common::{chain::config::MagicBytes, primitives::time::Time};
 
 use p2p_types::services::Services;
+use thiserror::Error;
 
 use crate::{
     error::{ConnectionValidationError, P2pError},
     protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The reason why a peer is being disconnected. This will be converted to string and sent
+/// to the peer in a WillDisconnect message.
+///
+/// Note: we derive `thiserror::Error` here just for the convenience of implementing `Display`.
+/// But conceptually this enum is not an error and it's not supposed to be used with `Result`.
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DisconnectionReason {
+    #[error("Your address is banned")]
     AddressBanned,
+    #[error("Your address is discouraged")]
     AddressDiscouraged,
+    #[error("You are evicted")]
     PeerEvicted,
+    #[error("This was a feeler connection")]
     FeelerConnection,
+    #[error("We think you are a self-connection")]
     ConnectionFromSelf,
+    #[error("Manual disconnection")]
     ManualDisconnect,
+    #[error("You ignore our ping requests")]
     PingIgnored,
+    #[error("You ignore our sync requests")]
     SyncRequestsIgnored,
+    #[error("Too many inbound connections and your address is discouraged")]
     TooManyInboundPeersAndThisOneIsDiscouraged,
+    #[error("Too many inbound connections, which can't be evicted")]
     TooManyInboundPeersAndCannotEvictAnyone,
+    #[error("Unsupported protocol version, our min version is {}", *MIN_SUPPORTED_PROTOCOL_VERSION as u32)]
     UnsupportedProtocol,
+    #[error("Your time {remote_time:?} is out of the acceptable range {accepted_peer_time:?}")]
     TimeDiff {
         remote_time: Time,
         accepted_peer_time: std::ops::RangeInclusive<Time>,
     },
-    DifferentNetwork {
-        our_network: MagicBytes,
-    },
+    #[error("Wrong network; out network is '{our_network}'")]
+    DifferentNetwork { our_network: MagicBytes },
+    #[error("No common services")]
     NoCommonServices,
-    InsufficientServices {
-        needed_services: Services,
-    },
-}
-
-impl Display for DisconnectionReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DisconnectionReason::AddressBanned => write!(f, "Your address is banned"),
-            DisconnectionReason::AddressDiscouraged => write!(f, "Your address is discouraged"),
-            DisconnectionReason::PeerEvicted => write!(f, "You are evicted"),
-            DisconnectionReason::FeelerConnection => write!(f, "This was a feeler connection"),
-            DisconnectionReason::ConnectionFromSelf => {
-                write!(f, "We think you are a self-connection")
-            }
-            DisconnectionReason::ManualDisconnect => write!(f, "Manual disconnection"),
-            DisconnectionReason::PingIgnored => write!(f, "You ignore our ping requests"),
-            DisconnectionReason::SyncRequestsIgnored => write!(f, "You ignore our sync requests"),
-
-            DisconnectionReason::TooManyInboundPeersAndThisOneIsDiscouraged => {
-                write!(
-                    f,
-                    "Too many inbound connections and your address is discouraged"
-                )
-            }
-            DisconnectionReason::TooManyInboundPeersAndCannotEvictAnyone => {
-                write!(f, "Too many inbound connections, which can't be evicted")
-            }
-
-            DisconnectionReason::UnsupportedProtocol => write!(
-                f,
-                "Unsupported protocol version, out min version is {}",
-                *MIN_SUPPORTED_PROTOCOL_VERSION as u32
-            ),
-
-            DisconnectionReason::TimeDiff {
-                remote_time,
-                accepted_peer_time,
-            } => write!(
-                f,
-                "Your time {:?} is out of the acceptable range {:?}",
-                remote_time, accepted_peer_time
-            ),
-            DisconnectionReason::DifferentNetwork { our_network } => {
-                write!(f, "Wrong network; out network is '{our_network}'")
-            }
-            DisconnectionReason::NoCommonServices => write!(f, "No common services"),
-            DisconnectionReason::InsufficientServices { needed_services } => {
-                write!(f, "Insufficient services, we need {needed_services:?}")
-            }
-        }
-    }
+    #[error("Insufficient services, we need {needed_services:?}")]
+    InsufficientServices { needed_services: Services },
 }
 
 impl DisconnectionReason {
