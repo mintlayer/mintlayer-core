@@ -36,3 +36,6 @@ cargo clippy --all-features --workspace --lib --bins --examples -- \
 
 # Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
 "$PYTHON" "$SCRIPT_DIR/build-tools/codecheck/codecheck.py"
+
+# Ensure that wasm documentation is up-to-date
+cargo run -p wasm-doc-gen -- -o wasm-wrappers/WASM-API.md --check

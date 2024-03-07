@@ -1,6 +1,6 @@
 mod run_options;
 
-use std::io::Write;
+use std::io::{Read, Write};
 
 use clap::Parser;
 use run_options::DocGenRunOptions;
@@ -200,6 +200,31 @@ fn write_to_stream<'a, D: Documentable>(
     Ok(())
 }
 
+fn write_docs_to_data_vec(
+    docs_title: Option<impl AsRef<str>>,
+    library_file_path: impl AsRef<std::path::Path>,
+) -> anyhow::Result<Vec<u8>> {
+    let file_to_doc = std::fs::read_to_string(library_file_path).expect("Source file not found");
+    let file_to_doc_contents = syn::parse_file(&file_to_doc).expect("Unable to parse file");
+
+    let fn_docs = FunctionData::pull_from_items(&file_to_doc_contents.items);
+    let enum_docs = EnumData::pull_from_items(&file_to_doc_contents.items);
+    let struct_docs = StructData::pull_from_items(&file_to_doc_contents.items);
+
+    let mut expected_doc_file_data = Vec::new();
+
+    {
+        let mut stream: std::io::BufWriter<Box<dyn std::io::Write>> =
+            std::io::BufWriter::new(Box::new(&mut expected_doc_file_data));
+
+        write_to_stream(docs_title.as_ref(), fn_docs, &mut stream)?;
+        write_to_stream(docs_title.as_ref(), enum_docs, &mut stream)?;
+        write_to_stream(docs_title.as_ref(), struct_docs, &mut stream)?;
+    }
+
+    Ok(expected_doc_file_data)
+}
+
 fn open_output_file(file_path: impl AsRef<std::path::Path>) -> anyhow::Result<std::fs::File> {
     let out_file_obj = std::fs::File::create(file_path.as_ref());
     let out_file_obj = match out_file_obj {
@@ -215,25 +240,52 @@ fn open_output_file(file_path: impl AsRef<std::path::Path>) -> anyhow::Result<st
 }
 
 fn main() -> anyhow::Result<()> {
-    let file = std::fs::read_to_string("wasm-wrappers/src/lib.rs").expect("Source file not found");
-    let file_contents = syn::parse_file(&file).expect("Unable to parse file");
-
-    let fn_docs = FunctionData::pull_from_items(&file_contents.items);
-    let enum_docs = EnumData::pull_from_items(&file_contents.items);
-    let struct_docs = StructData::pull_from_items(&file_contents.items);
-
     let args = DocGenRunOptions::parse();
 
-    let output_stream: Box<dyn std::io::Write> = match args.output_file {
-        Some(outfile) => Box::new(open_output_file(outfile)?),
-        None => Box::new(std::io::stdout()),
-    };
+    let generated_doc_data = write_docs_to_data_vec(args.doc_title, "wasm-wrappers/src/lib.rs")?;
 
-    let mut stream = Box::new(std::io::BufWriter::new(output_stream));
+    if args.check {
+        if let Some(ref file_path) = args.output_file {
+            let mut file = match std::fs::File::open(&file_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    return Err(anyhow::anyhow!(
+                        "Failed to open file {} to check docs: {e}\n
+                        Does it really exist?",
+                        file_path.display()
+                    ))
+                }
+            };
 
-    write_to_stream(args.doc_title.as_ref(), fn_docs, stream.as_mut())?;
-    write_to_stream(args.doc_title.as_ref(), enum_docs, stream.as_mut())?;
-    write_to_stream(args.doc_title.as_ref(), struct_docs, stream.as_mut())?;
+            let mut doc_file_data = Vec::new();
+            file.read_to_end(&mut doc_file_data).map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to read file {} to check docs: {e}",
+                    file_path.display()
+                )
+            })?;
+
+            if generated_doc_data != doc_file_data {
+                return Err(anyhow::anyhow!(
+                    "Expected doc data and current doc data in {} didn't match. Consider regenerating docs",
+                    file_path.display()
+                ));
+            }
+        } else {
+            return Err(anyhow::anyhow!(
+                "Cannot run doc-generator in check-mode without specifying an output file",
+            ));
+        }
+    } else {
+        let mut output_stream: Box<dyn std::io::Write> = match args.output_file {
+            Some(outfile) => Box::new(open_output_file(outfile)?),
+            None => Box::new(std::io::stdout()),
+        };
+
+        output_stream
+            .write_all(&mut generated_doc_data.as_slice())
+            .map_err(|e| anyhow::anyhow!("Failed to write documentation to output stream: {e}",))?;
+    }
 
     Ok(())
 }
