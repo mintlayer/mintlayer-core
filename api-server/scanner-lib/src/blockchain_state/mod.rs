@@ -1101,18 +1101,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 )
                 .await;
             }
-            TxOutput::ProduceBlockFromStake(_, _) => {
-                set_utxo(
-                    OutPointSourceId::Transaction(transaction_id),
-                    idx,
-                    output,
-                    db_tx,
-                    block_height,
-                    false,
-                    &chain_config,
-                )
-                .await;
-            }
+            TxOutput::ProduceBlockFromStake(_, _) => {}
             TxOutput::CreateDelegationId(destination, pool_id) => {
                 if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
                 {
@@ -1129,16 +1118,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         )
                         .await
                         .expect("Unable to set delegation data");
-                    set_utxo(
-                        OutPointSourceId::Transaction(transaction_id),
-                        idx,
-                        output,
-                        db_tx,
-                        block_height,
-                        false,
-                        &chain_config,
-                    )
-                    .await;
                 }
             }
             TxOutput::CreateStakePool(pool_id, stake_pool_data) => {
@@ -1189,17 +1168,6 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     Address::<Destination>::new(&chain_config, new_delegation.spend_destination())
                         .expect("Unable to encode address");
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
-
-                set_utxo(
-                    OutPointSourceId::Transaction(transaction_id),
-                    idx,
-                    output,
-                    db_tx,
-                    block_height,
-                    false,
-                    &chain_config,
-                )
-                .await;
             }
             TxOutput::Transfer(output_value, destination) => match destination {
                 Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
