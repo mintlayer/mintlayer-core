@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{ChainConfig, GenBlock},
+    chain::{config::MagicBytes, ChainConfig, GenBlock},
     primitives::Id,
 };
 use serialization::{Decode, Encode};
@@ -23,7 +23,7 @@ use serialization::{Decode, Encode};
 pub struct ChainInfo {
     chain_type: String,
     genesis_block_id: Id<GenBlock>,
-    magic_bytes: [u8; 4],
+    magic_bytes: MagicBytes,
 }
 
 impl ChainInfo {
@@ -43,7 +43,7 @@ impl ChainInfo {
         self.genesis_block_id
     }
 
-    pub fn magic_bytes(&self) -> [u8; 4] {
+    pub fn magic_bytes(&self) -> MagicBytes {
         self.magic_bytes
     }
 

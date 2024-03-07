@@ -32,6 +32,7 @@ use tokio::{
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use p2p::{
     config::{NodeType, P2pConfig},
+    disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
@@ -240,7 +241,11 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         Ok(())
     }
 
-    fn disconnect(&mut self, peer_id: PeerId) -> p2p::Result<()> {
+    fn disconnect(
+        &mut self,
+        peer_id: PeerId,
+        _reason: Option<DisconnectionReason>,
+    ) -> p2p::Result<()> {
         let address = *self
             .state
             .connected

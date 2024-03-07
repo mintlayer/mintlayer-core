@@ -20,8 +20,6 @@ use num_traits::FromPrimitive;
 use serialization::{Decode, Encode};
 use utils::make_config_setting;
 
-use crate::error::{P2pError, ProtocolError};
-
 /// Network protocol version
 ///
 /// When two nodes connect, they exchange protocol versions,
@@ -44,6 +42,15 @@ impl ProtocolVersion {
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq, Eq, PartialOrd, Ord, Sequence)]
 pub enum SupportedProtocolVersion {
     V2 = 2,
+    V3 = 3,
+}
+
+lazy_static::lazy_static! {
+    pub static ref MIN_SUPPORTED_PROTOCOL_VERSION: SupportedProtocolVersion = {
+        enum_iterator::all::<SupportedProtocolVersion>()
+            .min()
+            .expect("SupportedProtocolVersion must have at least one element")
+    };
 }
 
 impl SupportedProtocolVersion {
@@ -58,13 +65,9 @@ impl From<SupportedProtocolVersion> for ProtocolVersion {
     }
 }
 
-impl TryFrom<ProtocolVersion> for SupportedProtocolVersion {
-    type Error = P2pError;
-
-    fn try_from(value: ProtocolVersion) -> Result<Self, Self::Error> {
-        SupportedProtocolVersion::from_u32(value.inner()).ok_or(P2pError::ProtocolError(
-            ProtocolError::UnsupportedProtocol(value),
-        ))
+impl From<ProtocolVersion> for Option<SupportedProtocolVersion> {
+    fn from(value: ProtocolVersion) -> Self {
+        SupportedProtocolVersion::from_u32(value.inner())
     }
 }
 
@@ -73,9 +76,9 @@ impl TryFrom<ProtocolVersion> for SupportedProtocolVersion {
 pub fn choose_common_protocol_version(
     version1: ProtocolVersion,
     version2: ProtocolVersion,
-) -> crate::Result<SupportedProtocolVersion> {
+) -> Option<SupportedProtocolVersion> {
     let min_version = std::cmp::min(version1, version2);
-    min_version.try_into()
+    min_version.into()
 }
 
 make_config_setting!(HeaderLimit, usize, 2000);

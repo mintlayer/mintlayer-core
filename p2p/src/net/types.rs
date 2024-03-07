@@ -18,14 +18,14 @@ pub use crate::types::services;
 use std::fmt::{Debug, Display};
 
 use common::{
-    chain::ChainConfig,
+    chain::{config::MagicBytes, ChainConfig},
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
 use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
-    error::ProtocolError,
+    error::ConnectionValidationError,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -115,7 +115,7 @@ pub struct PeerInfo {
     pub protocol_version: SupportedProtocolVersion,
 
     /// Peer network
-    pub network: [u8; 4],
+    pub network: MagicBytes,
 
     /// Peer software version
     pub software_version: SemVer,
@@ -136,10 +136,12 @@ impl PeerInfo {
 
     pub fn check_compatibility(&self, chain_config: &ChainConfig) -> crate::Result<()> {
         if self.network != *chain_config.magic_bytes() {
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                *chain_config.magic_bytes(),
-                self.network,
-            )))
+            Err(P2pError::ConnectionValidationFailed(
+                ConnectionValidationError::DifferentNetwork {
+                    our_network: *chain_config.magic_bytes(),
+                    their_network: self.network,
+                },
+            ))
         } else {
             Ok(())
         }

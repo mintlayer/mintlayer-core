@@ -521,7 +521,7 @@ where
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError> {
-        let magic_bytes = self.chainstate.chain_config().magic_bytes().to_vec();
+        let magic_bytes = *self.chainstate.chain_config().magic_bytes();
 
         let mut reader = reader;
 
@@ -532,7 +532,7 @@ where
         let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
 
         import_bootstrap_stream(
-            &magic_bytes,
+            &magic_bytes.bytes(),
             &mut reader,
             &mut block_processor,
             &chainstate_config,
@@ -550,7 +550,7 @@ where
         let magic_bytes = self.chainstate.chain_config().magic_bytes();
         let mut writer = writer;
         export_bootstrap_stream(
-            magic_bytes,
+            &magic_bytes.bytes(),
             &mut writer,
             include_orphans,
             &self.chainstate.query().map_err(ChainstateError::from)?,

@@ -146,7 +146,8 @@ async fn initialize(
                 | P2pError::InvalidConfigurationValue(_)
                 | P2pError::InvalidStorageState(_)
                 | P2pError::MempoolError(_)
-                | P2pError::MessageCodecError(_) => Err(err),
+                | P2pError::MessageCodecError(_)
+                | P2pError::ConnectionValidationFailed(_) => Err(err),
             },
         }
     }?;

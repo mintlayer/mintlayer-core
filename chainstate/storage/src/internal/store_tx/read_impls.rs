@@ -20,7 +20,7 @@ use chainstate_types::{BlockIndex, EpochData, EpochStorageRead};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
-        config::EpochIndex,
+        config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
         UtxoOutPoint,
@@ -91,7 +91,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
-    fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
+    fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>> {
         self.read_value::<well_known::MagicBytes>()
     }
 
@@ -346,7 +346,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
-    fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
+    fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>> {
         self.read_value::<well_known::MagicBytes>()
     }
 

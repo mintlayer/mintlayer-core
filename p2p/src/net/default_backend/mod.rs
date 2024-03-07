@@ -28,6 +28,7 @@ use logging::log;
 use p2p_types::{services::Services, socket_address::SocketAddress};
 
 use crate::{
+    disconnection_reason::DisconnectionReason,
     error::P2pError,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     net::{
@@ -120,10 +121,14 @@ where
         Ok(self.cmd_sender.send(types::Command::Accept { peer_id })?)
     }
 
-    fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
+    fn disconnect(
+        &mut self,
+        peer_id: PeerId,
+        reason: Option<DisconnectionReason>,
+    ) -> crate::Result<()> {
         log::debug!("close connection with remote, peer_id: {peer_id}");
 
-        Ok(self.cmd_sender.send(types::Command::Disconnect { peer_id })?)
+        Ok(self.cmd_sender.send(types::Command::Disconnect { peer_id, reason })?)
     }
 
     fn send_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) -> crate::Result<()> {

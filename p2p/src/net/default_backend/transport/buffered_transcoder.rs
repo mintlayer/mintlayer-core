@@ -85,7 +85,10 @@ mod tests {
 
     use chainstate::Locator;
     use chainstate_test_framework::TestFramework;
-    use common::primitives::{semver::SemVer, Id};
+    use common::{
+        chain::config::MagicBytes,
+        primitives::{semver::SemVer, Id},
+    };
     use crypto::random::Rng;
     use p2p_types::services::Service;
     use test_utils::random::Seed;
@@ -122,7 +125,7 @@ mod tests {
         let messages = [
             Message::Handshake(HandshakeMessage::Hello {
                 protocol_version: ProtocolVersion::new(rng.gen()),
-                network: [rng.gen(), rng.gen(), rng.gen(), rng.gen()],
+                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: SemVer {
@@ -142,7 +145,7 @@ mod tests {
             }),
             Message::Handshake(HandshakeMessage::HelloAck {
                 protocol_version: ProtocolVersion::new(rng.gen()),
-                network: [rng.gen(), rng.gen(), rng.gen(), rng.gen()],
+                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: SemVer {

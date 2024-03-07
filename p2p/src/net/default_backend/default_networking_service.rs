@@ -41,7 +41,7 @@ use super::{backend::Backend, ConnectivityHandle, MessagingHandle, SyncingEventR
 // The preferred protocol version.
 // Note that we intentionally keep this constant private, because most of the code should
 // not depend on its value.
-const PREFERRED_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
+const PREFERRED_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V3;
 
 // Some tests do need this value though in order to check the correct version selection.
 // So we make it available for them via a function with a test-specific name and under cfg(test).

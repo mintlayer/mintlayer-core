@@ -15,20 +15,22 @@
 
 use std::time::Duration;
 
+use tokio::sync::{mpsc::Sender, oneshot};
+
 use common::{
-    chain::Transaction,
+    chain::{config::MagicBytes, Transaction},
     primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id},
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
-use tokio::sync::{mpsc::Sender, oneshot};
 
 use crate::{
+    disconnection_reason::DisconnectionReason,
     error::P2pError,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
         BlockSyncMessage, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
-        PingResponse, TransactionResponse, TransactionSyncMessage,
+        PingResponse, TransactionResponse, TransactionSyncMessage, WillDisconnectMessage,
     },
     net::types::services::Services,
     protocol::{ProtocolVersion, SupportedProtocolVersion},
@@ -46,6 +48,7 @@ pub enum Command {
     },
     Disconnect {
         peer_id: PeerId,
+        reason: Option<DisconnectionReason>,
     },
     SendMessage {
         peer_id: PeerId,
@@ -80,6 +83,8 @@ impl P2pTimestamp {
 }
 
 pub mod peer_event {
+    use common::chain::config::MagicBytes;
+
     use super::*;
 
     /// The "peer info" from PeerEvent's perspective.
@@ -89,7 +94,7 @@ pub mod peer_event {
     #[derive(Debug, PartialEq, Eq)]
     pub struct PeerInfo {
         pub protocol_version: SupportedProtocolVersion,
-        pub network: [u8; 4],
+        pub network: MagicBytes,
         pub common_services: Services,
         pub user_agent: UserAgent,
         pub software_version: SemVer,
@@ -135,6 +140,9 @@ pub enum BackendEvent {
         transaction_sync_msg_sender: Sender<TransactionSyncMessage>,
     },
     SendMessage(Box<Message>),
+    Disconnect {
+        reason: Option<DisconnectionReason>,
+    },
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -142,7 +150,7 @@ pub enum HandshakeMessage {
     #[codec(index = 0)]
     Hello {
         protocol_version: ProtocolVersion,
-        network: [u8; 4],
+        network: MagicBytes,
         services: Services,
         user_agent: UserAgent,
         software_version: SemVer,
@@ -158,7 +166,7 @@ pub enum HandshakeMessage {
     #[codec(index = 1)]
     HelloAck {
         protocol_version: ProtocolVersion,
-        network: [u8; 4],
+        network: MagicBytes,
         services: Services,
         user_agent: UserAgent,
         software_version: SemVer,
@@ -202,6 +210,11 @@ pub enum Message {
     #[codec(index = 10)]
     AddrListResponse(AddrListResponse),
 
+    /// Indicates that the peer will be disconnected immediately, providing a reason
+    /// for the disconnection. Available since protocol V3.
+    #[codec(index = 13)]
+    WillDisconnect(WillDisconnectMessage),
+
     // A message that corresponds to BlockSyncMessage::TestSentinel.
     #[cfg(test)]
     #[codec(index = 255)]
@@ -216,6 +229,7 @@ impl From<PeerManagerMessage> for Message {
             PeerManagerMessage::PingRequest(r) => Message::PingRequest(r),
             PeerManagerMessage::AddrListResponse(r) => Message::AddrListResponse(r),
             PeerManagerMessage::PingResponse(r) => Message::PingResponse(r),
+            PeerManagerMessage::WillDisconnect(r) => Message::WillDisconnect(r),
         }
     }
 }
@@ -273,6 +287,9 @@ impl Message {
             Message::AddrListResponse(msg) => {
                 CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListResponse(msg))
             }
+            Message::WillDisconnect(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::WillDisconnect(msg))
+            }
 
             Message::HeaderListRequest(msg) => {
                 CategorizedMessage::BlockSyncMessage(BlockSyncMessage::HeaderListRequest(msg))
@@ -302,4 +319,10 @@ impl Message {
             ),
         }
     }
+}
+
+/// Return true if the WillDisconnect message can be sent to a peer with the specified
+/// protocol version.
+pub fn can_send_will_disconnect(peer_protocol_version: ProtocolVersion) -> bool {
+    peer_protocol_version >= SupportedProtocolVersion::V3.into()
 }

@@ -96,6 +96,8 @@ where
 
     let bans_count = test_node_remnants.peer_mgr.peerdb().list_banned().count();
     assert_eq!(bans_count, 0);
+    let discouragements_count = test_node_remnants.peer_mgr.peerdb().list_discouraged().count();
+    assert_eq!(discouragements_count, 0);
 
     assert_eq!(test_node_remnants.peer_mgr.peers().len(), 1);
     let peer_score = test_node_remnants.peer_mgr.peers().first_key_value().unwrap().1.score;
@@ -176,6 +178,8 @@ where
 
     let bans_count = test_node_remnants.peer_mgr.peerdb().list_banned().count();
     assert_eq!(bans_count, 0);
+    let discouragements_count = test_node_remnants.peer_mgr.peerdb().list_discouraged().count();
+    assert_eq!(discouragements_count, 0);
 
     assert_eq!(test_node_remnants.peer_mgr.peers().len(), 1);
     let peer_score = test_node_remnants.peer_mgr.peers().first_key_value().unwrap().1.score;

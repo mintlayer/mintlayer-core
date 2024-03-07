@@ -41,6 +41,7 @@ use utils::{
 
 use crate::{
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
     error::{DialError, P2pError, PeerError},
     message::PeerManagerMessage,
     net::{
@@ -284,12 +285,19 @@ where
     }
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
-    fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        self.peers
-            .get(&peer_id)
+    fn disconnect_peer(
+        &mut self,
+        peer_id: PeerId,
+        reason: Option<DisconnectionReason>,
+    ) -> crate::Result<()> {
+        // Note: disconnection is performed by sending an event to Peer rather then calling
+        // destroy_peer directly, so that Peer has a chance to handle events that have already
+        // been sent to it.
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        self.destroy_peer(peer_id)
+        Ok(peer.backend_event_sender.send(BackendEvent::Disconnect { reason })?)
     }
 
     /// Sends a message to the remote peer. Might fail if the peer is already disconnected.
@@ -429,6 +437,13 @@ where
 
         if self.is_connection_from_self(connection_info, handshake_nonce)? {
             log::debug!("Peer {peer_id} is a connection from self");
+
+            // Note: backend_event_sender will be dropped immediately after this; but the receiver
+            // part will still produce messages that were in flight when the sender was dropped,
+            // so Peer will be able to receive this event.
+            backend_event_sender.send(BackendEvent::Disconnect {
+                reason: Some(DisconnectionReason::ConnectionFromSelf),
+            })?;
             return Ok(());
         }
 
@@ -696,8 +711,8 @@ where
                     log::debug!("Failed to accept peer {peer_id}: {e}");
                 }
             }
-            Command::Disconnect { peer_id } => {
-                let res = self.disconnect_peer(peer_id);
+            Command::Disconnect { peer_id, reason } => {
+                let res = self.disconnect_peer(peer_id, reason);
                 if let Err(e) = res {
                     log::debug!("Failed to disconnect peer {peer_id}: {e}");
                 }

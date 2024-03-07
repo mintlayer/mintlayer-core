@@ -23,7 +23,7 @@ use std::{
 
 use chainstate::ban_score::BanScore;
 use common::{
-    chain::ChainConfig,
+    chain::{config::MagicBytes, ChainConfig},
     primitives::{time::Time, user_agent::mintlayer_core_user_agent},
 };
 use p2p::{
@@ -380,7 +380,7 @@ fn incompatible_node(#[case] seed: Seed) {
             peer_info: PeerInfo {
                 peer_id: peer1,
                 protocol_version: TEST_PROTOCOL_VERSION,
-                network: [255, 255, 255, 255],
+                network: MagicBytes::new([255, 255, 255, 255]),
                 software_version: *chain_config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
                 common_services: NodeType::DnsServer.into(),

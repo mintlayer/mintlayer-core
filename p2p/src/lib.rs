@@ -15,6 +15,7 @@
 
 pub mod ban_config;
 pub mod config;
+pub mod disconnection_reason;
 pub mod error;
 pub mod interface;
 pub mod message;

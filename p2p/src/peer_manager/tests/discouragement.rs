@@ -20,6 +20,7 @@ use rstest::rstest;
 use crate::{
     ban_config::BanConfig,
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
     message::{AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::types::{Command, Message},
@@ -134,7 +135,13 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
 
     // The discouraged peer should be disconnected.
     let cmd = expect_recv!(cmd_receiver);
-    assert_eq!(cmd, Command::Disconnect { peer_id });
+    assert_eq!(
+        cmd,
+        Command::Disconnect {
+            peer_id,
+            reason: Some(crate::disconnection_reason::DisconnectionReason::AddressDiscouraged)
+        }
+    );
 
     wait_for_no_recv(&mut peer_mgr_notification_receiver).await;
 
@@ -314,7 +321,8 @@ async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[cas
     assert_eq!(
         cmd,
         Command::Disconnect {
-            peer_id: discouraged_peer_id
+            peer_id: discouraged_peer_id,
+            reason: Some(DisconnectionReason::TooManyInboundPeersAndThisOneIsDiscouraged)
         }
     );
 
@@ -329,7 +337,8 @@ async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[cas
     assert_eq!(
         cmd,
         Command::Disconnect {
-            peer_id: normal_peer1_id
+            peer_id: normal_peer1_id,
+            reason: Some(DisconnectionReason::PeerEvicted)
         }
     );
     let cmd = expect_recv!(cmd_receiver);

@@ -21,6 +21,7 @@ use test_utils::{assert_matches, assert_matches_return_val};
 
 use crate::{
     config::{NodeType, P2pConfig},
+    disconnection_reason::DisconnectionReason,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{
@@ -153,7 +154,8 @@ async fn ping_timeout() {
     // PeerManager should ask backend to close connection
     let event = expect_recv!(cmd_receiver);
     match event {
-        Command::Disconnect { peer_id } => {
+        Command::Disconnect { peer_id, reason } => {
+            assert_eq!(reason, Some(DisconnectionReason::PingIgnored));
             conn_event_sender.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();
         }
         _ => panic!("unexpected event: {event:?}"),

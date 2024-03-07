@@ -277,7 +277,7 @@ impl TestNode {
         let future = async {
             loop {
                 match self.peer_manager_event_receiver.recv().await.unwrap() {
-                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
+                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _, sender) => {
                         assert_eq!(id, peer_id);
                         sender.send(Ok(()));
                         break;
@@ -324,7 +324,9 @@ impl TestNode {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
                 match self.peer_manager_event_receiver.recv().await.unwrap() {
-                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _) if id == peer_id => {
+                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _, _)
+                        if id == peer_id =>
+                    {
                         break;
                     }
                     _ => {}
@@ -344,7 +346,7 @@ impl TestNode {
                 let peer_event = self.peer_manager_event_receiver.recv().await.unwrap();
                 match peer_event {
                     PeerManagerEvent::Connect(_, _)
-                    | PeerManagerEvent::Disconnect(_, _, _)
+                    | PeerManagerEvent::Disconnect(_, _, _, _)
                     | PeerManagerEvent::GetPeerCount(_)
                     | PeerManagerEvent::GetBindAddresses(_)
                     | PeerManagerEvent::GetConnectedPeers(_)
@@ -636,7 +638,7 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
     fn from(event: &PeerManagerEvent) -> Self {
         match event {
             PeerManagerEvent::Connect(addr, _) => PeerManagerEventDesc::Connect(addr.clone()),
-            PeerManagerEvent::Disconnect(peer_id, _, _) => {
+            PeerManagerEvent::Disconnect(peer_id, _, _, _) => {
                 PeerManagerEventDesc::Disconnect(*peer_id)
             }
             PeerManagerEvent::GetPeerCount(_) => PeerManagerEventDesc::GetPeerCount,

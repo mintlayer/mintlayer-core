@@ -18,7 +18,7 @@ use crate::{BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag, 
 use chainstate_types::{BlockIndex, EpochData, EpochStorageWrite};
 use common::{
     chain::{
-        config::EpochIndex,
+        config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
         UtxoOutPoint,
@@ -41,7 +41,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     #[log_error]
-    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()> {
+    fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()> {
         self.write_value::<well_known::MagicBytes>(bytes)
     }
 

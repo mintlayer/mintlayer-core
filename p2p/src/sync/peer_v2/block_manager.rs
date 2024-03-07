@@ -36,6 +36,7 @@ use utils::sync::Arc;
 
 use crate::{
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
     error::{P2pError, PeerError, ProtocolError},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     net::{
@@ -898,6 +899,7 @@ where
         self.peer_mgr_event_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
+            Some(DisconnectionReason::SyncRequestsIgnored),
             sender,
         ))?;
         receiver.await?.or_else(|e| match e {

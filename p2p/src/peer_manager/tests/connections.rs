@@ -35,6 +35,8 @@ use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
+    disconnection_reason::DisconnectionReason,
+    error::ConnectionValidationError,
     message::AddrListRequest,
     net::{
         default_backend::{
@@ -71,7 +73,9 @@ use crate::{
     utils::oneshot_nofail,
 };
 use common::{
-    chain::config, primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter,
+    chain::config::{self, MagicBytes},
+    primitives::user_agent::mintlayer_core_user_agent,
+    time_getter::TimeGetter,
 };
 use utils::atomics::SeqCstAtomicBool;
 
@@ -111,7 +115,7 @@ where
             net::types::PeerInfo {
                 peer_id,
                 protocol_version: TEST_PROTOCOL_VERSION,
-                network: [1, 2, 3, 4],
+                network: MagicBytes::new([1, 2, 3, 4]),
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
                 common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
@@ -168,7 +172,7 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+        Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
     )
     .await;
 
@@ -388,7 +392,7 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+        Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
     )
     .await;
 
@@ -502,7 +506,7 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+        Arc::new(config::Builder::test_chain().magic_bytes(MagicBytes::new([1, 2, 3, 4])).build()),
     )
     .await;
 
@@ -520,10 +524,12 @@ where
             peer_info,
             None
         ),
-        Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-            [1, 2, 3, 4],
-            *config::create_unit_test_config().magic_bytes(),
-        )))
+        Err(P2pError::ConnectionValidationFailed(
+            ConnectionValidationError::DifferentNetwork {
+                our_network: MagicBytes::new([1, 2, 3, 4]),
+                their_network: *config::create_unit_test_config().magic_bytes(),
+            }
+        ))
     );
 }
 
@@ -586,7 +592,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id),
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id, None),
         Ok(())
     );
     assert!(std::matches!(
@@ -1762,7 +1768,8 @@ async fn feeler_connections_test_impl(seed: Seed) {
             assert_eq!(
                 cmd,
                 Command::Disconnect {
-                    peer_id: cur_peer_id
+                    peer_id: cur_peer_id,
+                    reason: Some(DisconnectionReason::FeelerConnection)
                 }
             );
 

@@ -107,7 +107,7 @@ where
         res => panic!("unexpected result: {res:?}"),
     }
 
-    service1.disconnect(info.peer_id).unwrap();
+    service1.disconnect(info.peer_id, None).unwrap();
     assert_eq!(
         timeout(Duration::from_secs(5), events_receiver.recv()).await.unwrap(),
         Some(P2pEvent::PeerDisconnected(info.peer_id))

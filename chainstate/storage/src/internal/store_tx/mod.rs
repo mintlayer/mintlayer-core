@@ -26,7 +26,7 @@ use crate::{
 };
 
 mod well_known {
-    use common::chain::GenBlock;
+    use common::chain::{self, GenBlock};
 
     use super::{BlockHeight, ChainstateStorageVersion, Codec, Id};
 
@@ -51,7 +51,7 @@ mod well_known {
     declare_entry!(StoreVersion: ChainstateStorageVersion);
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
-    declare_entry!(MagicBytes: [u8; 4]);
+    declare_entry!(MagicBytes: chain::config::MagicBytes);
     declare_entry!(ChainType: String);
     declare_entry!(MinHeightForReorg: BlockHeight);
 }

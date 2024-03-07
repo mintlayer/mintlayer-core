@@ -33,6 +33,7 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config,
+    disconnection_reason::DisconnectionReason,
     message::{BlockSyncMessage, PeerManagerMessage, TransactionSyncMessage},
     types::peer_id::PeerId,
     P2pEventHandler,
@@ -104,7 +105,12 @@ where
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote node
-    fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
+    /// `reason` - reason for the disconnection
+    fn disconnect(
+        &mut self,
+        peer_id: PeerId,
+        reason: Option<DisconnectionReason>,
+    ) -> crate::Result<()>;
 
     /// Sends a message to the given peer.
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()>;
