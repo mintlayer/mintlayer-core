@@ -630,12 +630,7 @@ where
             let utxo = Utxo::new(output2.clone(), true);
             expected_utxos.remove(&outpoint2);
             db_tx
-                .set_utxo_at_height(
-                    outpoint2,
-                    utxo,
-                    bob_address.get(),
-                    block_height.next_height(),
-                )
+                .set_utxo_at_height(outpoint2, utxo, bob_address.get(), block_height)
                 .await
                 .unwrap();
 
