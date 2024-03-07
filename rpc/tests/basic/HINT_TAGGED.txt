@@ -1,0 +1,3 @@
+EITHER OF
+     1) { "Int": number }
+     2) { "String": string }

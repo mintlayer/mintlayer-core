@@ -15,7 +15,7 @@
 
 //! RPC description tests
 
-use rpc::description::{Described, Module, ValueHint as VH};
+use rpc::description::{Described, HasValueHint, Module, ValueHint as VH};
 
 use expect_test::expect_file;
 
@@ -58,6 +58,33 @@ fn value_hint_render() {
     const HINT: VH = VH::Object(&[("auth", &AUTH_HINT), ("command", &COMMAND_HINT)]);
 
     expect_file!["./HINT_RENDER.md"].assert_eq(&format!("{HINT}\n"));
+}
+
+#[test]
+fn value_hint_tagged() {
+    #[derive(HasValueHint, serde::Serialize)]
+    #[allow(unused)]
+    enum Tagged {
+        Int(u64),
+        String(String),
+    }
+
+    let actual = Tagged::HINT.to_string();
+    expect_file!["./HINT_TAGGED.txt"].assert_eq(&actual);
+}
+
+#[test]
+fn value_hint_untagged() {
+    #[derive(HasValueHint, serde::Serialize)]
+    #[serde(untagged)]
+    #[allow(unused)]
+    enum Untagged {
+        Int(u64),
+        String(String),
+    }
+
+    let actual = Untagged::HINT.to_string();
+    expect_file!["./HINT_UNTAGGED.txt"].assert_eq(&actual);
 }
 
 #[test]
