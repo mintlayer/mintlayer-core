@@ -1003,9 +1003,24 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         tx_id: Id<Transaction>,
     ) -> WalletResult<()> {
-        self.for_account_rw(account_index, |account, db_tx| {
-            account.abandon_transaction(tx_id, db_tx)
-        })
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        for (idx, account) in self.accounts.iter_mut() {
+            if *idx == account_index {
+                // check the selected account and report any error
+                account.abandon_transaction(tx_id, &mut db_tx)?;
+            } else {
+                // check any other account if it has the transaction
+                if let Err(err) = account.abandon_transaction(tx_id, &mut db_tx) {
+                    // ignore the error if it can't find the transaction
+                    ensure!(err == WalletError::CannotFindTransactionWithId(tx_id), err);
+                }
+            }
+        }
+
+        db_tx.commit()?;
+
+        Ok(())
     }
 
     pub fn get_pool_ids(

@@ -1893,12 +1893,12 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     // Send delegation to account 1
     // test that account 1 will receive the money but not register the delegation id as theirs
     let (other_acc_idx, _) = wallet.create_next_account(None).unwrap();
-    let address = wallet.get_new_address(other_acc_idx).unwrap().1;
+    let other_acc_address = wallet.get_new_address(other_acc_idx).unwrap().1;
 
     let delegation_tx2 = wallet
         .create_transaction_to_addresses_from_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            address.clone(),
+            other_acc_address.clone(),
             Amount::from_atoms(1),
             delegation_id,
             Amount::from_atoms(1),
@@ -1957,7 +1957,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let delegation_tx3 = wallet
         .create_transaction_to_addresses_from_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            address,
+            other_acc_address,
             Amount::from_atoms(1),
             delegation_id,
             Amount::from_atoms(1),
@@ -1972,10 +1972,33 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     assert_eq!(*deleg_id, delegation_id);
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(2)));
 
+    let tx_id = delegation_tx2.transaction().get_id();
+    // check tx is in inactive state
+    match wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap().state() {
+        TxState::Inactive(_) => {}
+        _ => panic!("wrong state"),
+    };
+    // same for the other acc
+    match wallet.get_transaction(other_acc_idx, tx_id).unwrap().state() {
+        TxState::Inactive(_) => {}
+        _ => panic!("wrong state"),
+    };
+
     // abandon tx2 should also abandon tx3 and roll back account nonce to 0
     wallet
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, delegation_tx2.transaction().get_id())
         .unwrap();
+
+    // check tx is now abandoned
+    match wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap().state() {
+        TxState::Abandoned => {}
+        _ => panic!("wrong state"),
+    };
+    // same for the other acc
+    match wallet.get_transaction(other_acc_idx, tx_id).unwrap().state() {
+        TxState::Abandoned => {}
+        _ => panic!("wrong state"),
+    };
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
