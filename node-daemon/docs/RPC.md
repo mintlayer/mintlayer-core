@@ -964,12 +964,17 @@ bool
 
 ### Method `blockprod_generate_block`
 
-Generate a block with the given transactions
+Generate a block with the given transactions.
 
-If `transactions` is `None`, the block will be generated with
-available transactions in the mempool.
-If transaction_ids is provided, those from the mempool will be exclusively used or prioritized,
-depending on the PackingStrategy chosen.
+Parameters:
+- `input_data`: The input data for block generation, such as staking key.
+- `transactions`: The transactions prioritized to be included in the block.
+                  Notice that it's the responsibility of the caller to ensure that the transactions are valid.
+                  If the transactions are not valid, the block will be rejected and will not be included in the blockchain.
+                  It's preferable to use `transaction_ids` instead, where the mempool will ensure that the transactions are valid
+                  against the current state of the blockchain.
+- `transaction_ids`: The transaction IDs of the transactions to be included in the block from the mempool.
+- `packing_strategy`: Whether or not to include transactions from the mempool in the block, other than the ones specified in `transaction_ids`.
 
 
 Parameters:
