@@ -176,10 +176,7 @@ fn pull_docs_from_attribute(attrs: &[syn::Attribute]) -> String {
     let docs = attrs
         .iter()
         .filter_map(|m| m.meta.require_name_value().ok())
-        .filter(|m| {
-            m.path.segments.first().is_some()
-                && m.path.segments.first().expect("Was checked").ident == "doc"
-        })
+        .filter(|m| m.path.is_ident("doc"))
         .filter_map(|v| match &v.value {
             syn::Expr::Lit(lit) => Some(lit),
             _ => None,
