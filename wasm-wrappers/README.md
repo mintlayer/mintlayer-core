@@ -78,4 +78,4 @@ node js-bindings/node-entry.js
 
 ### Mintlayer WASM Wrappers Function API documentation
 
-[You can find the public functions documentations here](doc/wasm_wrappers/index.html)
+[You can find the public functions documentations here](WASM-API.md)

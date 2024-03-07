@@ -44,6 +44,7 @@ use wasm_bindgen::prelude::*;
 
 pub mod error;
 
+/// The network, for which an operation to be done. Mainnet, testnet, etc.
 #[wasm_bindgen]
 pub enum Network {
     Mainnet,
@@ -120,6 +121,7 @@ pub fn encode_outpoint_source_id(id: &[u8], source: SourceId) -> Vec<u8> {
     .encode()
 }
 
+/// The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
 #[wasm_bindgen]
 pub enum SignatureHashType {
     ALL,
