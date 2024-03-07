@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2023 RBB S.r.l
+// Copyright (c) 2021-2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,537 +13,272 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use only unsigned types
-// if you need a signed amount, we should create a separate type for it and implement proper conversion
+use super::{signed::SignedIntType, *};
 
-#![allow(clippy::eq_op)]
+use crypto::random::Rng;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
-use serialization::{Decode, Encode};
-use std::iter::Sum;
+#[test]
+fn creation() {
+    let x = Amount::from_atoms(555);
+    assert_eq!(x, Amount { atoms: 555 });
 
-use super::{signed_amount::SignedAmount, DecimalAmount};
-
-pub type UnsignedIntType = u128;
-
-/// An unsigned fixed-point type for amounts
-/// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-#[must_use]
-pub struct Amount {
-    #[codec(compact)]
-    atoms: UnsignedIntType,
+    let y = Amount::from_atoms(123);
+    assert_eq!(y, Amount { atoms: 123 });
 }
 
-impl Amount {
-    pub const MAX: Self = Self::from_atoms(UnsignedIntType::MAX);
-    pub const ZERO: Self = Self::from_atoms(0);
-
-    pub const fn from_atoms(v: UnsignedIntType) -> Self {
-        Amount { atoms: v }
-    }
-
-    pub const fn into_atoms(&self) -> UnsignedIntType {
-        self.atoms
-    }
-
-    pub fn from_signed(amount: SignedAmount) -> Option<Self> {
-        let signed_atoms = amount.into_atoms();
-        let atoms: UnsignedIntType = signed_atoms.try_into().ok()?;
-        Some(Self::from_atoms(atoms))
-    }
-
-    pub fn into_signed(self) -> Option<SignedAmount> {
-        let atoms = self.atoms;
-        let signed_atoms: super::signed_amount::SignedIntType = atoms.try_into().ok()?;
-        Some(SignedAmount::from_atoms(signed_atoms))
-    }
-
-    pub fn into_fixedpoint_str(self, decimals: u8) -> String {
-        DecimalAmount::from_amount_minimal(self, decimals).to_string()
-    }
-
-    pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
-        amount_str.parse::<DecimalAmount>().ok()?.to_amount(decimals)
-    }
-
-    pub fn abs_diff(self, other: Amount) -> Amount {
-        if self > other {
-            (self - other).expect("cannot be negative")
-        } else {
-            (other - self).expect("cannot be negative")
-        }
-    }
+#[test]
+fn add_some() {
+    assert_eq!(
+        Amount { atoms: 2 } + Amount { atoms: 2 },
+        Some(Amount { atoms: 4 })
+    );
 }
 
-impl std::ops::Add for Amount {
-    type Output = Option<Self>;
-
-    fn add(self, other: Self) -> Option<Self> {
-        self.atoms.checked_add(other.atoms).map(|n| Amount { atoms: n })
-    }
+#[test]
+fn sub_some() {
+    assert_eq!(
+        Amount { atoms: 4 } - Amount { atoms: 2 },
+        Some(Amount { atoms: 2 })
+    );
 }
 
-impl std::ops::Sub for Amount {
-    type Output = Option<Self>;
-
-    fn sub(self, other: Self) -> Option<Self> {
-        self.atoms.checked_sub(other.atoms).map(|n| Amount { atoms: n })
-    }
+#[test]
+fn mul_some() {
+    assert_eq!(Amount { atoms: 3 } * 3, Some(Amount { atoms: 9 }));
 }
 
-impl std::ops::Mul<UnsignedIntType> for Amount {
-    type Output = Option<Self>;
-
-    fn mul(self, other: UnsignedIntType) -> Option<Self> {
-        self.atoms.checked_mul(other).map(|n| Amount { atoms: n })
-    }
+#[test]
+fn div_some() {
+    assert_eq!(Amount { atoms: 9 } / 3, Some(Amount { atoms: 3 }));
 }
 
-impl std::ops::Div<UnsignedIntType> for Amount {
-    type Output = Option<Amount>;
-
-    fn div(self, other: UnsignedIntType) -> Option<Amount> {
-        self.atoms.checked_div(other).map(|n| Amount { atoms: n })
-    }
+#[test]
+fn rem_some() {
+    assert_eq!(Amount { atoms: 9 } % 4, Some(Amount { atoms: 1 }));
 }
 
-impl std::ops::Rem<UnsignedIntType> for Amount {
-    type Output = Option<Self>;
-
-    fn rem(self, other: UnsignedIntType) -> Option<Self> {
-        self.atoms.checked_rem(other).map(|n| Amount { atoms: n })
-    }
-}
-
-impl std::ops::BitAnd for Amount {
-    type Output = Self;
-
-    fn bitand(self, other: Self) -> Self {
+#[test]
+fn add_overflow() {
+    assert_eq!(
         Amount {
-            atoms: self.atoms.bitand(other.atoms),
-        }
-    }
+            atoms: UnsignedIntType::MAX
+        } + Amount { atoms: 1 },
+        None
+    );
 }
 
-impl std::ops::BitAndAssign for Amount {
-    fn bitand_assign(&mut self, other: Self) {
-        self.atoms.bitand_assign(other.atoms)
-    }
+#[test]
+fn sum_some() {
+    let amounts = vec![Amount { atoms: 1 }, Amount { atoms: 2 }, Amount { atoms: 3 }];
+    assert_eq!(
+        amounts.into_iter().sum::<Option<Amount>>(),
+        Some(Amount { atoms: 6 })
+    );
 }
 
-impl std::ops::BitOr for Amount {
-    type Output = Self;
-
-    fn bitor(self, other: Self) -> Self {
+#[test]
+fn sum_overflow() {
+    let amounts = vec![
+        Amount { atoms: 1 },
+        Amount { atoms: 2 },
         Amount {
-            atoms: self.atoms.bitor(other.atoms),
-        }
-    }
+            atoms: UnsignedIntType::MAX - 2,
+        },
+    ];
+    assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
 }
 
-impl std::ops::BitOrAssign for Amount {
-    fn bitor_assign(&mut self, other: Self) {
-        self.atoms.bitor_assign(other.atoms)
-    }
+#[test]
+fn sum_empty() {
+    assert_eq!(
+        vec![].into_iter().sum::<Option<Amount>>(),
+        Some(Amount::from_atoms(0))
+    )
 }
 
-impl std::ops::BitXor for Amount {
-    type Output = Self;
-
-    fn bitxor(self, other: Self) -> Self {
+#[test]
+fn sub_underflow() {
+    assert_eq!(
         Amount {
-            atoms: self.atoms.bitxor(other.atoms),
-        }
-    }
+            atoms: UnsignedIntType::MIN
+        } - Amount { atoms: 1 },
+        None
+    );
 }
 
-impl std::ops::BitXorAssign for Amount {
-    fn bitxor_assign(&mut self, other: Self) {
-        self.atoms.bitxor_assign(other.atoms)
-    }
-}
-
-impl std::ops::Not for Amount {
-    type Output = Self;
-
-    fn not(self) -> Self {
+#[test]
+fn mul_overflow() {
+    assert_eq!(
         Amount {
-            atoms: self.atoms.not(),
-        }
-    }
+            atoms: UnsignedIntType::MAX / 2 + 1
+        } * 2,
+        None
+    );
 }
 
-impl std::ops::Shl<u32> for Amount {
-    type Output = Option<Self>;
-
-    fn shl(self, other: u32) -> Option<Self> {
-        self.atoms.checked_shl(other).map(|v| Amount { atoms: v })
-    }
+#[test]
+fn comparison() {
+    assert!(Amount { atoms: 1 } != Amount { atoms: 2 });
+    assert!(Amount { atoms: 1 } < Amount { atoms: 2 });
+    assert!(Amount { atoms: 1 } <= Amount { atoms: 2 });
+    assert!(Amount { atoms: 2 } <= Amount { atoms: 2 });
+    assert!(Amount { atoms: 2 } == Amount { atoms: 2 });
+    assert!(Amount { atoms: 2 } >= Amount { atoms: 2 });
+    assert!(Amount { atoms: 3 } > Amount { atoms: 2 });
 }
 
-impl std::ops::Shr<u32> for Amount {
-    type Output = Option<Self>;
-
-    fn shr(self, other: u32) -> Option<Self> {
-        self.atoms.checked_shr(other).map(|v| Amount { atoms: v })
-    }
+#[test]
+fn bit_ops() {
+    let x = Amount { atoms: 5 };
+    let y = Amount { atoms: 1 };
+    let z = Amount { atoms: 2 };
+    let zero: UnsignedIntType = 0;
+    assert_eq!(x | y, Amount { atoms: 5 });
+    assert_eq!(x & z, Amount { atoms: 0 });
+    assert_eq!(x ^ y, Amount { atoms: 4 });
+    assert_eq!(!zero, UnsignedIntType::MAX);
 }
 
-impl Sum<Amount> for Option<Amount> {
-    fn sum<I>(mut iter: I) -> Self
-    where
-        I: Iterator<Item = Amount>,
-    {
-        iter.try_fold(Amount::ZERO, std::ops::Add::add)
-    }
+#[test]
+fn bit_ops_assign() {
+    let mut x = Amount { atoms: 5 };
+
+    x ^= Amount { atoms: 1 };
+    assert_eq!(x, Amount { atoms: 4 });
+
+    x |= Amount { atoms: 2 };
+    assert_eq!(x, Amount { atoms: 6 });
+
+    x &= Amount { atoms: 5 };
+    assert_eq!(x, Amount { atoms: 4 });
 }
 
-impl rpc_description::HasValueHint for Amount {
-    const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::STRING)]);
+#[test]
+fn bit_shifts() {
+    let x = Amount { atoms: 1 };
+    assert_eq!(x << 1, Some(Amount { atoms: 2 }));
+    assert_eq!(x << 2, Some(Amount { atoms: 4 }));
+    assert_eq!(x << 4, Some(Amount { atoms: 16 }));
+    assert_eq!(x << 6, Some(Amount { atoms: 64 }));
+
+    let y = Amount { atoms: 128 };
+    assert_eq!(y >> 1, Some(Amount { atoms: 64 }));
+    assert_eq!(y >> 2, Some(Amount { atoms: 32 }));
+    assert_eq!(y >> 4, Some(Amount { atoms: 8 }));
+    assert_eq!(y >> 6, Some(Amount { atoms: 2 }));
 }
 
-#[macro_export]
-macro_rules! amount_sum {
-    ($arg_1:expr, $($arg_n:expr),+) => {{
-        let result = Some($arg_1);
-        $(
-            let result = match result {
-                Some(v) => v + $arg_n,
-                None => None,
-            };
-        )*
-        result
-    }}
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn abs_diff_never_fails(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let a = Amount::from_atoms(rng.gen());
+    let b = Amount::from_atoms(rng.gen());
+    let _ = a.abs_diff(b);
 }
 
-mod json {
-    use super::{Amount, UnsignedIntType};
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    #[serde(untagged)]
-    enum StringOrUint {
-        String(String),
-        UInt(UnsignedIntType),
-    }
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct JsonAmount {
-        atoms: StringOrUint,
-    }
-
-    impl From<Amount> for JsonAmount {
-        fn from(amount: Amount) -> Self {
-            JsonAmount {
-                atoms: StringOrUint::String(amount.atoms.to_string()),
-            }
-        }
-    }
-
-    impl TryFrom<JsonAmount> for Amount {
-        type Error = Box<dyn std::error::Error>;
-
-        fn try_from(json_amount: JsonAmount) -> Result<Self, Self::Error> {
-            let atoms: UnsignedIntType = match json_amount.atoms {
-                StringOrUint::String(s) => s.parse()?,
-                StringOrUint::UInt(atoms) => atoms,
-            };
-            Ok(Amount { atoms })
-        }
-    }
+#[rstest]
+#[case(2, 0, 2)]
+#[case(0, 2, 2)]
+#[case(221, 117, 104)]
+#[case(117, 221, 104)]
+#[case(u128::MAX, 1, u128::MAX-1)]
+#[case(1, u128::MAX, u128::MAX-1)]
+fn abs_diff_check(#[case] a: u128, #[case] b: u128, #[case] result: u128) {
+    assert_eq!(
+        Amount::from_atoms(a).abs_diff(Amount::from_atoms(b)),
+        Amount::from_atoms(result)
+    );
 }
 
-impl serde::Serialize for Amount {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let json_amount: json::JsonAmount = (*self).into();
-        json_amount.serialize(serializer)
-    }
+#[test]
+fn variadic_sum() {
+    assert_eq!(
+        amount_sum!(Amount::from_atoms(1), Amount::from_atoms(2)),
+        Some(Amount::from_atoms(3))
+    );
+
+    assert_eq!(
+        amount_sum!(
+            Amount::from_atoms(1),
+            Amount::from_atoms(2),
+            Amount::from_atoms(3)
+        ),
+        Some(Amount::from_atoms(6))
+    );
+
+    assert_eq!(
+        amount_sum!(
+            Amount::from_atoms(1),
+            Amount::from_atoms(2),
+            Amount::from_atoms(3),
+            Amount::from_atoms(4)
+        ),
+        Some(Amount::from_atoms(10))
+    );
+
+    assert_eq!(
+        amount_sum!(
+            Amount::from_atoms(UnsignedIntType::MAX),
+            Amount::from_atoms(0)
+        ),
+        Some(Amount::from_atoms(UnsignedIntType::MAX))
+    );
+
+    assert_eq!(
+        amount_sum!(
+            Amount::from_atoms(UnsignedIntType::MAX),
+            Amount::from_atoms(1)
+        ),
+        None
+    );
+
+    assert_eq!(
+        amount_sum!(
+            Amount::from_atoms(UnsignedIntType::MAX - 1),
+            Amount::from_atoms(1),
+            Amount::from_atoms(1)
+        ),
+        None
+    );
 }
 
-impl<'de> serde::Deserialize<'de> for Amount {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error;
-
-        let json_amount = json::JsonAmount::deserialize(deserializer)?;
-
-        let amount: Amount = json_amount
-            .try_into()
-            .map_err(|e| D::Error::custom(format!("Failed to parse json amount to Amount: {e}")))?;
-
-        Ok(amount)
-    }
+#[test]
+fn signed_conversion_arbitrary() {
+    let amount = Amount::from_atoms(10);
+    let signed_amount_inner = 10 as SignedIntType;
+    assert_eq!(
+        amount.into_signed().unwrap(),
+        SignedAmount::from_atoms(signed_amount_inner)
+    )
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::primitives::signed_amount::SignedIntType;
+#[test]
+fn signed_conversion_max() {
+    let amount = Amount::MAX;
+    assert!(amount.into_signed().is_none())
+}
 
-    use super::*;
+#[test]
+fn signed_conversion_signed_max_before_threshold() {
+    let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType);
+    let signed_amount_inner = SignedIntType::MAX;
+    assert_eq!(
+        amount.into_signed().unwrap(),
+        SignedAmount::from_atoms(signed_amount_inner)
+    )
+}
 
-    use crypto::random::Rng;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+#[test]
+fn signed_conversion_signed_max_after_threshold() {
+    let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType + 1);
+    assert!(amount.into_signed().is_none())
+}
 
-    #[test]
-    fn creation() {
-        let x = Amount::from_atoms(555);
-        assert_eq!(x, Amount { atoms: 555 });
-
-        let y = Amount::from_atoms(123);
-        assert_eq!(y, Amount { atoms: 123 });
-    }
-
-    #[test]
-    fn add_some() {
-        assert_eq!(
-            Amount { atoms: 2 } + Amount { atoms: 2 },
-            Some(Amount { atoms: 4 })
-        );
-    }
-
-    #[test]
-    fn sub_some() {
-        assert_eq!(
-            Amount { atoms: 4 } - Amount { atoms: 2 },
-            Some(Amount { atoms: 2 })
-        );
-    }
-
-    #[test]
-    fn mul_some() {
-        assert_eq!(Amount { atoms: 3 } * 3, Some(Amount { atoms: 9 }));
-    }
-
-    #[test]
-    fn div_some() {
-        assert_eq!(Amount { atoms: 9 } / 3, Some(Amount { atoms: 3 }));
-    }
-
-    #[test]
-    fn rem_some() {
-        assert_eq!(Amount { atoms: 9 } % 4, Some(Amount { atoms: 1 }));
-    }
-
-    #[test]
-    fn add_overflow() {
-        assert_eq!(
-            Amount {
-                atoms: UnsignedIntType::MAX
-            } + Amount { atoms: 1 },
-            None
-        );
-    }
-
-    #[test]
-    fn sum_some() {
-        let amounts = vec![Amount { atoms: 1 }, Amount { atoms: 2 }, Amount { atoms: 3 }];
-        assert_eq!(
-            amounts.into_iter().sum::<Option<Amount>>(),
-            Some(Amount { atoms: 6 })
-        );
-    }
-
-    #[test]
-    fn sum_overflow() {
-        let amounts = vec![
-            Amount { atoms: 1 },
-            Amount { atoms: 2 },
-            Amount {
-                atoms: UnsignedIntType::MAX - 2,
-            },
-        ];
-        assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
-    }
-
-    #[test]
-    fn sum_empty() {
-        assert_eq!(
-            vec![].into_iter().sum::<Option<Amount>>(),
-            Some(Amount::from_atoms(0))
-        )
-    }
-
-    #[test]
-    fn sub_underflow() {
-        assert_eq!(
-            Amount {
-                atoms: UnsignedIntType::MIN
-            } - Amount { atoms: 1 },
-            None
-        );
-    }
-
-    #[test]
-    fn mul_overflow() {
-        assert_eq!(
-            Amount {
-                atoms: UnsignedIntType::MAX / 2 + 1
-            } * 2,
-            None
-        );
-    }
-
-    #[test]
-    fn comparison() {
-        assert!(Amount { atoms: 1 } != Amount { atoms: 2 });
-        assert!(Amount { atoms: 1 } < Amount { atoms: 2 });
-        assert!(Amount { atoms: 1 } <= Amount { atoms: 2 });
-        assert!(Amount { atoms: 2 } <= Amount { atoms: 2 });
-        assert!(Amount { atoms: 2 } == Amount { atoms: 2 });
-        assert!(Amount { atoms: 2 } >= Amount { atoms: 2 });
-        assert!(Amount { atoms: 3 } > Amount { atoms: 2 });
-    }
-
-    #[test]
-    fn bit_ops() {
-        let x = Amount { atoms: 5 };
-        let y = Amount { atoms: 1 };
-        let z = Amount { atoms: 2 };
-        let zero: UnsignedIntType = 0;
-        assert_eq!(x | y, Amount { atoms: 5 });
-        assert_eq!(x & z, Amount { atoms: 0 });
-        assert_eq!(x ^ y, Amount { atoms: 4 });
-        assert_eq!(!zero, UnsignedIntType::MAX);
-    }
-
-    #[test]
-    fn bit_ops_assign() {
-        let mut x = Amount { atoms: 5 };
-
-        x ^= Amount { atoms: 1 };
-        assert_eq!(x, Amount { atoms: 4 });
-
-        x |= Amount { atoms: 2 };
-        assert_eq!(x, Amount { atoms: 6 });
-
-        x &= Amount { atoms: 5 };
-        assert_eq!(x, Amount { atoms: 4 });
-    }
-
-    #[test]
-    fn bit_shifts() {
-        let x = Amount { atoms: 1 };
-        assert_eq!(x << 1, Some(Amount { atoms: 2 }));
-        assert_eq!(x << 2, Some(Amount { atoms: 4 }));
-        assert_eq!(x << 4, Some(Amount { atoms: 16 }));
-        assert_eq!(x << 6, Some(Amount { atoms: 64 }));
-
-        let y = Amount { atoms: 128 };
-        assert_eq!(y >> 1, Some(Amount { atoms: 64 }));
-        assert_eq!(y >> 2, Some(Amount { atoms: 32 }));
-        assert_eq!(y >> 4, Some(Amount { atoms: 8 }));
-        assert_eq!(y >> 6, Some(Amount { atoms: 2 }));
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn abs_diff_never_fails(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-        let a = Amount::from_atoms(rng.gen());
-        let b = Amount::from_atoms(rng.gen());
-        let _ = a.abs_diff(b);
-    }
-
-    #[rstest]
-    #[case(2, 0, 2)]
-    #[case(0, 2, 2)]
-    #[case(221, 117, 104)]
-    #[case(117, 221, 104)]
-    #[case(u128::MAX, 1, u128::MAX-1)]
-    #[case(1, u128::MAX, u128::MAX-1)]
-    fn abs_diff_check(#[case] a: u128, #[case] b: u128, #[case] result: u128) {
-        assert_eq!(
-            Amount::from_atoms(a).abs_diff(Amount::from_atoms(b)),
-            Amount::from_atoms(result)
-        );
-    }
-
-    #[test]
-    fn variadic_sum() {
-        assert_eq!(
-            amount_sum!(Amount::from_atoms(1), Amount::from_atoms(2)),
-            Some(Amount::from_atoms(3))
-        );
-
-        assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(1),
-                Amount::from_atoms(2),
-                Amount::from_atoms(3)
-            ),
-            Some(Amount::from_atoms(6))
-        );
-
-        assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(1),
-                Amount::from_atoms(2),
-                Amount::from_atoms(3),
-                Amount::from_atoms(4)
-            ),
-            Some(Amount::from_atoms(10))
-        );
-
-        assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(UnsignedIntType::MAX),
-                Amount::from_atoms(0)
-            ),
-            Some(Amount::from_atoms(UnsignedIntType::MAX))
-        );
-
-        assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(UnsignedIntType::MAX),
-                Amount::from_atoms(1)
-            ),
-            None
-        );
-
-        assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(UnsignedIntType::MAX - 1),
-                Amount::from_atoms(1),
-                Amount::from_atoms(1)
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn signed_conversion_arbitrary() {
-        let amount = Amount::from_atoms(10);
-        let signed_amount_inner = 10 as SignedIntType;
-        assert_eq!(
-            amount.into_signed().unwrap(),
-            SignedAmount::from_atoms(signed_amount_inner)
-        )
-    }
-
-    #[test]
-    fn signed_conversion_max() {
-        let amount = Amount::MAX;
-        assert!(amount.into_signed().is_none())
-    }
-
-    #[test]
-    fn signed_conversion_signed_max_before_threshold() {
-        let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType);
-        let signed_amount_inner = SignedIntType::MAX;
-        assert_eq!(
-            amount.into_signed().unwrap(),
-            SignedAmount::from_atoms(signed_amount_inner)
-        )
-    }
-
-    #[test]
-    fn signed_conversion_signed_max_after_threshold() {
-        let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType + 1);
-        assert!(amount.into_signed().is_none())
-    }
-
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn from_fixedpoint_8_decimals() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 8).unwrap(), Amount { atoms: 98765432100000000 });
@@ -618,7 +353,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1.23e4567891", 8).is_none());
     }
 
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn from_fixedpoint_0_decimals() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 0).unwrap(), Amount { atoms: 987654321 });
@@ -694,7 +429,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1", 0).is_none());
     }
 
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn from_fixedpoint_1_decimal() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 1).unwrap(), Amount { atoms: 9876543210 });
@@ -763,7 +498,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1.2", 1).is_none());
     }
 
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn to_fixedpoint_8_decimals() {
         assert_eq!(Amount { atoms: 0 }.into_fixedpoint_str(8), "0");
@@ -804,7 +539,7 @@ mod tests {
         assert_eq!(Amount { atoms: 11234567800 }.into_fixedpoint_str(8), "112.345678");
     }
 
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn to_fixedpoint_0_decimals() {
         assert_eq!(Amount { atoms: 1 }.into_fixedpoint_str(0), "1");
@@ -848,7 +583,7 @@ mod tests {
         assert_eq!(Amount { atoms: 123456789012300 }.into_fixedpoint_str(0), "123456789012300");
     }
 
-    #[rustfmt::skip]
+#[rustfmt::skip]
     #[test]
     fn to_fixedpoint_1_decimal() {
         assert_eq!(Amount { atoms: 1 }.into_fixedpoint_str(1), "0.1");
@@ -892,48 +627,45 @@ mod tests {
         assert_eq!(Amount { atoms: 123456789012300 }.into_fixedpoint_str(1), "12345678901230");
     }
 
-    #[test]
-    fn serde_serialization() {
-        let amount: Amount = Amount::from_atoms(123553758873844226);
+#[test]
+fn serde_serialization() {
+    let amount: Amount = Amount::from_atoms(123553758873844226);
 
-        let serialized = serde_json::to_string(&amount).unwrap();
+    let serialized = serde_json::to_string(&amount).unwrap();
 
-        // Ensure that these don't change for backwards compatibility
-        assert!(serialized.contains("\"123553758873844226\""));
-        assert!(serialized.contains("\"atoms\""));
+    // Ensure that these don't change for backwards compatibility
+    assert!(serialized.contains("\"123553758873844226\""));
+    assert!(serialized.contains("\"atoms\""));
 
-        let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
-        assert_eq!(amount, deserialized.try_into().unwrap());
+    let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
+    assert_eq!(amount, deserialized.try_into().unwrap());
 
-        let deserialized_json_value =
-            serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
+    let deserialized_json_value = serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
 
-        assert_eq!(deserialized_json_value["atoms"], "123553758873844226");
-    }
+    assert_eq!(deserialized_json_value["atoms"], "123553758873844226");
+}
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn serde_serialization_randomized(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn serde_serialization_randomized(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
 
-        let amount: Amount = Amount::from_atoms(rng.gen());
+    let amount: Amount = Amount::from_atoms(rng.gen());
 
-        let serialized = serde_json::to_string(&amount).unwrap();
+    let serialized = serde_json::to_string(&amount).unwrap();
 
-        // Ensure that these don't change for backwards compatibility
-        assert!(serialized.contains(&format!("\"{}\"", amount.into_atoms())));
-        assert!(serialized.contains("\"atoms\""));
+    // Ensure that these don't change for backwards compatibility
+    assert!(serialized.contains(&format!("\"{}\"", amount.into_atoms())));
+    assert!(serialized.contains("\"atoms\""));
 
-        let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
-        assert_eq!(amount, deserialized.try_into().unwrap());
+    let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
+    assert_eq!(amount, deserialized.try_into().unwrap());
 
-        let deserialized_json_value =
-            serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
+    let deserialized_json_value = serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
 
-        assert_eq!(
-            deserialized_json_value["atoms"],
-            amount.into_atoms().to_string()
-        );
-    }
+    assert_eq!(
+        deserialized_json_value["atoms"],
+        amount.into_atoms().to_string()
+    );
 }

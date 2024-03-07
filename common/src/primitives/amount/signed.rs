@@ -17,7 +17,7 @@
 
 use std::iter::Sum;
 
-use super::{amount::UnsignedIntType, Amount};
+use super::{Amount, UnsignedIntType};
 
 use serialization::{Decode, Encode};
 

@@ -33,7 +33,7 @@ use common::{
         AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{signed_amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
+    primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},

@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use accounting::combine_amount_delta;
 use common::{
     chain::{DelegationId, PoolId},
-    primitives::{signed_amount::SignedAmount, Amount},
+    primitives::{amount::SignedAmount, Amount},
 };
 
 use crate::{
