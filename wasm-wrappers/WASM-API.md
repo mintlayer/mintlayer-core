@@ -182,3 +182,10 @@ A utxo can either come from a transaction or a block reward. This enum signifies
 
 The part of the transaction that will be committed in the signature. Similar to bitcoin's sighash.
 
+### Struct: `Amount`
+
+Amount type abstraction. The amount type is stored in a string
+since JavaScript number type cannot fit 128-bit integers.
+The amount is given as an integer in units of "atoms".
+Atoms are the smallest, indivisible amount of a coin or token.
+

@@ -46,7 +46,6 @@ use wasm_bindgen::prelude::*;
 
 pub mod error;
 
-/// The network, for which an operation to be done. Mainnet, testnet, etc.
 #[wasm_bindgen]
 /// Amount type abstraction. The amount type is stored in a string
 /// since JavaScript number type cannot fit 128-bit integers.
@@ -68,15 +67,22 @@ impl Amount {
         self.atoms
     }
 
-    fn get_amount(&self) -> Result<primitives::Amount, Error> {
+    fn as_internal_amount(&self) -> Result<primitives::Amount, Error> {
         UnsignedIntType::from_str(&self.atoms)
             .ok()
             .map(primitives::Amount::from_atoms)
             .ok_or(Error::InvalidAmount)
     }
+
+    fn from_internal_amount(amount: primitives::Amount) -> Self {
+        Self {
+            atoms: amount.into_atoms().to_string(),
+        }
+    }
 }
 
 #[wasm_bindgen]
+/// The network, for which an operation to be done. Mainnet, testnet, etc.
 pub enum Network {
     Mainnet,
     Testnet,
@@ -130,7 +136,7 @@ fn parse_token_total_supply(
         TotalSupply::Lockable => TokenTotalSupply::Lockable,
         TotalSupply::Unlimited => TokenTotalSupply::Unlimited,
         TotalSupply::Fixed => {
-            TokenTotalSupply::Fixed(amount.ok_or(Error::FixedTotalSupply)?.get_amount()?)
+            TokenTotalSupply::Fixed(amount.ok_or(Error::FixedTotalSupply)?.as_internal_amount()?)
         }
     };
 
@@ -339,7 +345,7 @@ pub fn encode_output_transfer(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let amount = amount.get_amount()?;
+    let amount = amount.as_internal_amount()?;
     let destination = parse_addressable::<Destination>(&chain_config, address)?;
 
     let output = TxOutput::Transfer(Coin(amount), destination);
@@ -406,7 +412,7 @@ pub fn encode_output_lock_then_transfer(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let amount = amount.get_amount()?;
+    let amount = amount.as_internal_amount()?;
     let destination = parse_addressable::<Destination>(&chain_config, address)?;
     let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
 
@@ -417,7 +423,7 @@ pub fn encode_output_lock_then_transfer(
 /// Given an amount, this function creates an output (as bytes) to burn a given amount of coins
 #[wasm_bindgen]
 pub fn encode_output_coin_burn(amount: Amount) -> Result<Vec<u8>, Error> {
-    let amount = amount.get_amount()?;
+    let amount = amount.as_internal_amount()?;
 
     let output = TxOutput::Burn(Coin(amount));
     Ok(output.encode())
@@ -449,7 +455,7 @@ pub fn encode_output_delegate_staking(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let amount = amount.get_amount()?;
+    let amount = amount.as_internal_amount()?;
     let delegation_id = parse_addressable(&chain_config, delegation_id)?;
 
     let output = TxOutput::DelegateStaking(amount, delegation_id);
@@ -469,11 +475,11 @@ pub fn encode_stake_pool_data(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let value = value.get_amount()?;
+    let value = value.as_internal_amount()?;
     let staker = parse_addressable(&chain_config, staker)?;
     let vrf_public_key = parse_addressable(&chain_config, vrf_public_key)?;
     let decommission_key = parse_addressable(&chain_config, decommission_key)?;
-    let cost_per_block = cost_per_block.get_amount()?;
+    let cost_per_block = cost_per_block.as_internal_amount()?;
 
     let pool_data = StakePoolData::new(
         value,
@@ -572,7 +578,7 @@ pub fn encode_input_for_withdraw_from_delegation(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let amount = amount.get_amount()?;
+    let amount = amount.as_internal_amount()?;
     let delegation_id = parse_addressable(&chain_config, delegation_id)?;
     let input = TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(nonce),
@@ -717,8 +723,8 @@ pub fn effective_pool_balance(
 ) -> Result<Amount, Error> {
     let chain_config = Builder::new(network.into()).build();
 
-    let pledge_amount = pledge_amount.get_amount()?;
-    let pool_balance = pool_balance.get_amount()?;
+    let pledge_amount = pledge_amount.as_internal_amount()?;
+    let pool_balance = pool_balance.as_internal_amount()?;
     let final_supply = chain_config.final_supply().ok_or(Error::FinalSupplyError)?;
     let final_supply = final_supply.to_amount_atoms();
 
@@ -726,9 +732,7 @@ pub fn effective_pool_balance(
         consensus::calculate_effective_pool_balance(pledge_amount, pool_balance, final_supply)
             .map_err(|e| Error::EffectiveBalanceCalculationFailed(e.to_string()))?;
 
-    Ok(Amount::from_atoms(
-        effective_balance.into_atoms().to_string(),
-    ))
+    Ok(Amount::from_internal_amount(effective_balance))
 }
 
 #[cfg(test)]
