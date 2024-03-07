@@ -35,7 +35,7 @@ impl StructData {
         })
     }
 
-    fn pull_from_items(all_items: &Vec<syn::Item>) -> Vec<StructData> {
+    fn pull_from_items(all_items: &[syn::Item]) -> Vec<StructData> {
         all_items
             .iter()
             .filter_map(|item| match item {
@@ -83,7 +83,7 @@ impl EnumData {
         })
     }
 
-    fn pull_from_items(all_items: &Vec<syn::Item>) -> Vec<EnumData> {
+    fn pull_from_items(all_items: &[syn::Item]) -> Vec<EnumData> {
         all_items
             .iter()
             .filter_map(|item| match item {
@@ -132,7 +132,7 @@ impl FunctionData {
         })
     }
 
-    fn pull_from_items(all_items: &Vec<syn::Item>) -> Vec<FunctionData> {
+    fn pull_from_items(all_items: &[syn::Item]) -> Vec<FunctionData> {
         all_items
             .iter()
             .filter_map(|item| match item {
@@ -157,13 +157,13 @@ impl Documentable for FunctionData {
     }
 }
 
-fn pull_docs_from_attribute(attrs: &Vec<syn::Attribute>) -> String {
+fn pull_docs_from_attribute(attrs: &[syn::Attribute]) -> String {
     let docs = attrs
         .iter()
         .filter_map(|m| m.meta.require_name_value().ok())
         .filter(|m| {
             m.path.segments.first().is_some()
-                && m.path.segments.first().expect("Was checked").ident.to_string() == "doc"
+                && m.path.segments.first().expect("Was checked").ident == "doc"
         })
         .filter_map(|v| match &v.value {
             syn::Expr::Lit(lit) => Some(lit),
@@ -193,7 +193,7 @@ fn write_to_stream<'a, D: Documentable>(
         stream.write_all(format!("### {}: `{}`", item.title(), item.name()).as_bytes())?;
         stream.write_all("\n\n".as_bytes())?;
 
-        stream.write_all(format!("{}", item.docs()).as_bytes())?;
+        stream.write_all(item.docs().to_string().as_bytes())?;
         stream.write_all("\n\n".as_bytes())?;
     }
 
@@ -246,7 +246,7 @@ fn main() -> anyhow::Result<()> {
 
     if args.check {
         if let Some(ref file_path) = args.output_file {
-            let mut file = match std::fs::File::open(&file_path) {
+            let mut file = match std::fs::File::open(file_path) {
                 Ok(f) => f,
                 Err(e) => {
                     return Err(anyhow::anyhow!(
@@ -283,7 +283,7 @@ fn main() -> anyhow::Result<()> {
         };
 
         output_stream
-            .write_all(&mut generated_doc_data.as_slice())
+            .write_all(generated_doc_data.as_slice())
             .map_err(|e| anyhow::anyhow!("Failed to write documentation to output stream: {e}",))?;
     }
 
