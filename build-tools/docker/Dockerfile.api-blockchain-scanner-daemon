@@ -2,25 +2,8 @@
 FROM mintlayer-builder:latest AS builder
 
 # Runtime Stage
-FROM debian:bookworm-slim
-
-# Create a new user and group
-RUN groupadd -g 1000 mintlayer && \
-    useradd -u 1000 -g mintlayer -d /home/mintlayer -s /bin/bash -c "Mintlayer User" mintlayer
-
-# Create and set the home directory for the new user
-RUN mkdir /home/mintlayer && \
-    chown mintlayer:mintlayer /home/mintlayer
+FROM mintlayer-runner-base
 
 COPY --from=builder /usr/src/target/release/api-blockchain-scanner-daemon /usr/bin
-
-# Define mintlayer directory as a volume
-VOLUME ["/home/mintlayer"]
-
-# Switch to the non-root user
-USER mintlayer
-
-# Set the working directory
-WORKDIR /home/mintlayer
 
 CMD ["api-blockchain-scanner-daemon"]

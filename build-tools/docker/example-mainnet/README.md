@@ -12,10 +12,9 @@ commenting out services that you won't need. Edit values in `.env` according to 
 2. To start the available services, run `docker compose up`.
 
     When the corresponding docker containers start, their `home` directories will be mounted
-    to the `container_home` subdirectory of the project directory. You have to make sure
-    that the directory is writable by a user with uid 1000.
+    to the `mintlayer-data` subdirectory of the project directory.
 
-    Note: this `container_home` directory will contain all the data produced by the containers
+    Note: this `mintlayer-data` directory will contain all the data produced by the containers
     except for the api-server's database, which will be stored in a dedicated docker volume.
 
     Additionally, you can pass `-d` (or `--detach`) to `docker compose up` to run the containers
@@ -30,5 +29,5 @@ commenting out services that you won't need. Edit values in `.env` according to 
 3. It's also possible to run `wallet-cli` interactively in a docker container as well.
     To do so, run the following after starting the services:
     ```
-    docker compose exec node-daemon wallet-cli
+    docker compose run --rm wallet-cli
     ```

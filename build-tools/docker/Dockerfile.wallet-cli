@@ -4,6 +4,6 @@ FROM mintlayer-builder:latest AS builder
 # Runtime Stage
 FROM mintlayer-runner-base
 
-COPY --from=builder /usr/src/target/release/dns-server /usr/bin
+COPY --from=builder /usr/src/target/release/wallet-cli /usr/bin/wallet-cli
 
-CMD ["dns-server"]
+CMD ["wallet-cli"]

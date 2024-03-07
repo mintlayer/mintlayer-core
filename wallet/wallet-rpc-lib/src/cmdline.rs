@@ -83,7 +83,6 @@ impl WalletRpcDaemonCommand {
     group(
         clap::ArgGroup::new("rpc_auth")
             .args(["rpc_cookie_file", "rpc_username", "rpc_password", "rpc_no_authentication"])
-            .multiple(true)
             .required(true)
             .multiple(true)
     ),
