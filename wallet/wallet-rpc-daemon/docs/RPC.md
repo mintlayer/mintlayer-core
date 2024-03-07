@@ -104,8 +104,8 @@ Parameters:
 Returns:
 ```
 {
-    "coins": decimal string,
-    "tokens": { hex string: decimal string, .. },
+    "coins": { "decimal": decimal string },
+    "tokens": { hex string: { "decimal": decimal string }, .. },
 }
 ```
 
@@ -146,7 +146,7 @@ Parameters:
 {
     "account": number,
     "address": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "selected_utxos": [ {
         "id": EITHER OF
              1) { "Transaction": hex string }
@@ -203,7 +203,7 @@ Parameters:
 {
     "account": number,
     "address": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "selected_utxo": {
         "id": EITHER OF
              1) { "Transaction": hex string }
@@ -222,8 +222,8 @@ Returns:
 {
     "hex": string,
     "fees": {
-        "coins": decimal string,
-        "tokens": { hex string: decimal string, .. },
+        "coins": { "decimal": decimal string },
+        "tokens": { hex string: { "decimal": decimal string }, .. },
     },
 }
 ```
@@ -241,8 +241,8 @@ Returns:
     "tx": hex string,
     "fees": EITHER OF
          1) {
-                "coins": decimal string,
-                "tokens": { hex string: decimal string, .. },
+                "coins": { "decimal": decimal string },
+                "tokens": { hex string: { "decimal": decimal string }, .. },
             }
          2) null,
     "stats": {
@@ -264,8 +264,8 @@ Parameters:
 ```
 {
     "account": number,
-    "amount": decimal string,
-    "cost_per_block": decimal string,
+    "amount": { "decimal": decimal string },
+    "cost_per_block": { "decimal": decimal string },
     "margin_ratio_per_thousand": string,
     "decommission_address": string,
     "options": { "in_top_x_mb": number },
@@ -341,7 +341,7 @@ Parameters:
 ```
 {
     "account": number,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "delegation_id": string,
     "options": { "in_top_x_mb": number },
 }
@@ -359,7 +359,7 @@ Parameters:
 {
     "account": number,
     "address": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "delegation_id": string,
     "options": { "in_top_x_mb": number },
 }
@@ -440,8 +440,8 @@ Returns:
 ```
 [ {
     "pool_id": string,
-    "pledge": decimal string,
-    "balance": decimal string,
+    "pledge": { "decimal": decimal string },
+    "balance": { "decimal": decimal string },
     "height": number,
     "block_timestamp": { "timestamp": number },
     "vrf_public_key": string,
@@ -475,7 +475,7 @@ Returns:
 ```
 [ {
     "delegation_id": bech32 string,
-    "balance": decimal string,
+    "balance": { "decimal": decimal string },
 }, .. ]
 ```
 
@@ -544,7 +544,7 @@ Parameters:
         "number_of_decimals": number,
         "metadata_uri": string,
         "token_supply": EITHER OF
-             1) { "Fixed": decimal string }
+             1) { "Fixed": { "decimal": decimal string } }
              2) "Lockable"
              3) "Unlimited",
         "is_freezable": bool,
@@ -586,7 +586,7 @@ Parameters:
     "account": number,
     "token_id": string,
     "address": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -603,7 +603,7 @@ Parameters:
 {
     "account": number,
     "token_id": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -670,7 +670,7 @@ Parameters:
     "account": number,
     "token_id": string,
     "address": string,
-    "amount": decimal string,
+    "amount": { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -1037,8 +1037,8 @@ Returns:
 {
     "hex": string,
     "fees": {
-        "coins": decimal string,
-        "tokens": { hex string: decimal string, .. },
+        "coins": { "decimal": decimal string },
+        "tokens": { hex string: { "decimal": decimal string }, .. },
     },
 }
 ```

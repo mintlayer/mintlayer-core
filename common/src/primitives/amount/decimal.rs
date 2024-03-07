@@ -59,7 +59,7 @@ impl DecimalAmount {
 
     /// Convert from amount, keeping as few decimal digits as possible (without losing precision)
     pub const fn from_amount_minimal(amount: Amount, decimals: u8) -> Self {
-        Self::from_amount_full(amount, decimals).minimize()
+        Self::from_amount_full(amount, decimals).minimal()
     }
 
     /// Convert to amount using given number of decimals
@@ -75,7 +75,7 @@ impl DecimalAmount {
     }
 
     /// Trim trailing zeroes in the fractional part
-    pub const fn minimize(mut self) -> Self {
+    pub const fn minimal(mut self) -> Self {
         while self.decimals > 0 && self.mantissa % TEN == 0 {
             self.mantissa /= TEN;
             self.decimals -= 1;
@@ -147,12 +147,29 @@ impl std::fmt::Display for DecimalAmount {
 
 impl serde::Serialize for DecimalAmount {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        let amount = DecimalAmountSerde {
+            decimal: StringOrUint::String(self.to_string()),
+        };
+        amount.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DecimalAmount {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match DecimalAmountSerde::deserialize(deserializer)?.decimal {
+            StringOrUint::String(s) => s.parse().map_err(<D::Error as serde::de::Error>::custom),
+            StringOrUint::UInt(i) => Ok(Self::from_uint_integral(i)),
+        }
     }
 }
 
 impl rpc_description::HasValueHint for DecimalAmount {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim("decimal string");
+    const HINT: rpc_description::ValueHint = DecimalAmountSerde::HINT;
+}
+
+#[derive(serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+struct DecimalAmountSerde {
+    decimal: StringOrUint,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -162,13 +179,10 @@ enum StringOrUint {
     UInt(u128),
 }
 
-impl<'de> serde::Deserialize<'de> for DecimalAmount {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match StringOrUint::deserialize(deserializer)? {
-            StringOrUint::String(s) => s.parse().map_err(<D::Error as serde::de::Error>::custom),
-            StringOrUint::UInt(i) => Ok(Self::from_uint_integral(i)),
-        }
-    }
+impl rpc_description::HasValueHint for StringOrUint {
+    // While this supports strings and numbers, strings should be encouraged so only mention string
+    // in the value hint.
+    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::DECIMAL_STRING;
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]

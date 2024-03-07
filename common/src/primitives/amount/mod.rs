@@ -18,13 +18,16 @@
 
 #![allow(clippy::eq_op)]
 
+use rpc_description::ValueHint as VH;
 use serialization::{Decode, Encode};
 use std::iter::Sum;
 
 pub mod decimal;
+pub mod rpc;
 pub mod signed;
 
 pub use decimal::{DecimalAmount, DisplayAmount};
+pub use rpc::{RpcAmountIn, RpcAmountOut};
 pub use signed::SignedAmount;
 
 pub type UnsignedIntType = u128;
@@ -203,8 +206,7 @@ impl Sum<Amount> for Option<Amount> {
 }
 
 impl rpc_description::HasValueHint for Amount {
-    const HINT: rpc_description::ValueHint =
-        rpc_description::ValueHint::Object(&[("atoms", &rpc_description::ValueHint::STRING)]);
+    const HINT: VH = VH::Object(&[("atoms", &VH::NUMBER_STRING)]);
 }
 
 #[macro_export]
