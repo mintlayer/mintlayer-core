@@ -1261,11 +1261,32 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn list_pool_ids(&self, account_index: U31) -> WRpcResult<Vec<PoolInfo>, N> {
+    pub async fn list_staking_pools(&self, account_index: U31) -> WRpcResult<Vec<PoolInfo>, N> {
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    controller.readonly_controller(account_index).get_pool_ids().await
+                    controller.readonly_controller(account_index).get_staking_pools().await
+                })
+            })
+            .await?
+            .map(|pools: Vec<(PoolId, PoolData, Amount, Amount)>| {
+                pools
+                    .into_iter()
+                    .map(|(pool_id, pool_data, balance, pledge)| {
+                        PoolInfo::new(pool_id, pool_data, balance, pledge, &self.chain_config)
+                    })
+                    .collect()
+            })
+    }
+
+    pub async fn list_pools_for_decommission(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<Vec<PoolInfo>, N> {
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    controller.readonly_controller(account_index).get_pools_for_decommission().await
                 })
             })
             .await?

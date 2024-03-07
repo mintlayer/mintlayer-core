@@ -271,7 +271,12 @@ pub trait WalletInterface {
 
     async fn staking_status(&self, account_index: U31) -> Result<StakingStatus, Self::Error>;
 
-    async fn list_pool_ids(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error>;
+    async fn list_staking_pools(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error>;
+
+    async fn list_pools_for_decommission(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<PoolInfo>, Self::Error>;
 
     async fn stake_pool_balance(&self, pool_id: String) -> Result<StakePoolBalance, Self::Error>;
 

@@ -578,9 +578,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn list_pool_ids(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error> {
+    async fn list_staking_pools(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error> {
         self.wallet_rpc
-            .list_pool_ids(account_index)
+            .list_staking_pools(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn list_pools_for_decommission(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<PoolInfo>, Self::Error> {
+        self.wallet_rpc
+            .list_pools_for_decommission(account_index)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

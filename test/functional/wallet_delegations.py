@@ -476,7 +476,12 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
             assert_in("Success", await wallet.sync())
 
+            # the acc0 pool has been decommissioned so there are non left
             pools = await wallet.list_pool_ids()
+            assert_equal(len(pools), 0)
+
+            # but since acc1's pool has the decommissioning address from acc0
+            pools = await wallet.list_pools_for_decommission()
             assert_equal(len(pools), 1)
 
             balance = await wallet.get_balance("locked")

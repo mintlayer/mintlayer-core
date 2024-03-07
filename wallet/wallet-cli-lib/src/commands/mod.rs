@@ -511,9 +511,13 @@ pub enum WalletCommand {
         delegation_id: String,
     },
 
-    /// List ids of pools that are controlled by the selected account in this wallet
-    #[clap(name = "staking-list-pool-ids")]
-    ListPoolIds,
+    /// List staking pools that are controlled by the selected account in this wallet
+    #[clap(name = "staking-list-pools")]
+    ListPools,
+
+    /// List pools that can be decommissioned by the selected account in this wallet
+    #[clap(name = "staking-list-owned-pools-for-decommission")]
+    ListOwnedPoolsForDecommission,
 
     /// Start staking, assuming there are staking pools in the selected account in this wallet.
     #[clap(name = "staking-start")]

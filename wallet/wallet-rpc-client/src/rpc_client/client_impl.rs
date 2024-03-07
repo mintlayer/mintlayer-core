@@ -505,8 +505,17 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn list_pool_ids(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error> {
-        WalletRpcClient::list_pool_ids(&self.http_client, account_index.into())
+    async fn list_staking_pools(&self, account_index: U31) -> Result<Vec<PoolInfo>, Self::Error> {
+        WalletRpcClient::list_pools(&self.http_client, account_index.into())
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn list_pools_for_decommission(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<PoolInfo>, Self::Error> {
+        WalletRpcClient::list_pools_for_decommission(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
