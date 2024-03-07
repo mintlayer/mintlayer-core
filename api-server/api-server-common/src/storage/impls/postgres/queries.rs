@@ -1614,7 +1614,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .execute(
                 "INSERT INTO ml_utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
-                    SET utxo = $2;",
+                    SET utxo = $2, spent = $3;",
                 &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &address, &height],
             )
             .await
