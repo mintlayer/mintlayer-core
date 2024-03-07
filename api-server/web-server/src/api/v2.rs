@@ -94,7 +94,6 @@ pub fn routes<
     let router = router
         .route("/address/:address", get(address))
         .route("/address/:address/all-utxos", get(all_address_utxos))
-        .route("/address/:address/available-utxos", get(address_utxos))
         .route("/address/:address/spendable-utxos", get(address_utxos))
         .route("/address/:address/delegations", get(address_delegations));
 
