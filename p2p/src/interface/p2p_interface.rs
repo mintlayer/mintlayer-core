@@ -26,6 +26,8 @@ use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
+    async fn enable_networking(&mut self, enable: bool) -> crate::Result<()>;
+
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 

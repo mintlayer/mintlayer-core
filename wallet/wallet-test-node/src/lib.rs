@@ -215,6 +215,7 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
+        true,
         Arc::clone(&chain_config),
         Arc::new(p2p_config),
         chainstate.clone(),

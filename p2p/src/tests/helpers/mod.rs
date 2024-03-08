@@ -16,16 +16,21 @@
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use async_trait::async_trait;
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 
 use crate::{
-    net::types::{PeerInfo, PeerRole},
+    net::{
+        default_backend::transport::TransportSocket,
+        types::{PeerInfo, PeerRole},
+    },
     peer_manager::{self, dns_seed::DnsSeed},
 };
 
@@ -100,13 +105,13 @@ impl peer_manager::Observer for PeerManagerObserver {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TestPeerInfo {
     pub info: PeerInfo,
     pub role: PeerRole,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TestPeersInfo {
     pub info: BTreeMap<SocketAddress, TestPeerInfo>,
 }
@@ -149,5 +154,93 @@ impl TestDnsSeed {
 impl DnsSeed for TestDnsSeed {
     async fn obtain_addresses(&self) -> Vec<SocketAddress> {
         self.addresses.lock().unwrap().clone()
+    }
+}
+
+pub async fn node_group_wait_for_connections_to<Transport>(
+    node_group: &TestNodeGroup<Transport>,
+    address: SocketAddress,
+    min_connected_nodes_count: usize,
+    iteration_time_advancement: Option<Duration>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    nodes_wait_for_connections(
+        node_group.nodes(),
+        address,
+        min_connected_nodes_count..=usize::MAX,
+        iteration_time_advancement.map(|dur| (node_group.time_getter(), dur)),
+        iteration_sleep_duration,
+    )
+    .await
+}
+
+pub async fn node_wait_for_connection_to<Transport>(
+    node: &TestNode<Transport>,
+    address: SocketAddress,
+    iteration_time_advancement: Option<Duration>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    nodes_wait_for_connections(
+        std::slice::from_ref(node),
+        address,
+        1..=1,
+        iteration_time_advancement.map(|dur| (node.time_getter(), dur)),
+        iteration_sleep_duration,
+    )
+    .await
+}
+
+pub async fn node_wait_for_disconnection<Transport>(
+    node: &TestNode<Transport>,
+    address: SocketAddress,
+    iteration_time_advancement: Option<Duration>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    nodes_wait_for_connections(
+        std::slice::from_ref(node),
+        address,
+        0..=0,
+        iteration_time_advancement.map(|dur| (node.time_getter(), dur)),
+        iteration_sleep_duration,
+    )
+    .await
+}
+
+pub async fn nodes_wait_for_connections<Transport>(
+    nodes: &[TestNode<Transport>],
+    address: SocketAddress,
+    required_connected_nodes_count: std::ops::RangeInclusive<usize>,
+    iteration_time_advancement: Option<(&P2pBasicTestTimeGetter, Duration)>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    loop {
+        let mut connected_nodes_count = 0;
+
+        for node in nodes {
+            let peers_info = node.get_peers_info().await;
+            if peers_info.info.contains_key(&address) {
+                connected_nodes_count += 1;
+            }
+        }
+
+        if required_connected_nodes_count.contains(&connected_nodes_count) {
+            break;
+        }
+
+        if let Some((time_getter, time_advancement)) = iteration_time_advancement {
+            time_getter.advance_time(time_advancement);
+        }
+
+        if let Some(iteration_sleep_duration) = iteration_sleep_duration {
+            tokio::time::sleep(iteration_sleep_duration).await;
+        }
     }
 }

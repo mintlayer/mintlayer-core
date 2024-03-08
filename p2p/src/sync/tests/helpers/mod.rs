@@ -358,6 +358,7 @@ impl TestNode {
                     | PeerManagerEvent::Ban(_, _, _)
                     | PeerManagerEvent::Unban(_, _)
                     | PeerManagerEvent::ListDiscouraged(_)
+                    | PeerManagerEvent::EnableNetworking { .. }
                     | PeerManagerEvent::GenericQuery(_)
                     | PeerManagerEvent::GenericMut(_) => {
                         panic!("Unexpected peer manager event: {peer_event:?}");
@@ -630,6 +631,9 @@ pub enum PeerManagerEventDesc {
     Ban(BannableAddress, Duration),
     Unban(BannableAddress),
     ListDiscouraged,
+    EnableNetworking {
+        enable: bool,
+    },
     GenericQuery,
     GenericMut,
 }
@@ -680,6 +684,10 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::Ban(addr, duration, _) => PeerManagerEventDesc::Ban(*addr, *duration),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
             PeerManagerEvent::ListDiscouraged(_) => PeerManagerEventDesc::ListDiscouraged,
+            PeerManagerEvent::EnableNetworking {
+                enable,
+                response_sender: _,
+            } => PeerManagerEventDesc::EnableNetworking { enable: *enable },
             PeerManagerEvent::GenericQuery(_) => PeerManagerEventDesc::GenericQuery,
             PeerManagerEvent::GenericMut(_) => PeerManagerEventDesc::GenericMut,
         }
@@ -701,6 +709,7 @@ impl NetworkingService for NetworkingServiceStub {
     type SyncingEventReceiver = SyncingEventReceiverMock;
 
     async fn start(
+        _: bool,
         _: Self::Transport,
         _: Vec<SocketAddress>,
         _: Arc<ChainConfig>,

@@ -148,6 +148,8 @@ pub enum ConnectionValidationError {
         needed_services: Services,
         available_services: Services,
     },
+    #[error("Networking disabled")]
+    NetworkingDisabled,
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]

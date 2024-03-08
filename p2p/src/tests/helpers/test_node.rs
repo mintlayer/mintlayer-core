@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeSet,
+    net::IpAddr,
+    sync::{Arc, Mutex},
+};
 
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
@@ -45,7 +49,9 @@ use crate::{
         ConnectivityService,
     },
     peer_manager::{
-        peerdb::storage_impl::PeerDbStorageImpl, test_utils::query_peer_manager, PeerManager,
+        peerdb::storage_impl::PeerDbStorageImpl,
+        test_utils::{mutate_peer_manager, query_peer_manager},
+        PeerManager,
     },
     protocol::ProtocolVersion,
     sync::SyncManager,
@@ -98,7 +104,9 @@ impl<Transport> TestNode<Transport>
 where
     Transport: TransportSocket,
 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
+        networking_enabled: bool,
         time_getter: P2pBasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -151,6 +159,7 @@ where
 
         let (conn_handle, messaging_handle, syncing_event_receiver, backend_join_handle) =
             DefaultNetworkingService::<Transport>::start_generic(
+                networking_enabled,
                 transport,
                 socket,
                 Arc::clone(&chain_config),
@@ -172,6 +181,7 @@ where
         let dns_seed_addresses = Arc::new(Mutex::new(Vec::new()));
 
         let peer_mgr = PeerMgr::<Transport>::new_generic(
+            networking_enabled,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn_handle,
@@ -307,6 +317,29 @@ where
             TestPeersInfo::from_peer_mgr_peer_contexts(peer_mgr.peers())
         })
         .await
+    }
+
+    pub async fn get_peer_ip_addresses(&self) -> BTreeSet<IpAddr> {
+        let peers_info = self.get_peers_info().await;
+        peers_info.info.keys().map(|addr| addr.ip_addr()).collect()
+    }
+
+    pub async fn discover_peer(&mut self, address: SocketAddress) {
+        mutate_peer_manager(&self.peer_mgr_event_sender, move |peer_mgr| {
+            peer_mgr.peer_db_mut().peer_discovered(address);
+        })
+        .await;
+    }
+
+    pub async fn enable_networking(&mut self, enable: bool) {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::EnableNetworking {
+                enable,
+                response_sender,
+            })
+            .unwrap();
+        response_receiver.await.unwrap().unwrap();
     }
 
     pub async fn assert_connected_to(&self, expected_connections: &[(SocketAddress, PeerRole)]) {

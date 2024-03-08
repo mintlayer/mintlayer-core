@@ -54,6 +54,9 @@ pub enum Command {
         peer_id: PeerId,
         message: Message,
     },
+    EnableNetworking {
+        enable: bool,
+    },
 }
 
 /// Random nonce sent in outbound handshake.

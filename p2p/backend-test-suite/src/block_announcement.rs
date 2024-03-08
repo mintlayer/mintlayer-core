@@ -52,6 +52,7 @@ where
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let time_getter = TimeGetter::default();
     let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
+        true,
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -67,6 +68,7 @@ where
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
+        true,
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -196,6 +198,7 @@ where
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let time_getter = TimeGetter::default();
     let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
+        true,
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -211,6 +214,7 @@ where
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
+        true,
         T::make_transport(),
         vec![T::make_address()],
         chain_config,

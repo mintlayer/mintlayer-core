@@ -82,6 +82,7 @@ where
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(
+        true,
         transport,
         vec![bind_address],
         Arc::clone(&chain_config),
@@ -96,6 +97,7 @@ where
     let (peer_mgr_event_sender, peer_mgr_event_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let peer_manager = PeerManager::<T, _>::new(
+        true,
         chain_config,
         p2p_config,
         conn,
@@ -169,6 +171,7 @@ pub fn make_standalone_peer_manager(
     let dns_seed = DefaultDnsSeed::new(Arc::clone(&chain_config), Arc::clone(&p2p_config));
 
     let peer_mgr = PeerManager::<TcpNetworkingService, _>::new_generic(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

@@ -94,6 +94,7 @@ pub async fn start_subsystems(
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p_handle = p2p::make_p2p(
+        true,
         Arc::clone(&chain_config),
         Arc::new(p2p_config),
         chainstate_handle.clone(),

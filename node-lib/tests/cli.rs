@@ -98,6 +98,7 @@ fn read_config_override_values() {
     let blockprod_skip_ibd_check = true;
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
+    let p2p_networking_enabled = false;
     let p2p_bind_addr = "127.0.0.1:44444".parse::<SocketAddr>().unwrap();
     let p2p_socks5_proxy = "socks5_proxy";
     let p2p_disable_noise = false;
@@ -129,6 +130,7 @@ fn read_config_override_values() {
         mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
+        p2p_networking_enabled: Some(p2p_networking_enabled),
         p2p_bind_addresses: Some(vec![p2p_bind_addr]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
         p2p_disable_noise: Some(p2p_disable_noise),
@@ -185,6 +187,10 @@ fn read_config_override_values() {
         Some(min_tx_relay_fee_rate)
     );
 
+    assert_eq!(
+        config.p2p.clone().unwrap().networking_enabled,
+        Some(p2p_networking_enabled)
+    );
     assert_eq!(
         config.p2p.clone().unwrap().bind_addresses,
         Some(vec!(p2p_bind_addr))

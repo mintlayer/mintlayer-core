@@ -112,6 +112,7 @@ where
     /// This function starts the networking backend and individual manager objects.
     #[allow(clippy::too_many_arguments)]
     async fn new<S: PeerDbStorage + 'static>(
+        networking_enabled: bool,
         transport: T::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<ChainConfig>,
@@ -126,6 +127,7 @@ where
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
         let (conn, messaging_handle, syncing_event_receiver, backend_task) = T::start(
+            networking_enabled,
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -148,6 +150,7 @@ where
         let (peer_mgr_event_sender, peer_mgr_event_receiver) = mpsc::unbounded_channel();
 
         let peer_manager = peer_manager::PeerManager::<T, _>::new(
+            networking_enabled,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
@@ -253,6 +256,7 @@ fn get_p2p_bind_addresses(
 // TODO: Remove this structure.
 // See https://github.com/mintlayer/mintlayer-core/issues/889 for more details.
 pub struct P2pInit<S: PeerDbStorage + 'static> {
+    networking_enabled: bool,
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: chainstate::ChainstateHandle,
@@ -271,6 +275,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
         T::SyncingEventReceiver: SyncingEventReceiver,
     {
         P2p::<T>::new(
+            self.networking_enabled,
             transport,
             self.bind_addresses,
             self.chain_config,
@@ -303,6 +308,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
 }
 
 pub fn make_p2p<S: PeerDbStorage + 'static>(
+    networking_enabled: bool,
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: chainstate::ChainstateHandle,
@@ -377,6 +383,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     }
 
     Ok(P2pInit {
+        networking_enabled,
         chain_config,
         p2p_config,
         chainstate_handle,

@@ -40,6 +40,17 @@ where
     T: NetworkingService + Send + Sync,
     T::MessagingHandle: MessagingService,
 {
+    async fn enable_networking(&mut self, enable: bool) -> crate::Result<()> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::EnableNetworking {
+                enable,
+                response_sender,
+            })
+            .map_err(|_| P2pError::ChannelClosed)?;
+        response_receiver.await?
+    }
+
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         let (response_sender, response_receiver) = oneshot_nofail::channel();
         self.peer_mgr_event_sender

@@ -270,6 +270,7 @@ mod tests {
         p2p_config.bind_addresses = vec![SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0).into()];
 
         let p2p = p2p::make_p2p(
+            true,
             Arc::clone(&chain_config),
             Arc::new(p2p_config),
             subsystem::Handle::clone(&chainstate),
