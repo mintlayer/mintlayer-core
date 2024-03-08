@@ -45,12 +45,15 @@ impl WalletRpcDaemonArgs {
 #[derive(clap::Subcommand)]
 pub enum WalletRpcDaemonCommand {
     /// Run the mainnet wallet.
+    #[clap(mut_args(clap_utils::env_adder("MAINNET_WALLET_RPC_DAEMON")))]
     Mainnet(WalletRpcDaemonChainArgs),
 
     /// Run the testnet wallet.
+    #[clap(mut_args(clap_utils::env_adder("TESTNET_WALLET_RPC_DAEMON")))]
     Testnet(WalletRpcDaemonChainArgs),
 
     /// Run the regtest wallet.
+    #[clap(mut_args(clap_utils::env_adder("REGTEST_WALLET_RPC_DAEMON")))]
     Regtest {
         #[command(flatten)]
         args: WalletRpcDaemonChainArgs,
@@ -76,7 +79,6 @@ impl WalletRpcDaemonCommand {
 }
 
 #[derive(clap::Args)]
-#[clap(mut_args(clap_utils::env_adder("WALLET_RPC_DAEMON")))]
 #[command(
     version,
     about,
@@ -215,7 +217,7 @@ pub fn make_wallet_config(
     rpc_username: Option<String>,
     rpc_password: Option<String>,
     rpc_no_authentication: bool,
-    wallet_rpc_address: Option<String>,
+    wallet_rpc_bind_address: Option<String>,
     chain_type: ChainType,
 ) -> Result<WalletRpcConfig, ConfigError> {
     let rpc_config = {
@@ -230,7 +232,7 @@ pub fn make_wallet_config(
             _ => panic!("Should not happen due to arg constraints"),
         };
 
-        let bind_addr = match wallet_rpc_address {
+        let bind_addr = match wallet_rpc_bind_address {
             None => {
                 let port = WalletRpcConfig::default_port(chain_type);
                 std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), port)
