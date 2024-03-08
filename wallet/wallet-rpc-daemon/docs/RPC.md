@@ -408,7 +408,28 @@ EITHER OF
      2) "NotStaking"
 ```
 
-### Method `staking_list_pool_ids`
+### Method `staking_list_pools`
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+[ {
+    "pool_id": string,
+    "pledge": decimal string,
+    "balance": decimal string,
+    "height": number,
+    "block_timestamp": { "timestamp": number },
+    "vrf_public_key": string,
+    "decommission_key": string,
+    "staker": string,
+}, .. ]
+```
+
+### Method `staking_list_owned_pools_for_decommission`
 
 Parameters:
 ```
