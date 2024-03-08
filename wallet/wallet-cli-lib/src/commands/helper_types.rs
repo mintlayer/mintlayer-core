@@ -143,6 +143,21 @@ impl CliStoreSeedPhrase {
     }
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum EnableOrDisable {
+    Enable,
+    Disable,
+}
+
+impl EnableOrDisable {
+    pub fn is_enable(self) -> bool {
+        match self {
+            Self::Enable => true,
+            Self::Disable => false,
+        }
+    }
+}
+
 /// Parses a string into UtxoOutPoint
 /// The string format is expected to be
 /// tx(H256,u32) or block(H256,u32)

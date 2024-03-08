@@ -781,6 +781,12 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error> {
+        WalletRpcClient::node_enable_networking(&self.http_client, enable)
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn connect_to_peer(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         WalletRpcClient::connect_to_peer(&self.http_client, address.to_string())
             .await

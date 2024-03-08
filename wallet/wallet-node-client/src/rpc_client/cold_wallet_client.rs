@@ -164,6 +164,10 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
+    async fn node_enable_networking(&self, _enable: bool) -> Result<(), Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
     async fn node_version(&self) -> Result<String, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }

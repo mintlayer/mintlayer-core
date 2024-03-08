@@ -812,6 +812,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.node_shutdown().await)
     }
 
+    async fn node_enable_networking(&self, enable: bool) -> rpc::RpcResult<()> {
+        rpc::handle_result(self.node_enable_networking(enable).await)
+    }
+
     async fn connect_to_peer(&self, address: String) -> rpc::RpcResult<()> {
         let address =
             IpOrSocketAddress::from_str(&address).map_err(|_| RpcError::<N>::InvalidIpAddress)?;

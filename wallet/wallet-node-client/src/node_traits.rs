@@ -89,6 +89,7 @@ pub trait NodeInterface {
     ) -> Result<(), Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;
 
     async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;

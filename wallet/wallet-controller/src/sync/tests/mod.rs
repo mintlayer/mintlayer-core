@@ -321,6 +321,9 @@ impl NodeInterface for MockNode {
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
         unreachable!()
     }
+    async fn node_enable_networking(&self, _enable: bool) -> Result<(), Self::Error> {
+        unreachable!()
+    }
     async fn node_version(&self) -> Result<String, Self::Error> {
         unreachable!()
     }

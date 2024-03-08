@@ -215,6 +215,11 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error> {
+        P2pRpcClient::enable_networking(&self.http_client, enable)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
     async fn node_version(&self) -> Result<String, Self::Error> {
         node_lib::rpc::NodeRpcClient::version(&self.http_client)
             .await

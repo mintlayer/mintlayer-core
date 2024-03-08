@@ -280,6 +280,10 @@ impl NodeInterface for WalletHandlesClient {
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
         unimplemented!()
     }
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.enable_networking(enable)).await??;
+        Ok(())
+    }
     async fn node_version(&self) -> Result<String, Self::Error> {
         unimplemented!()
     }

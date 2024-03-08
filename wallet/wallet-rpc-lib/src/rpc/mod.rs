@@ -1366,6 +1366,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.node.node_shutdown().await.map_err(RpcError::RpcError)
     }
 
+    pub async fn node_enable_networking(&self, enable: bool) -> WRpcResult<(), N> {
+        self.node.node_enable_networking(enable).await.map_err(RpcError::RpcError)
+    }
+
     pub async fn connect_to_peer(&self, address: IpOrSocketAddress) -> WRpcResult<(), N> {
         self.node.p2p_connect(address).await.map_err(RpcError::RpcError)
     }

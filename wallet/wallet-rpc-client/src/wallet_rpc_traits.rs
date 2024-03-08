@@ -386,6 +386,8 @@ pub trait WalletInterface {
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
 
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error>;
+
     async fn connect_to_peer(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
 
     async fn disconnect_peer(&self, peer_id: PeerId) -> Result<(), Self::Error>;

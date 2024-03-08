@@ -33,7 +33,7 @@ use utils_networking::IpOrSocketAddress;
 
 use self::helper_types::{
     CliForceReduce, CliIsFreezable, CliIsUnfreezable, CliStoreSeedPhrase, CliUtxoState,
-    CliUtxoTypes, CliWithLocked,
+    CliUtxoTypes, CliWithLocked, EnableOrDisable,
 };
 
 #[derive(Debug, Parser)]
@@ -494,6 +494,10 @@ pub enum WalletCommand {
 
     #[clap(name = "node-shutdown")]
     NodeShutdown,
+
+    /// Enable or disable p2p networking in the node
+    #[clap(name = "node-enable-p2p-networking")]
+    NodeEnableNetworking { enable: EnableOrDisable },
 
     #[clap(name = "node-connect-to-peer")]
     Connect { address: IpOrSocketAddress },

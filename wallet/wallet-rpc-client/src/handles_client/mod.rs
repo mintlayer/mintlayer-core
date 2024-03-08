@@ -820,6 +820,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error> {
+        self.wallet_rpc
+            .node_enable_networking(enable)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn connect_to_peer(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         self.wallet_rpc
             .connect_to_peer(address)
