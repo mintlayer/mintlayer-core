@@ -153,8 +153,8 @@ Parameters:
     "account": number,
     "address": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "selected_utxos": [ {
         "id": EITHER OF
              1) { "Transaction": hex string }
@@ -212,8 +212,8 @@ Parameters:
     "account": number,
     "address": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "selected_utxo": {
         "id": EITHER OF
              1) { "Transaction": hex string }
@@ -287,11 +287,11 @@ Parameters:
 {
     "account": number,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "cost_per_block": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "margin_ratio_per_thousand": string,
     "decommission_address": string,
     "options": { "in_top_x_mb": number },
@@ -368,8 +368,8 @@ Parameters:
 {
     "account": number,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "delegation_id": string,
     "options": { "in_top_x_mb": number },
 }
@@ -388,8 +388,8 @@ Parameters:
     "account": number,
     "address": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "delegation_id": string,
     "options": { "in_top_x_mb": number },
 }
@@ -590,8 +590,8 @@ Parameters:
         "metadata_uri": string,
         "token_supply": EITHER OF
              1) { "Fixed": EITHER OF
-                     1) { "decimal": decimal string }
-                     2) { "atoms": number string } }
+                     1) { "atoms": number string }
+                     2) { "decimal": decimal string } }
              2) "Lockable"
              3) "Unlimited",
         "is_freezable": bool,
@@ -634,8 +634,8 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -653,8 +653,8 @@ Parameters:
     "account": number,
     "token_id": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -722,8 +722,8 @@ Parameters:
     "token_id": string,
     "address": string,
     "amount": EITHER OF
-         1) { "decimal": decimal string }
-         2) { "atoms": number string },
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
     "options": { "in_top_x_mb": number },
 }
 ```

@@ -114,8 +114,56 @@ impl RpcAmountOut {
     pub fn decimal(&self) -> DecimalAmount {
         self.decimal
     }
+
+    /// Check this is the same number presented in the same way
+    pub fn is_same(&self, other: &Self) -> bool {
+        self.atoms == other.atoms && self.decimal.is_same(&other.decimal)
+    }
 }
 
 impl HasValueHint for RpcAmountOut {
     const HINT: VH = VH::Object(&[("atoms", &VH::NUMBER_STRING), ("decimal", &VH::DECIMAL_STRING)]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use serde_json::json;
+
+    #[rstest]
+    #[case::zero(0, 0)]
+    #[case(123456, 0)]
+    #[case(123450, 1)]
+    #[case(123450, 2)]
+    #[case(123450, 9)]
+    #[case(4000000000, 3)]
+    #[case(1u128 << 55, 17)]
+    #[case(u128::MAX, 0)]
+    #[case(u128::MAX, 1)]
+    #[case(u128::MAX, 25)]
+    fn rpc_amount_serde(#[case] atoms: u128, #[case] n_decimals: u8) {
+        let atoms = Amount::from_atoms(atoms);
+        let decimal = DecimalAmount::from_amount_minimal(atoms, n_decimals);
+
+        let decimal_str = decimal.to_string();
+        let atoms_str = atoms.into_atoms().to_string();
+
+        assert!(!atoms_str.contains('.'));
+
+        let decimal_in = RpcAmountIn::from_decimal(decimal);
+        let decimal_in_json = json!({ "decimal": decimal_str });
+        assert_eq!(serde_json::to_value(decimal_in).unwrap(), decimal_in_json);
+        assert!(decimal_in.is_same(&serde_json::from_value(decimal_in_json).unwrap()));
+
+        let atoms_in = RpcAmountIn::from_atoms(atoms);
+        let atoms_in_json = json!({ "atoms": atoms_str });
+        assert_eq!(serde_json::to_value(atoms_in).unwrap(), atoms_in_json);
+        assert!(atoms_in.is_same(&serde_json::from_value(atoms_in_json).unwrap()));
+
+        let rpc_out = RpcAmountOut::from_amount_minimal(atoms, n_decimals);
+        let rpc_out_json = json!({ "atoms": atoms_str, "decimal": decimal_str });
+        assert_eq!(serde_json::to_value(&rpc_out).unwrap(), rpc_out_json);
+        assert!(rpc_out.is_same(&serde_json::from_value(rpc_out_json).unwrap()));
+    }
 }
