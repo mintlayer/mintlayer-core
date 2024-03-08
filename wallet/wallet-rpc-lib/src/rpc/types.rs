@@ -35,13 +35,14 @@ use crypto::{
 };
 use rpc::description::{HasValueHint, ValueHint as VH};
 use serialization::hex::HexEncode;
+use wallet::account::PoolData;
 
+pub use common::primitives::amount::{RpcAmountIn, RpcAmountOut};
 pub use mempool_types::tx_options::TxOptionsOverrides;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
-use wallet::account::PoolData;
 pub use wallet_controller::types::{
-    Balances, BlockInfo, DecimalAmount, InspectTransaction, SignatureStats, ValidatedSignatures,
+    Balances, BlockInfo, InspectTransaction, SignatureStats, ValidatedSignatures,
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 
@@ -253,8 +254,8 @@ pub struct TransactionOptions {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct PoolInfo {
     pub pool_id: String,
-    pub pledge: DecimalAmount,
-    pub balance: DecimalAmount,
+    pub pledge: RpcAmountOut,
+    pub balance: RpcAmountOut,
     pub height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
     pub vrf_public_key: String,
@@ -271,8 +272,8 @@ impl PoolInfo {
         chain_config: &ChainConfig,
     ) -> Self {
         let decimals = chain_config.coin_decimals();
-        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
-        let pledge = DecimalAmount::from_amount_minimal(pledge, decimals);
+        let balance = RpcAmountOut::from_amount_minimal(balance, decimals);
+        let pledge = RpcAmountOut::from_amount_minimal(pledge, decimals);
 
         Self {
             pool_id: Address::new(chain_config, &pool_id).expect("addressable").to_string(),
@@ -307,18 +308,18 @@ impl rpc::description::HasValueHint for NewDelegation {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DelegationInfo {
     pub delegation_id: String,
-    pub balance: DecimalAmount,
+    pub balance: RpcAmountOut,
 }
 
 impl rpc::description::HasValueHint for DelegationInfo {
     const HINT: VH =
-        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &DecimalAmount::HINT)]);
+        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT)]);
 }
 
 impl DelegationInfo {
     pub fn new(delegation_id: DelegationId, balance: Amount, chain_config: &ChainConfig) -> Self {
         let decimals = chain_config.coin_decimals();
-        let balance = DecimalAmount::from_amount_minimal(balance, decimals);
+        let balance = RpcAmountOut::from_amount_minimal(balance, decimals);
 
         Self {
             delegation_id: Address::new(chain_config, &delegation_id)
@@ -359,26 +360,19 @@ impl NftMetadata {
     }
 }
 
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum TokenTotalSupply {
-    Fixed(DecimalAmount),
+    Fixed(RpcAmountIn),
     Lockable,
     Unlimited,
 }
 
 impl TokenTotalSupply {
-    fn into_token_supply<N: NodeInterface>(
-        self,
-        chain_config: &ChainConfig,
-    ) -> Result<tokens::TokenTotalSupply, RpcError<N>> {
+    fn to_token_supply(&self, decimals: u8) -> Option<tokens::TokenTotalSupply> {
         match self {
-            Self::Lockable => Ok(tokens::TokenTotalSupply::Lockable),
-            Self::Unlimited => Ok(tokens::TokenTotalSupply::Unlimited),
-            Self::Fixed(amount) => {
-                let decimals = chain_config.coin_decimals();
-                let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
-                Ok(tokens::TokenTotalSupply::Fixed(amount))
-            }
+            Self::Lockable => Some(tokens::TokenTotalSupply::Lockable),
+            Self::Unlimited => Some(tokens::TokenTotalSupply::Unlimited),
+            Self::Fixed(amount) => amount.to_amount(decimals).map(tokens::TokenTotalSupply::Fixed),
         }
     }
 }
@@ -393,11 +387,10 @@ pub struct TokenMetadata {
 }
 
 impl TokenMetadata {
-    pub fn token_supply<N: NodeInterface>(
-        &self,
-        chain_config: &ChainConfig,
-    ) -> Result<tokens::TokenTotalSupply, RpcError<N>> {
-        self.token_supply.into_token_supply(chain_config)
+    pub fn token_supply<N: NodeInterface>(&self) -> Result<tokens::TokenTotalSupply, RpcError<N>> {
+        self.token_supply
+            .to_token_supply(self.number_of_decimals)
+            .ok_or(RpcError::InvalidCoinAmount)
     }
 
     pub fn is_freezable(&self) -> IsTokenFreezable {

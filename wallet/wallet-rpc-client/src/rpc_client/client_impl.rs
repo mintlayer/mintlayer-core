@@ -271,7 +271,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             address,
-            amount,
+            amount.into(),
             selected_utxos,
             options,
         )
@@ -325,7 +325,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
         address: String,
-        amount_str: DecimalAmount,
+        amount: DecimalAmount,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         config: ControllerConfig,
@@ -337,7 +337,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             address,
-            amount_str,
+            amount.into(),
             selected_utxo,
             change_address,
             options,
@@ -370,8 +370,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::create_stake_pool(
             &self.http_client,
             account_index.into(),
-            amount,
-            cost_per_block,
+            amount.into(),
+            cost_per_block.into(),
             margin_ratio_per_thousand,
             decommission_address,
             options,
@@ -456,7 +456,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::delegate_staking(
             &self.http_client,
             account_index.into(),
-            amount,
+            amount.into(),
             delegation_id,
             options,
         )
@@ -479,7 +479,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             address,
-            amount,
+            amount.into(),
             delegation_id,
             options,
         )
@@ -650,7 +650,7 @@ impl WalletInterface for ClientWalletRpc {
             account_index.into(),
             token_id,
             address,
-            amount,
+            amount.into(),
             options,
         )
         .await
@@ -671,7 +671,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             token_id,
-            amount,
+            amount.into(),
             options,
         )
         .await
@@ -748,7 +748,7 @@ impl WalletInterface for ClientWalletRpc {
             account_index.into(),
             token_id,
             address,
-            amount,
+            amount.into(),
             options,
         )
         .await

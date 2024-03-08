@@ -41,11 +41,11 @@ use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
-        CreatedWallet, DecimalAmount, DelegationInfo, HexEncoded, JsonValue,
-        LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId,
-        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
+        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+        NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcTokenId, StakePoolBalance,
+        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -338,7 +338,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         address: String,
-        amount_str: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -350,7 +350,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             self.send_coins(
                 account_arg.index::<N>()?,
                 address,
-                amount_str,
+                amount,
                 selected_utxos,
                 config,
             )
@@ -406,7 +406,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         address: String,
-        amount_str: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         options: TransactionOptions,
@@ -419,7 +419,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             self.request_send_coins(
                 account_arg.index::<N>()?,
                 address,
-                amount_str,
+                amount,
                 selected_utxo,
                 change_address,
                 config,
@@ -439,8 +439,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn create_stake_pool(
         &self,
         account_arg: AccountArg,
-        amount: DecimalAmount,
-        cost_per_block: DecimalAmount,
+        amount: RpcAmountIn,
+        cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: String,
         options: TransactionOptions,
@@ -527,7 +527,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn delegate_staking(
         &self,
         account_arg: AccountArg,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -545,7 +545,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -637,7 +637,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             broadcast_to_mempool: true,
         };
 
-        let token_supply = metadata.token_supply::<N>(&self.chain_config)?;
+        let token_supply = metadata.token_supply::<N>()?;
         let is_freezable = metadata.is_freezable();
         rpc::handle_result(
             self.issue_new_token(
@@ -677,7 +677,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         token_id: String,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -695,7 +695,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         token_id: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -767,7 +767,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         token_id: String,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {

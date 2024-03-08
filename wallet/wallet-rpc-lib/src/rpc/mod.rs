@@ -48,8 +48,7 @@ use common::{
         Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, DecimalAmount, Id,
-        Idable,
+        id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
     },
 };
 pub use interface::{
@@ -72,7 +71,7 @@ use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcTokenId, StakingStatus,
+    NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcTokenId, StakingStatus,
     VrfPublicKeyInfo,
 };
 
@@ -593,12 +592,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         address: String,
-        amount_str: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
-        let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
+        let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
 
@@ -621,13 +620,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         address: String,
-        amount_str: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         config: ControllerConfig,
     ) -> WRpcResult<(PartiallySignedTransaction, Balances), N> {
         let decimals = self.chain_config.coin_decimals();
-        let amount = amount_str.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
+        let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address = Address::from_str(&self.chain_config, &address)
             .map_err(|_| RpcError::InvalidAddress)?;
         let change_address = change_address
@@ -681,7 +680,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         token_id: String,
         address: String,
-        amount_str: DecimalAmount,
+        amount: RpcAmountIn,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
@@ -694,7 +693,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .call_async(move |controller| {
                 Box::pin(async move {
                     let token_info = controller.get_token_info(token_id).await?;
-                    let amount = amount_str
+                    let amount = amount
                         .to_amount(token_info.token_number_of_decimals())
                         .ok_or(RpcError::InvalidCoinAmount)?;
 
@@ -713,8 +712,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn create_stake_pool(
         &self,
         account_index: U31,
-        amount: DecimalAmount,
-        cost_per_block: DecimalAmount,
+        amount: RpcAmountIn,
+        cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: String,
         config: ControllerConfig,
@@ -856,7 +855,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn delegate_staking(
         &self,
         account_index: U31,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
@@ -886,7 +885,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
@@ -1082,7 +1081,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         token_id: String,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
@@ -1114,7 +1113,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         token_id: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
         let token_id = Address::from_str(&self.chain_config, &token_id)
