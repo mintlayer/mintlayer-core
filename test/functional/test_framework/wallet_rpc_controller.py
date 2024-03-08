@@ -281,7 +281,11 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:
-        pools = self._write_command("staking_list_pool_ids", [self.account])['result']
+        pools = self._write_command("staking_list_pools", [self.account])['result']
+        return [PoolData(pool['pool_id'], pool['pledge'], pool['balance']) for pool in pools]
+
+    async def list_pools_for_decommission(self) -> List[PoolData]:
+        pools = self._write_command("staking_list_owned_pools_for_decommission", [self.account])['result']
         return [PoolData(pool['pool_id'], pool['pledge'], pool['balance']) for pool in pools]
 
     async def list_created_blocks_ids(self) -> List[CreatedBlockInfo]:

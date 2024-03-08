@@ -1363,7 +1363,7 @@ impl OutputCache {
                     TxOutput::ProduceBlockFromStake(_, pool_id)
                     | TxOutput::CreateStakePool(pool_id, _) => {
                         self.pools.get(pool_id).and_then(|pool_data| {
-                            is_mine(&pool_data.decommission_key).then_some(*pool_id)
+                            is_mine(&pool_data.stake_destination).then_some(*pool_id)
                         })
                     }
                 }),

@@ -205,12 +205,27 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         self.get_all_issued_vrf_public_keys()
     }
 
-    pub async fn get_pool_ids(
+    /// Get all pools owned by this account that can be used for staking
+    pub async fn get_staking_pools(
         &self,
+    ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
+        self.get_pools(WalletPoolsFilter::Stake).await
+    }
+
+    /// Get all pools that can be decommissioned by this account
+    pub async fn get_pools_for_decommission(
+        &self,
+    ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
+        self.get_pools(WalletPoolsFilter::Decommission).await
+    }
+
+    async fn get_pools(
+        &self,
+        filter: WalletPoolsFilter,
     ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
         let pools = self
             .wallet
-            .get_pool_ids(self.account_index, WalletPoolsFilter::All)
+            .get_pool_ids(self.account_index, filter)
             .map_err(ControllerError::WalletError)?;
 
         let tasks: FuturesUnordered<_> = pools

@@ -1207,10 +1207,21 @@ where
                 Ok(ConsoleCommand::Print(version.version))
             }
 
-            WalletCommand::ListPoolIds => {
+            WalletCommand::ListPools => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let pool_ids: Vec<_> = wallet
-                    .list_pool_ids(selected_account)
+                    .list_staking_pools(selected_account)
+                    .await?
+                    .into_iter()
+                    .map(format_pool_info)
+                    .collect();
+                Ok(ConsoleCommand::Print(format!("{}\n", pool_ids.join("\n"))))
+            }
+
+            WalletCommand::ListOwnedPoolsForDecommission => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let pool_ids: Vec<_> = wallet
+                    .list_pools_for_decommission(selected_account)
                     .await?
                     .into_iter()
                     .map(format_pool_info)

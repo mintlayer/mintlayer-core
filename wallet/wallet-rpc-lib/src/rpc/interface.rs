@@ -314,8 +314,14 @@ trait WalletRpc {
     #[method(name = "staking_status")]
     async fn staking_status(&self, account: AccountArg) -> rpc::RpcResult<StakingStatus>;
 
-    #[method(name = "staking_list_pool_ids")]
-    async fn list_pool_ids(&self, account: AccountArg) -> rpc::RpcResult<Vec<PoolInfo>>;
+    #[method(name = "staking_list_pools")]
+    async fn list_pools(&self, account: AccountArg) -> rpc::RpcResult<Vec<PoolInfo>>;
+
+    #[method(name = "staking_list_owned_pools_for_decommission")]
+    async fn list_pools_for_decommission(
+        &self,
+        account: AccountArg,
+    ) -> rpc::RpcResult<Vec<PoolInfo>>;
 
     #[method(name = "staking_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: String) -> rpc::RpcResult<StakePoolBalance>;

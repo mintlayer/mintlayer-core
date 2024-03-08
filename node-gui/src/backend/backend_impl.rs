@@ -777,7 +777,7 @@ impl Backend {
                 let pool_info_res = wallet_data
                     .controller
                     .readonly_controller(account_id.account_index())
-                    .get_pool_ids()
+                    .get_staking_pools()
                     .await;
                 match pool_info_res {
                     Ok(staking_balance) => {

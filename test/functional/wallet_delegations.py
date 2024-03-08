@@ -377,9 +377,8 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             assert_equal(len(delegations), 1)
             assert_equal(delegations[0].balance, '1000')
 
-            # create another pool in account 1
-            decommission_address_acc1 = await wallet.new_address()
-            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_address_acc1))
+            # create another pool in account 1 with decommission_address from acc 0
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5, decommission_address))
 
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             pools = await wallet.list_pool_ids()
@@ -469,13 +468,21 @@ class WalletDelegationsCLI(BitcoinTestFramework):
             address = await wallet.new_address()
             assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pool_id, address))
 
-            transactions = node.mempool_transactions()
-            block_height = await wallet.get_best_block_height()
-            self.gen_pos_block(transactions, int(block_height)+1, last_block_id)
+            assert_in("Success", await wallet.select_account(1))
+            assert_in("Staking started successfully", await wallet.start_staking())
+            tip_id = node.chainstate_best_block_id()
+            self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+
             assert_in("Success", await wallet.sync())
 
+            # the acc0 pool has been decommissioned so there are non left
             pools = await wallet.list_pool_ids()
             assert_equal(len(pools), 0)
+
+            # but since acc1's pool has the decommissioning address from acc0
+            pools = await wallet.list_pools_for_decommission()
+            assert_equal(len(pools), 1)
 
             balance = await wallet.get_balance("locked")
             pattern = r"Coins amount: (\d{5,})"
@@ -494,6 +501,11 @@ class WalletDelegationsCLI(BitcoinTestFramework):
                     return block.block_id == block_id and str(block.block_height) == str(block_height) and block.pool_id == pool_id
 
                 assert(any([same_with_current(block) for block in created_block_ids]))
+
+            # check even though decommission_address is from acc0 it will list the created blocks for acc1's pool
+            assert_in("Success", await wallet.select_account(1))
+            created_block_ids = await wallet.list_created_blocks_ids()
+            assert_greater_than(len(created_block_ids), 0)
 
 
 if __name__ == '__main__':

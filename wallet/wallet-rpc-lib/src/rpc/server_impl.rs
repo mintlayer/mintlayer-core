@@ -577,8 +577,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.staking_status(account_arg.index::<N>()?).await)
     }
 
-    async fn list_pool_ids(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<PoolInfo>> {
-        rpc::handle_result(self.list_pool_ids(account_arg.index::<N>()?).await)
+    async fn list_pools(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<PoolInfo>> {
+        rpc::handle_result(self.list_staking_pools(account_arg.index::<N>()?).await)
+    }
+
+    async fn list_pools_for_decommission(
+        &self,
+        account_arg: AccountArg,
+    ) -> rpc::RpcResult<Vec<PoolInfo>> {
+        rpc::handle_result(self.list_pools_for_decommission(account_arg.index::<N>()?).await)
     }
 
     async fn list_delegation_ids(
