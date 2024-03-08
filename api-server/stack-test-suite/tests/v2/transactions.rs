@@ -22,7 +22,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_offset() {
-    let (task, response) = spawn_webserver("/api/v1/transaction?offset=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/transaction?offset=asd").await;
 
     assert_eq!(response.status(), 400);
 
@@ -36,7 +36,7 @@ async fn invalid_offset() {
 
 #[tokio::test]
 async fn invalid_num_items() {
-    let (task, response) = spawn_webserver("/api/v1/transaction?items=asd").await;
+    let (task, response) = spawn_webserver("/api/v2/transaction?items=asd").await;
 
     assert_eq!(response.status(), 400);
 
@@ -56,7 +56,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let more_than_max = rng.gen_range(101..1000);
     let (task, response) =
-        spawn_webserver(&format!("/api/v1/transaction?items={more_than_max}")).await;
+        spawn_webserver(&format!("/api/v2/transaction?items={more_than_max}")).await;
 
     assert_eq!(response.status(), 400);
 
@@ -126,6 +126,7 @@ async fn ok(#[case] seed: Seed) {
                                 additinal_info: TxAdditionalInfo {
                                     input_utxos: utxos,
                                     fee: Amount::ZERO,
+                                    token_decimals: BTreeMap::new(),
                                 },
                             },
                             &chain_config,
@@ -179,7 +180,7 @@ async fn ok(#[case] seed: Seed) {
 
     let expected_transactions = rx.await.unwrap();
     let num_tx = expected_transactions.len();
-    let url = format!("/api/v1/transaction?offset=0&items={num_tx}");
+    let url = format!("/api/v2/transaction?offset=0&items={num_tx}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener

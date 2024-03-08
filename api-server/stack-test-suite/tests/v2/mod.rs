@@ -44,7 +44,10 @@ use api_server_common::storage::{
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
 use api_web_server::{
-    api::{json_helpers::txoutput_to_json, web_server},
+    api::{
+        json_helpers::{txoutput_to_json, TokenDecimals},
+        web_server,
+    },
     ApiServerWebServerState, CachedValues,
 };
 use chainstate::BlockSource;
@@ -68,6 +71,7 @@ use hex::ToHex;
 use rstest::rstest;
 use serde_json::json;
 use std::{
+    collections::BTreeMap,
     net::TcpListener,
     sync::{Arc, RwLock},
 };
@@ -75,7 +79,7 @@ use test_utils::random::{make_seedable_rng, Rng, Seed};
 
 #[tokio::test]
 async fn chain_genesis() {
-    let url = "/api/v1/chain/genesis";
+    let url = "/api/v2/chain/genesis";
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
@@ -94,7 +98,7 @@ async fn chain_genesis() {
                     "timestamp": expected_genesis.timestamp(),
                     "utxos": expected_genesis.utxos()
                              .iter()
-                             .map(|out| txoutput_to_json(out, &chain_config))
+                             .map(|out| txoutput_to_json(out, &chain_config, &TokenDecimals::Single(None)))
                              .collect::<Vec<_>>(),
                 }));
 

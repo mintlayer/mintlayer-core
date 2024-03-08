@@ -24,7 +24,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_block_id() {
-    let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id/transaction-ids").await;
+    let (task, response) = spawn_webserver("/api/v2/block/invalid-block-id/transaction-ids").await;
 
     assert_eq!(response.status(), 400);
 
@@ -39,7 +39,7 @@ async fn invalid_block_id() {
 #[tokio::test]
 async fn block_not_found() {
     let (task, response) = spawn_webserver(
-    "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/transaction-ids").await;
+    "/api/v2/block/0000000000000000000000000000000000000000000000000000000000000001/transaction-ids").await;
 
     assert_eq!(response.status(), 404);
 
@@ -131,7 +131,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let (block_id, expected_transaction_ids) = rx.await.unwrap();
-    let url = format!("/api/v1/block/{block_id}/transaction-ids");
+    let url = format!("/api/v2/block/{block_id}/transaction-ids");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener

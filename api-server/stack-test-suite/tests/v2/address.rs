@@ -24,7 +24,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_address() {
-    let (task, response) = spawn_webserver("/api/v1/address/invalid-address").await;
+    let (task, response) = spawn_webserver("/api/v2/address/invalid-address").await;
 
     assert_eq!(response.status(), 400);
 
@@ -48,7 +48,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v1/address/{}", address.get())).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/address/{}", address.get())).await;
 
     assert_eq!(response.status(), 404);
 
@@ -222,16 +222,16 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
                     (
                         alice_address.get().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO),
+                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json(bob_balance),
-                        "locked_coin_balance": amount_to_json(bob_locked_balance),
+                        "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(bob_locked_balance, chain_config.coin_decimals()),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),
@@ -274,7 +274,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
     });
 
     for (address, expected_balance) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}");
+        let url = format!("/api/v2/address/{address}");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
@@ -465,16 +465,16 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
                     (
                         alice_address.get().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO),
+                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json((bob_balance + bob_locked_balance).unwrap()),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO),
+                        "coin_balance": amount_to_json((bob_balance + bob_locked_balance).unwrap(), chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),
@@ -517,7 +517,7 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
     });
 
     for (address, expected_balance) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}");
+        let url = format!("/api/v2/address/{address}");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener
@@ -688,16 +688,16 @@ async fn ok(#[case] seed: Seed) {
                     (
                         alice_address.get().to_string(),
                         json!({
-                        "coin_balance": amount_to_json(alice_balance),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO),
+                        "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
                         "transaction_history": alice_transaction_history,
                                 }),
                     ),
                     (
                         bob_address.to_string(),
                         json!({
-                        "coin_balance": amount_to_json(bob_balance),
-                        "locked_coin_balance": amount_to_json(Amount::ZERO),
+                        "coin_balance": amount_to_json(bob_balance, chain_config.coin_decimals()),
+                        "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
                         "transaction_history": bob_transaction_history,
                                 }),
                     ),
@@ -740,7 +740,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     for (address, expected_values) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}");
+        let url = format!("/api/v2/address/{address}");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener

@@ -19,7 +19,7 @@ use common::{
     primitives::{per_thousand::PerThousand, time::get_time, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use std::sync::RwLock;
+use std::{collections::BTreeMap, sync::RwLock};
 
 use api_web_server::{
     api::json_helpers::{block_header_to_json, tx_to_json, txoutput_to_json},
@@ -32,7 +32,7 @@ use super::*;
 
 #[tokio::test]
 async fn invalid_block_id() {
-    let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id").await;
+    let (task, response) = spawn_webserver("/api/v2/block/invalid-block-id").await;
 
     assert_eq!(response.status(), 400);
 
@@ -47,7 +47,7 @@ async fn invalid_block_id() {
 #[tokio::test]
 async fn block_not_found() {
     let (task, response) = spawn_webserver(
-        "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001",
+        "/api/v2/block/0000000000000000000000000000000000000000000000000000000000000001",
     )
     .await;
 
@@ -151,7 +151,7 @@ async fn ok(#[case] seed: Seed) {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, tf.chain_config()))
+                        .map(|out| txoutput_to_json(out, tf.chain_config(), &TokenDecimals::Single(None)))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
@@ -203,7 +203,7 @@ async fn ok(#[case] seed: Seed) {
                     "reward": block.block_reward()
                         .outputs()
                         .iter()
-                        .map(|out| txoutput_to_json(out, tf.chain_config()))
+                        .map(|out| txoutput_to_json(out, tf.chain_config(), &TokenDecimals::Single(None)))
                         .collect::<Vec<_>>(),
                     "transactions": block.transactions()
                                         .iter()
@@ -235,7 +235,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let (block_id, new_expected_block, old_block_id, old_expected_block) = rx.await.unwrap();
-    let url = format!("/api/v1/block/{block_id}");
+    let url = format!("/api/v2/block/{block_id}");
 
     // Given that the listener port is open, this will block until a
     // response is made (by the web server, which takes the listener
@@ -251,7 +251,7 @@ async fn ok(#[case] seed: Seed) {
 
     assert_eq!(body, new_expected_block);
 
-    let url = format!("/api/v1/block/{old_block_id}");
+    let url = format!("/api/v2/block/{old_block_id}");
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -286,6 +286,7 @@ async fn get_tx_additional_data(
         tx_additional_data.push(TxAdditionalInfo {
             input_utxos,
             fee: Amount::ZERO,
+            token_decimals: BTreeMap::new(),
         });
     }
     tx_additional_data

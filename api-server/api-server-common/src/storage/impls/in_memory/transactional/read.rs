@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -27,7 +27,7 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+    Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -180,14 +180,14 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     async fn get_address_available_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_address_available_utxos(address)
     }
 
     async fn get_address_all_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_address_all_utxos(address)
     }
 
@@ -195,7 +195,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         &self,
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         self.transaction.get_locked_utxos_until_now(block_height, time_range)
     }
 
@@ -218,5 +218,12 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         token_id: TokenId,
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         self.transaction.get_nft_token_issuance(token_id)
+    }
+
+    async fn get_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        self.transaction.get_token_num_decimals(token_id)
     }
 }

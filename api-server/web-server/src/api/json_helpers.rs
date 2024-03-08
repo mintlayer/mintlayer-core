@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Sub;
+use std::{collections::BTreeMap, ops::Sub};
 
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, TransactionInfo, TxAdditionalInfo,
@@ -21,7 +21,8 @@ use api_server_common::storage::storage_api::{
 use common::{
     address::Address,
     chain::{
-        block::ConsensusData, output_value::OutputValue, Block, ChainConfig, Transaction, TxOutput,
+        block::ConsensusData, output_value::OutputValue, tokens::TokenId, Block, ChainConfig,
+        Transaction, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256,
@@ -29,16 +30,43 @@ use common::{
 use hex::ToHex;
 use serde_json::json;
 
-pub fn amount_to_json(amount: Amount) -> serde_json::Value {
-    amount.into_atoms().to_string().into()
+pub enum TokenDecimals<'a> {
+    Map(&'a BTreeMap<TokenId, u8>),
+    Single(Option<u8>),
 }
 
-pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> serde_json::Value {
+impl<'a> TokenDecimals<'a> {
+    fn get(&self, token_id: &TokenId) -> u8 {
+        match self {
+            Self::Single(decimals) => decimals.expect("must exist"),
+            Self::Map(map) => *map.get(token_id).expect("must exist"),
+        }
+    }
+}
+
+impl<'a> From<&'a BTreeMap<TokenId, u8>> for TokenDecimals<'a> {
+    fn from(value: &'a BTreeMap<TokenId, u8>) -> Self {
+        Self::Map(value)
+    }
+}
+
+pub fn amount_to_json(amount: Amount, number_of_decimals: u8) -> serde_json::Value {
+    json!({
+        "decimal": amount.into_fixedpoint_str(number_of_decimals),
+        "atoms": amount.into_atoms().to_string(),
+    })
+}
+
+pub fn outputvalue_to_json(
+    value: &OutputValue,
+    chain_config: &ChainConfig,
+    token_decimals: &TokenDecimals,
+) -> serde_json::Value {
     match value {
         OutputValue::Coin(amount) => {
             json!({
                 "type": "Coin",
-                "amount": amount_to_json(*amount),
+                "amount": amount_to_json(*amount, chain_config.coin_decimals()),
             })
         }
         OutputValue::TokenV0(_) => {
@@ -50,26 +78,29 @@ pub fn outputvalue_to_json(value: &OutputValue, chain_config: &ChainConfig) -> s
             json!({
                 "type": "TokenV1",
                 "token_id": Address::new(chain_config, token_id).expect("no error").get(),
-                // TODO: fix this with token decimals when we store token info in the DB
-                "amount": amount_to_json(*amount),
+                "amount": amount_to_json(*amount, token_decimals.get(token_id)),
             })
         }
     }
 }
 
-pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_json::Value {
+pub fn txoutput_to_json(
+    out: &TxOutput,
+    chain_config: &ChainConfig,
+    token_decimals: &TokenDecimals,
+) -> serde_json::Value {
     match out {
         TxOutput::Transfer(value, dest) => {
             json!({
                 "type": "Transfer",
-                "value": outputvalue_to_json(value, chain_config),
+                "value": outputvalue_to_json(value, chain_config, token_decimals),
                 "destination": Address::new(chain_config, dest).expect("no error").get(),
             })
         }
         TxOutput::LockThenTransfer(value, dest, lock) => {
             json!({
                 "type": "LockThenTransfer",
-                "value": outputvalue_to_json(value, chain_config),
+                "value": outputvalue_to_json(value, chain_config, token_decimals),
                 "destination": Address::new(chain_config, dest).expect("no error").get(),
                 "lock": lock,
             })
@@ -77,7 +108,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
         TxOutput::Burn(value) => {
             json!({
                 "type": "LockThenTransfer",
-                "value": outputvalue_to_json(value, chain_config),
+                "value": outputvalue_to_json(value, chain_config, token_decimals),
             })
         }
         TxOutput::CreateStakePool(pool_id, data) => {
@@ -85,12 +116,12 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
                 "type": "CreateStakePool",
                 "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
                 "data": {
-                    "amount": amount_to_json(data.pledge()),
+                    "amount": amount_to_json(data.pledge(), chain_config.coin_decimals()),
                     "staker": Address::new(chain_config, data.staker()).expect("no error").get(),
                     "vrf_public_key": Address::new(chain_config, data.vrf_public_key()).expect("no error").get(),
                     "decommission_key": Address::new(chain_config, data.decommission_key()).expect("no error").get(),
                     "margin_ratio_per_thousand": data.margin_ratio_per_thousand(),
-                    "cost_per_block": amount_to_json(data.cost_per_block())
+                    "cost_per_block": amount_to_json(data.cost_per_block(), chain_config.coin_decimals())
                 },
             })
         }
@@ -98,7 +129,7 @@ pub fn txoutput_to_json(out: &TxOutput, chain_config: &ChainConfig) -> serde_jso
             json!({
                 "type": "DelegateStaking",
                 "delegation_id": Address::new(chain_config, delegation_id).expect("no error").get(),
-                "amount": amount_to_json(*amount),
+                "amount": amount_to_json(*amount, chain_config.coin_decimals()),
             })
         }
         TxOutput::CreateDelegationId(dest, pool_id) => {
@@ -155,14 +186,14 @@ pub fn tx_to_json(
     "version_byte": tx.version_byte(),
     "is_replaceable": tx.is_replaceable(),
     "flags": tx.flags(),
-    "fee": amount_to_json(additinal_info.fee),
+    "fee": amount_to_json(additinal_info.fee, chain_config.coin_decimals()),
     "inputs": tx.inputs().iter().zip(additinal_info.input_utxos.iter()).map(|(inp, utxo)| json!({
         "input": inp,
-        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config)),
+        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additinal_info.token_decimals).into())),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
             .iter()
-            .map(|out| txoutput_to_json(out, chain_config))
+            .map(|out| txoutput_to_json(out, chain_config, &(&additinal_info.token_decimals).into()))
             .collect::<Vec<_>>()
     })
 }

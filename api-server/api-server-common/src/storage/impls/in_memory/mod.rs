@@ -18,14 +18,13 @@ pub mod transactional;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
-    TransactionInfo, Utxo, UtxoLock,
+    TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, Genesis, PoolId, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, Genesis, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -416,7 +415,7 @@ impl ApiServerInMemoryStorage {
     fn get_address_available_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let result = self.address_utxos.get(address).map_or(vec![], |outpoints| {
             outpoints
                 .iter()
@@ -428,7 +427,7 @@ impl ApiServerInMemoryStorage {
                         self.get_utxo(outpoint.clone())
                             .expect("no error")
                             .expect("must exist")
-                            .output()
+                            .utxo_with_extra_info()
                             .clone(),
                     ))
                 })
@@ -440,7 +439,7 @@ impl ApiServerInMemoryStorage {
     fn get_address_all_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let result = self
             .address_utxos
             .get(address)
@@ -457,10 +456,10 @@ impl ApiServerInMemoryStorage {
                                 .values()
                                 .last()
                                 .expect("not empty")
-                                .output()
+                                .utxo_with_extra_info()
                                 .clone()
                         },
-                        |utxo| utxo.output().clone(),
+                        |utxo| utxo.utxo_with_extra_info().clone(),
                     ),
                 )
             })
@@ -472,7 +471,7 @@ impl ApiServerInMemoryStorage {
         &self,
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let result = self
             .locked_utxo_table
             .iter()
@@ -482,7 +481,7 @@ impl ApiServerInMemoryStorage {
                     UtxoLock::UntilHeight(height) => height == block_height,
                     UtxoLock::UntilTime(time) => time > time_range.0 && time <= time_range.1,
                 }
-                .then_some((outpint.clone(), locked_utxo.output().clone()))
+                .then_some((outpint.clone(), locked_utxo.utxo_with_extra_info().clone()))
             })
             .collect();
         Ok(result)
@@ -521,6 +520,17 @@ impl ApiServerInMemoryStorage {
             .nft_token_issuances
             .get(&token_id)
             .map(|by_height| by_height.values().last().cloned().expect("not empty")))
+    }
+
+    fn get_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_issuances
+            .get(&token_id)
+            .map(|data| data.values().last().expect("not empty").number_of_decimals)
+            .or_else(|| self.nft_token_issuances.get(&token_id).map(|_| 0)))
     }
 }
 

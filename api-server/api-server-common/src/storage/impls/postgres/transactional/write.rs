@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -30,7 +30,7 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo, Delegation,
-        FungibleTokenData, LockedUtxo, PoolBlockStats, TransactionInfo, Utxo,
+        FungibleTokenData, LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -524,7 +524,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_address_available_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_available_utxos(address).await?;
 
@@ -534,7 +534,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_address_all_utxos(
         &self,
         address: &str,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_address_all_utxos(address).await?;
 
@@ -545,7 +545,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
         &self,
         block_height: BlockHeight,
         time_range: (BlockTimestamp, BlockTimestamp),
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ApiServerStorageError> {
+    ) -> Result<Vec<(UtxoOutPoint, UtxoWithExtraInfo)>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_locked_utxos_until_now(block_height, time_range).await?;
 
@@ -578,6 +578,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Option<NftIssuance>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_nft_token_issuance(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_token_num_decimals(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<u8>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_num_decimals(token_id).await?;
 
         Ok(res)
     }

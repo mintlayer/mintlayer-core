@@ -25,7 +25,7 @@ use super::*;
 async fn dissabled_post_route() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let url = "/api/v1/transaction";
+    let url = "/api/v2/transaction";
 
     let task = tokio::spawn(async move {
         let web_server_state = {
@@ -74,7 +74,7 @@ async fn dissabled_post_route() {
 async fn invalid_transaction() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let url = "/api/v1/transaction";
+    let url = "/api/v2/transaction";
 
     let task = tokio::spawn(async move {
         let web_server_state = {
@@ -127,7 +127,7 @@ async fn invalid_transaction() {
 async fn ok(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let url = "/api/v1/transaction";
+    let url = "/api/v2/transaction";
 
     let mut rng = make_seedable_rng(seed);
 

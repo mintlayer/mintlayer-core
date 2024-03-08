@@ -26,7 +26,7 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
         BlockInfo, Delegation, FungibleTokenData, LockedUtxo, TransactionInfo, TxAdditionalInfo,
-        Utxo, UtxoLock,
+        Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -316,6 +316,7 @@ where
                 additinal_info: TxAdditionalInfo {
                     fee: Amount::from_atoms(rng.gen_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
+                    token_decimals: BTreeMap::new(),
                 },
             };
             db_tx.set_transaction(tx1.transaction().get_id(), None, &tx_info).await.unwrap();
@@ -335,6 +336,7 @@ where
                 additinal_info: TxAdditionalInfo {
                     fee: Amount::from_atoms(rng.gen_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
+                    token_decimals: BTreeMap::new(),
                 },
             };
             db_tx
@@ -414,13 +416,14 @@ where
             bob_destination.clone(),
         );
 
-        let utxo = Utxo::new(output.clone(), false);
+        let utxo = Utxo::new(output.clone(), None, false);
         let block_height = BlockHeight::new(rng.gen_range(1..100));
 
         // set one and get it
         {
             let locked_utxo = LockedUtxo::new(
                 output.clone(),
+                None,
                 UtxoLock::UntilHeight(block_height.next_height()),
             );
             db_tx
@@ -447,7 +450,13 @@ where
                 )
                 .await
                 .unwrap();
-            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+            assert_eq!(
+                bob_utxos,
+                vec![(
+                    outpoint.clone(),
+                    UtxoWithExtraInfo::new(output.clone(), None),
+                )]
+            );
 
             db_tx
                 .del_locked_utxo_above_height(block_height.prev_height().unwrap())
@@ -455,8 +464,11 @@ where
                 .unwrap();
 
             let next_block_timestamp = block_timestamp.add_int_seconds(10).unwrap();
-            let locked_utxo =
-                LockedUtxo::new(output.clone(), UtxoLock::UntilTime(next_block_timestamp));
+            let locked_utxo = LockedUtxo::new(
+                output.clone(),
+                None,
+                UtxoLock::UntilTime(next_block_timestamp),
+            );
             db_tx
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
@@ -480,7 +492,13 @@ where
                 )
                 .await
                 .unwrap();
-            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+            assert_eq!(
+                bob_utxos,
+                vec![(
+                    outpoint.clone(),
+                    UtxoWithExtraInfo::new(output.clone(), None),
+                )]
+            );
         }
 
         // get all utxos
@@ -505,6 +523,7 @@ where
             // setup a locked utxo
             let locked_utxo = LockedUtxo::new(
                 output.clone(),
+                None,
                 UtxoLock::UntilHeight(block_height.next_height()),
             );
             db_tx
@@ -518,7 +537,7 @@ where
                 .unwrap();
 
             // set it as unlocked at next block height
-            let utxo = Utxo::new(output.clone(), false);
+            let utxo = Utxo::new(output.clone(), None, false);
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
@@ -530,7 +549,7 @@ where
                 .unwrap();
 
             // and set it as spent on the next block height
-            let spent_utxo = Utxo::new(output.clone(), true);
+            let spent_utxo = Utxo::new(output.clone(), None, true);
             db_tx
                 .set_utxo_at_height(
                     outpoint.clone(),
@@ -555,6 +574,7 @@ where
 
             let locked_utxo = LockedUtxo::new(
                 locked_output.clone(),
+                None,
                 UtxoLock::UntilHeight(BlockHeight::new(rng.gen_range(10000..100000))),
             );
             db_tx
@@ -572,11 +592,14 @@ where
             assert_eq!(utxos.len(), 2);
             assert_eq!(
                 utxos.iter().find(|utxo| utxo.0 == outpoint),
-                Some(&(outpoint.clone(), output.clone()))
+                Some(&(
+                    outpoint.clone(),
+                    UtxoWithExtraInfo::new(output.clone(), None)
+                ))
             );
             assert_eq!(
                 utxos.iter().find(|utxo| utxo.0 == locked_outpoint),
-                Some(&(locked_outpoint, locked_output))
+                Some(&(locked_outpoint, UtxoWithExtraInfo::new(locked_output, None)))
             );
         }
 
@@ -588,7 +611,13 @@ where
                 .unwrap();
 
             let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
-            assert_eq!(bob_utxos, vec![(outpoint.clone(), output.clone())]);
+            assert_eq!(
+                bob_utxos,
+                vec![(
+                    outpoint.clone(),
+                    UtxoWithExtraInfo::new(output.clone(), None)
+                )]
+            );
         }
 
         // set another one and retrieve both
@@ -604,7 +633,7 @@ where
                 bob_destination,
             );
 
-            let utxo = Utxo::new(output2.clone(), false);
+            let utxo = Utxo::new(output2.clone(), None, false);
             let block_height = BlockHeight::new(rng.gen_range(1..100));
             db_tx
                 .set_utxo_at_height(
@@ -617,8 +646,13 @@ where
                 .unwrap();
 
             let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
-            let mut expected_utxos =
-                BTreeMap::from_iter([(outpoint, output), (outpoint2.clone(), output2.clone())]);
+            let mut expected_utxos = BTreeMap::from_iter([
+                (outpoint, UtxoWithExtraInfo::new(output, None)),
+                (
+                    outpoint2.clone(),
+                    UtxoWithExtraInfo::new(output2.clone(), None),
+                ),
+            ]);
             assert_eq!(bob_utxos.len(), 2);
 
             for (outpoint, output) in bob_utxos {
@@ -626,16 +660,11 @@ where
                 assert_eq!(&output, expected);
             }
 
-            // set the new one to spent
-            let utxo = Utxo::new(output2.clone(), true);
+            // set the new one to spent in the same block
+            let utxo = Utxo::new(output2.clone(), None, true);
             expected_utxos.remove(&outpoint2);
             db_tx
-                .set_utxo_at_height(
-                    outpoint2,
-                    utxo,
-                    bob_address.get(),
-                    block_height.next_height(),
-                )
+                .set_utxo_at_height(outpoint2, utxo, bob_address.get(), block_height)
                 .await
                 .unwrap();
 

@@ -28,7 +28,7 @@ use super::*;
 #[trace]
 #[tokio::test]
 async fn invalid_query_parameter() {
-    let (task, response) = spawn_webserver("/api/v1/feerate?in_top_x_mb=invalid").await;
+    let (task, response) = spawn_webserver("/api/v2/feerate?in_top_x_mb=invalid").await;
 
     assert_eq!(response.status(), 400);
 
@@ -80,7 +80,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     let response = reqwest::get(format!(
-        "http://{}:{}/api/v1/feerate?in_top_x_mb={in_top_x_mb}",
+        "http://{}:{}/api/v2/feerate?in_top_x_mb={in_top_x_mb}",
         addr.ip(),
         addr.port()
     ))
@@ -153,7 +153,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
 
     while time_passed <= REFRESH_INTERVAL_SEC {
         let response = reqwest::get(format!(
-            "http://{}:{}/api/v1/feerate?in_top_x_mb={in_top_x_mb}",
+            "http://{}:{}/api/v2/feerate?in_top_x_mb={in_top_x_mb}",
             addr.ip(),
             addr.port()
         ))
@@ -171,7 +171,7 @@ async fn ok_reload_feerate(#[case] seed: Seed) {
 
     // after the refresh interval we will get the new feerates
     let response = reqwest::get(format!(
-        "http://{}:{}/api/v1/feerate?in_top_x_mb={in_top_x_mb}",
+        "http://{}:{}/api/v2/feerate?in_top_x_mb={in_top_x_mb}",
         addr.ip(),
         addr.port()
     ))

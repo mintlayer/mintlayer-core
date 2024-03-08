@@ -30,7 +30,7 @@ use super::{
 
 #[tokio::test]
 async fn invalid_address() {
-    let (task, response) = spawn_webserver("/api/v1/address/invalid-address/delegations").await;
+    let (task, response) = spawn_webserver("/api/v2/address/invalid-address/delegations").await;
 
     assert_eq!(response.status(), 400);
 
@@ -55,7 +55,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
     let (task, response) =
-        spawn_webserver(&format!("/api/v1/address/{}/delegations", address.get())).await;
+        spawn_webserver(&format!("/api/v2/address/{}/delegations", address.get())).await;
 
     assert_eq!(response.status(), 200);
 
@@ -173,7 +173,7 @@ async fn ok(#[case] seed: Seed) {
                                 ).get(),
                                 "next_nonce": AccountNonce::new(0),
                                 "spend_destination": alice_address.get(),
-                                "balance": amount_to_json(amount),
+                                "balance": amount_to_json(amount, chain_config.coin_decimals()),
                             })})
                             .collect::<Vec<_>>()
                             .into(),
@@ -218,7 +218,7 @@ async fn ok(#[case] seed: Seed) {
     });
 
     for (address, expected) in rx.await.unwrap() {
-        let url = format!("/api/v1/address/{address}/delegations");
+        let url = format!("/api/v2/address/{address}/delegations");
 
         // Given that the listener port is open, this will block until a
         // response is made (by the web server, which takes the listener

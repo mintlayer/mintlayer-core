@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub mod json_helpers;
-pub mod v1;
+pub mod v2;
 
 use crate::{
     api,
@@ -41,7 +41,7 @@ async fn bad_request() -> Result<(), ApiServerWebServerError> {
 #[allow(clippy::unused_async)]
 async fn server_status() -> Result<impl IntoResponse, ApiServerWebServerError> {
     Ok(Json(json!({
-        "versions": [api::v1::API_VERSION]
+        "versions": [api::v2::API_VERSION]
         //"network": "testnet",
     })))
 }
@@ -62,7 +62,7 @@ pub fn web_server<
 
     let routes = Router::new()
         .route("/", get(server_status))
-        .nest("/api/v1", api::v1::routes(enable_post_endpoints))
+        .nest("/api/v2", api::v2::routes(enable_post_endpoints))
         .fallback(bad_request)
         .with_state(state)
         .layer(cors_layer);
