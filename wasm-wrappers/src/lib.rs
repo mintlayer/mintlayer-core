@@ -587,11 +587,15 @@ pub fn encode_input_for_withdraw_from_delegation(
     Ok(input.encode())
 }
 
-/// Given inputs, each input's destination (from the UTXO or Account) and outputs, estimate the transaction size.
+/// Given the inputs, along each input's destination that can spend that input
+/// (e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it's mtc1xxxx in element number 2 in the vector/list.
+/// for Account inputs that spend from a delegation it is the owning address of that delegation,
+/// and in the case of AccountCommand inputs which change a token it is the token's authority destination)
+/// and the outputs, estimate the transaction size.
 #[wasm_bindgen]
 pub fn estimate_transaction_size(
     inputs: &[u8],
-    input_destinations: Vec<String>,
+    input_utxos_destinations: Vec<String>,
     mut outputs: &[u8],
     network: Network,
 ) -> Result<usize, Error> {
@@ -607,8 +611,8 @@ pub fn estimate_transaction_size(
 
     let mut total_size = size + inputs_size;
 
-    for address in input_destinations {
-        let destination = parse_addressable::<Destination>(&chain_config, &address)?;
+    for destination in input_utxos_destinations {
+        let destination = parse_addressable::<Destination>(&chain_config, &destination)?;
         let signature_size = input_signature_size_from_destination(&destination)
             .map_err(|_| Error::InvalidAddressable)?;
 
