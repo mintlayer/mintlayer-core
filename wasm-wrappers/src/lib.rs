@@ -33,7 +33,7 @@ use common::{
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, H256},
-    size_estimation::{input_signature_size, tx_size_with_outputs},
+    size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
 use crypto::key::{
     extended::{ExtendedKeyKind, ExtendedPrivateKey},
@@ -587,13 +587,15 @@ pub fn encode_input_for_withdraw_from_delegation(
     Ok(input.encode())
 }
 
-/// Given inputs, outputs and utxos (each encoded as `Option<TxOutput>`), estimate the transaction size.
+/// Given inputs, each input's destination (from the UTXO or Account) and outputs, estimate the transaction size.
 #[wasm_bindgen]
 pub fn estimate_transaction_size(
     inputs: &[u8],
-    mut opt_utxos: &[u8],
+    input_destinations: Vec<String>,
     mut outputs: &[u8],
+    network: Network,
 ) -> Result<usize, Error> {
+    let chain_config = Builder::new(network.into()).build();
     let mut tx_outputs = vec![];
     while !outputs.is_empty() {
         let output = TxOutput::decode(&mut outputs).map_err(|_| Error::InvalidOutput)?;
@@ -605,14 +607,10 @@ pub fn estimate_transaction_size(
 
     let mut total_size = size + inputs_size;
 
-    while !opt_utxos.is_empty() {
-        let utxo = Option::<TxOutput>::decode(&mut opt_utxos).map_err(|_| Error::InvalidInput)?;
-        let signature_size = utxo
-            .as_ref()
-            .map(input_signature_size)
-            .transpose()
-            .map_err(|_| Error::InvalidInput)?
-            .unwrap_or(0);
+    for address in input_destinations {
+        let destination = parse_addressable::<Destination>(&chain_config, &address)?;
+        let signature_size = input_signature_size_from_destination(&destination)
+            .map_err(|_| Error::InvalidAddressable)?;
 
         total_size += signature_size;
     }

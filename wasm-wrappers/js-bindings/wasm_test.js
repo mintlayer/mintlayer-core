@@ -611,8 +611,9 @@ export async function run_test() {
 
     const estimated_size = estimate_transaction_size(
       inputs,
-      opt_utxos,
-      outputs
+      [address, address],
+      outputs,
+      Network.Testnet,
     );
     if (estimated_size != expected_signed_tx.length) {
       throw new Error("wrong estimated size");
