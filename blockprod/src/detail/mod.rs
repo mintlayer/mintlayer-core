@@ -535,6 +535,195 @@ impl BlockProduction {
         }
     }
 
+    async fn stubborn_produce_block_with_custom_id(
+        &self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        custom_id_maybe: Option<Vec<u8>>,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        if !self.blockprod_config.skip_ibd_check {
+            let is_initial_block_download = self
+                .chainstate_handle
+                .call(|this| this.is_initial_block_download())
+                .await
+                .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
+
+            if is_initial_block_download {
+                return Err(BlockProductionError::ChainstateWaitForSync);
+            }
+        }
+
+        let current_peer_count = self
+            .p2p_handle
+            .call_async_mut(move |this| this.get_peer_count())
+            .await?
+            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+
+        if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
+            return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
+                current_peer_count,
+                self.blockprod_config.min_peers_to_produce_blocks,
+            ));
+        }
+
+        let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
+        let tip_at_start = self.pull_best_block_index().await?;
+        let custom_id = custom_id_maybe.map_or_else(
+            || CustomId::new_from_input_data(&input_data),
+            CustomId::new_from_value,
+        );
+
+        let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) = self
+            .job_manager_handle
+            .add_job(custom_id.clone(), tip_at_start.block_id())
+            .await?;
+
+        // This destructor ensures that the job manager cleans up its
+        // housekeeping for the job when this current function returns
+        let (job_stopper_function, job_finished_receiver) =
+            self.job_manager_handle.make_job_stopper_function();
+        let _job_stopper_destructor = {
+            let job_key = job_key.clone();
+            OnceDestructor::new(move || job_stopper_function(job_key))
+        };
+
+        // Unlike Proof of Work, which can vary any header field when
+        // searching for a valid block, Proof of Stake can only vary
+        // the header timestamp. Its search space starts at the
+        // previous block's timestamp + 1 second, and ends at the
+        // current timestamp + some distance in time defined by the
+        // blockchain.
+        //
+        // This variable keeps track of the last timestamp that was
+        // attempted, and during Proof of Stake, will prevent
+        // searching over the same search space, across multiple
+        // calls, given the same tip
+        let last_timestamp_seconds_used = {
+            let tip_timestamp = cmp::max(
+                previous_last_used_block_timestamp.unwrap_or(BlockTimestamp::from_int_seconds(0)),
+                tip_at_start.block_timestamp(),
+            );
+
+            let tip_plus_one = tip_timestamp
+                .add_int_seconds(1)
+                .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
+
+            Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
+        };
+
+        // Range of timestamps for the block we attempt to construct.
+        let min_constructed_block_timestamp =
+            BlockTimestamp::from_time(self.time_getter().get_time());
+        let max_constructed_block_timestamp = min_constructed_block_timestamp
+            .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+            .ok_or(ConsensusCreationError::TimestampOverflow(
+                min_constructed_block_timestamp,
+                self.chain_config.max_future_block_time_offset().as_secs(),
+            ))?;
+
+        loop {
+            {
+                // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
+                let last_used_block_timestamp =
+                    BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
+
+                if last_used_block_timestamp >= max_constructed_block_timestamp {
+                    stop_flag.store(true);
+                    return Err(BlockProductionError::TryAgainLater);
+                }
+
+                self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
+                    .await?;
+            }
+
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
+                self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
+
+            if current_tip_index.block_id() != tip_at_start.block_id() {
+                log::info!(
+                    "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
+                    tip_at_start.block_id(),
+                    tip_at_start.block_height(),
+                    current_tip_index.block_id(),
+                    current_tip_index.block_height(),
+                );
+                return Err(BlockProductionError::TipChanged(
+                    tip_at_start.block_id(),
+                    tip_at_start.block_height(),
+                    current_tip_index.block_id(),
+                    current_tip_index.block_height(),
+                ));
+            }
+
+            // We conservatively use the minimum timestamp here in order to figure out
+            // which transactions are valid for the block.
+            // TODO: Alternatively, we can construct the transaction sequence from
+            // scratch every time a different timestamp is attempted. That is more costly
+            // in terms of computational resources but will allow the node to include more
+            // transactions since the passing time may release some time locks.
+            let accumulator = self
+                .collect_transactions(
+                    current_tip_index.block_id(),
+                    min_constructed_block_timestamp,
+                    transactions.clone(),
+                    transaction_ids.clone(),
+                    packing_strategy,
+                )
+                .await?;
+
+            let collected_transactions = match accumulator {
+                Some(acc) => acc.transactions().to_vec(),
+                None => continue,
+            };
+
+            let block_body = BlockBody::new(block_reward, collected_transactions);
+
+            // A synchronous channel that sends only when the mining/staking is done
+            let (ended_sender, ended_receiver) = mpsc::channel::<()>();
+
+            // Return the result of mining
+            let (result_sender, mut result_receiver) = oneshot::channel();
+
+            self.spawn_block_solver(
+                &current_tip_index,
+                Arc::clone(&stop_flag),
+                &block_body,
+                Arc::clone(&last_timestamp_seconds_used),
+                finalize_block_data,
+                consensus_data,
+                ended_sender,
+                result_sender,
+            )?;
+
+            tokio::select! {
+                _ = cancel_receiver.recv() => {
+                    stop_flag.store(true);
+
+                    // This can fail if the mining thread has already finished
+                    let _ended = ended_receiver.recv();
+
+                    return Err(BlockProductionError::Cancelled);
+                }
+                solve_receive_result = &mut result_receiver => {
+                    let mining_result = match solve_receive_result {
+                        Ok(mining_result) => mining_result,
+                        Err(_) => continue,
+                    };
+
+                    let signed_block_header = match mining_result {
+                        Ok(header) => header,
+                        Err(_) => continue,
+                    };
+
+                    let block = Block::new_from_header(signed_block_header, block_body.clone())?;
+                    return Ok((block, job_finished_receiver));
+                }
+            }
+        }
+    }
+
     // TODO: here, `block_timestamp_seconds` is a scary thing because, by being AcqRel, it might
     // imply that we perform thread synchronization through it. Which would be a bad thing
     // to do, because thread synchronization via atomics is too low-level and non-trivial

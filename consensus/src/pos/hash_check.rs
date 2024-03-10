@@ -47,7 +47,7 @@ fn check_pos_hash_v0(
         epoch_index,
         block_timestamp,
         random_seed,
-        pos_data,
+        pos_data.vrf_data(),
         vrf_pub_key,
     )?
     .value()
@@ -85,7 +85,7 @@ fn check_pos_hash_v1(
         epoch_index,
         block_timestamp,
         random_seed,
-        pos_data,
+        pos_data.vrf_data(),
         vrf_pub_key,
     )?
     .value()

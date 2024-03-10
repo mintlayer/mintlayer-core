@@ -20,6 +20,7 @@ mod pos;
 mod pow;
 mod validator;
 
+use crypto::vrf;
 pub use pos::calculate_effective_pool_balance;
 
 use std::sync::Arc;
@@ -176,52 +177,61 @@ pub fn finalize_consensus_data(
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.consensus_upgrades().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
-        RequiredConsensus::PoS(pos_status) => match block_header.consensus_data() {
-            ConsensusData::None => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::NoInputDataProvided,
-            )),
-            ConsensusData::PoW(_) => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::PoWInputDataProvided,
-            )),
-            ConsensusData::PoS(pos_data) => match finalize_data {
-                FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
+        RequiredConsensus::PoS(pos_status) => {
+            let consensus_data = block_header.consensus_data().clone();
+            match consensus_data {
+                ConsensusData::None => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::NoInputDataProvided,
                 )),
-                FinalizeBlockInputData::PoW => Err(ConsensusCreationError::StakingError(
+                ConsensusData::PoW(_) => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::PoWInputDataProvided,
                 )),
-                FinalizeBlockInputData::PoS(finalize_pos_data) => {
-                    let stake_private_key = finalize_pos_data.stake_private_key().clone();
+                ConsensusData::PoS(mut pos_data) => match finalize_data {
+                    FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
+                        ConsensusPoSError::NoInputDataProvided,
+                    )),
+                    FinalizeBlockInputData::PoW => Err(ConsensusCreationError::StakingError(
+                        ConsensusPoSError::PoWInputDataProvided,
+                    )),
+                    FinalizeBlockInputData::PoS(finalize_pos_data) => {
+                        let stake_private_key = finalize_pos_data.stake_private_key().clone();
 
-                    let stake_result = stake(
-                        chain_config,
-                        pos_status.get_chain_config(),
-                        &mut pos_data.clone(),
-                        block_header,
-                        Arc::clone(&block_timestamp_seconds),
-                        finalize_pos_data,
-                        stop_flag,
-                    )?;
+                        let stake_result = stake(
+                            chain_config,
+                            pos_status.get_chain_config(),
+                            pos_data.as_ref().clone(),
+                            Arc::clone(&block_timestamp_seconds),
+                            finalize_pos_data,
+                            stop_flag,
+                        )?;
 
-                    let signed_block_header = stake_private_key
-                        .sign_message(&block_header.encode())
-                        .map_err(|_| {
-                            ConsensusCreationError::StakingError(
-                                ConsensusPoSError::FailedToSignBlockHeader,
-                            )
-                        })
-                        .map(BlockHeaderSignatureData::new)
-                        .map(BlockHeaderSignature::HeaderSignature)
-                        .map(|signed_data| block_header.clone().with_signature(signed_data))?;
+                        match stake_result {
+                            StakeResult::Success(block_timestamp, vrf_data) => {
+                                pos_data.update_vrf_data(vrf_data);
+                                block_header.update_timestamp(block_timestamp);
+                                block_header.update_consensus_data(ConsensusData::PoS(pos_data));
 
-                    match stake_result {
-                        StakeResult::Success => Ok(signed_block_header),
-                        StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
-                        StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
+                                let signed_block_header = stake_private_key
+                                    .sign_message(&block_header.encode())
+                                    .map_err(|_| {
+                                        ConsensusCreationError::StakingError(
+                                            ConsensusPoSError::FailedToSignBlockHeader,
+                                        )
+                                    })
+                                    .map(BlockHeaderSignatureData::new)
+                                    .map(BlockHeaderSignature::HeaderSignature)
+                                    .map(|signed_data| {
+                                        block_header.clone().with_signature(signed_data)
+                                    })?;
+                                Ok(signed_block_header)
+                            }
+                            StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
+                            StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
+                        }
                     }
-                }
-            },
-        },
+                },
+            }
+        }
         RequiredConsensus::PoW(_) => match block_header.consensus_data() {
             ConsensusData::None => Err(ConsensusCreationError::MiningError(
                 ConsensusPoWError::NoInputDataProvided,

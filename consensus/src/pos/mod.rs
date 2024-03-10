@@ -21,6 +21,7 @@ pub mod kernel;
 pub mod target;
 
 mod effective_pool_balance;
+use crypto::vrf::VRFReturn;
 pub use effective_pool_balance::effective_pool_balance as calculate_effective_pool_balance;
 pub use effective_pool_balance::EffectivePoolBalanceError;
 
@@ -34,7 +35,7 @@ use common::{
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            timestamp::BlockTimestamp,
         },
         ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
     },
@@ -55,9 +56,9 @@ use crate::{
 };
 
 #[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StakeResult {
-    Success,
+    Success(BlockTimestamp, VRFReturn),
     Failed,
     Stopped,
 }
@@ -201,8 +202,7 @@ where
 pub fn stake(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
-    pos_data: &mut Box<PoSData>,
-    block_header: &mut BlockHeader,
+    mut pos_data: PoSData,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
     stop_flag: Arc<RelaxedAtomicBool>,
@@ -245,7 +245,7 @@ pub fn stake(
             pos_config.consensus_version(),
             finalize_pos_data.epoch_index(),
             sealed_epoch_randomness,
-            pos_data,
+            &pos_data,
             &vrf_pk,
             block_timestamp,
             finalize_pos_data.pledge_amount(),
@@ -260,9 +260,10 @@ pub fn stake(
                 pos_data.stake_pool_id()
             );
 
-            block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
-            block_header.update_timestamp(block_timestamp);
-            return Ok(StakeResult::Success);
+            return Ok(StakeResult::Success(
+                block_timestamp,
+                pos_data.vrf_data().clone(),
+            ));
         }
 
         if stop_flag.load() {

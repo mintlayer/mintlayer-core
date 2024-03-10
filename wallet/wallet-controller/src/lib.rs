@@ -483,7 +483,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 )
                 .await;
             match block_res {
-                Ok(block) => return Ok(block),
+                Ok(block) => return Ok(block), // FIXME: better block later in loop?
                 Err(err) => last_error = err,
             }
         }
