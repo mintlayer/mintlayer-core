@@ -78,7 +78,7 @@ def delete_docker_image(image_name, version):
 
 def build_instances(version, docker_hub_user, num_jobs):
     if num_jobs is None:
-        num_jobs = len(os.sched_getaffinity(0))
+        num_jobs = os.cpu_count() or 1
 
     build_docker_image("build-tools/docker/Dockerfile.builder",
                         "mintlayer-builder", "latest", num_jobs)
