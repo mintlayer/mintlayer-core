@@ -852,11 +852,13 @@ where
                     .await?
                     .into_coins_and_tokens();
 
+                let coins = coins.decimal();
                 let mut output = format!("Coins amount: {coins}\n");
 
                 for (token_id, amount) in tokens {
                     let token_id = Address::new(chain_config, &token_id)
                         .expect("Encoding token id should never fail");
+                    let amount = amount.decimal();
                     writeln!(&mut output, "Token: {token_id} amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
                 }
@@ -1236,7 +1238,10 @@ where
                     .await?
                     .into_iter()
                     .map(|info| {
-                        format_delegation_info(info.delegation_id, info.balance.to_string())
+                        format_delegation_info(
+                            info.delegation_id,
+                            info.balance.decimal().to_string(),
+                        )
                     })
                     .collect();
                 Ok(ConsoleCommand::Print(delegations.join("\n").to_string()))
@@ -1340,6 +1345,7 @@ where
 
 fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {
     let (coins, tokens) = fees.into_coins_and_tokens();
+    let coins = coins.decimal();
     writeln!(
         output,
         "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
@@ -1349,6 +1355,7 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
     for (token_id, amount) in tokens {
         let token_id =
             Address::new(chain_config, &token_id).expect("Encoding token id should never fail");
+        let amount = amount.decimal();
         writeln!(output, "Token: {token_id} amount: {amount}")
             .expect("Writing to a memory buffer should not fail");
     }

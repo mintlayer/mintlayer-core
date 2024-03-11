@@ -27,7 +27,10 @@ use utils::{
     ACCOUNT1_ARG,
 };
 use wallet_rpc_lib::{
-    types::{AddressInfo, Balances, BlockInfo, NewAccountInfo, NewTransaction, TransactionOptions},
+    types::{
+        AddressInfo, Balances, BlockInfo, NewAccountInfo, NewTransaction, RpcAmountIn,
+        TransactionOptions,
+    },
     TxState,
 };
 
@@ -97,7 +100,6 @@ impl EventInfo {
 async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let tf = utils::TestFramework::start(&mut rng).await;
-    let coin_decimals = tf.chain_config().coin_decimals();
 
     let wallet_rpc = tf.rpc_client_ws().await;
 
@@ -123,7 +125,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
 
     // Get balance info
     let balances: Balances = wallet_rpc.request("account_balance", [ACCOUNT0_ARG]).await.unwrap();
-    let coins_before = balances.coins().to_amount(coin_decimals).unwrap();
+    let coins_before = balances.coins().amount();
     log::debug!("Balances: {balances:?}");
 
     // Get UTXOs
@@ -154,14 +156,12 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
 
     let to_send_amount = Amount::from_atoms(utxo_amount / 2);
     let _: NewTransaction = {
-        let to_send_amount_str =
-            to_send_amount.into_fixedpoint_str(tf.chain_config().coin_decimals());
         let send_to_addr = acct1_addr.address;
         let options = TransactionOptions { in_top_x_mb: 3 };
         let params = (
             ACCOUNT0_ARG,
             send_to_addr,
-            to_send_amount_str,
+            RpcAmountIn::from_atoms(to_send_amount),
             Vec::<UtxoOutPoint>::new(),
             options,
         );
@@ -186,7 +186,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     ));
     assert_eq!(evt1, evt2);
 
-    let coins_after = balances.coins().to_amount(coin_decimals).unwrap();
+    let coins_after = balances.coins().amount();
     assert!(coins_after <= (coins_before / 2).unwrap());
     assert!(coins_after >= (coins_before / 3).unwrap());
 

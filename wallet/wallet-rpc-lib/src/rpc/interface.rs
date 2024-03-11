@@ -28,10 +28,10 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
-    DecimalAmount, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
-    TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
+    NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
+    PublicKeyInfo, RpcAmountIn, RpcTokenId, StakePoolBalance, StakingStatus, TokenMetadata,
+    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -267,7 +267,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -308,7 +308,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         options: TransactionOptions,
@@ -330,8 +330,8 @@ trait WalletRpc {
     async fn create_stake_pool(
         &self,
         account: AccountArg,
-        amount: DecimalAmount,
-        cost_per_block: DecimalAmount,
+        amount: RpcAmountIn,
+        cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
         decommission_address: String,
         options: TransactionOptions,
@@ -379,7 +379,7 @@ trait WalletRpc {
     async fn delegate_staking(
         &self,
         account: AccountArg,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -391,7 +391,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         delegation_id: String,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -474,7 +474,7 @@ trait WalletRpc {
         account: AccountArg,
         token_id: String,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -486,7 +486,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         token_id: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -532,7 +532,7 @@ trait WalletRpc {
         account: AccountArg,
         token_id: String,
         address: String,
-        amount: DecimalAmount,
+        amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 

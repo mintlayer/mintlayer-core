@@ -193,11 +193,11 @@ class WalletRpcController:
         return self._write_command("transaction_get_signed_raw", [self.account, tx_id])['result']
 
     async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
-        self._write_command("address_send", [self.account, address, str(amount), selected_utxos, {'in_top_x_mb': 5}])
+        self._write_command("address_send", [self.account, address, {'decimal': str(amount)}, selected_utxos, {'in_top_x_mb': 5}])
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return self._write_command("token_send", [self.account, token_id, address, amount, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_send", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -219,10 +219,10 @@ class WalletRpcController:
         return output
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, address, amount, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, amount, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_mint", [self.account, token_id, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
 
     async def lock_token_supply(self, token_id: str) -> str:
         return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']
@@ -269,7 +269,7 @@ class WalletRpcController:
                                 margin_ratio_per_thousand: float,
                                 decommission_key: Optional[str] = None) -> str:
         #decommission_key = decommission_key if decommission_key else 'NULL'
-        self._write_command("staking_create_pool", [self.account, str(amount), str(cost_per_block), str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
+        self._write_command("staking_create_pool", [self.account, {'decimal': str(amount)}, {'decimal': str(cost_per_block)}, str(margin_ratio_per_thousand), decommission_key, {'in_top_x_mb': 5}])['result']
         return "The transaction was submitted successfully"
 
     async def decommission_stake_pool(self, pool_id: str, address: str) -> str:
@@ -282,7 +282,7 @@ class WalletRpcController:
 
     async def list_pool_ids(self) -> List[PoolData]:
         pools = self._write_command("staking_list_pools", [self.account])['result']
-        return [PoolData(pool['pool_id'], pool['pledge'], pool['balance']) for pool in pools]
+        return [PoolData(pool['pool_id'], pool['pledge']['decimal'], pool['balance']['decimal']) for pool in pools]
 
     async def list_pools_for_decommission(self) -> List[PoolData]:
         pools = self._write_command("staking_list_owned_pools_for_decommission", [self.account])['result']
@@ -296,12 +296,12 @@ class WalletRpcController:
         return self._write_command("delegation_create", [self.account, address, pool_id, {'in_top_x_mb': 5}])['result']['delegation_id']
 
     async def stake_delegation(self, amount: int, delegation_id: str) -> str:
-        self._write_command(f"delegation_stake", [self.account, str(amount), delegation_id, {'in_top_x_mb': 5}])['result']
+        self._write_command(f"delegation_stake", [self.account, {'decimal': str(amount)}, delegation_id, {'in_top_x_mb': 5}])['result']
         return "Success"
 
     async def list_delegation_ids(self) -> List[DelegationData]:
         delegations = self._write_command("delegation_list_ids", [self.account])['result']
-        return [DelegationData(delegation['delegation_id'], delegation['balance']) for delegation in delegations]
+        return [DelegationData(delegation['delegation_id'], delegation['balance']['decimal']) for delegation in delegations]
 
     async def deposit_data(self, data: str) -> str:
         return self._write_command("address_deposit_data", [self.account, data, {'in_top_x_mb': 5}])['result']
@@ -331,7 +331,7 @@ class WalletRpcController:
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
         balances = self._write_command("account_balance", [self.account, with_locked])# {' '.join(utxo_states)})
-        return f"Coins amount: {balances['result']['coins']}"
+        return f"Coins amount: {balances['result']['coins']['decimal']}"
 
     async def list_pending_transactions(self) -> List[str]:
         output = self._write_command("transaction_list_pending", [self.account])['result']
@@ -377,7 +377,7 @@ class WalletRpcController:
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
         utxo = { "id": {"Transaction": selected_utxo.id}, "index": selected_utxo.index }
-        result = self._write_command("transaction_create_from_cold_input", [self.account, address, str(amount), utxo, change_address, {'in_top_x_mb': 5}])
+        result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"
         else:

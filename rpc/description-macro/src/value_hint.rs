@@ -17,21 +17,59 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
 
-fn check_attributes(attrs: &[syn::Attribute]) -> syn::Result<()> {
-    attrs
-        .iter()
-        .flat_map(|attr| {
-            attr.path().segments.iter().map(|seg| {
-                (seg.ident != "serde").then_some(()).ok_or_else(|| {
-                    let msg = concat!(
-                        "The 'serde' attribute changes the structure of the value, ",
-                        "please implement ValueHint manually or improve the derive macro.",
-                    );
-                    syn::Error::new(attr.span(), msg)
-                })
-            })
-        })
-        .collect::<syn::Result<()>>()
+#[must_use = "Must check attributes"]
+struct SerdeAttributes {
+    untagged: Option<syn::Path>,
+}
+
+impl SerdeAttributes {
+    fn new(attrs: &[syn::Attribute]) -> syn::Result<Self> {
+        let mut untagged = None;
+
+        for attr in attrs.iter().filter(|a| a.path().is_ident("serde")) {
+            let err = || {
+                let msg = concat!(
+                    "The 'serde' attribute changes the structure of the value, ",
+                    "please implement ValueHint manually or improve the derive macro.",
+                );
+                syn::Error::new(attr.span(), msg)
+            };
+
+            match &attr.meta {
+                syn::Meta::List(la) => {
+                    la.parse_nested_meta(|m| {
+                        if m.path.is_ident("untagged") {
+                            untagged = Some(m.path.clone());
+                        } else {
+                            return Err(err());
+                        }
+                        Ok(())
+                    })?;
+                }
+                syn::Meta::Path(_) | syn::Meta::NameValue(_) => return Err(err()),
+            }
+        }
+
+        Ok(Self { untagged })
+    }
+
+    // Require no attribute to be present
+    fn check_none(self) -> syn::Result<()> {
+        let Self { untagged } = self;
+        if let Some(untagged) = untagged {
+            return Err(syn::Error::new(
+                untagged.span(),
+                "Untagged not supported here by `HasValueHint`",
+            ));
+        }
+        Ok(())
+    }
+
+    // Allow only untagged attribute to be present
+    fn into_untagged(self) -> syn::Result<bool> {
+        let Self { untagged } = self;
+        Ok(untagged.is_some())
+    }
 }
 
 fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<TokenStream> {
@@ -41,7 +79,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
                 .named
                 .iter()
                 .map(|f| {
-                    check_attributes(&f.attrs)?;
+                    SerdeAttributes::new(&f.attrs)?.check_none()?;
                     let name = f.ident.as_ref().expect("named").to_string();
                     let ty = &f.ty;
                     Ok(quote!((#name, &<#ty as #desc_mod::HasValueHint>::HINT)))
@@ -53,7 +91,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
         syn::Fields::Unnamed(fields) => {
             if fields.unnamed.len() == 1 {
                 let field = &fields.unnamed[0];
-                check_attributes(&field.attrs)?;
+                SerdeAttributes::new(&field.attrs)?.check_none()?;
                 let ty = &field.ty;
                 quote!(<#ty as #desc_mod::HasValueHint>::HINT)
             } else {
@@ -61,7 +99,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
                     .unnamed
                     .iter()
                     .map(|f| {
-                        check_attributes(&f.attrs)?;
+                        SerdeAttributes::new(&f.attrs)?.check_none()?;
                         Ok(&f.ty)
                     })
                     .collect::<syn::Result<Vec<_>>>()?;
@@ -74,21 +112,27 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
 }
 
 fn process_input(item: syn::DeriveInput, desc_mod: TokenStream) -> syn::Result<TokenStream> {
-    check_attributes(&item.attrs)?;
-
     let hint = match &item.data {
-        syn::Data::Struct(item) => hint_for_fields(&item.fields, &desc_mod)?,
-        syn::Data::Enum(item) => {
-            let variants = item
+        syn::Data::Struct(struct_item) => {
+            SerdeAttributes::new(&item.attrs)?.check_none()?;
+            hint_for_fields(&struct_item.fields, &desc_mod)?
+        }
+        syn::Data::Enum(enum_item) => {
+            let untagged = SerdeAttributes::new(&item.attrs)?.into_untagged()?;
+            let variants = enum_item
                 .variants
                 .iter()
                 .map(|var| -> syn::Result<_> {
-                    check_attributes(&var.attrs)?;
+                    SerdeAttributes::new(&var.attrs)?.check_none()?;
                     match &var.fields {
                         fields @ (syn::Fields::Named(_) | syn::Fields::Unnamed(_)) => {
                             let subhints = hint_for_fields(fields, &desc_mod)?;
                             let name = var.ident.to_string();
-                            Ok(quote!(#desc_mod::ValueHint::Object(&[(#name, &#subhints)])))
+                            if untagged {
+                                Ok(subhints)
+                            } else {
+                                Ok(quote!(#desc_mod::ValueHint::Object(&[(#name, &#subhints)])))
+                            }
                         }
                         syn::Fields::Unit => {
                             let name = var.ident.to_string();

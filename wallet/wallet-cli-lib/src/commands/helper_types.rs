@@ -103,7 +103,7 @@ impl CliUtxoState {
 pub fn format_pool_info(pool_info: PoolInfo) -> String {
     format!(
         "Pool Id: {}, Pledge: {}, Balance: {}, Creation Block Height: {}, Timestamp: {}, Staker: {}, Decommission Key: {}, VRF Public Key: {}",
-        pool_info.pool_id, pool_info.pledge, pool_info.balance, pool_info.height, pool_info.block_timestamp, pool_info.staker, pool_info.decommission_key, pool_info.vrf_public_key
+        pool_info.pool_id, pool_info.pledge.decimal(), pool_info.balance.decimal(), pool_info.height, pool_info.block_timestamp, pool_info.staker, pool_info.decommission_key, pool_info.vrf_public_key
     )
 }
 
@@ -291,11 +291,10 @@ fn parse_fixed_token_supply<N: NodeInterface>(
 fn parse_token_amount<N: NodeInterface>(
     token_number_of_decimals: u8,
     value: &str,
-) -> Result<DecimalAmount, WalletCliError<N>> {
-    DecimalAmount::from_str(value)
-        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?
-        .with_decimals(token_number_of_decimals)
-        .ok_or_else(|| WalletCliError::<N>::InvalidInput(value.to_owned()))
+) -> Result<wallet_rpc_lib::types::RpcAmountIn, WalletCliError<N>> {
+    let amount = common::primitives::Amount::from_fixedpoint_str(value, token_number_of_decimals)
+        .ok_or_else(|| WalletCliError::<N>::InvalidInput(value.to_owned()))?;
+    Ok(amount.into())
 }
 
 #[cfg(test)]

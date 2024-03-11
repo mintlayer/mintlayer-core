@@ -53,6 +53,8 @@ impl ValueHint {
     pub const NULL: VH = VH::Prim("null");
     pub const NUMBER: VH = VH::Prim("number");
     pub const STRING: VH = VH::Prim("string");
+    pub const NUMBER_STRING: VH = VH::Prim("number string");
+    pub const DECIMAL_STRING: VH = VH::Prim("decimal string");
     pub const BECH32_STRING: VH = VH::Prim("bech32 string");
     pub const HEX_STRING: VH = VH::Prim("hex string");
     pub const GENERIC_OBJECT: VH = VH::Prim("object");

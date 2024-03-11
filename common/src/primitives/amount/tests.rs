@@ -637,8 +637,8 @@ fn serde_serialization() {
     assert!(serialized.contains("\"123553758873844226\""));
     assert!(serialized.contains("\"atoms\""));
 
-    let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
-    assert_eq!(amount, deserialized.try_into().unwrap());
+    let deserialized = serde_json::from_str::<AmountSerde>(&serialized).unwrap();
+    assert_eq!(amount, deserialized.into());
 
     let deserialized_json_value = serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
 
@@ -659,8 +659,8 @@ fn serde_serialization_randomized(#[case] seed: Seed) {
     assert!(serialized.contains(&format!("\"{}\"", amount.into_atoms())));
     assert!(serialized.contains("\"atoms\""));
 
-    let deserialized = serde_json::from_str::<json::JsonAmount>(&serialized).unwrap();
-    assert_eq!(amount, deserialized.try_into().unwrap());
+    let deserialized = serde_json::from_str::<AmountSerde>(&serialized).unwrap();
+    assert_eq!(amount, deserialized.into());
 
     let deserialized_json_value = serde_json::from_str::<serde_json::Value>(&serialized).unwrap();
 

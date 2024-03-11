@@ -339,7 +339,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         &self,
         account_index: U31,
         address: String,
-        amount_str: DecimalAmount,
+        amount: DecimalAmount,
         selected_utxo: UtxoOutPoint,
         change_address: Option<String>,
         config: ControllerConfig,
@@ -348,7 +348,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .request_send_coins(
                 account_index,
                 address,
-                amount_str,
+                amount.into(),
                 selected_utxo,
                 change_address,
                 config,
@@ -437,7 +437,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .send_coins(account_index, address, amount, selected_utxos, config)
+            .send_coins(
+                account_index,
+                address,
+                amount.into(),
+                selected_utxos,
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -480,8 +486,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         self.wallet_rpc
             .create_stake_pool(
                 account_index,
-                amount,
-                cost_per_block,
+                amount.into(),
+                cost_per_block.into(),
                 margin_ratio_per_thousand,
                 decommission_address,
                 config,
@@ -538,7 +544,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .delegate_staking(account_index, amount, delegation_id, config)
+            .delegate_staking(account_index, amount.into(), delegation_id, config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -552,7 +558,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .withdraw_from_delegation(account_index, address, amount, delegation_id, config)
+            .withdraw_from_delegation(account_index, address, amount.into(), delegation_id, config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -678,7 +684,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         metadata: TokenMetadata,
         config: ControllerConfig,
     ) -> Result<RpcTokenId, Self::Error> {
-        let token_supply = metadata.token_supply::<N>(self.wallet_rpc.chain_config())?;
+        let token_supply = metadata.token_supply()?;
         let is_freezable = metadata.is_freezable();
         self.wallet_rpc
             .issue_new_token(
@@ -717,7 +723,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .mint_tokens(account_index, token_id, address, amount, config)
+            .mint_tokens(account_index, token_id, address, amount.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -730,7 +736,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .unmint_tokens(account_index, token_id, amount, config)
+            .unmint_tokens(account_index, token_id, amount.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -786,7 +792,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .send_tokens(account_index, token_id, address, amount, config)
+            .send_tokens(account_index, token_id, address, amount.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

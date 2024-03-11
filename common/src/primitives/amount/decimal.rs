@@ -53,13 +53,13 @@ impl DecimalAmount {
     }
 
     /// Convert from amount, keeping all decimal digits
-    pub const fn from_amount_full(amount: Amount, decimals: u8) -> Self {
+    pub const fn from_amount_full_padding(amount: Amount, decimals: u8) -> Self {
         Self::from_uint_decimal(amount.into_atoms(), decimals)
     }
 
     /// Convert from amount, keeping as few decimal digits as possible (without losing precision)
-    pub const fn from_amount_minimal(amount: Amount, decimals: u8) -> Self {
-        Self::from_amount_full(amount, decimals).minimize()
+    pub const fn from_amount_no_padding(amount: Amount, decimals: u8) -> Self {
+        Self::from_amount_full_padding(amount, decimals).without_padding()
     }
 
     /// Convert to amount using given number of decimals
@@ -75,7 +75,7 @@ impl DecimalAmount {
     }
 
     /// Trim trailing zeroes in the fractional part
-    pub const fn minimize(mut self) -> Self {
+    pub const fn without_padding(mut self) -> Self {
         while self.decimals > 0 && self.mantissa % TEN == 0 {
             self.mantissa /= TEN;
             self.decimals -= 1;
@@ -145,32 +145,6 @@ impl std::fmt::Display for DecimalAmount {
     }
 }
 
-impl serde::Serialize for DecimalAmount {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl rpc_description::HasValueHint for DecimalAmount {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim("decimal string");
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-enum StringOrUint {
-    String(String),
-    UInt(u128),
-}
-
-impl<'de> serde::Deserialize<'de> for DecimalAmount {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match StringOrUint::deserialize(deserializer)? {
-            StringOrUint::String(s) => s.parse().map_err(<D::Error as serde::de::Error>::custom),
-            StringOrUint::UInt(i) => Ok(Self::from_uint_integral(i)),
-        }
-    }
-}
-
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ParseError {
     #[error("Resulting number is too big")]
@@ -226,7 +200,7 @@ impl DisplayAmount {
 
     /// Convert from [Amount], keeping all decimal digits
     pub const fn from_amount_full(amount: Amount, decimals: u8) -> Self {
-        Self(DecimalAmount::from_amount_full(amount, decimals))
+        Self(DecimalAmount::from_amount_full_padding(amount, decimals))
     }
 }
 
