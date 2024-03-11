@@ -15,7 +15,8 @@
 
 use crate::{
     api::json_helpers::{
-        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json, TokenDecimals,
+        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+        txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -36,8 +37,9 @@ use axum::{
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::NftIssuance, Block, Destination,
-        SignedTransaction, Transaction,
+        block::timestamp::BlockTimestamp,
+        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance},
+        Block, Destination, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -50,7 +52,7 @@ use utils::ensure;
 
 use crate::ApiServerWebServerState;
 
-use super::json_helpers::txoutput_to_json;
+use super::json_helpers::to_json_string;
 
 pub const API_VERSION: &str = "2.0.0";
 
@@ -656,7 +658,7 @@ pub async fn address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo.0,
+                "outpoint": utxo_outpoint_to_json(&utxo.0),
                 "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
@@ -692,7 +694,7 @@ pub async fn all_address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo.0,
+                "outpoint": utxo_outpoint_to_json(&utxo.0),
                 "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
@@ -1041,16 +1043,36 @@ pub async fn token<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::TokenNotFound,
         ))?;
 
+    let (frozen, freezable, unfreezable) = match token.frozen {
+        IsTokenFrozen::No(changable) => {
+            let freezable = match changable {
+                IsTokenFreezable::Yes => true,
+                IsTokenFreezable::No => false,
+            };
+            (false, Some(freezable), None)
+        }
+        IsTokenFrozen::Yes(changable) => {
+            let unfreezable = match changable {
+                IsTokenUnfreezable::Yes => true,
+                IsTokenUnfreezable::No => false,
+            };
+            (true, None, Some(unfreezable))
+        }
+    };
+
     Ok(Json(json!({
         "authority": Address::new(&state.chain_config, &token.authority).expect(
             "no error in encoding"
         ).get(),
         "is_locked": token.is_locked,
         "circulating_supply": amount_to_json(token.circulating_supply, token.number_of_decimals),
-        "metadata_uri": token.metadata_uri,
+        "token_ticker": to_json_string(&token.token_ticker),
+        "metadata_uri": to_json_string(&token.metadata_uri),
         "number_of_decimals": token.number_of_decimals,
         "total_supply": token.total_supply,
-        "frozen": token.frozen,
+        "frozen": frozen,
+        "is_token_unfreezable": unfreezable,
+        "is_token_freezable": freezable,
     })))
 }
 
@@ -1091,11 +1113,11 @@ pub async fn nft<T: ApiServerStorage>(
             ),
             "name": nft.metadata.name,
             "description": nft.metadata.description,
-            "ticker": nft.metadata.ticker,
-            "icon_uri": nft.metadata.icon_uri,
-            "additional_metadata_uri": nft.metadata.additional_metadata_uri,
-            "media_uri": nft.metadata.media_uri,
-            "media_hash": nft.metadata.media_hash,
+            "ticker": to_json_string(&nft.metadata.ticker),
+            "icon_uri": nft.metadata.icon_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "additional_metadata_uri": nft.metadata.additional_metadata_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "media_uri": nft.metadata.media_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "media_hash": to_json_string(&nft.metadata.media_hash),
         }))),
     }
 }

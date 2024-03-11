@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, sync::RwLock};
 
-use api_web_server::CachedValues;
+use api_web_server::{api::json_helpers::utxo_outpoint_to_json, CachedValues};
 use common::{chain::UtxoOutPoint, primitives::time::get_time};
 
 use crate::DummyRPC;
@@ -231,7 +231,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                             .into_iter()
                             .map(|utxo| {
                                 json!({
-                                "outpoint": utxo.0,
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
@@ -243,7 +243,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                             .into_iter()
                             .map(|utxo| {
                                 json!({
-                                "outpoint": utxo.0,
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
@@ -491,7 +491,7 @@ async fn ok(#[case] seed: Seed) {
                             .into_iter()
                             .map(|utxo| {
                                 json!({
-                                "outpoint": utxo.0,
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()
@@ -503,7 +503,7 @@ async fn ok(#[case] seed: Seed) {
                             .into_iter()
                             .map(|utxo| {
                                 json!({
-                                "outpoint": utxo.0,
+                                "outpoint": utxo_outpoint_to_json(&utxo.0),
                                 "utxo": txoutput_to_json(&utxo.1, &chain_config, &TokenDecimals::Single(None))})
                             })
                             .collect::<Vec<_>>()

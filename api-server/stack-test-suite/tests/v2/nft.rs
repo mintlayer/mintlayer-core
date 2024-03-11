@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_web_server::api::json_helpers::to_json_string;
 use common::{
     chain::tokens::{make_token_id, NftIssuance, NftIssuanceV0, TokenId},
     primitives::H256,
@@ -133,11 +134,11 @@ async fn ok(#[case] seed: Seed) {
                         ),
                         "name": nft.metadata.name,
                         "description": nft.metadata.description,
-                        "ticker": nft.metadata.ticker,
-                        "icon_uri": nft.metadata.icon_uri,
-                        "additional_metadata_uri": nft.metadata.additional_metadata_uri,
-                        "media_uri": nft.metadata.media_uri,
-                        "media_hash": nft.metadata.media_hash,
+                        "ticker": to_json_string(&nft.metadata.ticker),
+                        "icon_uri": nft.metadata.icon_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+                        "additional_metadata_uri": nft.metadata.additional_metadata_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+                        "media_uri": nft.metadata.media_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+                        "media_hash": to_json_string(&nft.metadata.media_hash),
                     }),
                 )]);
 

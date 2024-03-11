@@ -21,8 +21,11 @@ use api_server_common::storage::storage_api::{
 use common::{
     address::Address,
     chain::{
-        block::ConsensusData, output_value::OutputValue, tokens::TokenId, Block, ChainConfig,
-        Transaction, TxOutput,
+        block::ConsensusData,
+        output_value::OutputValue,
+        tokens::{IsTokenUnfreezable, TokenId},
+        AccountCommand, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256,
@@ -176,6 +179,116 @@ pub fn txoutput_to_json(
     }
 }
 
+pub fn utxo_outpoint_to_json(utxo: &UtxoOutPoint) -> serde_json::Value {
+    match utxo.source_id() {
+        OutPointSourceId::Transaction(tx_id) => {
+            json!({
+                "source_type": "Transaction",
+                "source_id": tx_id.to_hash().encode_hex::<String>(),
+                "index": utxo.output_index(),
+            })
+        }
+        OutPointSourceId::BlockReward(block_id) => {
+            json!({
+                "source_type": "BlockReward",
+                "source_id": block_id.to_hash().encode_hex::<String>(),
+                "index": utxo.output_index(),
+            })
+        }
+    }
+}
+
+pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json::Value {
+    match inp {
+        TxInput::Utxo(utxo) => match utxo.source_id() {
+            OutPointSourceId::Transaction(tx_id) => {
+                json!({
+                    "input_type": "UTXO",
+                    "source_type": "Transaction",
+                    "source_id": tx_id.to_hash().encode_hex::<String>(),
+                    "index": utxo.output_index(),
+                })
+            }
+            OutPointSourceId::BlockReward(block_id) => {
+                json!({
+                    "input_type": "UTXO",
+                    "source_type": "BlockReward",
+                    "source_id": block_id.to_hash().encode_hex::<String>(),
+                    "index": utxo.output_index(),
+                })
+            }
+        },
+        TxInput::Account(acc) => match acc.account() {
+            AccountSpending::DelegationBalance(delegation_id, amount) => {
+                json!({
+                    "input_type": "Account",
+                    "account_type": "DelegationBalance",
+                    "delegation_id": Address::new(chain_config, delegation_id).expect("addressable").to_string(),
+                    "amount": amount_to_json(*amount, chain_config.coin_decimals()),
+                    "nonce": acc.nonce(),
+                })
+            }
+        },
+        TxInput::AccountCommand(nonce, cmd) => match cmd {
+            AccountCommand::MintTokens(token_id, amount) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "MintTokens",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "amount": amount_to_json(*amount, chain_config.coin_decimals()),
+                    "nonce": nonce,
+                })
+            }
+            AccountCommand::UnmintTokens(token_id) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "UnmintTokens",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "nonce": nonce,
+                })
+            }
+            AccountCommand::FreezeToken(token_id, is_unfreezable) => {
+                let is_unfreezable = match is_unfreezable {
+                    IsTokenUnfreezable::Yes => true,
+                    IsTokenUnfreezable::No => false,
+                };
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "FreezeTokens",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "is_token_unfreezable": is_unfreezable,
+                    "nonce": nonce,
+                })
+            }
+            AccountCommand::UnfreezeToken(token_id) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "UnfreezeTokens",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "nonce": nonce,
+                })
+            }
+            AccountCommand::LockTokenSupply(token_id) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "LockTokenSupply",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "nonce": nonce,
+                })
+            }
+            AccountCommand::ChangeTokenAuthority(token_id, authority) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "ChangeTokenAuthority",
+                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "new_authority": Address::new(chain_config, authority).expect("addressable").to_string(),
+                    "nonce": nonce,
+                })
+            }
+        },
+    }
+}
+
 pub fn tx_to_json(
     tx: &Transaction,
     additinal_info: &TxAdditionalInfo,
@@ -188,7 +301,7 @@ pub fn tx_to_json(
     "flags": tx.flags(),
     "fee": amount_to_json(additinal_info.fee, chain_config.coin_decimals()),
     "inputs": tx.inputs().iter().zip(additinal_info.input_utxos.iter()).map(|(inp, utxo)| json!({
-        "input": inp,
+        "input": tx_input_to_json(inp, chain_config),
         "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additinal_info.token_decimals).into())),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
@@ -246,4 +359,23 @@ pub fn block_header_to_json(block: &Block) -> serde_json::Value {
         "witness_merkle_root": block.witness_merkle_root(),
         "consensus_data": consensus_data,
     })
+}
+
+pub fn to_json_string(bytes: &[u8]) -> serde_json::Value {
+    let hex_string: String = hex::encode(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(utf8_str) => {
+            json!({
+                "string": utf8_str,
+                "hex": hex_string,
+            })
+        }
+        Err(_) => {
+            logging::log::debug!("Decoding {hex_string} as utf8 string failed");
+            json!({
+                "string": None::<String>,
+                "hex": hex_string,
+            })
+        }
+    }
 }
