@@ -17,8 +17,9 @@ pub mod interactive;
 pub mod non_interactive;
 
 use clap::{Command, FromArgMatches, Subcommand};
+use rpc::description::{Described, Module};
 use tokio::sync::mpsc;
-use wallet_rpc_lib::types::NodeInterface;
+use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
 
 use crate::{
     cli_event_loop::Event,
@@ -40,6 +41,9 @@ const COMMAND_HELP_TEMPLATE: &str = "\
 ";
 
 pub fn get_repl_command(cold_wallet: bool) -> Command {
+    const COLD_WALLET_DESC: &Module = &ColdWalletRpcDescription::DESCRIPTION;
+    const WALLET_DESC: &Module = &WalletRpcDescription::DESCRIPTION;
+
     let repl_command = Command::new("repl")
         .multicall(true)
         .arg_required_else_help(true)
@@ -57,7 +61,20 @@ pub fn get_repl_command(cold_wallet: bool) -> Command {
 
     // Customize the help template for all commands to make it more REPL friendly
     for subcommand in repl_command.get_subcommands_mut() {
-        *subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE);
+        if let Some(desc) =
+            COLD_WALLET_DESC.methods.iter().chain(WALLET_DESC.methods).find_map(|method| {
+                method
+                    .name
+                    .split('_')
+                    .zip(subcommand.get_name().split('-'))
+                    .all(|(x, y)| x == y)
+                    .then_some(method.description)
+            })
+        {
+            *subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE).about(desc);
+        } else {
+            *subcommand = subcommand.clone().help_template(COMMAND_HELP_TEMPLATE);
+        }
     }
 
     repl_command
