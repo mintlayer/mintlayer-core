@@ -63,6 +63,8 @@ pub enum DisconnectionReason {
     NoCommonServices,
     #[error("Insufficient services, we need {needed_services:?}")]
     InsufficientServices { needed_services: Services },
+    #[error("Networking disabled")]
+    NetworkingDisabled,
 }
 
 impl DisconnectionReason {
@@ -124,6 +126,7 @@ impl DisconnectionReason {
                 } => Some(Self::InsufficientServices {
                     needed_services: *needed_services,
                 }),
+                ConnectionValidationError::NetworkingDisabled => Some(Self::NetworkingDisabled),
             },
         }
     }

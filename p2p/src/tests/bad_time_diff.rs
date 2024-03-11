@@ -69,6 +69,7 @@ where
         });
 
         let test_node = TestNode::<TTM::Transport>::start(
+            true,
             time_getter.clone(),
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
@@ -191,6 +192,7 @@ where
         });
 
         let test_node = TestNode::<TTM::Transport>::start(
+            true,
             time_getter.clone(),
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),

@@ -32,6 +32,10 @@ use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
     P2pInterface for T
 {
+    async fn enable_networking(&mut self, enable: bool) -> crate::Result<()> {
+        self.deref_mut().enable_networking(enable).await
+    }
+
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().connect(addr).await
     }

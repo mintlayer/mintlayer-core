@@ -60,6 +60,7 @@ async fn connect_to_remote_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut local_srv, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -75,6 +76,7 @@ async fn connect_to_remote_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (remote_srv, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -153,6 +155,7 @@ async fn accept_incoming_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut local_srv, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -168,6 +171,7 @@ async fn accept_incoming_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut remote_srv, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -242,6 +246,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -257,6 +262,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         config,
@@ -316,6 +322,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -331,6 +338,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -432,6 +440,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
+        true,
         A::make_transport(),
         vec![],
         Arc::clone(&config),
@@ -498,6 +507,7 @@ async fn general_protocol_version_selection_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut srv1, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -514,6 +524,7 @@ async fn general_protocol_version_selection_impl<A, T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut srv2, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        true,
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),

@@ -56,6 +56,7 @@ pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
 impl<T: TransportSocket> DefaultNetworkingService<T> {
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn start_generic(
+        networking_enabled: bool,
         transport: <Self as NetworkingService>::Transport,
         socket: <T as TransportSocket>::Listener,
         chain_config: Arc<common::chain::ChainConfig>,
@@ -78,6 +79,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let backend = Backend::<T>::new(
+            networking_enabled,
             transport,
             socket,
             chain_config,
@@ -119,6 +121,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
 
     #[allow(clippy::too_many_arguments)]
     pub async fn start_with_version(
+        networking_enabled: bool,
         transport: <Self as NetworkingService>::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
@@ -136,6 +139,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
     )> {
         let socket = transport.bind(bind_addresses).await?;
         Self::start_generic(
+            networking_enabled,
             transport,
             socket,
             chain_config,
@@ -158,6 +162,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type SyncingEventReceiver = SyncingEventReceiver;
 
     async fn start(
+        networking_enabled: bool,
         transport: Self::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
@@ -173,6 +178,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         JoinHandle<()>,
     )> {
         Self::start_with_version(
+            networking_enabled,
             transport,
             bind_addresses,
             chain_config,

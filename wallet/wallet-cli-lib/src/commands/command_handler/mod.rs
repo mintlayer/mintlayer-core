@@ -1263,6 +1263,11 @@ where
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
+            WalletCommand::NodeEnableNetworking { enable } => {
+                self.wallet().await?.node_enable_networking(enable.is_enable()).await?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
             WalletCommand::Connect { address } => {
                 self.wallet().await?.connect_to_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))

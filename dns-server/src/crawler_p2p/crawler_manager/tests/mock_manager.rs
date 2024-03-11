@@ -158,6 +158,7 @@ impl NetworkingService for MockNetworkingService {
     type SyncingEventReceiver = MockSyncingEventReceiver;
 
     async fn start(
+        _networking_enabled: bool,
         _transport: Self::Transport,
         _bind_addresses: Vec<SocketAddress>,
         _chain_config: Arc<ChainConfig>,
@@ -178,6 +179,10 @@ impl NetworkingService for MockNetworkingService {
 
 #[async_trait]
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
+    fn enable_networking(&mut self, _enable: bool) -> p2p::Result<()> {
+        Ok(())
+    }
+
     fn connect(&mut self, address: SocketAddress, _services: Option<Services>) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
         match self.state.online.lock().unwrap().get(&address) {

@@ -753,6 +753,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, _) = T::start(
+        true,
         transport,
         vec![addr1],
         Arc::clone(&config),
@@ -849,6 +850,7 @@ async fn connection_timeout_rpc_notified<T>(
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(
+        true,
         transport,
         vec![addr1],
         Arc::clone(&config),
@@ -863,6 +865,7 @@ async fn connection_timeout_rpc_notified<T>(
     let (peer_mgr_event_sender, peer_mgr_event_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let peer_manager = peer_manager::PeerManager::<T, _>::new(
+        true,
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
@@ -1638,6 +1641,7 @@ async fn feeler_connections_test_impl(seed: Seed) {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

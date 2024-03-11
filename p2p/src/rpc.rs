@@ -27,6 +27,10 @@ use rpc::RpcResult;
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
+    /// Enable or disable networking
+    #[method(name = "enable_networking")]
+    async fn enable_networking(&self, enable: bool) -> RpcResult<()>;
+
     /// Attempt to connect to a remote node (just once).
     ///
     /// For persistent connections see `add_reserved_node` should be used.
@@ -96,6 +100,11 @@ trait P2pRpc {
 
 #[async_trait::async_trait]
 impl P2pRpcServer for super::P2pHandle {
+    async fn enable_networking(&self, enable: bool) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.enable_networking(enable)).await;
+        rpc::handle_result(res)
+    }
+
     async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.connect(addr)).await;
         rpc::handle_result(res)

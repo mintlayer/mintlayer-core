@@ -41,6 +41,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
+        true,
         time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -127,6 +128,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
+        true,
         time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -204,6 +206,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
 
     let test_node = TestNode::<TTM::Transport>::start(
+        true,
         time_getter.clone(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),

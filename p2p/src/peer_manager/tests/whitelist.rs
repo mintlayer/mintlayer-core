@@ -181,6 +181,7 @@ where
     let (_shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (connectivity_handle, _, _, _) = T::start(
+        true,
         A::make_transport(),
         vec![addr2],
         Arc::clone(&chain_config),
@@ -210,6 +211,7 @@ where
     };
 
     let mut pm2 = PeerManager::<T, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -287,6 +289,7 @@ fn manual_ban_overrides_whitelisting() {
     );
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

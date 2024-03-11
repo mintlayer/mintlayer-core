@@ -64,6 +64,8 @@ impl FromStr for NodeTypeConfigFile {
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct P2pConfigFile {
+    /// Whether networking is enabled.
+    pub networking_enabled: Option<bool>,
     /// Address to bind P2P to.
     pub bind_addresses: Option<Vec<SocketAddr>>,
     /// SOCKS5 proxy.
@@ -103,6 +105,7 @@ pub struct P2pConfigFile {
 impl From<P2pConfigFile> for P2pConfig {
     fn from(config_file: P2pConfigFile) -> Self {
         let P2pConfigFile {
+            networking_enabled: _,
             bind_addresses,
             socks5_proxy,
             disable_noise,

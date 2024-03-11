@@ -18,6 +18,7 @@
 
 mod bad_time_diff;
 mod correct_handshake;
+mod disable_networking;
 mod disconnect_on_will_disconnect_msg;
 mod incorrect_handshake;
 mod misbehavior;

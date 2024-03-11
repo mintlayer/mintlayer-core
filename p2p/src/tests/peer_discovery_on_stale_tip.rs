@@ -392,7 +392,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     main_node.set_dns_seed_addresses(vec![extra_nodes_addresses[0]]);
     time_getter.advance_time(peer_manager::DNS_SEED_QUERY_INTERVAL);
 
-    node_wait_for_connection_to(&main_node, &time_getter, extra_nodes_addresses[0]).await;
+    node_wait_for_connection_to(&main_node, extra_nodes_addresses[0]).await;
     main_node
         .assert_connected_to(&[(extra_nodes_addresses[0], PeerRole::OutboundFullRelay)])
         .await;
@@ -510,6 +510,7 @@ async fn start_node(
     name: &str,
 ) -> TestNode<Transport> {
     let node = TestNode::<Transport>::start(
+        true,
         time_getter.clone(),
         Arc::clone(chain_config),
         Arc::clone(p2p_config),
@@ -545,48 +546,27 @@ async fn wait_for_interconnection(node_group: &TestNodeGroup<Transport>) {
     }
 }
 
-async fn wait_for_connections_to_impl(
-    nodes: &[TestNode<Transport>],
-    time_getter: &P2pBasicTestTimeGetter,
-    address: SocketAddress,
-    min_connected_nodes_count: usize,
-) {
-    let mut connected_nodes_count = 0;
-    loop {
-        for node in nodes {
-            let peers_info = node.get_peers_info().await;
-            if peers_info.info.contains_key(&address) {
-                connected_nodes_count += 1;
-            }
-        }
-
-        if connected_nodes_count >= min_connected_nodes_count {
-            break;
-        }
-
-        time_getter.advance_time(peer_manager::HEARTBEAT_INTERVAL_MAX);
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-}
-
 async fn node_group_wait_for_connections_to(
     node_group: &TestNodeGroup<Transport>,
     address: SocketAddress,
     min_connected_nodes_count: usize,
 ) {
-    wait_for_connections_to_impl(
-        node_group.nodes(),
-        node_group.time_getter(),
+    super::helpers::node_group_wait_for_connections_to(
+        node_group,
         address,
         min_connected_nodes_count,
+        Some(peer_manager::HEARTBEAT_INTERVAL_MAX),
+        Some(Duration::from_millis(10)),
     )
     .await
 }
 
-async fn node_wait_for_connection_to(
-    node: &TestNode<Transport>,
-    time_getter: &P2pBasicTestTimeGetter,
-    address: SocketAddress,
-) {
-    wait_for_connections_to_impl(std::slice::from_ref(node), time_getter, address, 1).await
+async fn node_wait_for_connection_to(node: &TestNode<Transport>, address: SocketAddress) {
+    super::helpers::node_wait_for_connection_to(
+        node,
+        address,
+        Some(peer_manager::HEARTBEAT_INTERVAL_MAX),
+        Some(Duration::from_millis(10)),
+    )
+    .await
 }

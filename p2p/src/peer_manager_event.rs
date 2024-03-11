@@ -111,6 +111,11 @@ pub enum PeerManagerEvent {
 
     ListDiscouraged(oneshot_nofail::Sender<Vec<(BannableAddress, Time)>>),
 
+    EnableNetworking {
+        enable: bool,
+        response_sender: oneshot_nofail::Sender<crate::Result<()>>,
+    },
+
     GenericQuery(Box<dyn PeerManagerQueryFunc>),
     #[cfg(test)]
     GenericMut(Box<dyn PeerManagerMutFunc>),

@@ -119,6 +119,9 @@ struct PendingPeerContext {
 }
 
 pub struct Backend<T: TransportSocket> {
+    /// Whether networking is enabled.
+    networking_enabled: bool,
+
     /// Transport of the backend
     transport: T,
 
@@ -140,7 +143,7 @@ pub struct Backend<T: TransportSocket> {
     peers: HashMap<PeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<PeerId, PendingPeerContext>,
+    pending_peers: HashMap<PeerId, PendingPeerContext>,
 
     /// Map of streams for receiving events from peers.
     peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
@@ -173,6 +176,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        networking_enabled: bool,
         transport: T,
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
@@ -187,6 +191,7 @@ where
         node_protocol_version: ProtocolVersion,
     ) -> Self {
         Self {
+            networking_enabled,
             transport,
             socket,
             cmd_receiver,
@@ -196,7 +201,7 @@ where
             time_getter,
             syncing_event_sender,
             peers: HashMap::new(),
-            pending: HashMap::new(),
+            pending_peers: HashMap::new(),
             peer_event_stream_map: StreamMap::new(),
             command_queue: FuturesUnordered::new(),
             shutdown,
@@ -332,16 +337,26 @@ where
                 res = self.socket.accept() => {
                     match res {
                         Ok((stream, address)) => {
-                            self.create_pending_peer(
-                                stream,
-                                PeerId::new(),
-                                ConnectionInfo::Inbound,
-                                address,
-                            )?;
+                            if !self.networking_enabled {
+                                log::info!("Ignoring incoming connection from {address:?} because networking is disabled");
+                            } else {
+                                self.create_pending_peer(
+                                    stream,
+                                    PeerId::new(),
+                                    ConnectionInfo::Inbound,
+                                    address,
+                                )?;
+                            }
                         },
                         Err(err) => {
                             // Just log the error and let the node continue working
-                            log::error!("Accepting a new connection failed unexpectedly: {err}")
+                            if self.networking_enabled {
+                                log::error!("Accepting a new connection failed unexpectedly: {err}")
+                            } else {
+                                log::debug!(
+                                    "Ignoring failed incoming connection because networking is disabled (err = {err})",
+                                );
+                            }
                         },
                     }
                 }
@@ -397,7 +412,7 @@ where
             }
         });
 
-        self.pending.insert(
+        self.pending_peers.insert(
             peer_id,
             PendingPeerContext {
                 handle,
@@ -427,8 +442,8 @@ where
             bind_address,
             connection_info,
             backend_event_sender,
-        } = match self.pending.remove(&peer_id) {
-            Some(pending) => pending,
+        } = match self.pending_peers.remove(&peer_id) {
+            Some(pending_peer) => pending_peer,
             // Could be removed if self-connection was detected earlier
             None => return Ok(()),
         };
@@ -528,7 +543,7 @@ where
         if connection_info == ConnectionInfo::Inbound {
             // Look for own outbound connection with same nonce
             let pending_outbound_peer_id = self
-                .pending
+                .pending_peers
                 .iter()
                 .find(|(_peer_id, peer_ctx)| match peer_ctx.connection_info {
                     ConnectionInfo::Inbound => false,
@@ -540,7 +555,7 @@ where
                 .map(|(peer_id, _pending)| *peer_id);
 
             if let Some(peer_id) = pending_outbound_peer_id {
-                let peer_ctx = self.pending.remove(&peer_id).expect("peer must exist");
+                let peer_ctx = self.pending_peers.remove(&peer_id).expect("peer must exist");
 
                 log::info!(
                     "self-connection detected on address {:?}",
@@ -562,6 +577,10 @@ where
     }
 
     fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
+        if !self.networking_enabled {
+            log::debug!("Got an event from peer {peer_id} while networking is disabled: {event:?}");
+        }
+
         match event {
             PeerEvent::PeerInfoReceived(peer_event::PeerInfo {
                 protocol_version,
@@ -571,24 +590,36 @@ where
                 software_version,
                 node_address_as_seen_by_peer,
                 handshake_nonce,
-            }) => self.create_peer(
-                peer_id,
-                handshake_nonce,
-                PeerInfo {
-                    peer_id,
-                    protocol_version,
-                    network,
-                    software_version,
-                    user_agent,
-                    common_services,
-                },
-                node_address_as_seen_by_peer,
-            ),
+            }) => {
+                if self.networking_enabled {
+                    self.create_peer(
+                        peer_id,
+                        handshake_nonce,
+                        PeerInfo {
+                            peer_id,
+                            protocol_version,
+                            network,
+                            software_version,
+                            user_agent,
+                            common_services,
+                        },
+                        node_address_as_seen_by_peer,
+                    )?;
+                }
 
-            PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
+                Ok(())
+            }
+
+            PeerEvent::MessageReceived { message } => {
+                if self.networking_enabled {
+                    self.handle_message(peer_id, message)?;
+                }
+
+                Ok(())
+            }
 
             PeerEvent::MisbehavedOnHandshake { error } => {
-                if let Some(pending_peer) = self.pending.get(&peer_id) {
+                if let Some(pending_peer) = self.pending_peers.get(&peer_id) {
                     log::debug!(
                         "Sending ConnectivityEvent::MisbehavedOnHandshake for peer {peer_id}"
                     );
@@ -605,7 +636,7 @@ where
             }
 
             PeerEvent::ConnectionClosed => {
-                if let Some(pending_peer) = self.pending.remove(&peer_id) {
+                if let Some(pending_peer) = self.pending_peers.remove(&peer_id) {
                     // Note: we'll get here if handshake has failed, so no need to use log levels
                     // higher that debug, because the error should have been logged properly already.
                     match pending_peer.connection_info {
@@ -721,6 +752,23 @@ where
                 let res = self.send_message(peer_id, message);
                 if let Err(e) = res {
                     log::debug!("Failed to send request to peer {peer_id}: {e}")
+                }
+            }
+            Command::EnableNetworking { enable } => {
+                if self.networking_enabled != enable {
+                    self.networking_enabled = enable;
+
+                    if !self.networking_enabled {
+                        for backend_event_sender in
+                            self.peers.values().map(|peer| &peer.backend_event_sender).chain(
+                                self.pending_peers.values().map(|peer| &peer.backend_event_sender),
+                            )
+                        {
+                            let _ = backend_event_sender.send(BackendEvent::Disconnect {
+                                reason: Some(DisconnectionReason::NetworkingDisabled),
+                            });
+                        }
+                    }
                 }
             }
         };

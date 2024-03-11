@@ -224,18 +224,18 @@ where
     F: FnOnce(&dyn PeerManagerInterface) -> R + Send + 'static,
     R: Send + 'static,
 {
-    let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
 
     peer_mgr_event_sender
         .send(PeerManagerEvent::GenericQuery(Box::new(
             move |peer_mgr: &dyn PeerManagerInterface| {
                 let res = query_func(peer_mgr);
-                response_sender.send(res).unwrap();
+                response_sender.send(res);
             },
         )))
         .unwrap();
 
-    response_receiver.recv().await.unwrap()
+    response_receiver.await.unwrap()
 }
 
 pub async fn mutate_peer_manager<F, R>(
@@ -246,18 +246,18 @@ where
     F: FnOnce(&mut dyn PeerManagerInterface) -> R + Send + 'static,
     R: Send + 'static,
 {
-    let (response_sender, mut response_receiver) = mpsc::unbounded_channel();
+    let (response_sender, response_receiver) = oneshot_nofail::channel();
 
     peer_mgr_event_sender
         .send(PeerManagerEvent::GenericMut(Box::new(
             move |peer_mgr: &mut dyn PeerManagerInterface| {
                 let res = mut_func(peer_mgr);
-                response_sender.send(res).unwrap();
+                response_sender.send(res);
             },
         )))
         .unwrap();
 
-    response_receiver.recv().await.unwrap()
+    response_receiver.await.unwrap()
 }
 
 pub fn start_manually_connecting(

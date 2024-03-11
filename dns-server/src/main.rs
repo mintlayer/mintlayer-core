@@ -86,6 +86,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never> {
     let time_getter = TimeGetter::default();
 
     let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
+        true,
         transport,
         vec![],
         Arc::clone(&chain_config),

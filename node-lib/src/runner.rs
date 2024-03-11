@@ -40,7 +40,7 @@ use test_rpc_functions::make_rpc_test_functions;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
-    config_files::{NodeConfigFile, DEFAULT_RPC_ENABLED},
+    config_files::{NodeConfigFile, DEFAULT_P2P_NETWORKING_ENABLED, DEFAULT_RPC_ENABLED},
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
@@ -151,9 +151,11 @@ async fn initialize(
             },
         }
     }?;
+    let p2p_config_file = node_config.p2p.unwrap_or_default();
     let p2p = p2p::make_p2p(
+        p2p_config_file.networking_enabled.unwrap_or(DEFAULT_P2P_NETWORKING_ENABLED),
         Arc::clone(&chain_config),
-        Arc::new(node_config.p2p.unwrap_or_default().into()),
+        Arc::new(p2p_config_file.into()),
         subsystem::Handle::clone(&chainstate),
         subsystem::Handle::clone(&mempool),
         Default::default(),

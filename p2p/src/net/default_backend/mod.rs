@@ -99,6 +99,12 @@ impl<S> ConnectivityService<S> for ConnectivityHandle<S>
 where
     S: NetworkingService + Send,
 {
+    fn enable_networking(&mut self, enable: bool) -> crate::Result<()> {
+        log::debug!("enable_networking called, enable = {enable}");
+
+        Ok(self.cmd_sender.send(types::Command::EnableNetworking { enable })?)
+    }
+
     fn connect(
         &mut self,
         address: SocketAddress,

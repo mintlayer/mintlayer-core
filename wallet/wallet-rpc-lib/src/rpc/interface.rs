@@ -554,6 +554,10 @@ trait WalletRpc {
     #[method(name = "node_shutdown")]
     async fn node_shutdown(&self) -> rpc::RpcResult<()>;
 
+    /// Enable or disable p2p networking in the node
+    #[method(name = "node_enable_networking")]
+    async fn node_enable_networking(&self, enable: bool) -> rpc::RpcResult<()>;
+
     /// Connect to a remote peer in the node
     #[method(name = "node_connect_to_peer")]
     async fn connect_to_peer(&self, address: String) -> rpc::RpcResult<()>;

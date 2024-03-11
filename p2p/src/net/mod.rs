@@ -60,6 +60,7 @@ pub trait NetworkingService {
     /// Initializes the network service provider.
     #[allow(clippy::too_many_arguments)]
     async fn start(
+        networking_enabled: bool,
         transport: Self::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
@@ -83,6 +84,8 @@ pub trait ConnectivityService<T>
 where
     T: NetworkingService,
 {
+    fn enable_networking(&mut self, enable: bool) -> crate::Result<()>;
+
     /// Connect to a remote node
     ///
     /// This function doesn't block on the connection but returns immediately

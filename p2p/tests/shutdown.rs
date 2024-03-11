@@ -64,6 +64,7 @@ async fn shutdown_timeout() {
 
     let peerdb_storage = PeerDbStorageImpl::new(InMemory::new()).unwrap();
     let _p2p = make_p2p(
+        true,
         Arc::clone(&chain_config),
         p2p_config,
         chainstate.clone(),

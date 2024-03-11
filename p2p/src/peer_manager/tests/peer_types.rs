@@ -77,6 +77,7 @@ fn validate_services() {
         );
 
         let mut pm = PeerManager::<TestNetworkingService, _>::new(
+            true,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             connectivity_handle,

@@ -152,6 +152,7 @@ fn test_addr_list_handling_inbound() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -238,6 +239,7 @@ fn test_addr_list_handling_outbound() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -343,6 +345,7 @@ async fn resend_own_addresses() {
     );
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -446,6 +449,7 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -504,6 +508,7 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -567,6 +572,7 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -659,6 +665,7 @@ async fn dont_use_dns_seed_if_connections_exist() {
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
     let mut peer_mgr = PeerManager::<TestNetworkingService, _>::new_generic(
+        true,
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

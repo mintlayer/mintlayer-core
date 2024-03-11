@@ -110,6 +110,10 @@ pub struct RunOptions {
     #[clap(long, value_name = "COUNT")]
     pub max_orphan_blocks: Option<usize>,
 
+    /// Whether p2p networking should be enabled.
+    #[clap(long, value_name = "VAL")]
+    pub p2p_networking_enabled: Option<bool>,
+
     /// Addresses to bind P2P to.
     /// Can be specified multiple times and/or be a comma-separated list.
     #[clap(long, value_name = "ADDR", value_delimiter(','))]

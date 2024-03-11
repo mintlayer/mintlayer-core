@@ -158,6 +158,9 @@ pub struct PeerManager<T, S>
 where
     T: NetworkingService,
 {
+    /// Whether networking is enabled.
+    networking_enabled: bool,
+
     /// Chain configuration.
     chain_config: Arc<ChainConfig>,
 
@@ -228,6 +231,7 @@ where
     S: PeerDbStorage,
 {
     pub fn new(
+        networking_enabled: bool,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
@@ -236,6 +240,7 @@ where
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         Self::new_generic(
+            networking_enabled,
             chain_config.clone(),
             p2p_config.clone(),
             handle,
@@ -249,6 +254,7 @@ where
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_generic(
+        networking_enabled: bool,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
@@ -273,6 +279,7 @@ where
         assert!(!p2p_config.ping_timeout.is_zero());
 
         Ok(PeerManager {
+            networking_enabled,
             chain_config,
             p2p_config,
             time_getter,
@@ -569,6 +576,11 @@ where
         peer_role: PeerRole,
     ) -> crate::Result<()> {
         ensure!(
+            self.networking_enabled,
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::NetworkingDisabled),
+        );
+
+        ensure!(
             !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
@@ -705,6 +717,11 @@ where
         peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
+        ensure!(
+            self.networking_enabled,
+            P2pError::ConnectionValidationFailed(ConnectionValidationError::NetworkingDisabled),
+        );
+
         info.check_compatibility(&self.chain_config)?;
 
         let is_peer_connected = self.is_peer_connected(info.peer_id);
@@ -1211,10 +1228,12 @@ where
         // Expired banned and discouraged addresses are dropped here.
         self.peerdb.heartbeat();
 
-        self.establish_new_connections();
+        if self.networking_enabled {
+            self.establish_new_connections();
 
-        self.evict_block_relay_peer();
-        self.evict_full_relay_peer();
+            self.evict_block_relay_peer();
+            self.evict_full_relay_peer();
+        }
 
         self.last_heartbeat_time = Some(self.time_getter.get_time());
 
@@ -1617,8 +1636,10 @@ where
             PeerManagerEvent::AddReserved(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
                 self.peerdb.add_reserved_node(address);
-                // Initiate new outbound connection without waiting for `heartbeat`
-                self.connect(address, OutboundConnectType::Reserved);
+                if self.networking_enabled {
+                    // Initiate new outbound connection without waiting for `heartbeat`
+                    self.connect(address, OutboundConnectType::Reserved);
+                }
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::RemoveReserved(address, response_sender) => {
@@ -1639,6 +1660,12 @@ where
             }
             PeerManagerEvent::ListDiscouraged(response_sender) => {
                 response_sender.send(self.peerdb.list_discouraged().collect())
+            }
+            PeerManagerEvent::EnableNetworking {
+                enable,
+                response_sender,
+            } => {
+                response_sender.send(self.enable_networking(enable));
             }
             PeerManagerEvent::GenericQuery(query_func) => {
                 query_func(self);
@@ -2017,6 +2044,29 @@ where
         }
     }
 
+    fn enable_networking(&mut self, enable: bool) -> crate::Result<()> {
+        if self.networking_enabled == enable {
+            return Ok(());
+        }
+
+        self.networking_enabled = enable;
+
+        if self.networking_enabled {
+            log::info!("Networking is enabled");
+        } else {
+            log::warn!("Networking is disabled");
+        }
+
+        self.peer_connectivity_handle.enable_networking(enable)?;
+
+        if self.networking_enabled {
+            // Perform a heartbeat immediately
+            self.heartbeat();
+        }
+
+        Ok(())
+    }
+
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has these main responsibilities:
@@ -2038,24 +2088,29 @@ where
         &mut self,
         loop_started_sender: Option<oneshot_nofail::Sender<()>>,
     ) -> crate::Result<Never> {
-        let anchor_peers = self.peerdb.anchors().clone();
-        if anchor_peers.is_empty() {
-            // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
-            self.heartbeat();
-        } else {
-            // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
-            // The stored anchor peers should be the first connected block relay peers.
-            for anchor_address in anchor_peers {
-                log::debug!("try to connect to anchor peer {anchor_address}");
-                // The first peers should become anchor peers
-                self.connect(
-                    anchor_address,
-                    OutboundConnectType::Automatic {
-                        block_relay_only: true,
-                    },
-                );
+        if self.networking_enabled {
+            let anchor_peers = self.peerdb.anchors().clone();
+            if anchor_peers.is_empty() {
+                // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
+                self.heartbeat();
+            } else {
+                // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
+                // The stored anchor peers should be the first connected block relay peers.
+                for anchor_address in anchor_peers {
+                    log::debug!("try to connect to anchor peer {anchor_address}");
+                    // The first peers should become anchor peers
+                    self.connect(
+                        anchor_address,
+                        OutboundConnectType::Automatic {
+                            block_relay_only: true,
+                        },
+                    );
+                }
             }
+        } else {
+            log::warn!("Starting with networking disabled");
         }
+
         let mut last_time = self.time_getter.get_time();
         let mut next_time_resend_own_address = self.time_getter.get_time();
 
@@ -2102,7 +2157,7 @@ where
             }
             last_time = now;
 
-            if self.tip_is_stale() {
+            if self.networking_enabled && self.tip_is_stale() {
                 early_heartbeat_needed = true;
             }
 
@@ -2112,39 +2167,41 @@ where
                 early_heartbeat_needed = false;
             }
 
-            // Query dns seed
-            if self.dns_seed_query_needed() {
-                self.query_dns_seed().await;
-                early_heartbeat_needed = true;
-            }
+            if self.networking_enabled {
+                // Query dns seed
+                if self.dns_seed_query_needed() {
+                    self.query_dns_seed().await;
+                    early_heartbeat_needed = true;
+                }
 
-            if self.need_load_predefined_addresses() {
-                self.load_predefined_addresses();
-                early_heartbeat_needed = true;
-            }
+                if self.need_load_predefined_addresses() {
+                    self.load_predefined_addresses();
+                    early_heartbeat_needed = true;
+                }
 
-            // Send ping requests and disconnect dead peers
-            if self.ping_check_needed() {
-                self.ping_check();
-            }
+                // Send ping requests and disconnect dead peers
+                if self.ping_check_needed() {
+                    self.ping_check();
+                }
 
-            // Advertise local address regularly
-            while next_time_resend_own_address <= now {
-                self.resend_own_address_randomly();
+                // Advertise local address regularly
+                while next_time_resend_own_address <= now {
+                    self.resend_own_address_randomly();
 
-                // Pick a random outbound peer to resend the listening address to.
-                // The delay has this value because normally there are at most
-                // `outbound_full_relay_count` peers that can have `discovered_own_address`.
-                // Note that in tests `outbound_full_relay_count` may be zero, so we have to
-                // adjust it for this case.
-                let delay_divisor = std::cmp::max(
-                    *self.p2p_config.peer_manager_config.outbound_full_relay_count,
-                    1,
-                );
-                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)
-                    .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-                next_time_resend_own_address = (next_time_resend_own_address + delay)
-                    .expect("Time derived from local clock; cannot fail");
+                    // Pick a random outbound peer to resend the listening address to.
+                    // The delay has this value because normally there are at most
+                    // `outbound_full_relay_count` peers that can have `discovered_own_address`.
+                    // Note that in tests `outbound_full_relay_count` may be zero, so we have to
+                    // adjust it for this case.
+                    let delay_divisor = std::cmp::max(
+                        *self.p2p_config.peer_manager_config.outbound_full_relay_count,
+                        1,
+                    );
+                    let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / delay_divisor as u32)
+                        .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                    next_time_resend_own_address = (next_time_resend_own_address + delay)
+                        .expect("Time derived from local clock; cannot fail");
+                }
             }
         }
     }
