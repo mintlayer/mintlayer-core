@@ -18,23 +18,39 @@
 
 #![allow(clippy::eq_op)]
 
-use rpc_description::ValueHint as VH;
 use serialization::{Decode, Encode};
 use std::iter::Sum;
 
 pub mod decimal;
 pub mod rpc;
+mod serde_support;
 pub mod signed;
 
 pub use decimal::{DecimalAmount, DisplayAmount};
 pub use rpc::{RpcAmountIn, RpcAmountOut};
 pub use signed::SignedAmount;
 
+// Internal re-exports
+use serde_support::{AmountSerde, RpcAmountInSerde, RpcAmountOutSerde};
+
 pub type UnsignedIntType = u128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(from = "AmountSerde", into = "AmountSerde")]
 #[must_use]
 pub struct Amount {
     #[codec(compact)]
@@ -205,8 +221,17 @@ impl Sum<Amount> for Option<Amount> {
     }
 }
 
-impl rpc_description::HasValueHint for Amount {
-    const HINT: VH = VH::Object(&[("atoms", &VH::NUMBER_STRING)]);
+impl From<Amount> for AmountSerde {
+    fn from(value: Amount) -> Self {
+        let atoms = value.into();
+        Self { atoms }
+    }
+}
+
+impl From<AmountSerde> for Amount {
+    fn from(value: AmountSerde) -> Self {
+        value.atoms.into()
+    }
 }
 
 #[macro_export]
@@ -221,63 +246,6 @@ macro_rules! amount_sum {
         )*
         result
     }}
-}
-
-mod json {
-    use super::{Amount, UnsignedIntType};
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    #[serde(untagged)]
-    enum StringOrUint {
-        String(String),
-        UInt(UnsignedIntType),
-    }
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    pub struct JsonAmount {
-        atoms: StringOrUint,
-    }
-
-    impl From<Amount> for JsonAmount {
-        fn from(amount: Amount) -> Self {
-            JsonAmount {
-                atoms: StringOrUint::String(amount.atoms.to_string()),
-            }
-        }
-    }
-
-    impl TryFrom<JsonAmount> for Amount {
-        type Error = Box<dyn std::error::Error>;
-
-        fn try_from(json_amount: JsonAmount) -> Result<Self, Self::Error> {
-            let atoms: UnsignedIntType = match json_amount.atoms {
-                StringOrUint::String(s) => s.parse()?,
-                StringOrUint::UInt(atoms) => atoms,
-            };
-            Ok(Amount { atoms })
-        }
-    }
-}
-
-impl serde::Serialize for Amount {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let json_amount: json::JsonAmount = (*self).into();
-        json_amount.serialize(serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for Amount {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error;
-
-        let json_amount = json::JsonAmount::deserialize(deserializer)?;
-
-        let amount: Amount = json_amount
-            .try_into()
-            .map_err(|e| D::Error::custom(format!("Failed to parse json amount to Amount: {e}")))?;
-
-        Ok(amount)
-    }
 }
 
 #[cfg(test)]

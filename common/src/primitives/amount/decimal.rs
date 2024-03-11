@@ -145,46 +145,6 @@ impl std::fmt::Display for DecimalAmount {
     }
 }
 
-impl serde::Serialize for DecimalAmount {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let amount = DecimalAmountSerde {
-            decimal: StringOrUint::String(self.to_string()),
-        };
-        amount.serialize(serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for DecimalAmount {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match DecimalAmountSerde::deserialize(deserializer)?.decimal {
-            StringOrUint::String(s) => s.parse().map_err(<D::Error as serde::de::Error>::custom),
-            StringOrUint::UInt(i) => Ok(Self::from_uint_integral(i)),
-        }
-    }
-}
-
-impl rpc_description::HasValueHint for DecimalAmount {
-    const HINT: rpc_description::ValueHint = DecimalAmountSerde::HINT;
-}
-
-#[derive(serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
-struct DecimalAmountSerde {
-    decimal: StringOrUint,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-enum StringOrUint {
-    String(String),
-    UInt(u128),
-}
-
-impl rpc_description::HasValueHint for StringOrUint {
-    // While this supports strings and numbers, strings should be encouraged so only mention string
-    // in the value hint.
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::DECIMAL_STRING;
-}
-
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ParseError {
     #[error("Resulting number is too big")]
