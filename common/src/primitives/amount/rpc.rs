@@ -106,18 +106,18 @@ impl RpcAmountOut {
     }
 
     pub fn from_amount(amount: Amount, decimals: u8) -> Self {
-        Self::from_amount_minimal(amount, decimals)
+        Self::from_amount_no_padding(amount, decimals)
     }
 
     /// Construct from amount, keeping all decimal digits
-    pub fn from_amount_full(amount: Amount, decimals: u8) -> Self {
-        let decimal = DecimalAmount::from_amount_full(amount, decimals);
+    pub fn from_amount_full_padding(amount: Amount, decimals: u8) -> Self {
+        let decimal = DecimalAmount::from_amount_full_padding(amount, decimals);
         Self::new_internal(amount, decimal)
     }
 
     /// Construct from amount, keeping the minimal number of decimal places
-    pub fn from_amount_minimal(amount: Amount, decimals: u8) -> Self {
-        let decimal = DecimalAmount::from_amount_minimal(amount, decimals);
+    pub fn from_amount_no_padding(amount: Amount, decimals: u8) -> Self {
+        let decimal = DecimalAmount::from_amount_no_padding(amount, decimals);
         Self::new_internal(amount, decimal)
     }
 
@@ -174,7 +174,7 @@ mod tests {
     #[case(u128::MAX, 25)]
     fn rpc_amount_serde(#[case] atoms: u128, #[case] n_decimals: u8) {
         let atoms = Amount::from_atoms(atoms);
-        let decimal = DecimalAmount::from_amount_minimal(atoms, n_decimals);
+        let decimal = DecimalAmount::from_amount_no_padding(atoms, n_decimals);
 
         let decimal_str = decimal.to_string();
         let atoms_str = atoms.into_atoms().to_string();
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(serde_json::to_value(atoms_in).unwrap(), atoms_in_json);
         assert!(atoms_in.is_same(&serde_json::from_value(atoms_in_json).unwrap()));
 
-        let rpc_out = RpcAmountOut::from_amount_minimal(atoms, n_decimals);
+        let rpc_out = RpcAmountOut::from_amount_no_padding(atoms, n_decimals);
         let rpc_out_json = json!({ "atoms": atoms_str, "decimal": decimal_str });
         assert_eq!(serde_json::to_value(&rpc_out).unwrap(), rpc_out_json);
         assert!(rpc_out.is_same(&serde_json::from_value(rpc_out_json).unwrap()));

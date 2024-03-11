@@ -82,7 +82,7 @@ impl Amount {
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
-        DecimalAmount::from_amount_minimal(self, decimals).to_string()
+        DecimalAmount::from_amount_no_padding(self, decimals).to_string()
     }
 
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {

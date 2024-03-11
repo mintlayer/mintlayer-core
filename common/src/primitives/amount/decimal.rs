@@ -53,13 +53,13 @@ impl DecimalAmount {
     }
 
     /// Convert from amount, keeping all decimal digits
-    pub const fn from_amount_full(amount: Amount, decimals: u8) -> Self {
+    pub const fn from_amount_full_padding(amount: Amount, decimals: u8) -> Self {
         Self::from_uint_decimal(amount.into_atoms(), decimals)
     }
 
     /// Convert from amount, keeping as few decimal digits as possible (without losing precision)
-    pub const fn from_amount_minimal(amount: Amount, decimals: u8) -> Self {
-        Self::from_amount_full(amount, decimals).minimal()
+    pub const fn from_amount_no_padding(amount: Amount, decimals: u8) -> Self {
+        Self::from_amount_full_padding(amount, decimals).without_padding()
     }
 
     /// Convert to amount using given number of decimals
@@ -75,7 +75,7 @@ impl DecimalAmount {
     }
 
     /// Trim trailing zeroes in the fractional part
-    pub const fn minimal(mut self) -> Self {
+    pub const fn without_padding(mut self) -> Self {
         while self.decimals > 0 && self.mantissa % TEN == 0 {
             self.mantissa /= TEN;
             self.decimals -= 1;
@@ -200,7 +200,7 @@ impl DisplayAmount {
 
     /// Convert from [Amount], keeping all decimal digits
     pub const fn from_amount_full(amount: Amount, decimals: u8) -> Self {
-        Self(DecimalAmount::from_amount_full(amount, decimals))
+        Self(DecimalAmount::from_amount_full_padding(amount, decimals))
     }
 }
 

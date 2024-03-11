@@ -1050,7 +1050,7 @@ pub async fn into_balances<T: NodeInterface>(
     mut balances: BTreeMap<Currency, Amount>,
 ) -> Result<Balances, ControllerError<T>> {
     let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-    let coins = RpcAmountOut::from_amount_minimal(coins, chain_config.coin_decimals());
+    let coins = RpcAmountOut::from_amount_no_padding(coins, chain_config.coin_decimals());
 
     let tasks: FuturesUnordered<_> = balances
         .into_iter()
@@ -1062,7 +1062,7 @@ pub async fn into_balances<T: NodeInterface>(
 
             fetch_token_info(rpc_client, token_id).await.map(|info| {
                 let decimals = info.token_number_of_decimals();
-                let amount = RpcAmountOut::from_amount_minimal(amount, decimals);
+                let amount = RpcAmountOut::from_amount_no_padding(amount, decimals);
                 (token_id, amount)
             })
         })

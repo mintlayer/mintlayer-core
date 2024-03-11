@@ -272,8 +272,8 @@ impl PoolInfo {
         chain_config: &ChainConfig,
     ) -> Self {
         let decimals = chain_config.coin_decimals();
-        let balance = RpcAmountOut::from_amount_minimal(balance, decimals);
-        let pledge = RpcAmountOut::from_amount_minimal(pledge, decimals);
+        let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
+        let pledge = RpcAmountOut::from_amount_no_padding(pledge, decimals);
 
         Self {
             pool_id: Address::new(chain_config, &pool_id).expect("addressable").to_string(),
@@ -319,7 +319,7 @@ impl rpc::description::HasValueHint for DelegationInfo {
 impl DelegationInfo {
     pub fn new(delegation_id: DelegationId, balance: Amount, chain_config: &ChainConfig) -> Self {
         let decimals = chain_config.coin_decimals();
-        let balance = RpcAmountOut::from_amount_minimal(balance, decimals);
+        let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
 
         Self {
             delegation_id: Address::new(chain_config, &delegation_id)
