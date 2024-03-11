@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use api_server_common::storage::storage_api::FungibleTokenData;
-use api_web_server::api::json_helpers::amount_to_json;
+use api_web_server::api::json_helpers::{amount_to_json, to_json_string};
 use common::{
     chain::tokens::{
         make_token_id, IsTokenFreezable, IsTokenFrozen, TokenId, TokenIssuance, TokenIssuanceV1,
@@ -141,7 +141,8 @@ async fn ok(#[case] seed: Seed) {
                         ).get(),
                         "is_locked": token_data.is_locked,
                         "circulating_supply": amount_to_json(token_data.circulating_supply, token_data.number_of_decimals),
-                        "metadata_uri": token_data.metadata_uri,
+                        "token_ticker": to_json_string(&token_data.token_ticker),
+                        "metadata_uri": to_json_string(&token_data.metadata_uri),
                         "number_of_decimals": token_data.number_of_decimals,
                         "total_supply": token_data.total_supply,
                         "frozen": false,

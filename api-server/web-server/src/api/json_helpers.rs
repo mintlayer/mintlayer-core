@@ -360,3 +360,22 @@ pub fn block_header_to_json(block: &Block) -> serde_json::Value {
         "consensus_data": consensus_data,
     })
 }
+
+pub fn to_json_string(bytes: &[u8]) -> serde_json::Value {
+    let hex_string: String = hex::encode(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(utf8_str) => {
+            json!({
+                "string": utf8_str,
+                "hex": hex_string,
+            })
+        }
+        Err(_) => {
+            logging::log::debug!("Decoding {hex_string} as utf8 string failed");
+            json!({
+                "string": None::<String>,
+                "hex": hex_string,
+            })
+        }
+    }
+}

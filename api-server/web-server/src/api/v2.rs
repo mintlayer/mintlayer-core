@@ -52,6 +52,8 @@ use utils::ensure;
 
 use crate::ApiServerWebServerState;
 
+use super::json_helpers::to_json_string;
+
 pub const API_VERSION: &str = "2.0.0";
 
 const TX_BODY_LIMIT: usize = 10240;
@@ -1064,7 +1066,8 @@ pub async fn token<T: ApiServerStorage>(
         ).get(),
         "is_locked": token.is_locked,
         "circulating_supply": amount_to_json(token.circulating_supply, token.number_of_decimals),
-        "metadata_uri": token.metadata_uri,
+        "token_ticker": to_json_string(&token.token_ticker),
+        "metadata_uri": to_json_string(&token.metadata_uri),
         "number_of_decimals": token.number_of_decimals,
         "total_supply": token.total_supply,
         "frozen": frozen,
@@ -1110,11 +1113,11 @@ pub async fn nft<T: ApiServerStorage>(
             ),
             "name": nft.metadata.name,
             "description": nft.metadata.description,
-            "ticker": nft.metadata.ticker,
-            "icon_uri": nft.metadata.icon_uri,
-            "additional_metadata_uri": nft.metadata.additional_metadata_uri,
-            "media_uri": nft.metadata.media_uri,
-            "media_hash": nft.metadata.media_hash,
+            "ticker": to_json_string(&nft.metadata.ticker),
+            "icon_uri": nft.metadata.icon_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "additional_metadata_uri": nft.metadata.additional_metadata_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "media_uri": nft.metadata.media_uri.as_ref().as_ref().map(|b| to_json_string(b)),
+            "media_hash": to_json_string(&nft.metadata.media_hash),
         }))),
     }
 }
