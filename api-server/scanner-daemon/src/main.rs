@@ -27,7 +27,6 @@ use clap::Parser;
 use common::chain::{config::ChainType, ChainConfig};
 use config::ApiServerScannerArgs;
 use node_comm::{make_rpc_client, rpc_client::NodeRpcClient};
-use node_lib::default_rpc_config;
 use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
@@ -146,17 +145,17 @@ async fn main() -> Result<(), ApiServerScannerError> {
 
     let ApiServerScannerArgs {
         network,
-        rpc_address,
-        rpc_cookie_file,
-        rpc_username,
-        rpc_password,
+        node_rpc_address,
+        node_rpc_cookie_file,
+        node_rpc_username,
+        node_rpc_password,
         postgres_config,
     } = args;
 
     let chain_type: ChainType = network.into();
     let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
 
-    let rpc_auth = match (rpc_cookie_file, rpc_username, rpc_password) {
+    let node_rpc_auth = match (node_rpc_cookie_file, node_rpc_username, node_rpc_password) {
         (None, None, None) => {
             let cookie_file_path =
                 default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
@@ -173,14 +172,22 @@ async fn main() -> Result<(), ApiServerScannerError> {
         }
     };
 
-    let default_rpc_bind_address =
-        || default_rpc_config(&chain_config).bind_address.expect("Can't fail").into();
+    let default_node_rpc_bind_address = || {
+        node_lib::default_rpc_config(&chain_config)
+            .bind_address
+            .expect("Can't fail")
+            .into()
+    };
 
-    let rpc_address = rpc_address.unwrap_or_else(default_rpc_bind_address);
+    let node_rpc_address = node_rpc_address.unwrap_or_else(default_node_rpc_bind_address);
 
-    let rpc_client = make_rpc_client(chain_config.clone(), rpc_address.to_string(), rpc_auth)
-        .await
-        .map_err(ApiServerScannerError::RpcError)?;
+    let rpc_client = make_rpc_client(
+        chain_config.clone(),
+        node_rpc_address.to_string(),
+        node_rpc_auth,
+    )
+    .await
+    .map_err(ApiServerScannerError::RpcError)?;
 
     let storage = make_postgres_storage(
         postgres_config.postgres_host,

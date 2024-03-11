@@ -4,6 +4,6 @@ FROM mintlayer-builder:latest AS builder
 # Runtime Stage
 FROM mintlayer-runner-base
 
-COPY --from=builder /usr/src/target/release/node-daemon /usr/bin/
+COPY --from=builder /usr/src/target/release/api-web-server /usr/bin
 
-CMD ["node-daemon"]
+CMD ["api-web-server"]

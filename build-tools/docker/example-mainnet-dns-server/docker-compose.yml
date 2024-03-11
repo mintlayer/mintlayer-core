@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  dns-server:
+    image: $DOCKERHUB_USERNAME/dns-server:$ML_SOFTWARE_VERSION
+    volumes:
+      - ./mintlayer-data:/home/mintlayer
+    command: dns-server
+    environment:
+      # Note: mainnet is the default network and 53 is the default port, so no need to specify them
+      # here; we do it mainly for demonstration purposes.
+      ML_DNS_SRV_NETWORK: mainnet
+      ML_DNS_SRV_BIND_ADDR: 0.0.0.0:53
+      # Addresses taken from predefined_peer_addresses for mainnet.
+      ML_DNS_SRV_RESERVED_NODES: 51.159.232.144:3031,51.159.179.229:3031,151.115.35.206:3031,172.232.50.132:3031,103.3.61.21:3031
+      ML_DNS_SRV_HOST: $DNS_SERVER_HOST_PARAM
+      ML_DNS_SRV_NAMESERVER: $DNS_SERVER_NAMESERVER_PARAM
+      ML_DNS_SRV_MBOX: $DNS_SERVER_MBOX_PARAM
+      RUST_LOG:
+    ports:
+      - "$DNS_SERVER_HOST_PORT:53/udp"

@@ -29,6 +29,13 @@ LICENSE_TEMPLATE = [
     r'|//'
 ]
 
+COMMON_EXCLUDE_DIRS = [
+    'target',
+    '.git',
+    'build-tools/docker/example-mainnet/mintlayer-data',
+    'build-tools/docker/example-mainnet-dns-server/mintlayer-data'
+]
+
 
 # List Rust source files
 def rs_sources(exclude = []):
@@ -47,7 +54,7 @@ def py_sources(exclude = []):
 
 # Cargo.toml files
 def cargo_toml_files(exclude = []):
-    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
+    exclude = [ os.path.normpath(dir) for dir in COMMON_EXCLUDE_DIRS + ['.github'] + exclude ]
     is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
 
     for top, dirs, files in os.walk('.', topdown=True):
@@ -57,7 +64,7 @@ def cargo_toml_files(exclude = []):
                 yield os.path.join(top, file)
 
 def _sources_with_extension(ext: str, exclude = []):
-    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
+    exclude = [ os.path.normpath(dir) for dir in COMMON_EXCLUDE_DIRS + ['.github'] + exclude ]
     is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
 
     for top, dirs, files in os.walk('.', topdown=True):
@@ -73,7 +80,7 @@ def sources_with_extensions(exts: list[str], exclude = []):
 
 # All files
 def all_files(exclude = []):
-    exclude_full_paths = [ os.path.normpath(dir) for dir in ['target', '.git'] + exclude ]
+    exclude_full_paths = [ os.path.normpath(dir) for dir in COMMON_EXCLUDE_DIRS + exclude ]
     exclude_dir_names = ['__pycache__']
 
     def is_excluded(top, d):

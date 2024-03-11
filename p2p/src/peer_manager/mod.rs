@@ -324,6 +324,7 @@ where
     /// This won't work for majority of nodes but that should be accepted.
     fn discover_own_address(
         &mut self,
+        peer_id: PeerId,
         peer_role: PeerRole,
         common_services: Services,
         node_address_as_seen_by_peer: Option<PeerAddress>,
@@ -373,7 +374,16 @@ where
 
         // Send only one address because of the rate limiter (see `ADDR_RATE_INITIAL_SIZE`).
         // Select a random address to give all addresses a chance to be discovered by the network.
-        discovered_own_addresses.into_iter().choose(&mut make_pseudo_rng())
+        let chosen_discovered_address =
+            discovered_own_addresses.iter().choose(&mut make_pseudo_rng()).cloned();
+
+        log::debug!(
+            "Own addresses discovered for peer {peer_id}: {:?}, chosen address: {:?}",
+            discovered_own_addresses,
+            chosen_discovered_address
+        );
+
+        chosen_discovered_address
     }
 
     /// Send address announcement to the selected peer (if the address is new)
@@ -964,6 +974,7 @@ where
         );
 
         let discovered_own_address = self.discover_own_address(
+            peer_id,
             peer_role,
             info.common_services,
             node_address_as_seen_by_peer,

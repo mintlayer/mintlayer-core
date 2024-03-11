@@ -1,0 +1,137 @@
+version: '3'
+
+x-common: &ml-common
+  volumes:
+    - ./mintlayer-data:/home/mintlayer
+
+x-common-env: &ml-common-env
+  RUST_LOG:
+  ML_USER_ID:
+  ML_GROUP_ID:
+
+services:
+  node-daemon:
+    <<: *ml-common
+    image: $DOCKERHUB_USERNAME/node-daemon:$ML_SOFTWARE_VERSION
+    command: node-daemon mainnet
+    environment:
+      <<: *ml-common-env
+      # For rpc, the default rpc bind address is '127.0.0.1', so it'll only be reachable from the
+      # same container; to make it reachable from other containers or from the host machine, we
+      # have to set it to '0.0.0.0'.
+      ML_MAINNET_NODE_RPC_BIND_ADDRESS: 0.0.0.0:3030
+      # For p2p, the default address is already '0.0.0.0'. But it's better to use the same port
+      # as the one exposed on the host system, otherwise other nodes won't be able to establish
+      # outbound connections to this node.
+      # Details: the node determines its own "public" p2p address by combining its ip address
+      # as it is seen by a peer with the port that it is listening on; this address is then
+      # advertised to other peers and propagated through the network. So, if the listening port
+      # differs from the one exposed on the host, the advertised address will be incorrect.
+      ML_MAINNET_NODE_P2P_BIND_ADDRESSES: 0.0.0.0:$NODE_P2P_HOST_PORT
+      # Rpc username and password.
+      ML_MAINNET_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_MAINNET_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+    ports:
+      # This is only needed if you want to access the node's rpc interface from the host system.
+      # Note that here we also set the ip address to bind to on the host to 127.0.0.1; because of
+      # this, rpc connections will only be allowed from the host machine and not from the "outside
+      # world".
+      - "127.0.0.1:$NODE_RPC_HOST_PORT:3030"
+      # This is only needed if you want the node to be able to accept incoming p2p connections
+      # from other nodes.
+      - "$NODE_P2P_HOST_PORT:$NODE_P2P_HOST_PORT"
+
+  ### Services needed to run the api server ###
+  api-postgres-db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      POSTGRES_DB: $API_SERVER_POSTGRES_DB
+    ports:
+      # This is only needed if you want to examine the contents of the db from the host system,
+      # e.g. via PgAdmin.
+      - "127.0.0.1:$API_SERVER_POSTGRES_HOST_PORT:5432"
+    volumes:
+      # Explicitly mount postgres docker image's mount point to a named volume (without this,
+      # docker will create an anonymous volume instead).
+       - api_postgres_db:/var/lib/postgresql/data
+
+  api-blockchain-scanner-daemon:
+    <<: *ml-common
+    image: $DOCKERHUB_USERNAME/api-blockchain-scanner-daemon:$ML_SOFTWARE_VERSION
+    command: api-blockchain-scanner-daemon
+    depends_on:
+      - api-postgres-db
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_API_SCANNER_DAEMON_POSTGRES_HOST: api-postgres-db
+      ML_API_SCANNER_DAEMON_POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      ML_API_SCANNER_DAEMON_POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      ML_API_SCANNER_DAEMON_POSTGRES_DATABASE: $API_SERVER_POSTGRES_DB
+      ML_API_SCANNER_DAEMON_NODE_RPC_ADDRESS: node-daemon:3030
+      ML_API_SCANNER_DAEMON_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_API_SCANNER_DAEMON_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+
+  api-web-server:
+    <<: *ml-common
+    image: $DOCKERHUB_USERNAME/api-web-server:$ML_SOFTWARE_VERSION
+    command: api-web-server
+    depends_on:
+      - api-postgres-db
+      - api-blockchain-scanner-daemon
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_API_WEB_SRV_BIND_ADDRESS: 0.0.0.0:3000
+      ML_API_WEB_SRV_POSTGRES_HOST: api-postgres-db
+      ML_API_WEB_SRV_POSTGRES_USER: $API_SERVER_POSTGRES_USER
+      ML_API_WEB_SRV_POSTGRES_PASSWORD: $API_SERVER_POSTGRES_PASSWORD
+      ML_API_WEB_SRV_POSTGRES_DATABASE: $API_SERVER_POSTGRES_DB
+      ML_API_WEB_SRV_NODE_RPC_ADDRESS: node-daemon:3030
+      ML_API_WEB_SRV_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_API_WEB_SRV_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+    ports:
+      - "$API_SERVER_HOST_PORT:3000"
+  ### End of services needed to run the api server ###
+
+  wallet-rpc-daemon:
+    <<: *ml-common
+    image: $DOCKERHUB_USERNAME/wallet-rpc-daemon:$ML_SOFTWARE_VERSION
+    command: wallet-rpc-daemon mainnet
+    depends_on:
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_MAINNET_WALLET_RPC_DAEMON_NODE_RPC_ADDRESS: node-daemon:3030
+      ML_MAINNET_WALLET_RPC_DAEMON_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_MAINNET_WALLET_RPC_DAEMON_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+      # Same as for the node, the default rpc bind address is '127.0.0.1' here; we need to set it
+      # to '0.0.0.0' to make it reachable from other containers/host machine.
+      ML_MAINNET_WALLET_RPC_DAEMON_RPC_BIND_ADDRESS: 0.0.0.0:3034
+      ML_MAINNET_WALLET_RPC_DAEMON_RPC_USERNAME: $WALLET_RPC_DAEMON_USERNAME
+      ML_MAINNET_WALLET_RPC_DAEMON_RPC_PASSWORD: $WALLET_RPC_DAEMON_PASSWORD
+    ports:
+      - "127.0.0.1:$WALLET_RPC_DAEMON_HOST_PORT:3034"
+
+  # wallet-cli is not a real service; we just need a service definition for it in order to be able
+  # to run it via "docker compose run"
+  wallet-cli:
+    <<: *ml-common
+    image: $DOCKERHUB_USERNAME/wallet-cli:$ML_SOFTWARE_VERSION
+    command: wallet-cli mainnet
+    depends_on:
+      - node-daemon
+    environment:
+      <<: *ml-common-env
+      ML_MAINNET_WALLET_NODE_RPC_ADDRESS: node-daemon:3030
+      ML_MAINNET_WALLET_NODE_RPC_USERNAME: $NODE_RPC_USERNAME
+      ML_MAINNET_WALLET_NODE_RPC_PASSWORD: $NODE_RPC_PASSWORD
+    profiles:
+      # Put it in a separate profile, so that it's not started automatically by "docker compose up".
+      - wallet_cli
+
+volumes:
+  api_postgres_db:

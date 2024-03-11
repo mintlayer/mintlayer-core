@@ -1,0 +1,9 @@
+# Build Stage
+FROM mintlayer-builder:latest AS builder
+
+# Runtime Stage
+FROM mintlayer-runner-base
+
+COPY --from=builder /usr/src/target/release/api-blockchain-scanner-daemon /usr/bin
+
+CMD ["api-blockchain-scanner-daemon"]

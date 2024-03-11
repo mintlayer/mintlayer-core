@@ -1,0 +1,17 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/mintlayer
+
+# Define mintlayer directory as a volume; this will cause docker to create an anonymous
+# volume for it if the user forgets to mount it explicitly.
+VOLUME ["/home/mintlayer"]
+
+# Note: using an entrypoint script solves 2 problems:
+# 1) We need to run the dockered app as a non-root user, for security purposes.
+# 2) If the source of a bind mount doesn't exist when it's mounted, docker will create it
+# automatically and the directory will be owned by root (if the host is Linux). The only way
+# to change its ownership is to explicitly call 'chown' inside CMD or ENTRYPOINT.
+COPY build-tools/docker/entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]

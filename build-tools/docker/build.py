@@ -25,6 +25,9 @@ def build_docker_image(dockerfile_path, image_name, version, num_jobs=None):
     command = f"docker build -t {image_name}:{version} -f {dockerfile_path}"
     if num_jobs:
         command += f" --build-arg NUM_JOBS={num_jobs}"
+    # Note: "plain" output is more verbose, but it makes it easier to understand what went wrong
+    # when a problem occurs.
+    command += " --progress=plain"
     command += " ."
 
     try:
@@ -73,23 +76,42 @@ def delete_docker_image(image_name, version):
         print(f"Failed to delete {full_image_name}.")
 
 
-def build_instances(version, num_jobs=None):
-    build_docker_image("build-tools/docker/Dockerfile.builder", "mintlayer-builder", "latest", num_jobs)
-    build_docker_image("build-tools/docker/Dockerfile.node-daemon", "mintlayer/node-daemon", version)
-    build_docker_image("build-tools/docker/Dockerfile.node-gui", "mintlayer/node-gui", version)
-    build_docker_image("build-tools/docker/Dockerfile.wallet-cli", "mintlayer/wallet-cli", version)
-    delete_docker_image("mintlayer-builder", "latest")
+def build_instances(version, docker_hub_user, num_jobs):
+    if num_jobs is None:
+        num_jobs = os.cpu_count() or 1
+
+    build_docker_image("build-tools/docker/Dockerfile.builder",
+                        "mintlayer-builder", "latest", num_jobs)
+    build_docker_image("build-tools/docker/Dockerfile.runner-base",
+                        "mintlayer-runner-base", "latest", num_jobs)
+    build_docker_image("build-tools/docker/Dockerfile.node-daemon",
+                        f"{docker_hub_user}/node-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.api-blockchain-scanner-daemon",
+                        f"{docker_hub_user}/api-blockchain-scanner-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.api-web-server",
+                        f"{docker_hub_user}/api-web-server", version)
+    build_docker_image("build-tools/docker/Dockerfile.wallet-cli",
+                        f"{docker_hub_user}/wallet-cli", version)
+    build_docker_image("build-tools/docker/Dockerfile.wallet-rpc-daemon",
+                        f"{docker_hub_user}/wallet-rpc-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.dns-server",
+                        f"{docker_hub_user}/dns-server", version)
+#    delete_docker_image("mintlayer-builder", "latest")
 
 
-def push_instances(version, latest):
-    push_docker_image("mintlayer/node-daemon",version , latest)
-    push_docker_image("mintlayer/node-gui",version , latest)
-    push_docker_image("mintlayer/wallet-cli",version , latest)
+def push_instances(docker_hub_user, version, latest):
+    push_docker_image(f"{docker_hub_user}/node-daemon", version, latest)
+    push_docker_image(f"{docker_hub_user}/api-blockchain-scanner-daemon", version, latest)
+    push_docker_image(f"{docker_hub_user}/api-web-server", version, latest)
+    push_docker_image(f"{docker_hub_user}/wallet-cli", version, latest)
+    push_docker_image(f"{docker_hub_user}/wallet-rpc-daemon", version, latest)
+    push_docker_image(f"{docker_hub_user}/dns-server", version, latest)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--push', action='store_true', help='Push the Docker image to Docker Hub')
+    parser.add_argument('--docker-hub-user', help='Docker Hub username', default='mintlayer')
     parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest while pushing')
     parser.add_argument('--build', type=lambda x: (str(x).lower() == 'true'), default=True, help="Set to false avoid the build")
     parser.add_argument('--version', help='Override version number', default=None)
@@ -99,12 +121,12 @@ def main():
     version = args.version if args.version else get_cargo_version("Cargo.toml")
 
     if args.build:
-        build_instances(version, args.num_jobs)
+        build_instances(version, args.docker_hub_user, args.num_jobs)
 
     # Only push the image if the --push flag is provided
     if args.push:
         latest = args.latest
-        push_instances(version, latest)
+        push_instances(args.docker_hub_user, version, latest)
 
 
 if __name__ == "__main__":
