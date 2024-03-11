@@ -15,6 +15,7 @@
 
 use std::{
     collections::BTreeMap,
+    net::{IpAddr, SocketAddr},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -196,20 +197,28 @@ pub async fn node_wait_for_connection_to<Transport>(
 
 pub async fn node_wait_for_disconnection<Transport>(
     node: &TestNode<Transport>,
-    address: SocketAddress,
+    address: IpAddr,
     iteration_time_advancement: Option<Duration>,
     iteration_sleep_duration: Option<Duration>,
 ) where
     Transport: TransportSocket,
 {
-    nodes_wait_for_connections(
-        std::slice::from_ref(node),
-        address,
-        0..=0,
-        iteration_time_advancement.map(|dur| (node.time_getter(), dur)),
-        iteration_sleep_duration,
-    )
-    .await
+    loop {
+        let peers_info = node.get_peers_info().await;
+        let addr_first = SocketAddress::new(SocketAddr::new(address, 0));
+        let addr_last = SocketAddress::new(SocketAddr::new(address, u16::MAX));
+        if peers_info.info.range(addr_first..=addr_last).next().is_none() {
+            break;
+        }
+
+        if let Some(iteration_time_advancement) = iteration_time_advancement {
+            node.time_getter().advance_time(iteration_time_advancement);
+        }
+
+        if let Some(iteration_sleep_duration) = iteration_sleep_duration {
+            tokio::time::sleep(iteration_sleep_duration).await;
+        }
+    }
 }
 
 pub async fn nodes_wait_for_connections<Transport>(

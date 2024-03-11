@@ -126,8 +126,8 @@ async fn disable_networking_impl() {
     test_node.enable_networking(false).await;
 
     // The previously connected nodes are disconnected.
-    node_wait_for_disconnection(&test_node, other_node1_addr, None, None).await;
-    node_wait_for_disconnection(&test_node, other_node2_addr, None, None).await;
+    node_wait_for_disconnection(&test_node, other_node1_addr.ip_addr(), None, None).await;
+    node_wait_for_disconnection(&test_node, other_node2_addr.ip_addr(), None, None).await;
 
     let peer_addresses = test_node.get_peer_ip_addresses().await;
     assert_eq!(peer_addresses, BTreeSet::new());
