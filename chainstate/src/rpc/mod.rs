@@ -71,6 +71,16 @@ trait ChainstateRpc {
         max_count: usize,
     ) -> RpcResult<Vec<HexEncoded<Block>>>;
 
+    /// Returns mainchain block ids with heights in the range start_height..end_height using
+    /// the given step;
+    #[method(name = "get_block_ids_as_checkpoints")]
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
+
     /// Returns the TxOutput for a specified UtxoOutPoint.
     /// Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
     #[method(name = "get_utxo")]
@@ -217,6 +227,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| this.get_mainchain_blocks(from, max_count)).await,
         )?;
         Ok(blocks.into_iter().map(HexEncoded::new).collect())
+    }
+
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> RpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
+        rpc::handle_result(
+            self.call(move |this| {
+                this.get_block_ids_as_checkpoints(start_height, end_height, step)
+            })
+            .await,
+        )
     }
 
     async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>> {

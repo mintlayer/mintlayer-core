@@ -212,6 +212,20 @@ where
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    #[tracing::instrument(skip(self))]
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_ids_as_checkpoints(start_height, end_height, step)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     #[tracing::instrument(skip_all)]
     fn get_mainchain_headers_by_locator(
         &self,

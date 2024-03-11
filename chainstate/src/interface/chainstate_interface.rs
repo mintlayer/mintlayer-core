@@ -84,6 +84,15 @@ pub trait ChainstateInterface: Send + Sync {
     /// Returns a locator starting from the specified height.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
 
+    /// Returns mainchain block ids with heights in the range start_height..end_height using
+    /// the given step;
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError>;
+
     /// Returns a list of mainchain block headers starting from the locator's highest block that
     /// is in the main chain (or genesis, if there is no such block).
     ///

@@ -133,6 +133,15 @@ where
         self.deref().get_locator_from_height(height)
     }
 
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
+        self.deref().get_block_ids_as_checkpoints(start_height, end_height, step)
+    }
+
     fn get_mainchain_headers_by_locator(
         &self,
         locator: &Locator,

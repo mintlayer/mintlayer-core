@@ -706,3 +706,85 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         );
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut btf = TestFramework::builder(&mut rng).build();
+
+        let locator = btf.chainstate.get_locator().unwrap();
+        assert_eq!(locator.len(), 1);
+        assert_eq!(&locator[0], &btf.genesis().get_id());
+
+        let genesis_id = btf.genesis().get_id().into();
+        let block_ids = btf.create_chain_return_ids(&genesis_id, 100, &mut rng).unwrap();
+
+        let start = 10.into();
+        let end = 0.into();
+        let bad_range_error =
+            btf.chainstate.get_block_ids_as_checkpoints(start, end, 1).unwrap_err();
+        assert_eq!(
+            bad_range_error,
+            ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidBlockHeightRange {
+                start,
+                end,
+            })
+        );
+
+        let step = 0;
+        let bad_step_error = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(0.into(), 10.into(), step)
+            .unwrap_err();
+        assert_eq!(
+            bad_step_error,
+            ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidStep(step))
+        );
+
+        let result = btf.chainstate.get_block_ids_as_checkpoints(0.into(), 5.into(), 1).unwrap();
+        assert_eq!(
+            result,
+            [
+                (0.into(), genesis_id),
+                (1.into(), block_ids[0]),
+                (2.into(), block_ids[1]),
+                (3.into(), block_ids[2]),
+                (4.into(), block_ids[3]),
+            ]
+        );
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(0.into(), 1000000.into(), 20)
+            .unwrap();
+        assert_eq!(
+            result,
+            [
+                (0.into(), genesis_id),
+                (20.into(), block_ids[19]),
+                (40.into(), block_ids[39]),
+                (60.into(), block_ids[59]),
+                (80.into(), block_ids[79]),
+                (100.into(), block_ids[99]),
+            ]
+        );
+
+        let result = btf.chainstate.get_block_ids_as_checkpoints(2.into(), 10.into(), 3).unwrap();
+        assert_eq!(
+            result,
+            [(2.into(), block_ids[1]), (5.into(), block_ids[4]), (8.into(), block_ids[7]),]
+        );
+
+        let result = btf.chainstate.get_block_ids_as_checkpoints(10.into(), 10.into(), 1).unwrap();
+        assert_eq!(result, []);
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(1000000.into(), 2000000.into(), 1)
+            .unwrap();
+        assert_eq!(result, []);
+    });
+}
