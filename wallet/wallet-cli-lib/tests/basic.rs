@@ -122,6 +122,9 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     assert!(test
         .exec(&format!("address-send {} 50000", acc2_address))
         .starts_with("The transaction was submitted successfully with ID"));
+    // create a block
+    assert_eq!(test.exec("node-generate-blocks 1"), "Success");
+
     assert_eq!(test.exec("account-select 1"), "Success");
     assert!(test
         .exec(&format!(
@@ -171,7 +174,7 @@ async fn produce_blocks_decommission_genesis_pool(#[case] seed: Seed) {
     // stake with the first acc
     assert_eq!(test.exec("account-select 0"), "Success");
     assert!(test.exec("account-balance").starts_with("Coins amount: 99869999"));
-    assert!(test.exec("account-balance locked").starts_with("Coins amount: 44242"));
+    assert!(test.exec("account-balance locked").starts_with("Coins amount: 44444"));
     assert_eq!(test.exec("node-generate-blocks 2"), "Success");
 
     test.shutdown().await;

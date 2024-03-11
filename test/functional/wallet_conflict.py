@@ -159,7 +159,7 @@ class WalletConflictTransaction(BitcoinTestFramework):
             transactions.remove(transfer_tx)
             freeze_tx = transactions[0]
 
-            assert_equal(2, len(await wallet.list_pending_transactions()))
+            assert_equal(1, len(await wallet.list_pending_transactions()))
 
 
             # try to send tokens again should fail as the tokens are already sent

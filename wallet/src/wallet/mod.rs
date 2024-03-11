@@ -1731,6 +1731,19 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    /// Save an unconfirmed transaction for a specific account in case we need to rebroadcast it later
+    /// and mark it as Inactive for now
+    pub fn add_account_unconfirmed_tx(
+        &mut self,
+        account_index: U31,
+        transaction: SignedTransaction,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |acc, db_tx| {
+            acc.scan_new_inactive_transactions(&[transaction], db_tx, wallet_events)
+        })
+    }
+
     pub fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.latest_median_time = median_time;
         let mut db_tx = self.db.transaction_rw(None)?;

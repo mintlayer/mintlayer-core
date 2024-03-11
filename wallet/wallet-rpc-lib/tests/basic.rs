@@ -172,10 +172,7 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
 
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     let evt1 = EventInfo::from_json(wallet_events.next().await.unwrap().unwrap());
-    let evt2 = EventInfo::from_json(wallet_events.next().await.unwrap().unwrap());
 
-    // The two events above refer to the same transaction. It is emitted twice, once for account 0
-    // which sends the coins, once for account 1 which receives the coins.
     assert!(matches!(
         evt1,
         EventInfo::TxUpdated {
@@ -184,7 +181,6 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
             id: _,
         }
     ));
-    assert_eq!(evt1, evt2);
 
     let coins_after = balances.coins().to_amount(coin_decimals).unwrap();
     assert!(coins_after <= (coins_before / 2).unwrap());
