@@ -1190,7 +1190,9 @@ fn wallet_get_transaction(#[case] seed: Seed) {
     let err = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap_err();
     assert_eq!(err, WalletError::NoTransactionFound(tx_id));
 
-    wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx.clone(), &WalletEventsNoOp)
+        .unwrap();
     let found_tx = wallet.get_transaction(DEFAULT_ACCOUNT_INDEX, tx_id).unwrap();
 
     assert_eq!(*found_tx.state(), TxState::Inactive(1));
@@ -1348,7 +1350,13 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     let fee = feerate.compute_fee(tx_size).unwrap();
 
     // register the successful transaction and check the balance
-    wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            transaction.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
     let coin_balance = get_coin_balance_with_inactive(&wallet);
     assert!(coin_balance <= ((block1_amount - amount_to_transfer).unwrap() - fee.into()).unwrap());
 }
@@ -1471,7 +1479,9 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
     }
 
     {
-        wallet.add_unconfirmed_tx(tx, &WalletEventsNoOp).unwrap();
+        wallet
+            .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, tx, &WalletEventsNoOp)
+            .unwrap();
         // Try to select the same UTXOs now they should be already consumed
 
         let err = wallet
@@ -1880,7 +1890,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         )
         .unwrap();
 
-    wallet.add_unconfirmed_tx(delegation_tx1.clone(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            delegation_tx1.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
     let delegation_tx1 = vec![delegation_tx1];
 
     // Check delegation balance after unconfirmed tx status
@@ -1905,7 +1921,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    wallet.add_unconfirmed_tx(delegation_tx2.clone(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            delegation_tx2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
 
     // Check delegation balance after unconfirmed tx status
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
@@ -1953,7 +1975,13 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, Amount::ZERO);
 
-    wallet.add_unconfirmed_tx(delegation_tx2.clone(), &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            delegation_tx2.clone(),
+            &WalletEventsNoOp,
+        )
+        .unwrap();
     let delegation_tx3 = wallet
         .create_transaction_to_addresses_from_delegation(
             DEFAULT_ACCOUNT_INDEX,
@@ -1964,7 +1992,9 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    wallet.add_unconfirmed_tx(delegation_tx3, &WalletEventsNoOp).unwrap();
+    wallet
+        .add_account_unconfirmed_tx(DEFAULT_ACCOUNT_INDEX, delegation_tx3, &WalletEventsNoOp)
+        .unwrap();
 
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
@@ -2056,7 +2086,11 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         );
 
         wallet
-            .add_unconfirmed_tx(token_issuance_transaction.clone(), &WalletEventsNoOp)
+            .add_account_unconfirmed_tx(
+                DEFAULT_ACCOUNT_INDEX,
+                token_issuance_transaction.clone(),
+                &WalletEventsNoOp,
+            )
             .unwrap();
 
         let unconfirmed_token_info =
@@ -2142,7 +2176,11 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         )
         .unwrap();
     wallet
-        .add_unconfirmed_tx(transfer_tokens_transaction.clone(), &WalletEventsNoOp)
+        .add_account_unconfirmed_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            transfer_tokens_transaction.clone(),
+            &WalletEventsNoOp,
+        )
         .unwrap();
 
     let _ = create_block(
@@ -3704,7 +3742,13 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
-        wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
+        wallet
+            .add_account_unconfirmed_tx(
+                DEFAULT_ACCOUNT_INDEX,
+                transaction.clone(),
+                &WalletEventsNoOp,
+            )
+            .unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
             // assert the utxos used in this transaction have not been used before

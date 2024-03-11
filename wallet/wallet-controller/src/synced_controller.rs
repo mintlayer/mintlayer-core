@@ -869,7 +869,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<SignedTransaction, ControllerError<T>> {
         if self.config.broadcast_to_mempool {
             self.wallet
-                .add_unconfirmed_tx(tx.clone(), self.wallet_events)
+                .add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
                 .map_err(ControllerError::WalletError)?;
 
             self.rpc_client

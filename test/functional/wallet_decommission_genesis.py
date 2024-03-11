@@ -280,9 +280,12 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
             assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
             assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 45000))
 
+            transactions = node.mempool_transactions()
+            self.gen_pos_block(transactions, 2)
+
             # check wallet best block if it is synced
             best_block_height = await wallet.get_best_block_height()
-            assert_in(best_block_height, '1')
+            assert_in(best_block_height, '2')
 
             assert_in("Success", await wallet.select_account(1))
             decommission_address = await wallet.new_address()
