@@ -15,7 +15,8 @@
 
 use crate::{
     api::json_helpers::{
-        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json, TokenDecimals,
+        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+        txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -36,8 +37,9 @@ use axum::{
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::NftIssuance, Block, Destination,
-        SignedTransaction, Transaction,
+        block::timestamp::BlockTimestamp,
+        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance},
+        Block, Destination, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -49,8 +51,6 @@ use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc, time::Durati
 use utils::ensure;
 
 use crate::ApiServerWebServerState;
-
-use super::json_helpers::txoutput_to_json;
 
 pub const API_VERSION: &str = "2.0.0";
 
@@ -656,7 +656,7 @@ pub async fn address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo.0,
+                "outpoint": utxo_outpoint_to_json(&utxo.0),
                 "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
@@ -692,7 +692,7 @@ pub async fn all_address_utxos<T: ApiServerStorage>(
             .into_iter()
             .map(|utxo| {
                 json!({
-                "outpoint": utxo.0,
+                "outpoint": utxo_outpoint_to_json(&utxo.0),
                 "utxo": txoutput_to_json(&utxo.1.output, &state.chain_config, &TokenDecimals::Single(utxo.1.token_decimals))})
             })
             .collect::<Vec<_>>(),
@@ -1041,6 +1041,23 @@ pub async fn token<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::TokenNotFound,
         ))?;
 
+    let (frozen, freezable, unfreezable) = match token.frozen {
+        IsTokenFrozen::No(changable) => {
+            let freezable = match changable {
+                IsTokenFreezable::Yes => true,
+                IsTokenFreezable::No => false,
+            };
+            (false, Some(freezable), None)
+        }
+        IsTokenFrozen::Yes(changable) => {
+            let unfreezable = match changable {
+                IsTokenUnfreezable::Yes => true,
+                IsTokenUnfreezable::No => false,
+            };
+            (true, None, Some(unfreezable))
+        }
+    };
+
     Ok(Json(json!({
         "authority": Address::new(&state.chain_config, &token.authority).expect(
             "no error in encoding"
@@ -1050,7 +1067,9 @@ pub async fn token<T: ApiServerStorage>(
         "metadata_uri": token.metadata_uri,
         "number_of_decimals": token.number_of_decimals,
         "total_supply": token.total_supply,
-        "frozen": token.frozen,
+        "frozen": frozen,
+        "is_token_unfreezable": unfreezable,
+        "is_token_freezable": freezable,
     })))
 }
 

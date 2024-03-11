@@ -144,7 +144,9 @@ async fn ok(#[case] seed: Seed) {
                         "metadata_uri": token_data.metadata_uri,
                         "number_of_decimals": token_data.number_of_decimals,
                         "total_supply": token_data.total_supply,
-                        "frozen": token_data.frozen,
+                        "frozen": false,
+                        "is_token_freezable": false,
+                        "is_token_unfreezable": None::<bool>,
                     }),
                 )]);
 
