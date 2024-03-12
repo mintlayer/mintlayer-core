@@ -17,6 +17,7 @@ mod error;
 mod rpc_auth;
 pub mod rpc_creds;
 pub mod subscription;
+pub mod types;
 
 /// Data structures describing an RPC interface
 pub use rpc_description as description;
