@@ -5912,7 +5912,9 @@ version = "0.3.0"
 dependencies = [
  "hex",
  "rpc-description",
+ "rstest",
  "serde",
+ "serde_json",
  "thiserror",
  "utils",
 ]

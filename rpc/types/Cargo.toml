@@ -13,3 +13,8 @@ utils = { path = "../../utils" }
 hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+
+rstest.workspace = true
+serde_json.workspace = true
