@@ -927,6 +927,21 @@ Returns:
 nothing
 ```
 
+### Method `node_enable_networking`
+
+Enable or disable p2p networking in the node
+
+
+Parameters:
+```
+{ "enable": bool }
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `node_connect_to_peer`
 
 Connect to a remote peer in the node
@@ -1035,7 +1050,7 @@ Returns:
 ], .. ]
 ```
 
-### Method `node-peer-count`
+### Method `node_peer_count`
 
 Get the number of connected peer in the node
 
