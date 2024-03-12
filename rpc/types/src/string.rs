@@ -209,7 +209,7 @@ impl TryFrom<RpcStringOutSerde> for RpcStringOut {
     fn try_from(value: RpcStringOutSerde) -> Result<Self, Self::Error> {
         let bytes = value.hex.into_bytes();
         utils::ensure!(
-            value.text.map_or(true, |text| text.as_bytes() == &bytes),
+            value.text.map_or(true, |text| text.as_bytes() == bytes),
             RpcStringOutConversionError::TextHexMismatch,
         );
         Ok(Self(bytes))
