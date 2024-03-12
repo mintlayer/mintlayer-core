@@ -189,7 +189,7 @@ pub struct LegacyVrfPublicKeyInfo {
 }
 
 impl rpc::description::HasValueHint for LegacyVrfPublicKeyInfo {
-    const HINT: VH = VH::Object(&[("vrf_public_key", &VH::HEX_STRING)]);
+    const HINT: VH = VH::Object(&[("vrf_public_key", &VH::STRING)]);
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
