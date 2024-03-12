@@ -354,9 +354,19 @@ Returns:
 EITHER OF
      1) { "FungibleToken": {
             "token_id": hex string,
-            "token_ticker": [ number, .. ],
+            "token_ticker": {
+                "text": EITHER OF
+                     1) string
+                     2) null,
+                "hex": hex string,
+            },
             "number_of_decimals": number,
-            "metadata_uri": [ number, .. ],
+            "metadata_uri": {
+                "text": EITHER OF
+                     1) string
+                     2) null,
+                "hex": hex string,
+            },
             "circulating_supply": { "atoms": number string },
             "total_supply": EITHER OF
                  1) { "Fixed": { "atoms": number string } }
@@ -385,13 +395,49 @@ EITHER OF
                 "creator": EITHER OF
                      1) [ number, .. ]
                      2) null,
-                "name": [ number, .. ],
-                "description": [ number, .. ],
-                "ticker": [ number, .. ],
-                "icon_uri": [ number, .. ],
-                "additional_metadata_uri": [ number, .. ],
-                "media_uri": [ number, .. ],
-                "media_hash": [ number, .. ],
+                "name": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "description": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "ticker": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "icon_uri": EITHER OF
+                     1) {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        }
+                     2) null,
+                "additional_metadata_uri": EITHER OF
+                     1) {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        }
+                     2) null,
+                "media_uri": EITHER OF
+                     1) {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        }
+                     2) null,
+                "media_hash": hex string,
             },
         } }
      3) null

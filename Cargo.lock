@@ -1471,6 +1471,7 @@ dependencies = [
  "ref-cast",
  "regex",
  "rpc-description",
+ "rpc-types",
  "rstest",
  "script",
  "serde",

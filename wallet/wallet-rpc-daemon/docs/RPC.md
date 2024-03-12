@@ -1790,7 +1790,7 @@ Parameters:
 
 Returns:
 ```
-{ "vrf_public_key": hex string }
+{ "vrf_public_key": string }
 ```
 
 ### Method `staking_show_vrf_public_keys`

@@ -24,6 +24,12 @@ use serialization_core::{Decode, Encode};
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataOrNoVec<T>(Option<Vec<T>>);
 
+impl<T> DataOrNoVec<T> {
+    pub fn as_opt_slice(&self) -> Option<&[T]> {
+        self.0.as_ref().map(AsRef::as_ref)
+    }
+}
+
 impl<T> AsRef<Option<Vec<T>>> for DataOrNoVec<T> {
     fn as_ref(&self) -> &Option<Vec<T>> {
         &self.0

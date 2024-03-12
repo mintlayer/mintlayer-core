@@ -22,9 +22,10 @@ use crate::{
     primitives::{Amount, Id},
 };
 use rpc_description::HasValueHint;
+use rpc_types::{RpcHexString, RpcStringOut};
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
     NonFungibleToken(Box<RPCNonFungibleTokenInfo>),
@@ -135,13 +136,13 @@ impl RPCIsTokenFrozen {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
-    pub token_ticker: Vec<u8>,
+    pub token_ticker: RpcStringOut,
     pub number_of_decimals: u8,
-    pub metadata_uri: Vec<u8>,
+    pub metadata_uri: RpcStringOut,
     pub circulating_supply: Amount,
     pub total_supply: RPCTokenTotalSupply,
     pub is_locked: bool,
@@ -164,9 +165,9 @@ impl RPCFungibleTokenInfo {
     ) -> Self {
         Self {
             token_id,
-            token_ticker,
+            token_ticker: token_ticker.into(),
             number_of_decimals,
-            metadata_uri,
+            metadata_uri: metadata_uri.into(),
             circulating_supply,
             total_supply,
             is_locked,
@@ -176,7 +177,7 @@ impl RPCFungibleTokenInfo {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenInfo {
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
@@ -210,29 +211,32 @@ impl From<&TokenCreator> for RPCTokenCreator {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenMetadata {
     pub creator: Option<RPCTokenCreator>,
-    pub name: Vec<u8>,
-    pub description: Vec<u8>,
-    pub ticker: Vec<u8>,
-    pub icon_uri: Vec<u8>,
-    pub additional_metadata_uri: Vec<u8>,
-    pub media_uri: Vec<u8>,
-    pub media_hash: Vec<u8>,
+    pub name: RpcStringOut,
+    pub description: RpcStringOut,
+    pub ticker: RpcStringOut,
+    pub icon_uri: Option<RpcStringOut>,
+    pub additional_metadata_uri: Option<RpcStringOut>,
+    pub media_uri: Option<RpcStringOut>,
+    pub media_hash: RpcHexString,
 }
 
 impl From<&Metadata> for RPCNonFungibleTokenMetadata {
     fn from(metadata: &Metadata) -> Self {
         Self {
             creator: metadata.creator().as_ref().map(RPCTokenCreator::from),
-            name: metadata.name().clone(),
-            description: metadata.description().clone(),
-            ticker: metadata.ticker().clone(),
-            icon_uri: metadata.icon_uri().encode(),
-            additional_metadata_uri: metadata.additional_metadata_uri().encode(),
-            media_uri: metadata.media_uri().encode(),
-            media_hash: metadata.media_hash().clone(),
+            name: metadata.name().clone().into(),
+            description: metadata.description().clone().into(),
+            ticker: metadata.ticker().clone().into(),
+            icon_uri: metadata.icon_uri().as_opt_slice().map(|x| x.to_vec().into()),
+            additional_metadata_uri: metadata
+                .additional_metadata_uri()
+                .as_opt_slice()
+                .map(|x| x.to_vec().into()),
+            media_uri: metadata.media_uri().as_opt_slice().map(|x| x.to_vec().into()),
+            media_hash: metadata.media_hash().clone().into(),
         }
     }
 }

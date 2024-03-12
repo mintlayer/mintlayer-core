@@ -18,9 +18,9 @@ use rpc_description::{HasValueHint, ValueHint as VH};
 /// Binary data encoded as a hex string in Serde/RPC.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "HexStringSerde", into = "HexStringSerde")]
-pub struct HexString(Vec<u8>);
+pub struct RpcHexString(Vec<u8>);
 
-impl HexString {
+impl RpcHexString {
     pub fn from_bytes(data: Vec<u8>) -> Self {
         Self(data)
     }
@@ -30,42 +30,42 @@ impl HexString {
     }
 }
 
-impl AsRef<[u8]> for HexString {
+impl AsRef<[u8]> for RpcHexString {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl From<Vec<u8>> for HexString {
+impl From<Vec<u8>> for RpcHexString {
     fn from(value: Vec<u8>) -> Self {
         Self::from_bytes(value)
     }
 }
 
-impl From<HexString> for Vec<u8> {
-    fn from(value: HexString) -> Self {
+impl From<RpcHexString> for Vec<u8> {
+    fn from(value: RpcHexString) -> Self {
         value.into_bytes()
     }
 }
 
-impl rpc_description::HasValueHint for HexString {
+impl rpc_description::HasValueHint for RpcHexString {
     const HINT: VH = VH::HEX_STRING;
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct HexStringSerde(String);
 
-impl From<HexString> for HexStringSerde {
-    fn from(value: HexString) -> Self {
+impl From<RpcHexString> for HexStringSerde {
+    fn from(value: RpcHexString) -> Self {
         Self(hex::encode(value.0))
     }
 }
 
-impl TryFrom<HexStringSerde> for HexString {
+impl TryFrom<HexStringSerde> for RpcHexString {
     type Error = hex::FromHexError;
 
     fn try_from(value: HexStringSerde) -> Result<Self, Self::Error> {
-        Ok(HexString::from_bytes(hex::decode(value.0)?))
+        Ok(RpcHexString::from_bytes(hex::decode(value.0)?))
     }
 }
 
@@ -119,8 +119,8 @@ impl From<String> for RpcStringIn {
     }
 }
 
-impl From<HexString> for RpcStringIn {
-    fn from(value: HexString) -> Self {
+impl From<RpcHexString> for RpcStringIn {
+    fn from(value: RpcHexString) -> Self {
         Self::from_bytes(value.into_bytes())
     }
 }
@@ -133,14 +133,14 @@ impl HasValueHint for RpcStringIn {
 #[serde(rename_all = "lowercase")]
 enum RpcStringInSerde {
     Text(String),
-    Hex(HexString),
+    Hex(RpcHexString),
     #[serde(untagged)]
     Bare(String),
 }
 
 impl From<RpcStringIn> for RpcStringInSerde {
     fn from(value: RpcStringIn) -> Self {
-        Self::Hex(HexString::from_bytes(value.0))
+        Self::Hex(RpcHexString::from_bytes(value.0))
     }
 }
 
@@ -187,12 +187,12 @@ impl HasValueHint for RpcStringOut {
 #[derive(serde::Serialize, serde::Deserialize, HasValueHint)]
 struct RpcStringOutSerde {
     text: Option<String>,
-    hex: String,
+    hex: RpcHexString,
 }
 
 impl From<RpcStringOut> for RpcStringOutSerde {
     fn from(value: RpcStringOut) -> Self {
-        let hex = hex::encode(&value.0);
+        let hex = value.0.clone().into();
         let text = String::from_utf8(value.0).ok();
         Self { text, hex }
     }
