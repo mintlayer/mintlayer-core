@@ -13,9 +13,3 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod string;
-
-pub use string::{RpcHexString, RpcStringIn, RpcStringOut};
-
-#[cfg(test)]
-mod tests;
