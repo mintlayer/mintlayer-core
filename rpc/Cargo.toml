@@ -13,6 +13,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 rpc-description = { path = "description" }
 rpc-description-macro = { path = "description-macro" }
+rpc-types = { path = "types" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils/" }
 utils-networking = { path = "../utils/networking" }

@@ -41,6 +41,7 @@ members = [
   "rpc/description",                    # Data types describing an RPC interface.
   "rpc/description-macro",              # Macro to generate rpc interface description.
   "rpc/gen-rpc-docs",                   # A tool to generate RPC documentation.
+  "rpc/types",                          # Support types for use in RPC interfaces.
   "script",                             # Bitcoin script and its interfaces.
   "serialization",                      # Full featured serialization interfaces and implementations.
   "serialization/core",                 # Serialization core tools.

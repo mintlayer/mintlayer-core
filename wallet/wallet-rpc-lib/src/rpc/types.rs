@@ -39,6 +39,7 @@ use wallet::account::PoolData;
 
 pub use common::primitives::amount::{RpcAmountIn, RpcAmountOut};
 pub use mempool_types::tx_options::TxOptionsOverrides;
+pub use rpc::types::RpcStringIn;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{
@@ -188,7 +189,7 @@ pub struct LegacyVrfPublicKeyInfo {
 }
 
 impl rpc::description::HasValueHint for LegacyVrfPublicKeyInfo {
-    const HINT: VH = VH::Object(&[("vrf_public_key", &VH::HEX_STRING)]);
+    const HINT: VH = VH::Object(&[("vrf_public_key", &VH::STRING)]);
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -334,13 +335,13 @@ impl DelegationInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NftMetadata {
     pub media_hash: String,
-    pub name: String,
-    pub description: String,
+    pub name: RpcStringIn,
+    pub description: RpcStringIn,
     pub ticker: String,
     pub creator: Option<HexEncoded<PublicKey>>,
-    pub icon_uri: Option<String>,
-    pub media_uri: Option<String>,
-    pub additional_metadata_uri: Option<String>,
+    pub icon_uri: Option<RpcStringIn>,
+    pub media_uri: Option<RpcStringIn>,
+    pub additional_metadata_uri: Option<RpcStringIn>,
 }
 
 impl NftMetadata {
@@ -379,9 +380,9 @@ impl TokenTotalSupply {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TokenMetadata {
-    pub token_ticker: String,
+    pub token_ticker: RpcStringIn,
     pub number_of_decimals: u8,
-    pub metadata_uri: String,
+    pub metadata_uri: RpcStringIn,
     pub token_supply: TokenTotalSupply,
     pub is_freezable: bool,
 }

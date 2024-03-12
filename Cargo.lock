@@ -1471,6 +1471,7 @@ dependencies = [
  "ref-cast",
  "regex",
  "rpc-description",
+ "rpc-types",
  "rstest",
  "script",
  "serde",
@@ -5874,6 +5875,7 @@ dependencies = [
  "logging",
  "rpc-description",
  "rpc-description-macro",
+ "rpc-types",
  "rstest",
  "serde",
  "serde_json",
@@ -5902,6 +5904,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.52",
+]
+
+[[package]]
+name = "rpc-types"
+version = "0.3.0"
+dependencies = [
+ "hex",
+ "rpc-description",
+ "rstest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "utils",
 ]
 
 [[package]]
