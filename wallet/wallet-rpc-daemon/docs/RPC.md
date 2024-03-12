@@ -658,21 +658,28 @@ Parameters:
     "destination_address": string,
     "metadata": {
         "media_hash": string,
-        "name": string,
-        "description": string,
+        "name": EITHER OF
+             1) string
+             2) { "hex": hex string },
+        "description": EITHER OF
+             1) string
+             2) { "hex": hex string },
         "ticker": string,
         "creator": EITHER OF
              1) hex string
              2) null,
         "icon_uri": EITHER OF
              1) string
-             2) null,
+             2) { "hex": hex string }
+             3) null,
         "media_uri": EITHER OF
              1) string
-             2) null,
+             2) { "hex": hex string }
+             3) null,
         "additional_metadata_uri": EITHER OF
              1) string
-             2) null,
+             2) { "hex": hex string }
+             3) null,
     },
     "options": { "in_top_x_mb": number },
 }
@@ -699,9 +706,13 @@ Parameters:
     "account": number,
     "destination_address": string,
     "metadata": {
-        "token_ticker": string,
+        "token_ticker": EITHER OF
+             1) string
+             2) { "hex": hex string },
         "number_of_decimals": number,
-        "metadata_uri": string,
+        "metadata_uri": EITHER OF
+             1) string
+             2) { "hex": hex string },
         "token_supply": EITHER OF
              1) { "Fixed": EITHER OF
                      1) { "atoms": number string }

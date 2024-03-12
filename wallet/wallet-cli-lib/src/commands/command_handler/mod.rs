@@ -713,9 +713,9 @@ where
                         selected_account,
                         destination_address,
                         TokenMetadata {
-                            token_ticker,
+                            token_ticker: token_ticker.into(),
                             number_of_decimals,
-                            metadata_uri,
+                            metadata_uri: metadata_uri.into(),
                             token_supply,
                             is_freezable: is_freezable.to_bool(),
                         },
@@ -743,12 +743,12 @@ where
             } => {
                 let metadata = NftMetadata {
                     creator,
-                    name,
-                    description,
+                    name: name.into(),
+                    description: description.into(),
                     ticker,
-                    icon_uri,
-                    additional_metadata_uri,
-                    media_uri,
+                    icon_uri: icon_uri.map(Into::into),
+                    additional_metadata_uri: additional_metadata_uri.map(Into::into),
+                    media_uri: media_uri.map(Into::into),
                     media_hash,
                 };
 
