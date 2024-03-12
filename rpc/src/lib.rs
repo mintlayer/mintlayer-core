@@ -17,12 +17,14 @@ mod error;
 mod rpc_auth;
 pub mod rpc_creds;
 pub mod subscription;
-pub mod types;
 
 /// Data structures describing an RPC interface
 pub use rpc_description as description;
 /// A macro to generate RPC interface description for given trait. Has to come before `#[rpc(...)]`
 pub use rpc_description_macro::describe;
+
+/// Support types for RPC interfaces
+pub use rpc_types as types;
 
 use std::{net::SocketAddr, path::PathBuf};
 

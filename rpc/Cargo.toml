@@ -13,6 +13,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 rpc-description = { path = "description" }
 rpc-description-macro = { path = "description-macro" }
+rpc-types = { path = "types" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils/" }
 utils-networking = { path = "../utils/networking" }
@@ -20,7 +21,6 @@ utils-networking = { path = "../utils/networking" }
 anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
-hex.workspace = true
 http.workspace = true
 hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "server-core", "http-client", "ws-client", "macros"] }

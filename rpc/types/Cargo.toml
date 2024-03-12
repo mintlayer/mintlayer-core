@@ -1,0 +1,15 @@
+[package]
+name = "rpc-types"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+rpc-description = { path = "../description" }
+utils = { path = "../../utils" }
+
+hex.workspace = true
+serde.workspace = true
+thiserror.workspace = true

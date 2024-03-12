@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::description::{HasValueHint, ValueHint as VH};
+use rpc_description::{HasValueHint, ValueHint as VH};
 
 /// Binary data encoded as a hex string in Serde/RPC.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

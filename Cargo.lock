@@ -5868,13 +5868,13 @@ dependencies = [
  "base64 0.22.0",
  "crypto",
  "expect-test",
- "hex",
  "http",
  "hyper",
  "jsonrpsee",
  "logging",
  "rpc-description",
  "rpc-description-macro",
+ "rpc-types",
  "rstest",
  "serde",
  "serde_json",
@@ -5903,6 +5903,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.52",
+]
+
+[[package]]
+name = "rpc-types"
+version = "0.3.0"
+dependencies = [
+ "hex",
+ "rpc-description",
+ "serde",
+ "thiserror",
+ "utils",
 ]
 
 [[package]]
