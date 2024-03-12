@@ -13,7 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Interface, Method, MethodKindData, Module, ValueHint};
+use super::{Interface, Method, MethodKindData, Module, RpcDocs, ValueHint};
+
+impl std::fmt::Display for RpcDocs<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            title,
+            version,
+            description,
+            interface,
+        } = self;
+
+        write!(f, "# RPC documentation for {title}\n\n")?;
+        write!(f, "Version `{version}`.\n\n")?;
+        if !description.is_empty() {
+            write!(f, "{description}\n\n")?;
+        }
+        write!(f, "{interface}")?;
+
+        Ok(())
+    }
+}
 
 impl std::fmt::Display for Interface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

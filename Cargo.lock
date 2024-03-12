@@ -2644,21 +2644,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gen-rpc-docs"
-version = "0.3.0"
-dependencies = [
- "blockprod",
- "chainstate",
- "clap",
- "mempool",
- "node-lib",
- "p2p",
- "rpc-description",
- "test-rpc-functions",
- "wallet-rpc-lib",
-]
-
-[[package]]
 name = "generator"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4285,8 +4270,10 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "expect-test",
  "logging",
  "node-lib",
+ "rpc-description",
  "tokio",
  "utils",
 ]
@@ -8236,8 +8223,10 @@ version = "0.3.0"
 dependencies = [
  "clap",
  "common",
+ "expect-test",
  "logging",
  "rpc",
+ "rpc-description",
  "thiserror",
  "tokio",
  "utils",
