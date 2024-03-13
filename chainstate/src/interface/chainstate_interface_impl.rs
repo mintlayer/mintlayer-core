@@ -95,9 +95,20 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(block_id = %header.get_id()))]
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
+    fn preliminary_header_check(&self, header: &SignedBlockHeader) -> Result<(), ChainstateError> {
         BlockChecker::new(&self.chainstate)
-            .preliminary_header_check(header)
+            .preliminary_headers_check(header, &[])
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
+    #[tracing::instrument(skip_all, fields(first_block_id = %first_header.get_id()))]
+    fn preliminary_headers_check(
+        &self,
+        first_header: &SignedBlockHeader,
+        other_headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError> {
+        BlockChecker::new(&self.chainstate)
+            .preliminary_headers_check(first_header, other_headers)
             .map_err(ChainstateError::ProcessBlockError)
     }
 

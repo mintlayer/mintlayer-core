@@ -49,7 +49,20 @@ pub trait ChainstateInterface: Send + Sync {
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
+
+    /// This is equivalent to `preliminary_headers_check(header, &[])`.
+    // FIXME remove
+    fn preliminary_header_check(&self, header: &SignedBlockHeader) -> Result<(), ChainstateError>;
+
+    /// Check the headers. The first header's parent must be known.
+    /// Each of the "other" headers must be connected to the previous one. These headers only
+    /// get the most basic checks (e.g. checkpoint enforcement)
+    fn preliminary_headers_check(
+        &self,
+        first_header: &SignedBlockHeader,
+        other_headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError>;
+
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
     fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;

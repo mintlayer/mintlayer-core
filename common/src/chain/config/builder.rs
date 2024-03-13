@@ -275,6 +275,7 @@ impl GenesisBlockInit {
 pub struct Builder {
     chain_type: ChainType,
     bip44_coin_type: ChildNumber,
+    checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>,
     magic_bytes: MagicBytes,
     p2p_port: u16,
     dns_seeds: Vec<&'static str>,
@@ -320,6 +321,7 @@ impl Builder {
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
+            checkpoints: BTreeMap::new(),
             coin_decimals: CoinUnit::DECIMALS,
             coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.magic_bytes(),
@@ -371,6 +373,7 @@ impl Builder {
         let Self {
             chain_type,
             bip44_coin_type,
+            checkpoints,
             coin_decimals,
             coin_ticker,
             magic_bytes,
@@ -426,10 +429,11 @@ impl Builder {
         };
         let genesis_block = Arc::new(WithId::new(genesis_block));
 
-        let height_checkpoint_data = vec![(0.into(), genesis_block.get_id().into())]
-            .into_iter()
-            .collect::<BTreeMap<BlockHeight, Id<GenBlock>>>()
-            .into();
+        let height_checkpoint_data = {
+            let mut checkpoints = checkpoints;
+            checkpoints.entry(0.into()).or_insert(genesis_block.get_id().into());
+            checkpoints.into()
+        };
 
         let pow_chain_config = {
             let (_, genesis_upgrade_version) =
@@ -506,6 +510,7 @@ macro_rules! builder_method {
 impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(bip44_coin_type: ChildNumber);
+    builder_method!(checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>);
     builder_method!(magic_bytes: MagicBytes);
     builder_method!(p2p_port: u16);
     builder_method!(dns_seeds: Vec<&'static str>);

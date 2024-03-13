@@ -13,19 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{iter, time::Duration};
+use std::{collections::BTreeMap, iter, time::Duration};
 
 use rstest::rstest;
 
-use chainstate::{BlockSource, ChainstateConfig, ChainstateError};
+use chainstate::{BlockSource, ChainstateConfig, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
+        self,
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         GenBlock,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
+    Uint256,
 };
 use crypto::random::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -675,7 +677,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let block = tf.make_block_builder().make_orphan(&mut rng).build();
         let block_id = block.get_id();
 
-        let err = tf.chainstate.preliminary_header_check(block.header().clone()).unwrap_err();
+        let err = tf.chainstate.preliminary_header_check(block.header()).unwrap_err();
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
@@ -704,6 +706,152 @@ fn header_check_for_orphan(#[case] seed: Seed) {
                 chainstate::BlockError::PrevBlockNotFoundForNewBlock(block_id)
             )
         );
+    });
+}
+
+// Ensure that preliminary_headers_check succeeds when all headers satisfy the checkpoints
+// and fails when some of them do not.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn headers_check_with_checkpoints(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let (parent_block, block_headers) = {
+            let mut tf = TestFramework::builder(&mut rng).build();
+            let parent_block_id =
+                tf.create_chain_return_ids(&tf.genesis().get_id().into(), 1, &mut rng).unwrap()[0];
+            let parent_block = tf
+                .chainstate
+                .get_block(tf.to_chain_block_id(&parent_block_id))
+                .unwrap()
+                .unwrap();
+            let ids =
+                tf.create_chain_return_ids(&parent_block.get_id().into(), 10, &mut rng).unwrap();
+            let block_headers = ids
+                .iter()
+                .map(|id| {
+                    let id = tf.to_chain_block_id(id);
+                    tf.chainstate.get_block_header(id).unwrap().unwrap()
+                })
+                .collect::<Vec<_>>();
+            (parent_block, block_headers)
+        };
+
+        // All blocks are checkpointed; all checkpoints are satisfied.
+        {
+            let checkpoints = block_headers
+                .iter()
+                .enumerate()
+                .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
+                .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            tf.chainstate
+                .preliminary_headers_check(&block_headers[0], &block_headers[1..])
+                .unwrap();
+        }
+
+        // A few blocks are checkpointed; all checkpoints are satisfied.
+        {
+            let checkpoints = [
+                (BlockHeight::new(3), block_headers[1].block_id().into()),
+                (BlockHeight::new(7), block_headers[5].block_id().into()),
+            ]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            tf.chainstate
+                .preliminary_headers_check(&block_headers[0], &block_headers[1..])
+                .unwrap();
+        }
+
+        // All blocks are checkpointed; some checkpoints are not satisfied.
+        {
+            let mut checkpoints = block_headers
+                .iter()
+                .enumerate()
+                .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
+                .collect::<BTreeMap<_, _>>();
+            let good_block_id = Id::new(Uint256::from_u64(12345).into());
+            let bad_block_id = checkpoints.insert(BlockHeight::new(5), good_block_id).unwrap();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            let err = tf
+                .chainstate
+                .preliminary_headers_check(&block_headers[0], &block_headers[1..])
+                .unwrap_err();
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch(
+                        tf.to_chain_block_id(&good_block_id),
+                        tf.to_chain_block_id(&bad_block_id)
+                    )
+                ))
+            );
+        }
+
+        // A few blocks are checkpointed; some checkpoints are not satisfied.
+        {
+            let good_block_id = Id::new(Uint256::from_u64(12345).into());
+            let bad_block_id = block_headers[5].block_id().into();
+            let checkpoints = [
+                (BlockHeight::new(3), block_headers[1].block_id().into()),
+                (BlockHeight::new(7), good_block_id),
+            ]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            let err = tf
+                .chainstate
+                .preliminary_headers_check(&block_headers[0], &block_headers[1..])
+                .unwrap_err();
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch(
+                        tf.to_chain_block_id(&good_block_id),
+                        tf.to_chain_block_id(&bad_block_id)
+                    )
+                ))
+            );
+        }
     });
 }
 

@@ -184,10 +184,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
 
         let start_height = std::cmp::min(start_height, max_height);
-        let end_height = std::cmp::min(
-            end_height,
-            (max_height + BlockDistance::new(1)).expect("BlockHeight limit reached"),
-        );
+        let end_height = std::cmp::min(end_height, max_height.next_height());
 
         let iter = (start_height.into_int()..end_height.into_int()).step_by(step).map(|height| {
             let height = BlockHeight::new(height);

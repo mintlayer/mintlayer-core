@@ -75,8 +75,16 @@ where
         self.deref().preliminary_block_check(block)
     }
 
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
+    fn preliminary_header_check(&self, header: &SignedBlockHeader) -> Result<(), ChainstateError> {
         self.deref().preliminary_header_check(header)
+    }
+
+    fn preliminary_headers_check(
+        &self,
+        first_header: &SignedBlockHeader,
+        other_headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError> {
+        self.deref().preliminary_headers_check(first_header, other_headers)
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {

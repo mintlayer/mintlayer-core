@@ -17,6 +17,7 @@ mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
 
+use itertools::Itertools;
 use std::{cmp::max, collections::BTreeSet};
 use thiserror::Error;
 
@@ -39,7 +40,7 @@ use common::{
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockCount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::Time, BlockCount, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -422,14 +423,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    #[log_error]
-    fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
-        let current_height = prev_block_index.block_height().next_height();
-
-        // If the block height is at the exact checkpoint height, we need to check that the block id matches the checkpoint id
-        if let Some(e) =
-            self.chain_config.height_checkpoints().checkpoint_at_height(&current_height)
+    // If the header height is at an exact checkpoint height, check that the block id matches the checkpoint id.
+    // Return true if the header height is at an exact checkpoint height.
+    fn enforce_exact_checkpoint_assuming_height(
+        &self,
+        header: &SignedBlockHeader,
+        header_height: BlockHeight,
+    ) -> Result<bool, CheckBlockError> {
+        if let Some(e) = self.chain_config.height_checkpoints().checkpoint_at_height(&header_height)
         {
             let expected_id = Id::<Block>::new(e.to_hash());
             if expected_id != header.get_id() {
@@ -438,9 +439,23 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     header.get_id(),
                 ));
             }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    #[log_error]
+    fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
+        let current_height = prev_block_index.block_height().next_height();
+
+        if self.enforce_exact_checkpoint_assuming_height(header, current_height)? {
+            return Ok(());
         }
 
-        // If the block height does not match a checkpoint height, we need to check that an ancestor block id matches the checkpoint id
+        // The block height does not match a checkpoint height; we need to check that
+        // an ancestor block id matches the checkpoint id.
         let (expected_checkpoint_height, expected_checkpoint_id) = self
             .chain_config
             .height_checkpoints()
@@ -457,6 +472,39 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 expected_checkpoint_id,
                 parent_checkpoint_id,
             ));
+        }
+
+        Ok(())
+    }
+
+    #[log_error]
+    pub fn enforce_checkpoints_for_header_chain(
+        &self,
+        checked_header: &SignedBlockHeader,
+        headers_to_check: &[SignedBlockHeader],
+    ) -> Result<(), BlockError> {
+        let checked_header_height = {
+            let prev_block_index = self.get_previous_block_index_for_check_block(checked_header)?;
+            prev_block_index.block_height().next_height()
+        };
+
+        for (cur_header_idx, (prev_header, cur_header)) in std::iter::once(checked_header)
+            .chain(headers_to_check.iter())
+            .tuple_windows()
+            .enumerate()
+        {
+            let prev_header_id: Id<GenBlock> = prev_header.get_id().into();
+            if cur_header.prev_block_id() != &prev_header_id {
+                // The caller should enforce this.
+                debug_assert!(false);
+                return Err(BlockError::InvariantErrorDisconnectedHeaders);
+            }
+
+            let cur_header_height = (checked_header_height
+                + BlockDistance::new(cur_header_idx as i64 + 1))
+            .expect("BlockHeight limit reached");
+
+            self.enforce_exact_checkpoint_assuming_height(cur_header, cur_header_height)?;
         }
 
         Ok(())
