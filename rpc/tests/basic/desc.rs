@@ -69,7 +69,7 @@ fn value_hint_tagged() {
         String(String),
     }
 
-    let actual = Tagged::HINT.to_string();
+    let actual = Tagged::HINT_SER.to_string();
     expect_file!["./HINT_TAGGED.txt"].assert_eq(&actual);
 }
 
@@ -83,7 +83,7 @@ fn value_hint_untagged() {
         String(String),
     }
 
-    let actual = Untagged::HINT.to_string();
+    let actual = Untagged::HINT_SER.to_string();
     expect_file!["./HINT_UNTAGGED.txt"].assert_eq(&actual);
 }
 

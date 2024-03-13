@@ -72,7 +72,11 @@ impl SerdeAttributes {
     }
 }
 
-fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<TokenStream> {
+fn hint_for_fields(
+    fields: &syn::Fields,
+    desc_mod: &TokenStream,
+    mode: &TokenStream,
+) -> syn::Result<TokenStream> {
     let result = match &fields {
         syn::Fields::Named(fields) => {
             let entries = fields
@@ -82,7 +86,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
                     SerdeAttributes::new(&f.attrs)?.check_none()?;
                     let name = f.ident.as_ref().expect("named").to_string();
                     let ty = &f.ty;
-                    Ok(quote!((#name, &<#ty as #desc_mod::HasValueHint>::HINT)))
+                    Ok(quote!((#name, &<#ty as #desc_mod::HasValueHint>::#mode)))
                 })
                 .collect::<syn::Result<Vec<_>>>()?;
 
@@ -93,7 +97,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
                 let field = &fields.unnamed[0];
                 SerdeAttributes::new(&field.attrs)?.check_none()?;
                 let ty = &field.ty;
-                quote!(<#ty as #desc_mod::HasValueHint>::HINT)
+                quote!(<#ty as #desc_mod::HasValueHint>::#mode)
             } else {
                 let tys = fields
                     .unnamed
@@ -103,7 +107,7 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
                         Ok(&f.ty)
                     })
                     .collect::<syn::Result<Vec<_>>>()?;
-                quote!(<(#(#tys),*) as #desc_mod::HasValueHint>::HINT)
+                quote!(<(#(#tys),*) as #desc_mod::HasValueHint>::#mode)
             }
         }
         syn::Fields::Unit => quote!(#desc_mod::ValueHint::NULL),
@@ -111,11 +115,15 @@ fn hint_for_fields(fields: &syn::Fields, desc_mod: &TokenStream) -> syn::Result<
     Ok(result)
 }
 
-fn process_input(item: syn::DeriveInput, desc_mod: TokenStream) -> syn::Result<TokenStream> {
-    let hint = match &item.data {
+fn hint_for_item(
+    item: &syn::DeriveInput,
+    desc_mod: &TokenStream,
+    mode: &TokenStream,
+) -> syn::Result<TokenStream> {
+    match &item.data {
         syn::Data::Struct(struct_item) => {
             SerdeAttributes::new(&item.attrs)?.check_none()?;
-            hint_for_fields(&struct_item.fields, &desc_mod)?
+            hint_for_fields(&struct_item.fields, desc_mod, mode)
         }
         syn::Data::Enum(enum_item) => {
             let untagged = SerdeAttributes::new(&item.attrs)?.into_untagged()?;
@@ -126,7 +134,7 @@ fn process_input(item: syn::DeriveInput, desc_mod: TokenStream) -> syn::Result<T
                     SerdeAttributes::new(&var.attrs)?.check_none()?;
                     match &var.fields {
                         fields @ (syn::Fields::Named(_) | syn::Fields::Unnamed(_)) => {
-                            let subhints = hint_for_fields(fields, &desc_mod)?;
+                            let subhints = hint_for_fields(fields, desc_mod, mode)?;
                             let name = var.ident.to_string();
                             if untagged {
                                 Ok(subhints)
@@ -142,16 +150,22 @@ fn process_input(item: syn::DeriveInput, desc_mod: TokenStream) -> syn::Result<T
                 })
                 .collect::<syn::Result<Vec<_>>>()?;
 
-            quote!(#desc_mod::ValueHint::Choice(&[#(&#variants,)*]))
+            Ok(quote!(#desc_mod::ValueHint::Choice(&[#(&#variants,)*])))
         }
-        syn::Data::Union(_) => panic!("ValueHint not supported for union"),
-    };
+        syn::Data::Union(_) => panic!("HasValueHint not supported for union"),
+    }
+}
+
+fn process_input(item: syn::DeriveInput, desc_mod: TokenStream) -> syn::Result<TokenStream> {
+    let hint_ser = hint_for_item(&item, &desc_mod, &quote!(HINT_SER))?;
+    let hint_de = hint_for_item(&item, &desc_mod, &quote!(HINT_DE))?;
 
     let name = &item.ident;
     let (g_impl, g_ty, g_where) = item.generics.split_for_impl();
     let result = quote! {
         impl #g_impl #desc_mod::HasValueHint for #name #g_ty #g_where {
-            const HINT: #desc_mod::ValueHint = #hint;
+            const HINT_SER: #desc_mod::ValueHint = #hint_ser;
+            const HINT_DE: #desc_mod::ValueHint = #hint_de;
         }
     };
 

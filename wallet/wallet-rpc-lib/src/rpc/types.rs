@@ -177,7 +177,7 @@ impl PublicKeyInfo {
 }
 
 impl rpc::description::HasValueHint for PublicKeyInfo {
-    const HINT: VH = VH::Object(&[
+    const HINT_SER: VH = VH::Object(&[
         ("public_key_hex", &VH::HEX_STRING),
         ("public_key_address", &VH::BECH32_STRING),
     ]);
@@ -189,7 +189,7 @@ pub struct LegacyVrfPublicKeyInfo {
 }
 
 impl rpc::description::HasValueHint for LegacyVrfPublicKeyInfo {
-    const HINT: VH = VH::Object(&[("vrf_public_key", &VH::STRING)]);
+    const HINT_SER: VH = VH::Object(&[("vrf_public_key", &VH::STRING)]);
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -210,10 +210,10 @@ impl VrfPublicKeyInfo {
 }
 
 impl rpc::description::HasValueHint for VrfPublicKeyInfo {
-    const HINT: VH = VH::Object(&[
+    const HINT_SER: VH = VH::Object(&[
         ("vrf_public_key", &VH::HEX_STRING),
-        ("child_number", &u32::HINT),
-        ("used", &bool::HINT),
+        ("child_number", &u32::HINT_SER),
+        ("used", &bool::HINT_SER),
     ]);
 }
 
@@ -224,8 +224,8 @@ pub struct UtxoInfo {
 }
 
 impl rpc::description::HasValueHint for UtxoInfo {
-    const HINT: VH =
-        VH::Object(&[("outpoint", &UtxoOutPoint::HINT), ("output", &VH::GENERIC_OBJECT)]);
+    const HINT_SER: VH =
+        VH::Object(&[("outpoint", &UtxoOutPoint::HINT_SER), ("output", &VH::GENERIC_OBJECT)]);
 }
 
 impl UtxoInfo {
@@ -302,8 +302,10 @@ pub struct NewDelegation {
 }
 
 impl rpc::description::HasValueHint for NewDelegation {
-    const HINT: VH =
-        VH::Object(&[("tx_id", &<Id<Transaction>>::HINT), ("delegation_id", &VH::BECH32_STRING)]);
+    const HINT_SER: VH = VH::Object(&[
+        ("tx_id", &<Id<Transaction>>::HINT_SER),
+        ("delegation_id", &VH::BECH32_STRING),
+    ]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -313,8 +315,10 @@ pub struct DelegationInfo {
 }
 
 impl rpc::description::HasValueHint for DelegationInfo {
-    const HINT: VH =
-        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT)]);
+    const HINT_SER: VH =
+        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT_SER)]);
+    const HINT_DE: VH =
+        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT_DE)]);
 }
 
 impl DelegationInfo {
@@ -415,7 +419,8 @@ pub struct RpcTokenId {
 }
 
 impl rpc::description::HasValueHint for RpcTokenId {
-    const HINT: VH = VH::Object(&[("token_id", &VH::BECH32_STRING), ("tx_id", &VH::HEX_STRING)]);
+    const HINT_SER: VH =
+        VH::Object(&[("token_id", &VH::BECH32_STRING), ("tx_id", &VH::HEX_STRING)]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

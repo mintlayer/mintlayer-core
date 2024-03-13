@@ -49,7 +49,7 @@ impl From<RpcHexString> for Vec<u8> {
 }
 
 impl rpc_description::HasValueHint for RpcHexString {
-    const HINT: VH = VH::HEX_STRING;
+    const HINT_SER: VH = VH::HEX_STRING;
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -126,7 +126,7 @@ impl From<RpcHexString> for RpcStringIn {
 }
 
 impl HasValueHint for RpcStringIn {
-    const HINT: VH = VH::Choice(&[&VH::STRING, &VH::Object(&[("hex", &VH::HEX_STRING)])]);
+    const HINT_SER: VH = VH::Choice(&[&VH::STRING, &VH::Object(&[("hex", &VH::HEX_STRING)])]);
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -181,7 +181,7 @@ impl From<String> for RpcStringOut {
 }
 
 impl HasValueHint for RpcStringOut {
-    const HINT: VH = RpcStringOutSerde::HINT;
+    const HINT_SER: VH = RpcStringOutSerde::HINT_SER;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, HasValueHint)]

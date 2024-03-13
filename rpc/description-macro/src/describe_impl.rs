@@ -198,7 +198,7 @@ impl quote::ToTokens for MethodMeta<'_> {
                 let ret = return_type.unwrap_or(&unit);
                 quote! {
                     ::rpc::description::MethodKindData::Method {
-                        return_type: <#ret as ::rpc::description::HasValueHint>::HINT,
+                        return_type: <#ret as ::rpc::description::HasValueHint>::HINT_SER,
                     }
                 }
             }
@@ -207,7 +207,7 @@ impl quote::ToTokens for MethodMeta<'_> {
                 quote! {
                     ::rpc::description::MethodKindData::Subscription {
                         unsubscribe_name: #unsub,
-                        item_type: <#item_ty as ::rpc::description::HasValueHint>::HINT,
+                        item_type: <#item_ty as ::rpc::description::HasValueHint>::HINT_SER,
                     }
                 }
             }
@@ -215,7 +215,7 @@ impl quote::ToTokens for MethodMeta<'_> {
 
         let params = params
             .iter()
-            .map(|(n, t)| quote!((#n, &<#t as ::rpc::description::HasValueHint>::HINT)));
+            .map(|(n, t)| quote!((#n, &<#t as ::rpc::description::HasValueHint>::HINT_DE)));
 
         tokens.extend(quote! {
             ::rpc::description::Method {

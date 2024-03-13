@@ -73,7 +73,7 @@ impl<'d> serde::Deserialize<'d> for PublicKey {
 }
 
 impl rpc_description::HasValueHint for PublicKey {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
 }
 
 impl PrivateKey {
