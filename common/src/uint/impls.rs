@@ -582,6 +582,32 @@ macro_rules! construct_uint {
                 Ok(())
             }
         }
+
+        impl std::fmt::LowerHex for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                if f.alternate() {
+                    write!(f, "0x")?;
+                }
+                let &$name(ref data) = self;
+                for ch in data.iter().rev() {
+                    write!(f, "{:016x}", ch)?;
+                }
+                Ok(())
+            }
+        }
+
+        impl std::fmt::UpperHex for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                if f.alternate() {
+                    write!(f, "0X")?;
+                }
+                let &$name(ref data) = self;
+                for ch in data.iter().rev() {
+                    write!(f, "{:016X}", ch)?;
+                }
+                Ok(())
+            }
+        }
     };
 }
 
@@ -714,8 +740,40 @@ mod tests {
             "0x00000000000000000000000000000000000000000000000000000000deadbeef"
         );
         assert_eq!(
+            format!("{:x}", Uint256::from_u64(0xDEADBEEF)),
+            "00000000000000000000000000000000000000000000000000000000deadbeef"
+        );
+        assert_eq!(
+            format!("{:#x}", Uint256::from_u64(0xDEADBEEF)),
+            "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+        );
+        assert_eq!(
+            format!("{:X}", Uint256::from_u64(0xDEADBEEF)),
+            "00000000000000000000000000000000000000000000000000000000DEADBEEF"
+        );
+        assert_eq!(
+            format!("{:#X}", Uint256::from_u64(0xDEADBEEF)),
+            "0X00000000000000000000000000000000000000000000000000000000DEADBEEF"
+        );
+        assert_eq!(
             format!("{:?}", Uint256::from_u64(u64::MAX)),
             "0x000000000000000000000000000000000000000000000000ffffffffffffffff"
+        );
+        assert_eq!(
+            format!("{:x}", Uint256::from_u64(u64::MAX)),
+            "000000000000000000000000000000000000000000000000ffffffffffffffff"
+        );
+        assert_eq!(
+            format!("{:#x}", Uint256::from_u64(u64::MAX)),
+            "0x000000000000000000000000000000000000000000000000ffffffffffffffff"
+        );
+        assert_eq!(
+            format!("{:X}", Uint256::from_u64(u64::MAX)),
+            "000000000000000000000000000000000000000000000000FFFFFFFFFFFFFFFF"
+        );
+        assert_eq!(
+            format!("{:#X}", Uint256::from_u64(u64::MAX)),
+            "0X000000000000000000000000000000000000000000000000FFFFFFFFFFFFFFFF"
         );
 
         let max_val = Uint256([
