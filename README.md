@@ -135,6 +135,14 @@ Communication with the node and the wallet is possible through RPC. Details on t
 - [Node RPC readme](node-daemon/docs/README.md)
 - [Wallet RPC readme](wallet/wallet-rpc-daemon/README.md)
 
+## WASM wrappers/bindings
+
+Using these wrappers is NOT recommended in general and should only be considered as last resort for developing applications that absolutely need it, such as light-wallets. We recommend using the RPC facilities to communicate with the node and wallet. This way, you have the best level of compatibility and safety.
+
+Nevertheless... If you insist, in order to be able to perform basic operations with other programming languages, we provide WASM (web-assembly) wrappers.
+
+- [WASM readme](wasm-wrappers/README.md)
+
 ## Security, and running a node in a rented public server or a Virtual Private Server (VPS)
 
 Please read the documentation on the recommended security practices when running a public server:
