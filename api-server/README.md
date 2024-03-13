@@ -94,13 +94,13 @@ The API web server will immediately start and connect to the database locally. A
 Once the previous steps are complete, you're ready to communicate with the API web server. The following curl command should work (or you can put the link in your browser directly):
 
 ```
-curl http://127.0.0.1:3000/api/v1/chain/tip
+curl http://127.0.0.1:3000/api/v2/chain/tip
 ```
 
 which will return the best block information in the blockchain. Or:
 
 ```
-curl http://127.0.0.1:3000/api/v1/chain/10
+curl http://127.0.0.1:3000/api/v2/chain/10
 ```
 
 to get the id of the block at height 10.
