@@ -72,10 +72,10 @@ impl TryFrom<HexStringSerde> for RpcHexString {
 /// A binary string type suitable for use in RPC input parameters. Accepts a string or a hex
 /// string.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-#[serde(into = "RpcStringInSerde", from = "RpcStringInSerde")]
-pub struct RpcStringIn(Vec<u8>);
+#[serde(into = "RpcStringSer", try_from = "RpcStringDe")]
+pub struct RpcString(Vec<u8>);
 
-impl RpcStringIn {
+impl RpcString {
     pub fn from_bytes(data: Vec<u8>) -> Self {
         Self(data)
     }
@@ -101,117 +101,84 @@ impl RpcStringIn {
     }
 }
 
-impl AsRef<[u8]> for RpcStringIn {
+impl AsRef<[u8]> for RpcString {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl From<Vec<u8>> for RpcStringIn {
+impl From<Vec<u8>> for RpcString {
     fn from(value: Vec<u8>) -> Self {
         Self::from_bytes(value)
     }
 }
 
-impl From<String> for RpcStringIn {
+impl From<String> for RpcString {
     fn from(value: String) -> Self {
         Self::from_string(value)
     }
 }
 
-impl From<RpcHexString> for RpcStringIn {
+impl From<RpcHexString> for RpcString {
     fn from(value: RpcHexString) -> Self {
         Self::from_bytes(value.into_bytes())
     }
 }
 
-impl HasValueHint for RpcStringIn {
-    const HINT_SER: VH = VH::Choice(&[&VH::STRING, &VH::Object(&[("hex", &VH::HEX_STRING)])]);
+impl HasValueHint for RpcString {
+    const HINT_SER: VH =
+        VH::Object(&[("text", &<Option<String>>::HINT_SER), ("hex", &VH::HEX_STRING)]);
+    const HINT_DE: VH = VH::Choice(&[&VH::STRING, &VH::Object(&[("hex", &VH::HEX_STRING)])]);
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum RpcStringInSerde {
-    Text(String),
-    Hex(RpcHexString),
-    #[serde(untagged)]
-    Bare(String),
-}
-
-impl From<RpcStringIn> for RpcStringInSerde {
-    fn from(value: RpcStringIn) -> Self {
-        Self::Hex(RpcHexString::from_bytes(value.0))
-    }
-}
-
-impl From<RpcStringInSerde> for RpcStringIn {
-    fn from(value: RpcStringInSerde) -> Self {
-        match value {
-            RpcStringInSerde::Text(s) | RpcStringInSerde::Bare(s) => s.into(),
-            RpcStringInSerde::Hex(hex) => hex.into(),
-        }
-    }
-}
-
-/// A binary string type suitable for use in RPC return values.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-#[serde(into = "RpcStringOutSerde", try_from = "RpcStringOutSerde")]
-pub struct RpcStringOut(Vec<u8>);
-
-impl RpcStringOut {
-    pub fn from_bytes(data: Vec<u8>) -> Self {
-        Self(data)
-    }
-
-    pub fn from_string(data: String) -> Self {
-        Self(data.into_bytes())
-    }
-}
-
-impl From<Vec<u8>> for RpcStringOut {
-    fn from(value: Vec<u8>) -> Self {
-        Self::from_bytes(value)
-    }
-}
-
-impl From<String> for RpcStringOut {
-    fn from(value: String) -> Self {
-        Self::from_string(value)
-    }
-}
-
-impl HasValueHint for RpcStringOut {
-    const HINT_SER: VH = RpcStringOutSerde::HINT_SER;
-}
-
-#[derive(serde::Serialize, serde::Deserialize, HasValueHint)]
-struct RpcStringOutSerde {
+struct RpcStringSer {
+    #[serde(default)]
     text: Option<String>,
     hex: RpcHexString,
 }
 
-impl From<RpcStringOut> for RpcStringOutSerde {
-    fn from(value: RpcStringOut) -> Self {
+impl From<RpcString> for RpcStringSer {
+    fn from(value: RpcString) -> Self {
         let hex = value.0.clone().into();
         let text = String::from_utf8(value.0).ok();
         Self { text, hex }
     }
 }
 
-#[derive(PartialEq, Debug, thiserror::Error)]
-enum RpcStringOutConversionError {
-    #[error("Text and hex keys hold different data")]
-    TextHexMismatch,
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum RpcStringDe {
+    Obj {
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        hex: Option<RpcHexString>,
+    },
+    Bare(String),
 }
 
-impl TryFrom<RpcStringOutSerde> for RpcStringOut {
-    type Error = RpcStringOutConversionError;
-    fn try_from(value: RpcStringOutSerde) -> Result<Self, Self::Error> {
-        let bytes = value.hex.into_bytes();
-        utils::ensure!(
-            value.text.map_or(true, |text| text.as_bytes() == bytes),
-            RpcStringOutConversionError::TextHexMismatch,
-        );
-        Ok(Self(bytes))
+#[derive(PartialEq, Debug, thiserror::Error)]
+enum RpcStringDeError {
+    #[error("Text and hex keys hold different data")]
+    Mismatch,
+    #[error("Neither text nor hex is present")]
+    Missing,
+}
+
+impl TryFrom<RpcStringDe> for RpcString {
+    type Error = RpcStringDeError;
+
+    fn try_from(value: RpcStringDe) -> Result<Self, Self::Error> {
+        match value {
+            RpcStringDe::Bare(s) => Ok(s.into()),
+            RpcStringDe::Obj { text, hex } => match (text, hex) {
+                (None, None) => Err(RpcStringDeError::Missing),
+                (None, Some(hex)) => Ok(hex.into()),
+                (Some(text), None) => Ok(text.into()),
+                (Some(text), Some(hex)) if text.as_bytes() == hex.as_ref() => Ok(hex.into()),
+                (Some(_text), Some(_hex)) => Err(RpcStringDeError::Mismatch),
+            },
+        }
     }
 }

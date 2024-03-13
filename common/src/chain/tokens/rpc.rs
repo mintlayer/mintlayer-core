@@ -22,7 +22,7 @@ use crate::{
     primitives::{Amount, Id},
 };
 use rpc_description::HasValueHint;
-use rpc_types::{RpcHexString, RpcStringOut};
+use rpc_types::{RpcHexString, RpcString};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -140,9 +140,9 @@ impl RPCIsTokenFrozen {
 pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
-    pub token_ticker: RpcStringOut,
+    pub token_ticker: RpcString,
     pub number_of_decimals: u8,
-    pub metadata_uri: RpcStringOut,
+    pub metadata_uri: RpcString,
     pub circulating_supply: Amount,
     pub total_supply: RPCTokenTotalSupply,
     pub is_locked: bool,
@@ -214,12 +214,12 @@ impl From<&TokenCreator> for RPCTokenCreator {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenMetadata {
     pub creator: Option<RPCTokenCreator>,
-    pub name: RpcStringOut,
-    pub description: RpcStringOut,
-    pub ticker: RpcStringOut,
-    pub icon_uri: Option<RpcStringOut>,
-    pub additional_metadata_uri: Option<RpcStringOut>,
-    pub media_uri: Option<RpcStringOut>,
+    pub name: RpcString,
+    pub description: RpcString,
+    pub ticker: RpcString,
+    pub icon_uri: Option<RpcString>,
+    pub additional_metadata_uri: Option<RpcString>,
+    pub media_uri: Option<RpcString>,
     pub media_hash: RpcHexString,
 }
 

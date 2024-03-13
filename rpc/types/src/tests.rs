@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde_json::json;
+use serde_json::{from_value, json};
 
 use super::*;
 
@@ -23,16 +23,14 @@ use super::*;
 #[case(&[0x20, 0x80], "2080")]
 #[case(&[0x22, 0x90], "2290")]
 fn invalid_utf8(#[case] bytes: &[u8], #[case] hex: &str) {
-    let rpc_out = RpcStringOut::from_bytes(bytes.to_vec());
+    let rpc_str = RpcString::from_bytes(bytes.to_vec());
 
-    let json = serde_json::to_value(rpc_out).unwrap();
+    let json = serde_json::to_value(rpc_str).unwrap();
     let expected_json = json!({ "hex": hex, "text": null });
     assert_eq!(json, expected_json);
 
-    let rpc_in_hex = json!({ "hex": hex });
-    let rpc_in: RpcStringIn = serde_json::from_value(rpc_in_hex.clone()).unwrap();
-    assert_eq!(rpc_in.as_ref(), bytes);
-    assert_eq!(serde_json::to_value(&rpc_in).unwrap(), rpc_in_hex);
+    let from_json: RpcString = from_value(json).unwrap();
+    assert_eq!(from_json.as_ref(), bytes);
 }
 
 #[rstest::rstest]
@@ -41,24 +39,34 @@ fn invalid_utf8(#[case] bytes: &[u8], #[case] hex: &str) {
 #[case("\t", "09")]
 #[case("Hello!", "48656c6c6f21")]
 fn valid_utf8(#[case] in_str: &str, #[case] hex: &str) {
-    let rpc_out = RpcStringOut::from_string(in_str.to_string());
-    let rpc_out_from_bytes = RpcStringOut::from_bytes(in_str.as_bytes().to_vec());
-    assert_eq!(rpc_out, rpc_out_from_bytes);
+    let from_bytes = RpcString::from_bytes(hex::decode(hex).unwrap());
+    let from_str = RpcString::from_string(in_str.to_string());
+    assert_eq!(from_str, from_bytes);
 
-    let json = serde_json::to_value(rpc_out).unwrap();
-    let expected_json = json!({ "hex": hex, "text": in_str });
-    assert_eq!(json, expected_json);
+    let json = json!({ "hex": hex, "text": in_str });
+    assert_eq!(serde_json::to_value(&from_str).unwrap(), json);
+    assert_eq!(from_value::<RpcString>(json).unwrap(), from_str);
 
-    let rpc_in_hex = json!({ "hex": hex });
-    let rpc_in_hex_obj: RpcStringIn = serde_json::from_value(rpc_in_hex.clone()).unwrap();
-    assert_eq!(rpc_in_hex_obj.as_ref(), in_str.as_bytes());
-    assert_eq!(serde_json::to_value(&rpc_in_hex_obj).unwrap(), rpc_in_hex);
+    let hex_json = json!({ "hex": hex });
+    assert_eq!(from_value::<RpcString>(hex_json).unwrap(), from_str);
 
-    let rpc_in_str = json!({ "text": in_str });
-    let rpc_in_str_obj: RpcStringIn = serde_json::from_value(rpc_in_str).unwrap();
-    assert_eq!(rpc_in_str_obj, rpc_in_hex_obj);
+    let text_json = json!({ "text": in_str });
+    assert_eq!(from_value::<RpcString>(text_json).unwrap(), from_str);
 
-    let rpc_in_str_bare = serde_json::Value::from(in_str);
-    let rpc_in_str_bare_obj: RpcStringIn = serde_json::from_value(rpc_in_str_bare).unwrap();
-    assert_eq!(rpc_in_str_bare_obj, rpc_in_hex_obj);
+    let str_json = in_str.to_string().into();
+    assert_eq!(from_value::<RpcString>(str_json).unwrap(), from_str);
+}
+
+#[rstest::rstest]
+#[case("", "00")]
+#[case(" ", "21")]
+#[case("Hello!", "48656c6c6f")]
+fn hex_text_mismatch(#[case] in_str: &str, #[case] hex: &str) {
+    let json = json!({ "hex": hex, "text": in_str });
+    assert!(from_value::<RpcString>(json).is_err());
+}
+
+#[test]
+fn empty_obj() {
+    assert!(from_value::<RpcString>(json!({})).is_err());
 }

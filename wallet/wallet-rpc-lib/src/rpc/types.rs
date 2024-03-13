@@ -39,7 +39,7 @@ use wallet::account::PoolData;
 
 pub use common::primitives::amount::{RpcAmountIn, RpcAmountOut};
 pub use mempool_types::tx_options::TxOptionsOverrides;
-pub use rpc::types::RpcStringIn;
+pub use rpc::types::RpcString;
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{
@@ -339,13 +339,13 @@ impl DelegationInfo {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NftMetadata {
     pub media_hash: String,
-    pub name: RpcStringIn,
-    pub description: RpcStringIn,
+    pub name: RpcString,
+    pub description: RpcString,
     pub ticker: String,
     pub creator: Option<HexEncoded<PublicKey>>,
-    pub icon_uri: Option<RpcStringIn>,
-    pub media_uri: Option<RpcStringIn>,
-    pub additional_metadata_uri: Option<RpcStringIn>,
+    pub icon_uri: Option<RpcString>,
+    pub media_uri: Option<RpcString>,
+    pub additional_metadata_uri: Option<RpcString>,
 }
 
 impl NftMetadata {
@@ -384,9 +384,9 @@ impl TokenTotalSupply {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TokenMetadata {
-    pub token_ticker: RpcStringIn,
+    pub token_ticker: RpcString,
     pub number_of_decimals: u8,
-    pub metadata_uri: RpcStringIn,
+    pub metadata_uri: RpcString,
     pub token_supply: TokenTotalSupply,
     pub is_freezable: bool,
 }
