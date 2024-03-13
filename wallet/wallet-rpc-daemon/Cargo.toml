@@ -17,3 +17,9 @@ wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 clap.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+
+rpc-description = { path = "../../rpc/description" }
+
+expect-test.workspace = true

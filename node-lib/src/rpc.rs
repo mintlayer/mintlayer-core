@@ -18,7 +18,7 @@
 use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
-use rpc::{handle_result, RpcResult};
+use rpc::{description::Described, handle_result, RpcResult};
 use subsystem::ShutdownTrigger;
 
 /// RPC methods controlling the node.
@@ -84,4 +84,20 @@ impl NodeRpcServer for NodeRpc {
 
 pub fn init(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> rpc::Methods {
     NodeRpc::new(shutdown_trigger, chain_config).into_rpc().into()
+}
+
+pub fn interface_description() -> rpc::description::Interface {
+    rpc::description::Interface::from_iter([
+        NodeRpcDescription::DESCRIPTION,
+        chainstate::rpc::ChainstateRpcDescription::DESCRIPTION,
+        mempool::rpc::MempoolRpcDescription::DESCRIPTION,
+        p2p::rpc::P2pRpcDescription::DESCRIPTION,
+        blockprod::rpc::BlockProductionRpcDescription::DESCRIPTION,
+    ])
+}
+
+pub fn dev_interface_description() -> rpc::description::Interface {
+    rpc::description::Interface::from_iter(std::iter::once(
+        test_rpc_functions::rpc::RpcTestFunctionsRpcDescription::DESCRIPTION,
+    ))
 }

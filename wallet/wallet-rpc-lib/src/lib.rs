@@ -185,3 +185,11 @@ where
 
     log::info!("Wallet RPC service terminated");
 }
+
+pub fn rpc_interface_description() -> ::rpc::description::Interface {
+    use ::rpc::description::Described;
+    ::rpc::description::Interface::from_iter([
+        WalletRpcDescription::DESCRIPTION,
+        ColdWalletRpcDescription::DESCRIPTION,
+    ])
+}

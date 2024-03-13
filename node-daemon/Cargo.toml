@@ -17,4 +17,8 @@ anyhow.workspace = true
 tokio = { workspace = true, default-features = false }
 
 [dev-dependencies]
+
+rpc-description = { path = "../rpc/description" }
+
 assert_cmd.workspace = true
+expect-test.workspace = true

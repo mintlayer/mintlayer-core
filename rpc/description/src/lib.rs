@@ -24,10 +24,24 @@ pub trait Described {
     const DESCRIPTION: Module;
 }
 
+/// A struct representing documentation of an RPC interface
+pub struct RpcDocs<'a> {
+    pub title: &'a str,
+    pub version: &'a str,
+    pub description: &'a str,
+    pub interface: &'a Interface,
+}
+
 /// Description of the whole RPC interface (a sequence of [Module]s)
 #[derive(PartialEq, Eq, Debug)]
 pub struct Interface {
     modules: Vec<Module>,
+}
+
+impl Interface {
+    pub fn modules(&self) -> &[Module] {
+        &self.modules
+    }
 }
 
 impl FromIterator<Module> for Interface {
