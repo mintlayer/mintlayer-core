@@ -182,8 +182,16 @@ where
             ColdWalletCommand::OpenWallet {
                 wallet_path,
                 encryption_password,
+                force_change_wallet_type,
             } => {
-                self.wallet().await?.open_wallet(wallet_path, encryption_password).await?;
+                self.wallet()
+                    .await?
+                    .open_wallet(
+                        wallet_path,
+                        encryption_password,
+                        Some(force_change_wallet_type),
+                    )
+                    .await?;
                 self.wallet.update_wallet::<N>().await;
 
                 Ok(ConsoleCommand::SetStatus {

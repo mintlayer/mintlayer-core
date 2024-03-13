@@ -559,6 +559,41 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    fn migrate_cold_to_hot_wallet(db: &Store<B>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None)?;
+        db_tx.set_wallet_type(WalletType::Hot)?;
+        db_tx.commit()?;
+        Ok(())
+    }
+
+    fn migrate_hot_to_cold_wallet(
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+    ) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None)?;
+        db_tx.set_wallet_type(WalletType::Cold)?;
+        Self::reset_wallet_transactions_and_load(chain_config, &mut db_tx)?;
+        db_tx.commit()?;
+        Ok(())
+    }
+
+    fn force_migrate_wallet_type(
+        wallet_type: WalletType,
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+    ) -> Result<(), WalletError> {
+        let current_wallet_type = db.transaction_ro()?.get_wallet_type()?;
+        match (current_wallet_type, wallet_type) {
+            (WalletType::Cold, WalletType::Hot) => Self::migrate_cold_to_hot_wallet(db)?,
+            (WalletType::Hot, WalletType::Cold) => {
+                Self::migrate_hot_to_cold_wallet(db, chain_config)?
+            }
+            (WalletType::Cold, WalletType::Cold) => {}
+            (WalletType::Hot, WalletType::Hot) => {}
+        }
+        Ok(())
+    }
+
     /// Reset all scanned transactions and revert all accounts to the genesis block
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
@@ -573,7 +608,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
         db_tx.clear_transactions()?;
         db_tx.clear_addresses()?;
@@ -604,7 +639,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     fn reset_wallet_transactions_and_load(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<BTreeMap<U31, Account>> {
         Self::reset_wallet_transactions(chain_config.clone(), db_tx)?;
 
@@ -656,11 +691,15 @@ impl<B: storage::Backend> Wallet<B> {
         password: Option<String>,
         pre_migration: F,
         wallet_type: WalletType,
+        force_change_wallet_type: bool,
     ) -> WalletResult<Self> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
         }
         Self::check_and_migrate_db(&db, chain_config.clone(), pre_migration, wallet_type)?;
+        if force_change_wallet_type {
+            Self::force_migrate_wallet_type(wallet_type, &db, chain_config.clone())?;
+        }
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.

@@ -103,7 +103,7 @@ impl TestFramework {
 
         // Start the wallet service
         let (wallet_service, rpc_server) = {
-            let ws_config = WalletServiceConfig::new(chain_type, Some(wallet_path), vec![])
+            let ws_config = WalletServiceConfig::new(chain_type, Some(wallet_path), false, vec![])
                 .with_regtest_options(chain_config_options)
                 .unwrap()
                 .with_custom_chain_config(chain_config.clone());

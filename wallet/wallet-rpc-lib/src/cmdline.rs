@@ -94,6 +94,10 @@ pub struct WalletRpcDaemonChainArgs {
     #[arg(long, value_name("PATH"))]
     wallet_file: Option<PathBuf>,
 
+    /// Force change the wallet type from hot to cold or from cold to hot
+    #[arg(long, requires("wallet_file"))]
+    force_change_wallet_type: bool,
+
     /// Start staking for the specified account after starting the wallet
     #[arg(long, value_name("ACC_NUMBER"), requires("wallet_file"))]
     start_staking_for_account: Vec<U31>,
@@ -153,6 +157,7 @@ impl WalletRpcDaemonChainArgs {
     ) -> Result<(WalletServiceConfig, WalletRpcConfig), ConfigError> {
         let Self {
             wallet_file,
+            force_change_wallet_type,
             rpc_bind_address,
             start_staking_for_account,
             node_rpc_address,
@@ -167,8 +172,12 @@ impl WalletRpcDaemonChainArgs {
         } = self;
 
         let ws_config = {
-            let service =
-                WalletServiceConfig::new(chain_type, wallet_file, start_staking_for_account);
+            let service = WalletServiceConfig::new(
+                chain_type,
+                wallet_file,
+                force_change_wallet_type,
+                start_staking_for_account,
+            );
 
             if cold_wallet {
                 service

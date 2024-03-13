@@ -137,11 +137,11 @@ class WalletRpcController:
         self._write_command("wallet_create", [wallet_file, True])
         return "Success"
 
-    async def open_wallet(self, name: str = "wallet") -> str:
+    async def open_wallet(self, name: str = "wallet", password: Optional[str] = None, force_change_wallet_type: bool = False) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        output = self._write_command("wallet_open", [wallet_file, None])
+        output = self._write_command("wallet_open", [wallet_file, password, force_change_wallet_type])
         if 'result' in output:
-            return "Success"
+            return "Wallet loaded successfully"
         else:
             return output['error']['message']
 

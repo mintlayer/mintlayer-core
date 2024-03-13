@@ -172,6 +172,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         &mut self,
         wallet_path: PathBuf,
         password: Option<String>,
+        force_migrate_wallet_type: bool,
     ) -> Result<(), ControllerError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -183,6 +184,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
             wallet_path,
             password,
             self.node_rpc.is_cold_wallet_node(),
+            force_migrate_wallet_type,
         )?;
 
         let controller = WalletController::new(

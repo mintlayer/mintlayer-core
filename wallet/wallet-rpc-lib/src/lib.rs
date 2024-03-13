@@ -105,6 +105,7 @@ where
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
         wallet_config.wallet_file,
+        wallet_config.force_change_wallet_type,
         wallet_config.start_staking_for_account,
         node_rpc,
     )

@@ -104,8 +104,20 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
         )
     }
 
-    async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()> {
-        rpc::handle_result(self.open_wallet(path.into(), password).await)
+    async fn open_wallet(
+        &self,
+        path: String,
+        password: Option<String>,
+        force_migrate_wallet_type: Option<bool>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.open_wallet(
+                path.into(),
+                password,
+                force_migrate_wallet_type.unwrap_or(false),
+            )
+            .await,
+        )
     }
 
     async fn close_wallet(&self) -> rpc::RpcResult<()> {
