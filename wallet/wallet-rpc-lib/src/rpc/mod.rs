@@ -1448,6 +1448,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn get_node_block(&self, block_id: Id<Block>) -> WRpcResult<Option<Block>, N> {
         self.node.get_block(block_id).await.map_err(RpcError::RpcError)
     }
+
+    pub async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> WRpcResult<Vec<(BlockHeight, Id<GenBlock>)>, N> {
+        self.node
+            .get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
+            .map_err(RpcError::RpcError)
+    }
 }
 
 pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(

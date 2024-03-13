@@ -719,4 +719,14 @@ trait WalletRpc {
     /// Get a block by its hash, represented with hex encoded bytes
     #[method(name = "node_get_block")]
     async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<String>>;
+
+    /// Returns mainchain block ids with heights in the range start_height..end_height using
+    /// the given step.
+    #[method(name = "node_get_block_ids_as_checkpoints")]
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
 }

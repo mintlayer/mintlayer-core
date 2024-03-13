@@ -1085,4 +1085,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map(|block_opt| block_opt.map(|block| block.hex_encode()))
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        self.wallet_rpc
+            .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
 }

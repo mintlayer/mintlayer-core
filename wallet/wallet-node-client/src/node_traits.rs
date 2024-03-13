@@ -47,6 +47,12 @@ pub trait NodeInterface {
         from: BlockHeight,
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error>;
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error>;
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
     async fn get_block_id_at_height(
         &self,

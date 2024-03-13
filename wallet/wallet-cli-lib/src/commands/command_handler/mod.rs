@@ -582,6 +582,19 @@ where
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
+            WalletCommand::GetBlockIdsAsCheckpoints {
+                start_height,
+                end_height,
+                step,
+            } => {
+                let block_ids = self
+                    .wallet()
+                    .await?
+                    .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+                    .await?;
+                Ok(ConsoleCommand::Print(format!("{block_ids:?}")))
+            }
+
             WalletCommand::CreateNewAccount { name } => {
                 let new_acc = self.non_empty_wallet().await?.create_account(name).await?;
 

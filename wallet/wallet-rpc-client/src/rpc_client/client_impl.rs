@@ -1104,4 +1104,20 @@ impl WalletInterface for ClientWalletRpc {
             .await
             .map_err(WalletRpcError::ResponseError)
     }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        WalletRpcClient::node_get_block_ids_as_checkpoints(
+            &self.http_client,
+            start_height,
+            end_height,
+            step,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
 }

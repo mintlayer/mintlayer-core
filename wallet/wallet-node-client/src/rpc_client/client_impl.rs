@@ -76,6 +76,22 @@ impl NodeInterface for NodeRpcClient {
             .map(|blocks| blocks.into_iter().map(HexEncoded::take).collect())
     }
 
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        ChainstateRpcClient::get_block_ids_as_checkpoints(
+            &self.http_client,
+            start_height,
+            end_height,
+            step,
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         ChainstateRpcClient::best_block_id(&self.http_client)
             .await

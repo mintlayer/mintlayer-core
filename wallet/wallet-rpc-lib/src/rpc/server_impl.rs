@@ -1022,4 +1022,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 .map(|block_opt| block_opt.map(|block| block.hex_encode())),
         )
     }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: usize,
+    ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
+        rpc::handle_result(
+            self.node_get_block_ids_as_checkpoints(start_height, end_height, step).await,
+        )
+    }
 }

@@ -74,6 +74,15 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        _start_height: BlockHeight,
+        _end_height: BlockHeight,
+        _step: usize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
