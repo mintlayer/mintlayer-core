@@ -541,15 +541,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 common::chain::block::ConsensusData::PoW(data) => data.bits(),
                 common::chain::block::ConsensusData::PoS(data) => data.compact_target(),
             };
-            let target: common::Uint256 = compact_target.try_into().expect("valid target");
 
             log::info!(
-                "New tip in chainstate {} with height {}, timestamp: {} ({}); Target {:?}",
+                "NEW TIP in chainstate {:x} with height {}, timestamp: {} ({})",
                 bi.block_id(),
                 bi.block_height(),
                 bi.block_timestamp(),
                 bi.block_timestamp().into_time(),
-                target
+            );
+            log::debug!(
+                "Difficulty target of new tip: {:#x}",
+                TryInto::<common::Uint256>::try_into(compact_target).expect("valid target")
             );
 
             self.update_initial_block_download_flag()
