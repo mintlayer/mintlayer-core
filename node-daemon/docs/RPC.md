@@ -678,6 +678,21 @@ Returns:
 
 ## Module `p2p`
 
+### Method `p2p_enable_networking`
+
+Enable or disable networking
+
+
+Parameters:
+```
+{ "enable": bool }
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `p2p_connect`
 
 Attempt to connect to a remote node (just once).

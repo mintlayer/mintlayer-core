@@ -927,6 +927,21 @@ Returns:
 nothing
 ```
 
+### Method `node_enable_networking`
+
+Enable or disable p2p networking in the node
+
+
+Parameters:
+```
+{ "enable": bool }
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `node_connect_to_peer`
 
 Connect to a remote peer in the node
@@ -1493,6 +1508,9 @@ Parameters:
     "path": string,
     "password": EITHER OF
          1) string
+         2) null,
+    "force_migrate_wallet_type": EITHER OF
+         1) bool
          2) null,
 }
 ```
