@@ -1520,6 +1520,9 @@ Parameters:
     "password": EITHER OF
          1) string
          2) null,
+    "force_migrate_wallet_type": EITHER OF
+         1) bool
+         2) null,
 }
 ```
 

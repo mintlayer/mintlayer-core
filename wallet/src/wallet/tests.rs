@@ -233,6 +233,7 @@ fn verify_wallet_balance(
         None,
         |_| Ok(()),
         WalletType::Hot,
+        false,
     )
     .unwrap();
     let coin_balance = get_coin_balance(&wallet);
@@ -322,6 +323,7 @@ fn wallet_creation_in_memory() {
         None,
         |_| Ok(()),
         WalletType::Hot,
+        false,
     ) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
@@ -338,6 +340,7 @@ fn wallet_creation_in_memory() {
         None,
         |_| Ok(()),
         WalletType::Hot,
+        false,
     )
     .unwrap();
 }
@@ -424,6 +427,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         password,
         |_| Ok(()),
         WalletType::Hot,
+        false,
     )
     .unwrap();
 
@@ -908,6 +912,7 @@ fn test_wallet_accounts(
         None,
         |_| Ok(()),
         WalletType::Hot,
+        false,
     )
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();

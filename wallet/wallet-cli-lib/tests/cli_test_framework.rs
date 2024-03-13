@@ -96,6 +96,7 @@ impl CliTestFramework {
                 run_options: wallet_cli_lib::config::CliArgs {
                     wallet_file: None,
                     wallet_password: None,
+                    force_change_wallet_type: false,
                     start_staking: false,
                     start_staking_for_account: vec![],
                     node_rpc_address: Some(rpc_address.into()),
@@ -123,6 +124,7 @@ impl CliTestFramework {
             run_options: wallet_cli_lib::config::CliArgs {
                 wallet_file: None,
                 wallet_password: None,
+                force_change_wallet_type: false,
                 start_staking: false,
                 start_staking_for_account: vec![],
                 node_rpc_address: Some(rpc_address.into()),

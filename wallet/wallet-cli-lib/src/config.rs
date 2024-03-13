@@ -73,6 +73,10 @@ pub struct CliArgs {
     #[clap(long)]
     pub wallet_password: Option<String>,
 
+    /// Force change the wallet type from hot to cold or from cold to hot
+    #[clap(long, requires("wallet_file"))]
+    pub force_change_wallet_type: bool,
+
     /// DEPRECATED: use start_staking_for_account instead!
     /// Start staking for the DEFAULT account after starting the wallet
     #[clap(long, requires("wallet_file"))]

@@ -127,11 +127,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         wallet_path: PathBuf,
         password: Option<String>,
+        force_migrate_wallet_type: bool,
     ) -> WRpcResult<(), N> {
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(async move { wallet_manager.open_wallet(wallet_path, password).await })
+                Box::pin(async move {
+                    wallet_manager
+                        .open_wallet(wallet_path, password, force_migrate_wallet_type)
+                        .await
+                })
             })
             .await??)
     }

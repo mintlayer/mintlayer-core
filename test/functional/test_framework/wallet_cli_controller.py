@@ -173,9 +173,11 @@ class WalletCliController:
         mnemonic_str = "" if mnemonic is None else f'"{mnemonic}"'
         return await self._write_command(f"wallet-create \"{wallet_file}\" store-seed-phrase {mnemonic_str}\n")
 
-    async def open_wallet(self, name: str) -> str:
+    async def open_wallet(self, name: str, password: Optional[str] = None, force_change_wallet_type: bool = False) -> str:
+        password_str = password if password else ""
+        force_change_wallet_type_str = "--force-change-wallet-type" if force_change_wallet_type else ""
         wallet_file = os.path.join(self.node.datadir, name)
-        return await self._write_command(f"wallet-open \"{wallet_file}\"\n")
+        return await self._write_command(f"wallet-open \"{wallet_file}\" {password_str} {force_change_wallet_type_str}\n")
 
     async def recover_wallet(self, mnemonic: str, name: str = "recovered_wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)

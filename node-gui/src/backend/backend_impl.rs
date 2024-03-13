@@ -127,6 +127,7 @@ impl Backend {
             file_path.clone(),
             None,
             WalletType::Hot,
+            false,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 

@@ -135,9 +135,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         &self,
         path: PathBuf,
         password: Option<String>,
+        force_migrate_wallet_type: Option<bool>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .open_wallet(path, password)
+            .open_wallet(path, password, force_migrate_wallet_type.unwrap_or(false))
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

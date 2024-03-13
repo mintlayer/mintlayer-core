@@ -42,6 +42,9 @@ pub struct WalletServiceConfig {
     /// Wallet file to operate on
     pub wallet_file: Option<PathBuf>,
 
+    /// Force change the wallet type from hot to cold or from cold to hot
+    pub force_change_wallet_type: bool,
+
     /// Start staking for account after starting the wallet
     pub start_staking_for_account: Vec<U31>,
 
@@ -53,11 +56,13 @@ impl WalletServiceConfig {
     pub fn new(
         chain_type: ChainType,
         wallet_file: Option<PathBuf>,
+        force_change_wallet_type: bool,
         start_staking_for_account: Vec<U31>,
     ) -> Self {
         Self {
             chain_config: Arc::new(common::chain::config::Builder::new(chain_type).build()),
             wallet_file,
+            force_change_wallet_type,
             start_staking_for_account,
             node_rpc: NodeRpc::ColdWallet,
         }

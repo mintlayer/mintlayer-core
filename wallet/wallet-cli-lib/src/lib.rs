@@ -283,6 +283,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
                 command: WalletCommand::ColdCommands(commands::ColdWalletCommand::OpenWallet {
                     wallet_path,
                     encryption_password: args.wallet_password,
+                    force_change_wallet_type: args.force_change_wallet_type,
                 }),
                 res_tx,
             })

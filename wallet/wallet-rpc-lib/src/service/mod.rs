@@ -54,6 +54,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
     pub async fn start(
         chain_config: Arc<ChainConfig>,
         wallet_file: Option<PathBuf>,
+        force_change_wallet_type: bool,
         start_staking_for_account: Vec<U31>,
         node_rpc: N,
     ) -> Result<Self, InitError<N>> {
@@ -69,6 +70,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletService<N> {
                     wallet_file,
                     wallet_password,
                     node_rpc.is_cold_wallet_node(),
+                    force_change_wallet_type,
                 )?
             };
 

@@ -293,6 +293,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         file_path: impl AsRef<Path>,
         password: Option<String>,
         wallet_type: WalletType,
+        force_change_wallet_type: bool,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -311,6 +312,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             password,
             |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
             wallet_type,
+            force_change_wallet_type,
         )
         .map_err(ControllerError::WalletError)?;
 

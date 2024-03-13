@@ -65,6 +65,9 @@ pub enum ColdWalletCommand {
         wallet_path: PathBuf,
         /// The existing password, if the wallet is encrypted.
         encryption_password: Option<String>,
+        /// Force change the wallet type from hot to cold or from cold to hot
+        #[arg(long)]
+        force_change_wallet_type: bool,
     },
 
     #[clap(name = "wallet-close")]

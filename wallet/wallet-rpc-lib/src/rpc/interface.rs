@@ -63,7 +63,12 @@ trait ColdWalletRpc {
 
     /// Open an exiting wallet by specifying the file location of the wallet file
     #[method(name = "wallet_open")]
-    async fn open_wallet(&self, path: String, password: Option<String>) -> rpc::RpcResult<()>;
+    async fn open_wallet(
+        &self,
+        path: String,
+        password: Option<String>,
+        force_migrate_wallet_type: Option<bool>,
+    ) -> rpc::RpcResult<()>;
 
     /// Close the currently open wallet file
     #[method(name = "wallet_close")]

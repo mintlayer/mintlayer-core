@@ -65,8 +65,12 @@ pub trait WalletInterface {
         passphrase: Option<String>,
     ) -> Result<CreatedWallet, Self::Error>;
 
-    async fn open_wallet(&self, path: PathBuf, password: Option<String>)
-        -> Result<(), Self::Error>;
+    async fn open_wallet(
+        &self,
+        path: PathBuf,
+        password: Option<String>,
+        force_migrate_wallet_type: Option<bool>,
+    ) -> Result<(), Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;
 

@@ -98,7 +98,7 @@ class WalletColdSend(BitcoinTestFramework):
         node = self.nodes[0]
         cold_wallet_pk = b""
 
-        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 
@@ -120,7 +120,7 @@ class WalletColdSend(BitcoinTestFramework):
         total_cold_wallet_coins = 50_000
         to_send = randint(1, 100)
 
-        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log) as wallet:
             # new hot wallet
             await wallet.create_wallet("hot_wallet")
 
@@ -131,7 +131,7 @@ class WalletColdSend(BitcoinTestFramework):
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
-            self.log.debug(f'Tip: {tip_id}')
+            self.log.info(f'Tip: {tip_id}')
 
             # Submit a valid transaction
             output = {
@@ -143,7 +143,7 @@ class WalletColdSend(BitcoinTestFramework):
             node.mempool_submit_transaction(encoded_tx, {})
             assert node.mempool_contains_tx(tx_id)
 
-            self.generate_block()
+            self.log.info(f"block {self.generate_block()}")
 
             balance = await wallet.get_balance()
             assert_in("Coins amount: 0", balance)
@@ -164,15 +164,7 @@ class WalletColdSend(BitcoinTestFramework):
 
         signed_tx = ""
 
-        # try to open the cold wallet file in hot mode
-        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
-            assert_in("A Hot wallet is trying to open a Cold wallet file", await wallet.open_wallet("cold_wallet"))
-
-        # try to open the hot wallet file in cold mode
-        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
-            assert_in("A Cold wallet is trying to open a Hot wallet file", await wallet.open_wallet("hot_wallet"))
-
-        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"]) as wallet:
             # open cold wallet
             await wallet.open_wallet("cold_wallet")
 
@@ -180,7 +172,7 @@ class WalletColdSend(BitcoinTestFramework):
             signed_tx_output = await wallet.sign_raw_transaction(send_req)
             signed_tx = signed_tx_output.split('\n')[2]
 
-        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log) as wallet:
             # open hot wallet
             await wallet.open_wallet("hot_wallet")
 
@@ -190,7 +182,7 @@ class WalletColdSend(BitcoinTestFramework):
             transactions = node.mempool_transactions()
             assert_in(signed_tx, transactions)
 
-            self.generate_block()
+            self.log.info(f"block {self.generate_block()}")
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
@@ -212,6 +204,22 @@ class WalletColdSend(BitcoinTestFramework):
                 else:
                     assert_greater_than_or_equal(coins, total_cold_wallet_coins - to_send - 1)
                     assert_equal(addr, expected_change_dest)
+
+        # try to open the cold wallet file in hot mode
+        async with self.wallet_controller(node, self.config, self.log) as wallet:
+            assert_in("A Hot wallet is trying to open a Cold wallet file", await wallet.open_wallet("cold_wallet"))
+
+        # try to open the hot wallet file in cold mode
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"]) as wallet:
+            assert_in("A Cold wallet is trying to open a Hot wallet file", await wallet.open_wallet("hot_wallet"))
+
+        # force convert the cold wallet to hot
+        async with self.wallet_controller(node, self.config, self.log) as wallet:
+            assert_in("Wallet loaded successfully", await wallet.open_wallet("cold_wallet", force_change_wallet_type=True))
+
+        # force convert the hot wallet to cold
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--cold-wallet"]) as wallet:
+            assert_in("Wallet loaded successfully", await wallet.open_wallet("hot_wallet", force_change_wallet_type=True))
 
 
 if __name__ == '__main__':
