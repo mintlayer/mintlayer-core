@@ -24,7 +24,7 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
@@ -209,6 +209,22 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             address,
+            label,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn add_separate_private_key(
+        &self,
+        account_index: U31,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::add_separate_private_key(
+            &self.http_client,
+            account_index.into(),
+            private_key,
             label,
         )
         .await

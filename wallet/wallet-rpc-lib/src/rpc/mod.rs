@@ -18,7 +18,7 @@ mod server_impl;
 pub mod types;
 
 use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -251,6 +251,28 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     w.synced_controller(account_index, config)
                         .await?
                         .add_separate_address(pkh, label)
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
+    pub async fn add_separate_private_key(
+        &self,
+        account_index: U31,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> WRpcResult<(), N> {
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .add_separate_private_key(private_key, label)
                 })
             })
             .await??;

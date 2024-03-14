@@ -61,7 +61,7 @@ use common::chain::{
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use itertools::{izip, Itertools};
 use serialization::{Decode, Encode};
@@ -1512,6 +1512,16 @@ impl Account {
         label: Option<String>,
     ) -> WalletResult<()> {
         Ok(self.key_chain.add_separate_address(db_tx, address, label)?)
+    }
+
+    /// Add a separate private key not derived from this account's key chain to be watched
+    pub fn add_separate_private_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.add_separate_private_key(db_tx, private_key, label)?)
     }
 
     /// Get a new address that hasn't been used before

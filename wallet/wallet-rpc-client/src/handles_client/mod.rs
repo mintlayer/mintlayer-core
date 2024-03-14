@@ -24,7 +24,7 @@ use common::{
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use node_comm::node_traits::NodeInterface;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
@@ -257,6 +257,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
             .add_separate_address(account_index, address, label)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn add_separate_private_key(
+        &self,
+        account_index: U31,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        self.wallet_rpc
+            .add_separate_private_key(account_index, private_key.take(), label)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
