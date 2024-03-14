@@ -44,6 +44,7 @@ test-utils = {path = '../test-utils'}
 
 bitcoin-bech32.workspace = true
 expect-test.workspace = true
+indoc.workspace = true
 proptest.workspace = true
 rstest.workspace = true
 serde_test.workspace = true

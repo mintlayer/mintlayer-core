@@ -19,7 +19,10 @@ use std::{fmt::Write, str::FromStr};
 
 use common::{
     address::Address,
-    chain::{ChainConfig, Destination, SignedTransaction, TxOutput, UtxoOutPoint},
+    chain::{
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
+        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+    },
     primitives::H256,
     text_summary::TextSummary,
 };
@@ -592,7 +595,10 @@ where
                     .await?
                     .node_get_block_ids_as_checkpoints(start_height, end_height, step)
                     .await?;
-                Ok(ConsoleCommand::Print(format!("{block_ids:?}")))
+
+                Ok(ConsoleCommand::Print(
+                    print_block_heights_ids_as_checkpoints_data(&block_ids),
+                ))
             }
 
             WalletCommand::CreateNewAccount { name } => {

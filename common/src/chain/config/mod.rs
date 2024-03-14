@@ -15,10 +15,12 @@
 
 mod builder;
 mod checkpoints;
+pub mod checkpoints_data;
 pub mod emission_schedule;
 pub mod regtest;
 pub mod regtest_options;
 pub use builder::Builder;
+
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use emission_schedule::CoinUnit;

@@ -165,6 +165,7 @@ http = "0.2"
 hyper = "0.14"
 iced = "0.10"
 iced_aw = "0.7"
+indoc = "2"
 itertools = "0.12"
 jsonrpsee = { version = "0.22", default-features = false }
 lazy_static = "1.4"
