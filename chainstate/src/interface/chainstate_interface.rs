@@ -50,10 +50,6 @@ pub trait ChainstateInterface: Send + Sync {
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
 
-    /// This is equivalent to `preliminary_headers_check(header, &[])`.
-    // FIXME remove
-    fn preliminary_header_check(&self, header: &SignedBlockHeader) -> Result<(), ChainstateError>;
-
     /// Check the headers. The first header's parent must be known.
     /// Each of the "other" headers must be connected to the previous one. These headers only
     /// get the most basic checks (e.g. checkpoint enforcement)

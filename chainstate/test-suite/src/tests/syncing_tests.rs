@@ -677,7 +677,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let block = tf.make_block_builder().make_orphan(&mut rng).build();
         let block_id = block.get_id();
 
-        let err = tf.chainstate.preliminary_header_check(block.header()).unwrap_err();
+        let err = tf.chainstate.preliminary_headers_check(block.header(), &[]).unwrap_err();
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
