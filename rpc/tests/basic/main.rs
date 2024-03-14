@@ -177,6 +177,7 @@ fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
 
 fn assert_unauthorized(result: anyhow::Result<()>) {
     let error = result.expect_err("Expected error, got success");
+    println!("ERROR STRING: {}", error.to_string());
     assert!(error.to_string().contains("Request rejected"));
     assert!(error.to_string().contains("401"));
 }
