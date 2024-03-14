@@ -26,7 +26,7 @@ use common::{
     chain::{Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PublicKey};
+use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
@@ -255,6 +255,15 @@ pub enum WalletCommand {
     AddSeparateKey {
         /// The new separate address to be added to the selected account
         address: String,
+
+        /// Optionally specify a label to the new address
+        label: Option<String>,
+    },
+
+    #[clap(name = "account-add-separate-private-key")]
+    AddSeparatePrivateKey {
+        /// The new separate private key to be added to the selected account
+        private_key: HexEncoded<PrivateKey>,
 
         /// Optionally specify a label to the new address
         label: Option<String>,

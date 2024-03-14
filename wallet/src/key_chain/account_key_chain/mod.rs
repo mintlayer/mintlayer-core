@@ -24,7 +24,7 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::{ExtendedVRFPrivateKey, ExtendedVRFPublicKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -428,6 +428,28 @@ impl AccountKeyChain {
             label,
             public_key: None,
             private_key: None,
+        };
+
+        db_tx.set_separate_key(&id, &key)?;
+        self.separate_keys.insert(id.into_item_id(), key);
+
+        Ok(())
+    }
+
+    ///  Adds a new private key to be watched, separate from the keys derived from this account
+    pub fn add_separate_private_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_private_key: PrivateKey,
+        label: Option<String>,
+    ) -> KeyChainResult<()> {
+        let pub_key = PublicKey::from_private_key(&new_private_key);
+        let pkh = PublicKeyHash::from(&pub_key);
+        let id = AccountPrefixedId::new(self.get_account_id(), pkh);
+        let key = AccountSeparateKey::V0 {
+            label,
+            public_key: Some(pub_key),
+            private_key: Some(new_private_key),
         };
 
         db_tx.set_separate_key(&id, &key)?;

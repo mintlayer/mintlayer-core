@@ -23,6 +23,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
@@ -255,6 +256,15 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         address: String,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()>;
+
+    /// Add a new separate private key not derived from the selected account's key chain to be watched
+    #[method(name = "account_add_separate_private_key")]
+    async fn add_separate_private_key(
+        &self,
+        account: AccountArg,
+        private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
