@@ -148,6 +148,29 @@ Returns:
 [ hex string, .. ]
 ```
 
+### Method `chainstate_get_block_ids_as_checkpoints`
+
+Returns mainchain block ids with heights in the range start_height..end_height using
+the given step;
+
+
+Parameters:
+```
+{
+    "start_height": number,
+    "end_height": number,
+    "step": number,
+}
+```
+
+Returns:
+```
+[ [
+    number,
+    hex string,
+], .. ]
+```
+
 ### Method `chainstate_get_utxo`
 
 Returns the TxOutput for a specified UtxoOutPoint.
