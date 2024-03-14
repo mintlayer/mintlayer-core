@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
-    address::Address,
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
@@ -172,6 +172,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .abandon_transaction(self.account_index, tx_id)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_separate_address(
+        &mut self,
+        address: PublicKeyHash,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .add_separate_address(self.account_index, address, label)
             .map_err(ControllerError::WalletError)
     }
 

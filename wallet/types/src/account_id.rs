@@ -81,3 +81,4 @@ pub type AccountWalletCreatedTxId = AccountPrefixedId<Id<Transaction>>;
 pub type AccountWalletTxId = AccountPrefixedId<OutPointSourceId>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;
+pub type AccountAddress = AccountPrefixedId<PublicKeyHash>;

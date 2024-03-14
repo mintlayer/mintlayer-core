@@ -33,6 +33,7 @@ use crate::send_request::{
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
+use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::inputsig::arbitrary_message::{
@@ -1079,6 +1080,17 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<Vec<(BlockHeight, Id<GenBlock>, PoolId)>> {
         let block_ids = self.get_account(account_index)?.get_created_blocks();
         Ok(block_ids)
+    }
+
+    pub fn add_separate_address(
+        &mut self,
+        account_index: U31,
+        public_key_hash: PublicKeyHash,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_separate_address(db_tx, public_key_hash, label)
+        })
     }
 
     pub fn get_new_address(

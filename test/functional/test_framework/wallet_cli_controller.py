@@ -224,6 +224,9 @@ class WalletCliController:
     async def rename_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-rename {name}\n")
 
+    async def add_separate_address(self, address: str, label: Optional[str] = '') -> str:
+        return await self._write_command(f"account-add-separate-address {address} {label}\n")
+
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"account-select {account_index}\n")
 
@@ -279,7 +282,7 @@ class WalletCliController:
     async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
         return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")
 
-    async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
+    async def send_to_address(self, address: str, amount: Union[int, float, str], selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint], only_transaction: bool = False) -> str:

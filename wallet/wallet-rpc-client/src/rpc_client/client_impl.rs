@@ -199,6 +199,22 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn add_separate_address(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::add_separate_address(
+            &self.http_client,
+            account_index.into(),
+            address,
+            label,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

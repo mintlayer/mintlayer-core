@@ -251,6 +251,15 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
+    #[clap(name = "account-add-separate-address")]
+    AddSeparateKey {
+        /// The new separate address to be added to the selected account
+        address: String,
+
+        /// Optionally specify a label to the new address
+        label: Option<String>,
+    },
+
     #[clap(name = "token-nft-issue-new")]
     IssueNewNft {
         /// The receiver of the token
