@@ -101,6 +101,48 @@ Returns:
 }
 ```
 
+### Method `account_add_separate_address`
+
+Add a new separate address not derived from the selected account's key chain to be watched
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": string,
+    "label": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `account_add_separate_private_key`
+
+Add a new separate private key not derived from the selected account's key chain to be watched
+
+
+Parameters:
+```
+{
+    "account": number,
+    "private_key": hex string,
+    "label": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `account_balance`
 
 Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
