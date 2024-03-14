@@ -73,5 +73,5 @@ impl<T: serialization_core::Encode> Display for HexEncoded<T> {
 }
 
 impl<T> rpc_description::HasValueHint for HexEncoded<T> {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
 }

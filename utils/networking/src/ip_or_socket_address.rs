@@ -72,7 +72,7 @@ impl IpOrSocketAddress {
 }
 
 impl rpc_description::HasValueHint for IpOrSocketAddress {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
 }
 
 #[cfg(test)]

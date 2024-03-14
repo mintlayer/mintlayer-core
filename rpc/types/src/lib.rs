@@ -15,7 +15,7 @@
 
 mod string;
 
-pub use string::{RpcHexString, RpcStringIn, RpcStringOut};
+pub use string::{RpcHexString, RpcString};
 
 #[cfg(test)]
 mod tests;

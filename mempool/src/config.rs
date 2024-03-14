@@ -98,7 +98,9 @@ impl<'de> serde::Deserialize<'de> for MempoolMaxSize {
 }
 
 impl HasValueHint for MempoolMaxSize {
-    const HINT: rpc_description::ValueHint = rpc_description::ValueHint::Prim(
+    const HINT_SER: rpc_description::ValueHint =
+        rpc_description::ValueHint::Prim("number in bytes");
+    const HINT_DE: rpc_description::ValueHint = rpc_description::ValueHint::Prim(
         "String with units, such as MB/KB/GB, or integer for bytes",
     );
 }

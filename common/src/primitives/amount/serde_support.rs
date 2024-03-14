@@ -107,16 +107,16 @@ pub enum RpcAmountInSerde {
 }
 
 impl HasValueHint for RpcAmountInSerde {
-    const HINT: VH = VH::Choice(&[
-        &VH::Object(&[("atoms", &AtomsInner::HINT)]),
-        &VH::Object(&[("decimal", &DecimalInner::HINT)]),
+    const HINT_SER: VH = VH::Choice(&[
+        &VH::Object(&[("atoms", &AtomsInner::HINT_SER)]),
+        &VH::Object(&[("decimal", &DecimalInner::HINT_SER)]),
     ]);
 }
 
 rpc_description::impl_value_hint!({
     AtomsInner => VH::NUMBER_STRING;
     DecimalInner => VH::DECIMAL_STRING;
-    Amount => AmountSerde::HINT;
-    super::RpcAmountIn => RpcAmountInSerde::HINT;
-    super::RpcAmountOut => RpcAmountOutSerde::HINT;
+    Amount => AmountSerde::HINT_SER;
+    super::RpcAmountIn => RpcAmountInSerde::HINT_SER;
+    super::RpcAmountOut => RpcAmountOutSerde::HINT_SER;
 });
