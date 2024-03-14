@@ -18,7 +18,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey, PublicKey},
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};
@@ -105,4 +105,14 @@ impl AccountInfo {
 pub struct AccountVrfKeys {
     pub account_vrf_key: ExtendedVRFPublicKey,
     pub legacy_vrf_key: ExtendedVRFPublicKey,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub enum AccountSeparateKey {
+    #[codec(index = 0)]
+    V0 {
+        label: Option<String>,
+        public_key: Option<PublicKey>,
+        private_key: Option<PrivateKey>,
+    },
 }

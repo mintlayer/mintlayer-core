@@ -249,6 +249,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn add_separate_address(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        self.wallet_rpc
+            .add_separate_address(account_index, address, label)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

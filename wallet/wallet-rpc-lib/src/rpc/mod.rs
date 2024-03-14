@@ -224,6 +224,39 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
+    pub async fn add_separate_address(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> WRpcResult<(), N> {
+        let dest = Address::from_str(&self.chain_config, &address)
+            .and_then(|addr| addr.decode_object(&self.chain_config))
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let pkh = match dest {
+            Destination::PublicKeyHash(pkh) => pkh,
+            Destination::PublicKey(pk) => (&pk).into(),
+            Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_)
+            | Destination::AnyoneCanSpend => return Err(RpcError::InvalidAddress),
+        };
+
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .add_separate_address(pkh, label)
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
     pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
         let config = ControllerConfig {
             in_top_x_mb: 5,

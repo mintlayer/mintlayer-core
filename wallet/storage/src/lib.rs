@@ -20,7 +20,7 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::{
-    address::{Address, AddressError},
+    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
@@ -28,10 +28,14 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_info::AccountVrfKeys, chain_info::ChainInfo, keys::RootKeys,
-    seed_phrase::SerializableSeedPhrase, wallet_type::WalletType, AccountDerivationPathId,
-    AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
-    KeychainUsageState, WalletTx,
+    account_id::AccountAddress,
+    account_info::{AccountSeparateKey, AccountVrfKeys},
+    chain_info::ChainInfo,
+    keys::RootKeys,
+    seed_phrase::SerializableSeedPhrase,
+    wallet_type::WalletType,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -75,6 +79,10 @@ pub trait WalletStorageReadLocked {
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
         -> Result<Option<AccountVrfKeys>>;
+    fn get_account_separate_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<PublicKeyHash, AccountSeparateKey>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -133,6 +141,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         tx: &SignedTransaction,
     ) -> Result<()>;
     fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
+    fn set_separate_key(&mut self, id: &AccountAddress, key: &AccountSeparateKey) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(

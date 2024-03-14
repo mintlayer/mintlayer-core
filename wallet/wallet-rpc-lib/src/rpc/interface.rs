@@ -244,6 +244,15 @@ trait WalletRpc {
         name: Option<String>,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
+    /// Add a new separate address not derived from the selected account's key chain to be watched
+    #[method(name = "account_add_separate_address")]
+    async fn add_separate_address(
+        &self,
+        account: AccountArg,
+        address: String,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()>;
+
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]
     async fn get_balance(
