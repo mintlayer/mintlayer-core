@@ -171,6 +171,9 @@ async fn ok(#[case] seed: Seed) {
                                 "delegation_id": Address::new(&chain_config, &delegation_id).expect(
                                     "no error in encoding"
                                 ).get(),
+                                "pool_id": Address::new(&chain_config, &pool_id).expect(
+                                    "no error in encoding"
+                                ).get(),
                                 "next_nonce": AccountNonce::new(0),
                                 "spend_destination": alice_address.get(),
                                 "balance": amount_to_json(amount, chain_config.coin_decimals()),
