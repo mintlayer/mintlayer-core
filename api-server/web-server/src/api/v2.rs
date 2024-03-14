@@ -733,6 +733,9 @@ pub async fn address_delegations<T: ApiServerStorage>(
             "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
                 "no error in encoding"
             ).get(),
+            "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
+                "no error in encoding"
+            ).get(),
             "next_nonce": delegation.next_nonce(),
             "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
                 "no error in encoding"
