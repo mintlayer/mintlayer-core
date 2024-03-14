@@ -20,10 +20,7 @@ use chainstate::{BlockInvalidatorError, ChainstateError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
 use common::{
-    chain::{
-        config::{Builder as ChainConfigBuilder, ChainType},
-        Block, Destination, NetUpgrades,
-    },
+    chain::{self, Block},
     primitives::{BlockDistance, Id, Idable},
 };
 use crypto::random::{CryptoRng, Rng};
@@ -164,9 +161,7 @@ struct TestChainBlockIds {
 fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestChainBlockIds) {
     let mut tf = TestFramework::builder(rng)
         .with_chain_config(
-            ChainConfigBuilder::new(ChainType::Testnet)
-                .consensus_upgrades(NetUpgrades::unit_tests())
-                .genesis_unittest(Destination::AnyoneCanSpend)
+            chain::config::create_unit_test_config_builder()
                 .max_depth_for_reorg(BlockDistance::new(5))
                 .build(),
         )

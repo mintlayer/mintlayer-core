@@ -438,7 +438,7 @@ fn no_sig_data_not_allowed(
 ) {
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let chain_config = chain::config::Builder::new(chain::config::ChainType::Testnet)
+        let chain_config = chain::config::Builder::new(chain::config::ChainType::Regtest)
             .data_in_no_signature_witness_allowed(data_allowed)
             .consensus_upgrades(
                 NetUpgrades::initialize(vec![(

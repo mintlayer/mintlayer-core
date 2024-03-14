@@ -940,8 +940,11 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
 
 #[cfg(test)]
 mod tests {
+    use self::checkpoints_data::make_mainnet_checkpoints;
+
     use super::*;
     use rstest::rstest;
+    use tests::checkpoints_data::make_testnet_checkpoints;
 
     #[test]
     fn mainnet_creation() {
@@ -1192,5 +1195,34 @@ mod tests {
             .build();
 
         assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    fn test_genesis_in_checkpoints() {
+        for chain_type in ChainType::ALL {
+            let config = Builder::new(chain_type).build();
+            let checkpoint_at_0 =
+                config.height_checkpoints().checkpoint_at_height(&BlockHeight::zero()).unwrap();
+            assert_eq!(*checkpoint_at_0, config.genesis_block_id());
+        }
+    }
+
+    #[test]
+    fn test_checkpoints() {
+        let config = Builder::new(ChainType::Mainnet).build();
+        let expected_checkpoints = {
+            let mut checkpoints = make_mainnet_checkpoints();
+            checkpoints.insert(BlockHeight::zero(), config.genesis_block_id());
+            checkpoints.into()
+        };
+        assert_eq!(*config.height_checkpoints(), expected_checkpoints);
+
+        let config = Builder::new(ChainType::Testnet).build();
+        let expected_checkpoints = {
+            let mut checkpoints = make_testnet_checkpoints();
+            checkpoints.insert(BlockHeight::zero(), config.genesis_block_id());
+            checkpoints.into()
+        };
+        assert_eq!(*config.height_checkpoints(), expected_checkpoints);
     }
 }

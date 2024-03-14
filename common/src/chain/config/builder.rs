@@ -41,7 +41,10 @@ use crate::{
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
-use super::MagicBytes;
+use super::{
+    checkpoints_data::{make_mainnet_checkpoints, make_testnet_checkpoints},
+    MagicBytes,
+};
 
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
@@ -275,7 +278,7 @@ impl GenesisBlockInit {
 pub struct Builder {
     chain_type: ChainType,
     bip44_coin_type: ChildNumber,
-    checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>,
+    checkpoints: Option<BTreeMap<BlockHeight, Id<GenBlock>>>,
     magic_bytes: MagicBytes,
     p2p_port: u16,
     dns_seeds: Vec<&'static str>,
@@ -321,7 +324,7 @@ impl Builder {
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
-            checkpoints: BTreeMap::new(),
+            checkpoints: None,
             coin_decimals: CoinUnit::DECIMALS,
             coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.magic_bytes(),
@@ -363,9 +366,12 @@ impl Builder {
 
     /// New builder initialized with test chain config
     pub fn test_chain() -> Self {
+        // Note: there are tests that seem to depend on Testnet being used here instead of Regtest.
         Self::new(ChainType::Testnet)
             .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
+            // Force empty checkpoints list, because a custom genesis is used.
+            .checkpoints(BTreeMap::new())
     }
 
     /// Build the chain config
@@ -430,7 +436,16 @@ impl Builder {
         let genesis_block = Arc::new(WithId::new(genesis_block));
 
         let height_checkpoint_data = {
-            let mut checkpoints = checkpoints;
+            let mut checkpoints = if let Some(checkpoints) = checkpoints {
+                checkpoints
+            } else {
+                match chain_type {
+                    ChainType::Mainnet => make_mainnet_checkpoints(),
+                    ChainType::Testnet => make_testnet_checkpoints(),
+                    ChainType::Regtest | ChainType::Signet => BTreeMap::new(),
+                }
+            };
+
             checkpoints.entry(0.into()).or_insert(genesis_block.get_id().into());
             checkpoints.into()
         };
@@ -510,7 +525,6 @@ macro_rules! builder_method {
 impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(bip44_coin_type: ChildNumber);
-    builder_method!(checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>);
     builder_method!(magic_bytes: MagicBytes);
     builder_method!(p2p_port: u16);
     builder_method!(dns_seeds: Vec<&'static str>);
@@ -530,6 +544,11 @@ impl Builder {
     builder_method!(empty_consensus_reward_maturity_block_count: BlockCount);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
+
+    pub fn checkpoints(mut self, checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>) -> Self {
+        self.checkpoints = Some(checkpoints);
+        self
+    }
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {
