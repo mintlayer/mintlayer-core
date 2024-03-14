@@ -20,7 +20,7 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
@@ -112,6 +112,13 @@ pub trait WalletInterface {
         &self,
         account_index: U31,
         address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error>;
+
+    async fn add_separate_private_key(
+        &self,
+        account_index: U31,
+        private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> Result<(), Self::Error>;
 

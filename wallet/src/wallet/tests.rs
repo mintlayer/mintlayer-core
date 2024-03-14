@@ -4443,3 +4443,60 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
             .unwrap();
     }
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_add_separate_private_key(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+    // generate a random private key unrelated to the wallet and add it
+    let (private_key, pub_key) =
+        crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
+
+    wallet
+        .add_separate_private_key(DEFAULT_ACCOUNT_INDEX, private_key, None)
+        .unwrap();
+
+    // get the destination address from the new private key and send some coins to it
+    let address = Address::new(
+        &chain_config,
+        &Destination::PublicKeyHash((&pub_key).into()),
+    )
+    .unwrap();
+
+    // Generate a new block which sends reward to the new address
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let output =
+        make_address_output(chain_config.as_ref(), address.clone(), block1_amount).unwrap();
+
+    let tx =
+        SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();
+
+    let block1 = Block::new(
+        vec![tx.clone()],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1.clone()]);
+
+    // Check amount is still zero
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // but the transaction has been added to the wallet
+    let tx_data = wallet
+        .get_transaction(DEFAULT_ACCOUNT_INDEX, tx.transaction().get_id())
+        .unwrap();
+
+    assert_eq!(tx_data.get_transaction(), tx.transaction());
+}

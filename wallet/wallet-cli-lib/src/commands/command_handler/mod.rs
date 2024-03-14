@@ -637,6 +637,17 @@ where
                 })
             }
 
+            WalletCommand::AddSeparatePrivateKey { private_key, label } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                wallet.add_separate_private_key(selected_account, private_key, label).await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: "Success, the new private key has been added to the account"
+                        .into(),
+                })
+            }
+
             WalletCommand::SelectAccount { account_index } => {
                 self.set_selected_account(account_index).await?;
 

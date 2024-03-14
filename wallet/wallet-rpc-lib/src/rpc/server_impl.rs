@@ -25,6 +25,7 @@ use common::{
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
+use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
@@ -309,6 +310,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
             self.add_separate_address(account_arg.index::<N>()?, address, label).await,
+        )
+    }
+
+    async fn add_separate_private_key(
+        &self,
+        account_arg: AccountArg,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.add_separate_private_key(account_arg.index::<N>()?, private_key.take(), label)
+                .await,
         )
     }
 

@@ -54,7 +54,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
 use pos_accounting::make_delegation_id;
@@ -1090,6 +1090,17 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.add_separate_address(db_tx, public_key_hash, label)
+        })
+    }
+
+    pub fn add_separate_private_key(
+        &mut self,
+        account_index: U31,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_separate_private_key(db_tx, private_key, label)
         })
     }
 

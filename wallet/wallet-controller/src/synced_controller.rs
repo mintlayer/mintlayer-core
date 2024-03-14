@@ -31,7 +31,7 @@ use common::{
 use crypto::{
     key::{
         hdkd::{child_number::ChildNumber, u31::U31},
-        PublicKey,
+        PrivateKey, PublicKey,
     },
     vrf::VRFPublicKey,
 };
@@ -182,6 +182,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_separate_address(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_separate_private_key(
+        &mut self,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .add_separate_private_key(self.account_index, private_key, label)
             .map_err(ControllerError::WalletError)
     }
 
