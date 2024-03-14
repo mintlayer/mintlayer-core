@@ -919,20 +919,20 @@ impl Account {
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.output_cache
             .delegation_ids()
-            .filter(|(_, data)| self.is_mine_or_watched_destination(&data.destination))
+            .filter(|(_, data)| self.is_destination_mine(&data.destination))
     }
 
     pub fn find_delegation(&self, delegation_id: &DelegationId) -> WalletResult<&DelegationData> {
         self.output_cache
             .delegation_data(delegation_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.destination))
+            .filter(|data| self.is_destination_mine(&data.destination))
             .ok_or(WalletError::DelegationNotFound(*delegation_id))
     }
 
     pub fn find_token(&self, token_id: &TokenId) -> WalletResult<&TokenIssuanceData> {
         self.output_cache
             .token_data(token_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
+            .filter(|data| self.is_destination_mine(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
@@ -942,7 +942,7 @@ impl Account {
     ) -> WalletResult<UnconfirmedTokenInfo> {
         self.output_cache
             .get_token_unconfirmed_info(token_info, |destination: &Destination| {
-                self.is_mine_or_watched_destination(destination)
+                self.is_destination_mine(destination)
             })
     }
 
@@ -1489,6 +1489,16 @@ impl Account {
         Ok(())
     }
 
+    /// Add a separate address not derived from this account's key chain to be watched
+    pub fn add_separate_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        address: PublicKeyHash,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.add_separate_address(db_tx, address, label)?)
+    }
+
     /// Get a new address that hasn't been used before
     pub fn get_new_address(
         &mut self,
@@ -1565,18 +1575,37 @@ impl Account {
         }
     }
 
+    /// Return true if this transaction output can be spent by this account
+    fn is_mine(&self, txo: &TxOutput) -> bool {
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|d| self.is_destination_mine(d))
+    }
+
     /// Return true if this transaction output can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
         self.collect_output_destinations(txo)
             .iter()
-            .any(|d| self.is_mine_or_watched_destination(d))
+            .any(|d| self.is_destination_mine_or_watched(d))
+    }
+
+    /// Return true if this destination can be spent by this account
+    fn is_destination_mine(&self, destination: &Destination) -> bool {
+        match destination {
+            Destination::PublicKeyHash(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+            Destination::AnyoneCanSpend => false,
+            Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
+        }
     }
 
     /// Return true if this destination can be spent by this account or if it is being watched.
-    fn is_mine_or_watched_destination(&self, destination: &Destination) -> bool {
+    fn is_destination_mine_or_watched(&self, destination: &Destination) -> bool {
         match destination {
-            Destination::PublicKeyHash(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+            Destination::PublicKeyHash(pkh) => {
+                self.key_chain.is_public_key_hash_mine_or_watched(pkh)
+            }
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
@@ -1607,7 +1636,7 @@ impl Account {
             match destination {
                 Destination::PublicKeyHash(pkh) => {
                     let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
-                    if found {
+                    if found || self.key_chain.is_public_key_hash_watched(&pkh) {
                         return Ok(true);
                     }
                 }
@@ -1688,10 +1717,7 @@ impl Account {
             current_block_info,
             utxo_states,
             with_locked,
-            |txo| {
-                self.is_mine_or_watched(txo)
-                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-            },
+            |txo| self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v)),
         )
     }
 
@@ -1770,7 +1796,7 @@ impl Account {
                 | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
                 AccountCommand::ChangeTokenAuthority(token_id, address) => {
                     self.find_token(token_id).is_ok()
-                        || self.is_mine_or_watched_destination(address)
+                        || self.is_destination_mine_or_watched(address)
                 }
             },
         });
@@ -2052,7 +2078,7 @@ impl Account {
 
     pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>, PoolId)> {
         self.output_cache
-            .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
+            .get_created_blocks(|destination| self.is_destination_mine(destination))
     }
 
     pub fn top_up_addresses(

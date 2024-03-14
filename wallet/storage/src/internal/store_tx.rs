@@ -21,7 +21,7 @@ use crate::{
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use common::{
-    address::Address,
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
@@ -32,7 +32,8 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    account_info::AccountVrfKeys,
+    account_id::AccountAddress,
+    account_info::{AccountSeparateKey, AccountVrfKeys},
     chain_info::ChainInfo,
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
@@ -236,6 +237,22 @@ macro_rules! impl_read_ops {
                 account_id: &AccountId,
             ) -> crate::Result<Option<AccountVrfKeys>> {
                 self.read::<db::DBVRFPublicKeys, _, _>(account_id)
+            }
+
+            fn get_account_separate_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<PublicKeyHash, AccountSeparateKey>> {
+                self.storage
+                    .get::<db::DBSeparateKeys, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|iter| {
+                        iter.map(|(key, value): (AccountAddress, AccountSeparateKey)| {
+                            (key.into_item_id(), value)
+                        })
+                        .collect()
+                    })
             }
 
             fn get_keychain_usage_state(
@@ -453,6 +470,14 @@ macro_rules! impl_write_ops {
 
             fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
+            }
+
+            fn set_separate_key(
+                &mut self,
+                id: &AccountAddress,
+                key: &AccountSeparateKey,
+            ) -> crate::Result<()> {
+                self.write::<db::DBSeparateKeys, _, _, _>(id, key)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {

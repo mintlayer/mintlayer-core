@@ -301,6 +301,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.update_account_name(account_arg.index::<N>()?, name).await)
     }
 
+    async fn add_separate_address(
+        &self,
+        account_arg: AccountArg,
+        address: String,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.add_separate_address(account_arg.index::<N>()?, address, label).await,
+        )
+    }
+
     async fn get_balance(
         &self,
         account_arg: AccountArg,
